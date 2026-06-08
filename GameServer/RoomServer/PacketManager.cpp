@@ -206,6 +206,28 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcMoveBatchPacket(const std::ve
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcSpawnBatchPacket(const std::vector<ObjectInfo>& objInfos) {
+	const uint16 count = static_cast<uint16>(objInfos.size());
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcSpawnBatchPacket) + sizeof(ObjectInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SNpcSpawnBatchPacket>();
+
+	auto infos = bw.reserve<ObjectInfo>(count);
+	for (uint16 i = 0; i < count; ++i) {
+		infos[i] = objInfos[i];
+	}
+
+	pkt->dataOffset = static_cast<uint16>(reinterpret_cast<uint64>(infos) - reinterpret_cast<uint64>(pkt));
+	pkt->objCnt     = count;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_NpcSpawnBatch;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SNpcAttackPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );

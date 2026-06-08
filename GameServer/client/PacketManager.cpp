@@ -37,6 +37,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSNpcMoveBatchPacket(buffer, len);
 		break;
 
+	case PacketType::S_NpcSpawnBatch:
+		handleSNpcSpawnBatchPacket(buffer, len);
+		break;
+
 	case PacketType::S_NpcAttack:
 		handleSNpcAttackPacket( buffer, len );
 		break;
@@ -178,6 +182,27 @@ void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
 	for (uint16 i = 0; i < list.count(); ++i) {
 		const auto& info = list[i];
 		game->moveGoblin(info.npcId, info.pos, info.orient, info.velocity);
+	}
+}
+
+void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<SNpcSpawnBatchPacket*>(buffer);
+	auto objList = pkt->getObjectList();
+
+	auto game = INet::ClientApp::onlineGame();
+
+	for (uint16 i = 0; i < objList.count(); ++i) {
+		const auto& objInfo = objList[i];
+
+		switch (objInfo.type) {
+		case ObjectType::Goblin:
+			game->createGoblin(objInfo);
+			break;
+
+		default:
+			std::cout << "S_NpcSpawnBatch: unsupported object type " << static_cast<uint16>(objInfo.type) << '\n';
+			break;
+		}
 	}
 }
 

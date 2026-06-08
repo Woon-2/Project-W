@@ -121,6 +121,7 @@ private:
     std::vector<int32> initialSquadSizes_{};
     Seconds          tacticTimer_{};
     Seconds          tacticCooldown_{};
+    Seconds          phaseHoldTimer_{};   // 대형 완성 후 체류(과시) 시간 누적
     mu::Vec3         boxAdvanceTargetPos_{};
     mu::Vec3         retreatTargetPos_{};
     uint32           primaryTargetId_{ 0 };
@@ -132,25 +133,27 @@ private:
     uint32            bossPersonalTargetId_{ 0 };
 
     static constexpr Seconds TACTIC_INTERVAL{ 1.f };
-    static constexpr float CLUSTER_RADIUS                = 20.f;
-    static constexpr float ENCIRCLE_RADIUS               = 50.0f;
-    static constexpr float ENCIRCLE_MIN_RADIUS           = 18.0f;
-    static constexpr float ENCIRCLE_SLOT_SPACING         = 7.5f;
+    static constexpr Seconds FORMATION_HOLD_DURATION{ 1.f };   // 후퇴/박스 대형 완성 후 다음 단계 전환 전 체류
+
+    static constexpr float CLUSTER_RADIUS                = 8.f;
+    static constexpr float ENCIRCLE_RADIUS               = 20.0f;
+    static constexpr float ENCIRCLE_MIN_RADIUS           = 7.0f;
+    static constexpr float ENCIRCLE_SLOT_SPACING         = 3.0f;
     static constexpr float TACTIC_HP_THRESHOLD           = 0.70f;
     static constexpr float TACTIC_SQUAD_RATIO            = 0.80f;
     static constexpr Seconds TACTIC_COOLDOWN_DURATION{ 8.0f };
     static constexpr Seconds TACTIC_FAIL_COOLDOWN_DURATION{ 5.0f };
     static constexpr Seconds DIVIDE_ENGAGE_PROTECT_DURATION{ 3.0f };
-    static constexpr float SCREEN_BLOCK_SPACING          = 8.0f;
+    static constexpr float SCREEN_BLOCK_SPACING          = 3.5f;
     static constexpr float SCREEN_SLOT_SPACING_SCALE     = 0.65f;
     static constexpr float SCREEN_SLOT_COLUMN_SCALE      = 3.0f;
     static constexpr int32 SCREEN_SLOT_COLUMN_COUNT      = 7;
     static constexpr float SCREEN_BLOCK_CENTER_BIAS      = 0.5f;
-    static constexpr float BOX_FRONT_OFFSET              = 15.f;
-    static constexpr float BOX_SQUAD_SPACING             = 35.f;
-    static constexpr float BOX_ARC_DEPTH                 = 10.f;
-    static constexpr float REGROUP_DIST                  = 70.f;
-    static constexpr float VIGILANCE_GUARD_RADIUS        = 20.f;
+    static constexpr float BOX_FRONT_OFFSET              = 6.f;
+    static constexpr float BOX_SQUAD_SPACING             = 15.f;
+    static constexpr float BOX_ARC_DEPTH                 = 4.f;
+    static constexpr float REGROUP_DIST                  = 25.f;
+    static constexpr float VIGILANCE_GUARD_RADIUS        = 8.f;
     static constexpr float TACTICAL_SPEED_MULT           = 3.f;
     static constexpr Seconds BOSS_TARGET_EVAL_INTERVAL{ 0.5f };
     static constexpr float BOSS_TARGET_SWITCH_MARGIN     = 120.f;

@@ -170,6 +170,11 @@ void PhysicsWorld::generateContacts()
     const auto pairs = broadPhase_->queryPairs();
 
     for (const auto& [a, b] : pairs) {
+        // Collision filter: skip pairs whose category/mask don't mutually match
+        // (e.g. tactical troops pass through players / their own boss).
+        if ((a->collisionCategory() & b->collisionMask()) == 0 ||
+            (b->collisionCategory() & a->collisionMask()) == 0) continue;
+
         const BVH& bvhA = a->worldBVH();
         const BVH& bvhB = b->worldBVH();
 

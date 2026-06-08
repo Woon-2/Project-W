@@ -143,10 +143,12 @@ void Room::init(const Level* levelData) {
 	}
 
 	// Register all goblins after the pool is fully built (no reallocation risk).
+	npcBroad_.setFatMargin(NPC_SEPARATION_FAT_MARGIN);   // separation neighbor broad phase
 	for (auto& g : goblins_) {
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 		registerObject(&g);
+		npcBodyOwner_[&g.body()] = &g;   // SAP 쌍(RigidBody*) → NPC 역참조
 	}
 
 	// Strongholds are damageable static structures (collidable obstacles).
@@ -201,19 +203,64 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	if (!worldTerrain_) return;
 
 	// Rear walls: build a Static collider from each named "Wall" marker.
+	// 동시에 Wall 위치를 누적해 BossSpawn 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	mu::Vec3 wallSum{};
+	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
 		spawnBarrierFromMarker(m);
+		wallSum += m.pos;
+		++wallCount;
 		std::cout << "[Zone] wall built: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 	}
 
-	// Mid-boss spawn: debug log only (actual spawn TBD).
-	for (const auto& m : worldTerrain_->markers()) {
-		if (m.type != "BossSpawn") continue;
-		std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
-		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	// Mid-boss encounter: dynamically spawn the boss + squads, then notify clients
+	// (S_NpcSpawnBatch) so they instantiate the goblins. Guarded so a re-entry
+	// can't double-spawn (zone is one-shot anyway).
+	if (tacticalNpcs_.empty() && !platoonLeader_) {
+		// Spawn center: prefer a "BossSpawn" marker; fall back to the Wall midpoint
+		// when the level has no BossSpawn marker authored.
+		mu::Vec3 spawnPos{};
+		bool     haveSpawnPos = false;
+		for (const auto& m : worldTerrain_->markers()) {
+			if (m.type != "BossSpawn") continue;
+			spawnPos     = m.pos;
+			haveSpawnPos = true;
+			std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+			break;   // 첫 BossSpawn 마커만 사용
+		}
+		if (!haveSpawnPos && wallCount > 0) {
+			spawnPos     = wallSum / static_cast<float>(wallCount);
+			haveSpawnPos = true;
+			std::cout << "[Zone] Hobgoblin spawn point (fallback: Wall 중점) at ("
+			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
+		}
+
+		if (haveSpawnPos) {
+			// Boss reuses the regular goblin model: spawnCenter == bossPos.
+			spawnTacticalGoblinEncounter(spawnPos, spawnPos, /*numSquads*/3, /*troopersPerSquad*/20);
+
+			std::vector<ObjectInfo> spawnInfos;
+			spawnInfos.reserve(tacticalNpcs_.size() + 1);
+			auto appendInfo = [&](const Object& o) {
+				spawnInfos.push_back(ObjectInfo{
+					.type           = ObjectType::Goblin,
+					.objectId       = static_cast<uint16>(o.getId()),
+					.materialSetIdx = 0,
+					.pos            = o.pos().getXmf(),
+					.orient         = o.orient().getXmf(),
+					.scale          = o.scale().getXmf(),
+				});
+			};
+			for (const auto& npc : tacticalNpcs_)
+				if (npc) appendInfo(*npc);
+			if (platoonLeader_) appendInfo(*platoonLeader_);
+
+			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+		}
 	}
 
 	// Clients build the same walls locally so the predicted player collides.
@@ -246,6 +293,8 @@ void Room::update() {
 	static constexpr Seconds dtSec   = 1s / 60.f;
 
 	physicsWorld_.step(dtSec);
+	rebuildLivingPlayersCache();   // NPC 분리력 컬링이 최신 플레이어 위치를 쓰도록 AI보다 먼저
+	rebuildNpcNeighbors();         // ① 플레이어 근접 컬링 → ② SAP로 이웃 인접 리스트 구축
 	zoneSystem_.update(*this, dtSec);
 	updateGoblinAI(dt);
 	updateTacticalAI(dt);
@@ -268,7 +317,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		grp->clearMemoryIfPlayerOutside(*this);
 	}
 
-	rebuildLivingPlayersCache();
+	// livingPlayersCache_는 Room::update()에서 이미 이번 프레임용으로 갱신됨.
 	rebuildAggroCount();
 
 	uint64 serverNow = static_cast<uint64>(
@@ -358,23 +407,60 @@ void Room::rebuildAggroCount() {
 	}
 }
 
+bool MU_CALLCONV Room::isNearAnyPlayer(mu::Vec3 p) const {
+	const float r2 = NPC_SEPARATION_RELEVANCE_RADIUS * NPC_SEPARATION_RELEVANCE_RADIUS;
+	for (auto* s : livingPlayersCache_)   // P ≤ 4
+		if ((s->player()->pos() - p).len2() < r2) return true;
+	return false;
+}
+
+// 매 프레임: ① 플레이어 근접 컬링으로 분리력 계산이 필요한 NPC만 추리고, ② 그들만 SAP에
+// 넣어 broad phase로 이웃쌍을 산출 → id별 이웃 위치 인접 리스트(npcNeighbors_) 구축.
+// findNearbyNpcPositions가 이 리스트를 조회한다. (호출 시점에 NPC 위치는 불변이므로
+// goblin/tactical 양쪽 AI 패스에서 동일 리스트를 안전하게 재사용.)
+void Room::rebuildNpcNeighbors() {
+	// ① 플레이어 근접 컬링: 관련 있는 살아있는 NPC만 SAP 입력에 넣는다.
+	npcBroad_.clear();
+	auto consider = [&](Object* o) {
+		if (o && o->hp() > 0 && isNearAnyPlayer(o->pos()))
+			npcBroad_.add(&o->body());
+	};
+	for (auto& g : goblins_)      consider(&g);
+	for (auto& n : tacticalNpcs_) consider(n.get());
+	if (platoonLeader_)           consider(platoonLeader_.get());
+
+	// ② SAP broad phase로 이웃쌍 산출 → 인접 리스트 구축 (capacity 재사용).
+	npcBroad_.update();
+	const auto pairs = npcBroad_.queryPairs();
+	for (auto& [id, v] : npcNeighbors_) v.clear();
+	for (const auto& [a, b] : pairs) {
+		Object* oa = npcBodyOwner_[a];
+		Object* ob = npcBodyOwner_[b];   // 컬링 통과분이라 둘 다 생존 보장
+		npcNeighbors_[oa->getId()].push_back(ob->pos());
+		npcNeighbors_[ob->getId()].push_back(oa->pos());
+	}
+}
+
 void MU_CALLCONV Room::findNearbyNpcPositions(mu::Vec3 from, float radius,
                                                uint32 excludeId,
                                                std::vector<mu::Vec3>& out) const {
-	float r2 = radius * radius;
-	for (const auto& g : goblins_) {
-		if (g.getId() == excludeId || g.hp() <= 0) continue;
-		if ((g.pos() - from).len2() < r2)
-			out.push_back(g.pos());
-	}
-	for (const auto& npc : tacticalNpcs_) {
-		if (!npc || npc->getId() == excludeId || npc->hp() <= 0) continue;
-		if ((npc->pos() - from).len2() < r2)
-			out.push_back(npc->pos());
-	}
-	if (platoonLeader_ && platoonLeader_->getId() != excludeId &&
-	    platoonLeader_->hp() > 0 &&
-	    (platoonLeader_->pos() - from).len2() < r2)
+	// 이웃 후보는 rebuildNpcNeighbors가 SAP로 미리 구축한 인접 리스트(fatMargin 반경의
+	// superset). 여기서는 각 호출의 실제 radius로 정밀 거리 필터만 한다(기존과 동일 검사).
+	auto it = npcNeighbors_.find(excludeId);
+	if (it == npcNeighbors_.end()) return;
+	const float r2 = radius * radius;
+	for (const mu::Vec3& p : it->second)
+		if ((p - from).len2() < r2) out.push_back(p);
+}
+
+void MU_CALLCONV Room::findNearbyBlockerPositions(mu::Vec3 from, float radius,
+                                                  std::vector<mu::Vec3>& out) const {
+	// 전술 NPC가 슬롯 이동 중 우회해야 할 큰 장애물: 플레이어 + 생존 중인 보스.
+	const float r2 = radius * radius;
+	for (GameSession* s : livingPlayersCache_)
+		if (s && (s->player()->pos() - from).len2() < r2) out.push_back(s->player()->pos());
+	if (platoonLeader_ && platoonLeader_->hp() > 0 &&
+		(platoonLeader_->pos() - from).len2() < r2)
 		out.push_back(platoonLeader_->pos());
 }
 
@@ -403,6 +489,7 @@ void Room::enter(GameSession* session) {
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
 	player->setScale(playerStarts_[sessions_.size() % playerStarts_.size()].scale());
 	player->body().setMotionType(MotionType::Kinematic);
+	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
@@ -426,7 +513,7 @@ void Room::enter(GameSession* session) {
 
 	// 기존 플레이어들 및 기타 object들에 대한 snapshot 만들기
 	auto objInfos = std::vector<ObjectInfo>();
-	objInfos.reserve(sessions_.size() + cubes_.size());
+	objInfos.reserve(sessions_.size() + cubes_.size() + tacticalNpcs_.size() + 1);
 
 	for (auto session : sessions_) {
 		auto playerInfo = ObjectInfo{
@@ -459,6 +546,30 @@ void Room::enter(GameSession* session) {
 			.pos = sh.pos().getXmf(),
 			.orient = sh.orient().getXmf(),
 			.scale = sh.scale().getXmf(),
+		});
+	}
+
+	// 이미 전술 전투가 시작된 뒤 접속한 플레이어도 무리를 보도록 스냅샷에 포함.
+	// 보스도 일반 고블린 모델(ObjectType::Goblin)로 전송.
+	for (const auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Goblin,
+			.objectId = static_cast<uint16>(npc->getId()),
+			.materialSetIdx = 0,
+			.pos = npc->pos().getXmf(),
+			.orient = npc->orient().getXmf(),
+			.scale = npc->scale().getXmf(),
+		});
+	}
+	if (platoonLeader_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Goblin,
+			.objectId = static_cast<uint16>(platoonLeader_->getId()),
+			.materialSetIdx = 0,
+			.pos = platoonLeader_->pos().getXmf(),
+			.orient = platoonLeader_->orient().getXmf(),
+			.scale = platoonLeader_->scale().getXmf(),
 		});
 	}
 
@@ -695,6 +806,20 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), newHp));
 		}
 	}
+
+	// 전술 전투 NPC(중간보스 + 분대)도 평타 대상에 포함(스킬과 달리 레거시 평타는 별도 경로).
+	// 되감기 미적용(전술 NPC는 posHistory 없음) — 현재 위치로 판정.
+	auto tryMeleeTactical = [&](Object* o) {
+		if (!o || o->hp() <= 0) return;
+		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
+		if (collides(hitbox, aabb).hit) {
+			int32 newHp = std::max(o->hp() - kDamage, 0);
+			o->setHp(newHp);
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(o->getId()), newHp));
+		}
+	};
+	for (auto& npc : tacticalNpcs_) tryMeleeTactical(npc.get());
+	tryMeleeTactical(platoonLeader_.get());
 }
 
 void Room::broadcast(const std::shared_ptr<SendBuffer>& sendBuffer) {
@@ -727,29 +852,18 @@ void Room::updateTacticalAI(Milliseconds dt) {
 	std::vector<SNpcMoveInfo> moveInfos;
 	moveInfos.reserve(tacticalNpcs_.size() + (platoonLeader_ ? 1 : 0));
 
-	for (auto& npc : tacticalNpcs_) {
-		if (!npc) continue;
-		npc->body().setOmega(mu::Vec3{});
-		auto result = npc->update(dtSec, *this);
-		if (npc->hp() > 0) {
-			moveInfos.push_back({
-				static_cast<uint16>(npc->getId()),
-				npc->pos().getXmf(),
-				npc->orient().getXmf(),
-				npc->linearVel().getXmf()
-			});
-		}
-		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
-	}
-
-	for (auto& squad : tacticalSquads_) {
-		if (squad) squad->update(dtSec, *this);
-	}
-
+	// 명령은 위→아래(리더 결정 → 분대 분배 → NPC 실행)로 흐르므로 같은 순서로 업데이트한다.
+	// (원본 NPCAI/sim/Room.cpp의 PlatoonLeader → TacticalSquad → TacticalNpc 순서.)
+	// 순서가 뒤집히면 order 발동→push→consume가 여러 틱으로 밀려 도착 게이트가 stale 슬롯으로
+	// 거짓 양성을 내고 대형(박스 등) 단계가 건너뛰어진다.
 	if (platoonLeader_) {
 		platoonLeader_->body().setOmega(mu::Vec3{});
 		auto result = platoonLeader_->update(dtSec, *this);
+		platoonLeader_->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
+		if (result.justDied) {
+			physicsWorld_.unregisterBody(&platoonLeader_->body());
+			npcBodyOwner_.erase(&platoonLeader_->body());
+		}
 		if (platoonLeader_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(platoonLeader_->getId()),
@@ -758,6 +872,36 @@ void Room::updateTacticalAI(Milliseconds dt) {
 				platoonLeader_->linearVel().getXmf()
 			});
 		}
+		if (!result.hits.empty())
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
+		for (const auto& hit : result.hits)
+			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+	}
+
+	for (auto& squad : tacticalSquads_) {
+		if (squad) squad->update(dtSec, *this);
+	}
+
+	for (auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		npc->body().setOmega(mu::Vec3{});
+		auto result = npc->update(dtSec, *this);
+		npc->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
+		if (result.justDied) {
+			// 시체가 산 NPC의 이동을 막지 않도록 물리 충돌에서 제거(시각적 시체는 클라가 유지).
+			physicsWorld_.unregisterBody(&npc->body());
+			npcBodyOwner_.erase(&npc->body());
+		}
+		if (npc->hp() > 0) {
+			moveInfos.push_back({
+				static_cast<uint16>(npc->getId()),
+				npc->pos().getXmf(),
+				npc->orient().getXmf(),
+				npc->linearVel().getXmf()
+			});
+		}
+		if (!result.hits.empty())
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc->getId())));
 		for (const auto& hit : result.hits)
 			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
 	}
@@ -808,41 +952,60 @@ int32 Room::tryApplyWedgeChargeHit(uint32_t chargeId, int32 playerId, float dama
 void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
                                          int numSquads, int troopersPerSquad)
 {
+	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
+
 	auto makeBase = [](mu::Vec3 pos) {
 		Object base;
 		base.setPos(pos);
 		return base;
 	};
+	// 일반 goblin(setupGoblin)과 동일한 모델/물리 셋업: 충돌 BVH·중력·플레이어 충돌·
+	// motor 이동(setDesiredVel)에 필요. tactical NPC/보스 모두 동일하게 적용.
+	const auto& anims = assetManager_->goblinAnimations();
 	auto registerBody = [&](Object& obj) {
 		obj.setId(IdPool::pop());
-		obj.body().setMotionType(MotionType::Kinematic);
+		obj.setFaction(Faction::Monsters);   // 플레이어 공격의 적대 대상이 되도록(미설정 시 Neutral → 스킬 필터 제외)
+
+		obj.setModel(assetManager_->modelGoblin());
+		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+		obj.animController().switchClip("Idle");
+		obj.setCanReceiveDamage(true);
+
+		obj.body().setMotionType(MotionType::Dynamic);
+		obj.body().setMass(70.f);
+		obj.body().setLinearDamping(0.1f);
+		obj.body().setAngularDamping(25.f);
+		obj.body().setRestitution(0.0f);
+		obj.body().setUprightStiffness(4000.f);
+		obj.body().enableMotor(true);
 		obj.body().snapToCurrent();
+
 		Object* raw = &obj;
 		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+		registerObject(raw);                // objectById_ 등록 → 스킬 히트 판정 타깃 후보에 포함
+		npcBodyOwner_[&obj.body()] = raw;   // SAP 쌍(RigidBody*) → NPC 역참조
 	};
 
 	TacticalNpcConfig trooperCfg = TacticalGoblin::trooperConfig();
 	TacticalNpcConfig bossCfg    = TacticalGoblin::bossConfig();
 
-	constexpr float TWO_PI = 2.f * 3.14159265f;
+	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;   // BossSpawn 주변 trooper 산개 반경
 
 	for (int s = 0; s < numSquads; ++s) {
-		float squadAngleBase = TWO_PI * static_cast<float>(s) / static_cast<float>(numSquads);
-
 		auto squad = std::make_unique<TacticalSquad>(
 			s, trooperCfg.attackRange, trooperCfg.separationRadius);
 
 		for (int t = 0; t < troopersPerSquad; ++t) {
-			int   ring  = 1 + t / 5;
-			float angle = squadAngleBase + TWO_PI * static_cast<float>(t % 5) /
-			              5.f + static_cast<float>(ring) * 0.3f;
-			float r = 10.f + static_cast<float>(ring) * trooperCfg.separationRadius * 2.f;
-			mu::Vec3 trooperPos(spawnCenter.x() + r * std::cosf(angle),
-			                    spawnCenter.y(),
-			                    spawnCenter.z() + r * std::sinf(angle));
+			// 랜덤 배치: spawnCenter 주변 disc 내 무작위 위치(지형 높이 반영).
+			mu::Vec3 trooperPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 
 			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
 			registerBody(*npc);
+			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). 나머지 충돌은 유지.
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -852,8 +1015,12 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		tacticalSquads_.push_back(std::move(squad));
 	}
 
+	// 보스는 spawnPos(Wall 마커 등 지형보다 높을 수 있음)를 그대로 받으므로 지형 높이로 보정.
+	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
 	registerBody(*platoonLeader_);
+	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
+	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());

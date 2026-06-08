@@ -10,6 +10,7 @@
 #include "zone.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
+#include "broadPhase.hpp"
 #include "skill/skillSystem.hpp"
 #include "TacticalNpc.hpp"
 #include "TacticalSquad.hpp"
@@ -100,6 +101,8 @@ public:
 	std::vector<Goblin>& goblins() { return goblins_; }
 	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
+	// 전술 NPC 대형 이동 시 회피할 "큰 장애물"(플레이어 + 생존 중인 보스) 위치를 radius 내에서 append.
+	void MU_CALLCONV findNearbyBlockerPositions( mu::Vec3 from, float radius, std::vector<mu::Vec3>& out ) const;
 	int32 countNpcsTargeting( int32 playerId ) const;
 	NpcGroup* getNpcGroup( int32 groupId );
 	Milliseconds getElapsedMs() const { return elapsedMs_; }
@@ -144,6 +147,11 @@ private:
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
 
+	// 분리력 이웃 탐색: ① 플레이어 근접 컬링 → ② SAPBroadPhase 공간분할로 매 프레임
+	// 이웃 인접 리스트(npcNeighbors_)를 재구축한다. findNearbyNpcPositions가 이를 조회.
+	void rebuildNpcNeighbors();
+	bool MU_CALLCONV isNearAnyPlayer(mu::Vec3 p) const;
+
 	std::vector<Cube>   cubes_;
 	std::vector<Player> playerStarts_;
 	std::vector<Goblin> goblins_;
@@ -164,6 +172,18 @@ private:
 	std::vector<std::unique_ptr<NpcGroup>> npcGroups_;
 	std::vector<GameSession*> livingPlayersCache_;
 	std::unordered_map<int32/* player id */, int32/* count */> aggroCount_;
+
+	// ── 분리력 이웃 탐색 (공간분할) ────────────────────────────────────────────
+	// 1단계 컬링 기준 반경: 감지/교전 사거리 + 클라가 NPC 무리를 또렷이 보는 거리보다
+	// 넉넉히 크게 잡아, 교전 중 NPC가 컬링돼 분리력이 빠지거나 팝핑이 보이지 않게 한다.
+	static constexpr float NPC_SEPARATION_RELEVANCE_RADIUS = 50.f;
+	// SAP AABB fatten 마진. findNearbyNpcPositions에 전달되는 최대 질의 반경(현재 ≈6:
+	// CONFUSED_SEPARATION_RADIUS / TACTICAL_PRESSURE_*) 이상이어야 누락이 없다. 7로 여유.
+	static constexpr float NPC_SEPARATION_FAT_MARGIN = 7.f;
+
+	SAPBroadPhase npcBroad_;                                        // 분리력 전용 broad phase
+	std::unordered_map<const RigidBody*, Object*> npcBodyOwner_;    // SAP 쌍 → NPC 역참조
+	std::unordered_map<uint32, std::vector<mu::Vec3>> npcNeighbors_;// id → 이웃 NPC 위치들
 
 	// ── Tactical AI 상태 ─────────────────────────────────────────────────────
 	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
