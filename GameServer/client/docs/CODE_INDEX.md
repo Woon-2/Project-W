@@ -19,6 +19,7 @@
 9. [게임 루프](#9-게임-루프)
 10. [디버그 시각화](#10-디버그-시각화)
 11. [UI 시스템](#11-ui-시스템)
+12. [스킬 에디터 (standalone)](#12-스킬-에디터-standalone)
 
 ---
 
@@ -906,8 +907,63 @@ if (uiManager_.onWndMsg(msg, wParam, lParam)) return 0;
 
 ---
 
+## 12. 스킬 에디터 (standalone)
+
+standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동작한다.
+`StandAlone::Game`이 월드(에셋/씬/물리/gfx)를 셋업하는 호스트이고, 에디터 로직은
+`client/editor/` 모듈이 담당한다. 설계 문서: `docs/skillEditor.md`.
+
+**파일:** `client/editor/`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수 (Player 18스킬/Goblin) |
+| `Editor::SkillDraft` | `editor/skillDraft.hpp/.cpp` | 컴파일 에셋의 original/draft 사본 + 편집 필드 목록 + diff 콘솔 덤프 |
+| `SkillDraft::Field` / `FieldType` | `editor/skillDraft.hpp` | 편집 가능한 스칼라 필드(center/half/euler/onHit/time/duration) |
+| `SkillDraft::load/buildFields/applyDelta/dumpDiff` | `editor/skillDraft.cpp` | 로드/필드구성/넛지/가이드 출력 |
+| `Editor::Controller` | `editor/editorController.hpp/.cpp` | 드롭다운 2개, 히트박스 피킹, nudge 편집, slow-mo/pause, free-fly 카메라 |
+| `Controller::handleInput` | `editor/editorController.cpp` | 키/마우스 처리 (Game::processInput에서 위임) |
+| `Controller::updateCamera` | `editor/editorController.cpp` | follow(camera_.update) / free-fly(camera_.setView) 분기 |
+| `Controller::refresh` | `editor/editorController.cpp` | 선택 히트박스 하이라이트 + 패널 갱신 |
+| `Controller::pickHitbox` | `editor/editorController.cpp` | screenToRay + SkillSystem::pickHitbox |
+
+**SkillSystem 에디터 API:** `skill/skillSystem.hpp/.cpp`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `SkillSystem::startSkillAsset` | `skillSystem.cpp` | 레지스트리 외부의 draft 에셋(포인터)으로 재생 |
+| `SkillSystem::collectActiveHitboxes` | `skillSystem.cpp` | 활성 bone 히트박스 열거(`ActiveHitboxRef`) |
+| `SkillSystem::pickHitbox` | `skillSystem.cpp` | ray로 최근접 활성 히트박스 OBB 선택 |
+| `SkillSystem::setHitboxLocalOBBs/setHitboxOnHit` | `skillSystem.cpp` | 활성 히트박스 live override (pause 중 즉시 반영) |
+| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
+| `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
+| `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
+| `screenToRay(...)` | `camera.hpp` | 스크린 픽셀 → 월드 ray (inverse view-proj) |
+
+**입력 맵:** Space=재생/재시작, LMB=히트박스 피킹(ray + 화면근접 폴백), Esc=히트박스 편집 종료,
+↑/↓=필드 이동, ←/→=넛지(Shift=coarse), [ / ]=timeScale, 0=pause,
+F=free 카메라(WASD+RMB look, Q/E 상하), P=diff 덤프, R=리셋.
+
+**기타:** 드롭다운 2개는 좌우 배치(캐릭터|스킬), 조작법은 우상단 helpLabel, 상태는 좌상단
+statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDummyInFront()`가 caster
+정면 3.5m·지형 높이(InitRefs::terrainHeightAt)로 배치. 기존 standalone HUD는 제거됨.
+
+**이펙트↔스킬 1:1 기반:** 기존 이펙트 드롭다운 18종 ParticleEffect와 1:1로 짝지은 기본 스킬 lua를
+`resources/skills/`에 추가(`SkillCompiler::compileAll`이 디렉터리 스캔→자동 등록). VFX는 경로가
+아니라 lua `PlayVFX{vfxId}`→`StandAlone::Game::skillVfxById_[vfxId]`(`ParticleEffect*` 배열) 인덱스
+바인딩(`standalone/game.cpp`, 0=hit/blood 예약 nullptr, 1~18=각 Effect). 스킬명은
+`kCharacterSkillMap` Player에 등록. vfxId↔Effect↔skill/lua 매핑표는 `docs/skillEditor.md`.
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| 18종 스킬 lua (slash_wave/slash_combo/.../piercing_multi) | `resources/skills/*.lua` | 이펙트당 기본 스킬(PlayAnimation+PlayVFX+SpawnHitbox/Destroy+OnHit 시작값) |
+| `skillVfxById_` 1~18 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
+
+---
+
 ## 관련 문서
 
+- `docs/skillEditor.md` — standalone 스킬 에디터 설계
 - `docs/graphicsArchitecture.md` — GFX 초기화 흐름, 파이프라인 구조
 - `docs/physicsArchitecture.md` — PhysicSystem::step 단계, BVH 변환 체인
 - `docs/gameArchitecture.md` — 게임 루프, 이벤트 시스템, CombatSystem 구조

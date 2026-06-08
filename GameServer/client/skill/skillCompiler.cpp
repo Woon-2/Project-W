@@ -56,6 +56,7 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
             sol::table obbTbl = val.as<sol::table>();
 
             OBB obb{};  // zero-init (identity orient)
+            mu::Vec3 eulerDeg{ 0.f, 0.f, 0.f };  // yaw, pitch, roll (authoring metadata)
 
             sol::optional<sol::table> center = obbTbl["center"];
             if (center) {
@@ -81,8 +82,10 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
                 float roll  = (*orient).get_or(3, 0.f);
                 // mu::NQuat(roll, pitch, yaw) -> XMQuaternionRotationRollPitchYaw(pitch, yaw, roll)
                 obb.orient = mu::NQuat(mu::Degree{roll}, mu::Degree{pitch}, mu::Degree{yaw});
+                eulerDeg   = { yaw, pitch, roll };
             }
             def.localOBBs.push_back(obb);
+            def.localOBBEulerDeg.push_back(eulerDeg);
         });
     }
 

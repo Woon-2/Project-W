@@ -118,4 +118,28 @@ inline bool worldToScreen(
 	return true;
 }
 
+// Builds a world-space ray (origin + normalized direction) from a screen-space
+// pixel position. Uses the inverse view-projection to unproject the near and
+// far plane points. DirectX NDC depth range is [0, 1].
+inline void screenToRay(
+	float screenX, float screenY,
+	float screenW, float screenH,
+	const mu::Mat4x4& view, const mu::Mat4x4& proj,
+	mu::Vec3& outOrigin, mu::Vec3& outDir)
+{
+	const float ndcX =  (screenX / screenW) * 2.f - 1.f;
+	const float ndcY = 1.f - (screenY / screenH) * 2.f;
+
+	const mu::Mat4x4 invVP = mu::inverse(view * proj);
+
+	mu::Vec4 nearH = mu::Vec4(ndcX, ndcY, 0.f, 1.f) * invVP;
+	mu::Vec4 farH  = mu::Vec4(ndcX, ndcY, 1.f, 1.f) * invVP;
+
+	const mu::Vec3 nearP = mu::Vec3(nearH.x(), nearH.y(), nearH.z()) * (1.f / nearH.w());
+	const mu::Vec3 farP  = mu::Vec3(farH.x(),  farH.y(),  farH.z())  * (1.f / farH.w());
+
+	outOrigin = nearP;
+	outDir    = mu::Vec3(mu::NVec3(farP - nearP));
+}
+
 #endif	// __camera_HPP

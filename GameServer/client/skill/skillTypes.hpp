@@ -50,6 +50,11 @@ struct OnHitDef {
 
 struct SkillHitboxDef {
     std::vector<OBB> localOBBs;    // OBBs in attachment-local space (bone or particle space)
+    // Authoring Euler angles (degrees, yaw/pitch/roll) for each entry in localOBBs.
+    // Populated by the Lua compiler so the in-game skill editor can present and round-trip
+    // rotation exactly as written in the .lua source. Parallel to localOBBs (same size).
+    // Not used by the runtime collision path.
+    std::vector<mu::Vec3> localOBBEulerDeg;
     AttachTarget     attach;
     OnHitDef         onHit;
     u8t              slot                 = 0;      // DestroyHitbox references this slot

@@ -29,6 +29,8 @@
 #include "../ui/widgets/Dropdown.hpp"
 #include "../ui/widgets/Label.hpp"
 
+#include "../editor/editorController.hpp"
+
 class Timer;
 
 namespace StandAlone {
@@ -140,6 +142,10 @@ private:
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	SwordEffect      currentEffect_  = SwordEffect::SlashWave;
 	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
+
+	// In-game skill / monster-pattern authoring tool. The standalone mode boots
+	// straight into this editor (see CLAUDE editor design doc).
+	Editor::Controller editor_{};
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

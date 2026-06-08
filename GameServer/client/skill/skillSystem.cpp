@@ -340,6 +340,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             hb.ownerObjectId         = inst.ownerObjectId;
             hb.instanceIdx           = static_cast<i32t>(&inst - instancePool_.instances.data());
             hb.slot                  = static_cast<u8t>(slot);
+            hb.defIdx                = defIdx;
             hb.hitGroup              = def.hitGroup;
             hb.hitGroupCooldownMs    = def.hitGroupCooldownMs;
             hb.applyAttachRotation   = def.applyAttachRotation;
@@ -806,10 +807,82 @@ Object* SkillSystem::lookupObject(const SkillDispatchContext& ctx, i32t id) cons
 // Debug: push all active hitbox OBBs to a DebugBVView (short TTL for live update)
 // ---------------------------------------------------------------------------
 
-void SkillSystem::renderDebugHitboxes(DebugBVView& bvView) const {
-    for (const AttachedHitbox& hb : hitboxPool_) {
+void SkillSystem::renderDebugHitboxes(DebugBVView& bvView, int selectedHitboxIdx) const {
+    static const mu::Vec4 kDefaultColor  { 0.f, 1.f, 0.f, 1.f };  // green
+    static const mu::Vec4 kSelectedColor { 1.f, 0.85f, 0.1f, 1.f }; // amber
+
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
         if (!hb.active) continue;
+        const mu::Vec4 color = (hi == selectedHitboxIdx) ? kSelectedColor : kDefaultColor;
         for (const OBB& obb : hb.worldOBBs)
-            bvView.push(obb, Milliseconds{ 32.f });
+            bvView.push(obb, Milliseconds{ 32.f }, BVPipeline::BVModel::Box, color);
     }
+}
+
+// ---------------------------------------------------------------------------
+// SkillSystem -- editor support
+// ---------------------------------------------------------------------------
+
+int SkillSystem::startSkillAsset(const SkillAsset* asset, i32t ownerObjectId,
+                                 SkillDispatchContext& ctx) {
+    if (!asset) return -1;
+
+    int idx = instancePool_.alloc(asset, ownerObjectId);
+    if (idx < 0) return -1;
+
+    // Fire t=0 events immediately (mirrors startSkill).
+    SkillInstance& inst = instancePool_.instances[idx];
+    while (inst.nextEventIdx < (int)asset->timeline.size()) {
+        if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
+        dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
+    }
+    return idx;
+}
+
+void SkillSystem::collectActiveHitboxes(std::vector<ActiveHitboxRef>& out) const {
+    out.clear();
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
+        if (!hb.active || hb.resolvedAttach.type != AttachType::Bone) continue;
+        if (hb.worldOBBs.empty()) continue;
+        out.push_back(ActiveHitboxRef{
+            hi, hb.ownerObjectId, hb.slot, hb.defIdx, &hb.worldOBBs });
+    }
+}
+
+int SkillSystem::pickHitbox(mu::Vec3 rayOrigin, mu::Vec3 rayDir) const {
+    Ray   ray{ rayOrigin, mu::Vec3(mu::NVec3(rayDir)) };
+    int   best   = -1;
+    float bestT  = std::numeric_limits<float>::max();
+
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
+        if (!hb.active) continue;
+        for (const OBB& obb : hb.worldOBBs) {
+            RayHit rh = RaycastOBB(obb, ray);
+            if (rh.hit && rh.t >= 0.f && rh.t < bestT) {
+                bestT = rh.t;
+                best  = hi;
+            }
+        }
+    }
+    return best;
+}
+
+void SkillSystem::setHitboxLocalOBBs(int hitboxIdx, const std::vector<OBB>& localOBBs) {
+    if (hitboxIdx < 0 || hitboxIdx >= (int)hitboxPool_.size()) return;
+    AttachedHitbox& hb = hitboxPool_[hitboxIdx];
+    if (!hb.active) return;
+    hb.localOBBs = localOBBs;
+    hb.worldOBBs.resize(localOBBs.size());
+    // worldOBBs are rebuilt by the next updateHitboxes() pass.
+}
+
+void SkillSystem::setHitboxOnHit(int hitboxIdx, const OnHitDef& onHit) {
+    if (hitboxIdx < 0 || hitboxIdx >= (int)hitboxPool_.size()) return;
+    AttachedHitbox& hb = hitboxPool_[hitboxIdx];
+    if (!hb.active) return;
+    hb.onHit = onHit;
 }

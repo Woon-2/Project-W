@@ -44,6 +44,7 @@ struct AttachedHitbox {
     i32t             ownerObjectId        = -1;
     i32t             instanceIdx          = -1;   // owning SkillInstance index
     u8t              slot                 = 0;
+    u8t              defIdx               = 0xFF; // index into owning asset's hitboxDefs (editor lookup)
     u8t              hitGroup             = 0;    // shared with sibling hitboxes for dedup
     float            hitGroupCooldownMs   = 0.f;  // 0 = hit once; >0 = re-hit after N ms
     bool             active               = false;
@@ -219,7 +220,38 @@ public:
     bool hasActiveSkill(i32t ownerObjectId) const;
 
     // Debug: push all active hitbox OBBs to a DebugBVView (call each frame in update).
-    void renderDebugHitboxes(DebugBVView& bvView) const;
+    // selectedHitboxIdx (>= 0) is drawn in a highlight color instead of the default.
+    void renderDebugHitboxes(DebugBVView& bvView, int selectedHitboxIdx = -1) const;
+
+    // -----------------------------------------------------------------------
+    // Editor support
+    // -----------------------------------------------------------------------
+
+    // Start a skill from an externally owned asset (not in the registry). The
+    // caller must keep `asset` alive for the lifetime of the instance. Used by
+    // the in-game skill editor to play an editable draft asset.
+    int startSkillAsset(const SkillAsset* asset, i32t ownerObjectId, SkillDispatchContext& ctx);
+
+    // A live, active bone hitbox surfaced for the editor (picking / inspection).
+    struct ActiveHitboxRef {
+        int                     hitboxIdx     = -1;  // index into hitboxPool_
+        i32t                    ownerObjectId = -1;
+        u8t                     slot          = 0;
+        u8t                     defIdx        = 0xFF; // index into owning asset's hitboxDefs
+        const std::vector<OBB>* worldOBBs     = nullptr;
+    };
+
+    // Collect all active bone hitboxes (skips VFX-particle hitboxes).
+    void collectActiveHitboxes(std::vector<ActiveHitboxRef>& out) const;
+
+    // Ray-pick the closest active bone hitbox OBB. Returns hitboxPool_ index or -1.
+    int pickHitbox(mu::Vec3 rayOrigin, mu::Vec3 rayDir) const;
+
+    // Editor live-edit: overwrite a live hitbox's local OBBs and on-hit response
+    // (e.g. after the draft asset's hitbox def was nudged). worldOBBs are rebuilt
+    // by the next updateHitboxes() pass, so edits appear even while paused.
+    void setHitboxLocalOBBs(int hitboxIdx, const std::vector<OBB>& localOBBs);
+    void setHitboxOnHit    (int hitboxIdx, const OnHitDef& onHit);
 
 private:
     // --- per-frame passes ---
