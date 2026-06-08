@@ -458,6 +458,17 @@ void MU_CALLCONV Room::findNearbyNpcPositions(mu::Vec3 from, float radius,
 		if ((p - from).len2() < r2) out.push_back(p);
 }
 
+void MU_CALLCONV Room::findNearbyBlockerPositions(mu::Vec3 from, float radius,
+                                                  std::vector<mu::Vec3>& out) const {
+	// 전술 NPC가 슬롯 이동 중 우회해야 할 큰 장애물: 플레이어 + 생존 중인 보스.
+	const float r2 = radius * radius;
+	for (GameSession* s : livingPlayersCache_)
+		if (s && (s->player()->pos() - from).len2() < r2) out.push_back(s->player()->pos());
+	if (platoonLeader_ && platoonLeader_->hp() > 0 &&
+		(platoonLeader_->pos() - from).len2() < r2)
+		out.push_back(platoonLeader_->pos());
+}
+
 int32 Room::countNpcsTargeting(int32 playerId) const {
 	auto it = aggroCount_.find(playerId);
 	return (it != aggroCount_.end()) ? it->second : 0;
@@ -483,6 +494,7 @@ void Room::enter(GameSession* session) {
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
 	player->setScale(playerStarts_[sessions_.size() % playerStarts_.size()].scale());
 	player->body().setMotionType(MotionType::Kinematic);
+	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
@@ -997,6 +1009,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 
 			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
 			registerBody(*npc);
+			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). 나머지 충돌은 유지.
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -1010,6 +1024,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
 	registerBody(*platoonLeader_);
+	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
+	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());

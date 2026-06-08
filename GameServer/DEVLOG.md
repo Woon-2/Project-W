@@ -678,7 +678,26 @@ order가 같은 틱에 분대 `pushCommandsToMembers` → NPC `consumePendingCom
 후퇴→박스, 박스→전술 두 전환 모두 적용. 체류 중엔 기존 메커니즘이 대형 유지(후퇴=리더 정지+RetreatFormUp
 HoldSlot, 박스=`boxRefreshTimer_` 0.1s 갱신). HP 임계/BossSolo 등 비상 전이는 체류와 무관하게 우선 동작.
 
+### [14] 전술 NPC 경로 차단 해소 — 충돌 통과 필터 + HoldSlot 회피
+
+전술 NPC가 슬롯/목표로 motor 직진할 때 (1) 경로의 플레이어(Kinematic=무한 질량)에 벽처럼 막혀 통과
+불가, (2) 박스 대형 형성 경로의 보스(Dynamic mass70)와 jam → 슬롯 도착 실패 → `allMembersArrived`
+영구 false → 전술 미발동. 원인: `updateHoldSlot`에 분리력이 전혀 없었고(직진만), 분리력 이웃에
+플레이어 미포함, 물리에 충돌 필터 부재.
+
+**수정 (A) 충돌 통과 필터:** `RigidBody`에 `collisionCategory_`/`collisionMask_`(기본 `0xFFFFFFFF`) 도입,
+`generateContacts`에서 `(a.cat & b.mask)==0 || (b.cat & a.mask)==0`이면 접촉 생성 skip. `CollisionLayer::Player`
+/`Boss` 비트로 플레이어·보스를 태그하고 trooper mask에서 둘을 제외 → trooper↔플레이어/보스 통과(나머지
+충돌·솔버 수학 불변, 보스↔플레이어 충돌 유지).
+
+**수정 (B) HoldSlot 회피:** `Room::findNearbyBlockerPositions`(플레이어+생존 보스) 추가, `updateHoldSlot`
+이동에서 슬롯까지 `separationRadius_`보다 멀면(en route) 분리력 수직 성분으로 slotDir를 옆으로 보정
+(`applyBlockerAvoidance`). 박스 밀집 패킹 보존 위해 peer NPC는 제외, 슬롯 근처는 비활성. 후퇴/박스/포위/
+경계가 모두 HoldSlot이라 일괄 적용. Chase(공격 접근)엔 미적용(타깃 회피 방지) — 정면 충돌은 (A)가 처리.
+
 ### 설계 규약 메모
+- **전술 trooper는 플레이어/보스와 물리 충돌하지 않음**(CollisionLayer). 경로 차단·대형 jam 방지용.
+  되돌리려면 Room.cpp의 카테고리/마스크 태그만 제거(물리 코어는 기본값이라 무해)([14]).
 - **전술 시스템 업데이트는 반드시 Leader → Squad → NPC 순서** — 명령이 위에서 아래로 흐르므로 같은 순서로
   돌려야 order가 한 틱에 끝까지 전파된다. 뒤집으면 도착 게이트가 stale 슬롯으로 거짓 양성을 내 대형
   단계(박스 등)가 건너뛰어진다([12]). NPCAI 원본의 순서를 유지할 것.

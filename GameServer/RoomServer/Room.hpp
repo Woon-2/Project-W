@@ -101,6 +101,8 @@ public:
 	std::vector<Goblin>& goblins() { return goblins_; }
 	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
+	// 전술 NPC 대형 이동 시 회피할 "큰 장애물"(플레이어 + 생존 중인 보스) 위치를 radius 내에서 append.
+	void MU_CALLCONV findNearbyBlockerPositions( mu::Vec3 from, float radius, std::vector<mu::Vec3>& out ) const;
 	int32 countNpcsTargeting( int32 playerId ) const;
 	NpcGroup* getNpcGroup( int32 groupId );
 	Milliseconds getElapsedMs() const { return elapsedMs_; }

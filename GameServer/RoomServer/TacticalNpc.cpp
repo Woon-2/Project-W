@@ -886,6 +886,23 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
 
 // ─── HoldSlot ─────────────────────────────────────────────────────────────────
 
+void MU_CALLCONV TacticalNpc::applyBlockerAvoidance( Room& room, mu::Vec3& slotDir, float distToSlot ) {
+    // 슬롯 근처에선 정밀 정렬을 위해 회피 비활성(en route에서만 우회).
+    if ( distToSlot <= separationRadius_ ) {
+        return;
+    }
+
+    nearbyCache_.clear();
+    room.findNearbyBlockerPositions( pos(), TACTICAL_BLOCKER_AVOID_RADIUS, nearbyCache_ );   // 플레이어 + 보스
+    if ( nearbyCache_.empty() ) {
+        return;
+    }
+
+    mu::Vec3 sep = calcSeparationForce( nearbyCache_, TACTICAL_BLOCKER_AVOID_RADIUS );
+    mu::Vec3 sepPerp = sep - slotDir * mu::dot( sep, slotDir );   // 진행 방향에 수직인 성분만(전진 유지)
+    slotDir = norm3( slotDir + sepPerp * separationWeight_ );
+}
+
 void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( guardNearestPlayer_ ) {
@@ -913,6 +930,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             }
 
             mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
+            applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
             float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
             if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
                 spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
@@ -942,6 +960,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
     }
 
     mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
+    applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
     if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
         spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );

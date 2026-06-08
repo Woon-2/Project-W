@@ -129,6 +129,8 @@ protected:
     void updateChargeThrough( Room& room );
     void updateConfused     ( Seconds dt, Room& room );
     void updateHoldSlot     ( Room& room );
+    // 슬롯 이동 방향(slotDir)을 큰 장애물(플레이어/보스) 회피로 옆으로 보정. en route에서만 동작.
+    void MU_CALLCONV applyBlockerAvoidance( Room& room, mu::Vec3& slotDir, float distToSlot );
     void updatePressureWait ( Seconds dt, Room& room );
     void updateDead         ( Room& room );
 
@@ -202,6 +204,8 @@ protected:
     // 슬롯 "도착" 판정 거리 배율(separationRadius_ 기준). 밀집 Dynamic 대형은 NPC끼리 물리적으로
     // 막혀 슬롯 2~3.5m에서 멈추므로, 도착 판정을 그만큼 넓혀 대형 완성(allMembersArrived)이 성립하게 한다.
     static constexpr float TACTICAL_SLOT_ARRIVE_MULT                  = 1.5f;
+    // 슬롯 이동(HoldSlot) 중 큰 장애물(플레이어/보스)을 옆으로 우회하는 회피 반경.
+    static constexpr float TACTICAL_BLOCKER_AVOID_RADIUS              = 3.5f;
     static constexpr int   MAX_TACTICAL_ATTACKERS_PER_TARGET          = 5;
     static constexpr float TACTICAL_ATTACK_RESERVATION_MAX_DIST       = 8.0f;
     static constexpr Seconds TACTICAL_ATTACK_RESERVATION_STALE_TIME{ 3.0f };

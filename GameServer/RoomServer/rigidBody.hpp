@@ -2,12 +2,22 @@
 #define room_server_rigidBody_hpp
 
 #include "collision.hpp"
+#include <cstdint>
 
 // Motion type for a RigidBody.
 // Kinematic: game logic drives velocity; solver does not apply forces.
 // Dynamic:   physics drives via force/impulse accumulation.
 // Static:    never moves; treated as infinite mass by the solver.
 enum class MotionType { Kinematic, Dynamic, Static };
+
+// Collision filtering bits. A pair (a, b) collides only when
+// (a.category & b.mask) != 0 && (b.category & a.mask) != 0.
+// Bodies default to category/mask = all-ones (collide with everything);
+// only specially-tagged bodies (player, boss) carve out exceptions.
+namespace CollisionLayer {
+    constexpr uint32_t Player = 1u << 0;
+    constexpr uint32_t Boss   = 1u << 1;
+}
 
 // Kinematic state snapshot used for interpolation.
 // prev and curr are kept separate so two snapshots can be compared.
@@ -135,6 +145,12 @@ public:
     void     setMotorGain(float g)                  { motor_.gain = g; }
     const VelocityMotor& motor()              const { return motor_; }
 
+    // Collision filtering (see CollisionLayer). Default: collide with all.
+    void     setCollisionCategory(uint32_t c)       { collisionCategory_ = c; }
+    void     setCollisionMask(uint32_t m)           { collisionMask_ = m; }
+    uint32_t collisionCategory()              const { return collisionCategory_; }
+    uint32_t collisionMask()                  const { return collisionMask_; }
+
     // Pseudo-velocity API for Split Impulse position correction.
     mu::Vec3 pseudoLinearVel() const { return pseudoLinearVel_; }
     mu::Vec3 pseudoOmega()     const { return pseudoOmega_; }
@@ -190,6 +206,10 @@ private:
     mu::Vec3   pseudoOmega_{};
 
     VelocityMotor motor_{};
+
+    // Collision filter bits (default: collide with everything).
+    uint32_t collisionCategory_{ 0xFFFFFFFFu };
+    uint32_t collisionMask_    { 0xFFFFFFFFu };
 };
 
 #endif // room_server_rigidBody_hpp
