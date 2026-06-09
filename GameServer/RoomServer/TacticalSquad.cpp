@@ -51,6 +51,7 @@ void TacticalSquad::receiveOrder( const SquadOrder& order ) {
     wedgePrepareSlots_.clear();
     wedgeExitSlots_.clear();
     activeWedgeChargeId_ = 0;
+    wedgeChargeReleased_ = !order.waitForChargeRelease;
 }
 
 void MU_CALLCONV TacticalSquad::updateBoxLeaderPos( mu::Vec3 pos ) {
@@ -87,7 +88,9 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
 
     if ( currentOrder_.type == SquadOrderType::WedgeCharge && !wedgePrepared_ && areMembersAtSlots() ) {
         wedgePrepared_ = true;
-        pushCommandsToMembers( room );
+        if ( wedgeChargeReleased_ ) {
+            pushCommandsToMembers( room );
+        }
     }
     if ( currentOrder_.type == SquadOrderType::WedgeCharge && wedgePrepared_ && activeWedgeChargeId_ != 0 && areChargeMembersComplete() ) {
         room.endWedgeCharge( activeWedgeChargeId_ );
@@ -123,6 +126,7 @@ void TacticalSquad::updateLeaderlessBrawl( Seconds dt, Room& room ) {
     wedgePrepareSlots_.clear();
     wedgeExitSlots_.clear();
     activeWedgeChargeId_ = 0;
+    wedgeChargeReleased_ = true;
 
     pushCommandsToMembers( room );
 }
@@ -179,43 +183,46 @@ mu::Vec3 TacticalSquad::calcCentroid() const {
 }
 
 bool TacticalSquad::areMembersAtSlots() const {
-    bool anyAlive = false;
+    int32 aliveCount = 0;
+    int32 atSlotCount = 0;
 
     for ( TacticalNpc* tnpc : memberCache_ ) {
         if ( !tnpc || tnpc->hp() <= 0 ) {
             continue;
         }
 
-        anyAlive = true;
-
-        if ( !tnpc->isAtSlot() ) {
-            return false;
+        ++aliveCount;
+        if ( tnpc->isAtSlot() ) {
+            ++atSlotCount;
         }
     }
 
-    return anyAlive;
+    // 전원 대신 임계비율(SLOT_ARRIVE_FRACTION) 이상 도착 시 완성 인정 — 한두 명이 끼어도 단계 전환 진행
+    return aliveCount > 0 &&
+           static_cast<float>( atSlotCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
 bool TacticalSquad::areChargeMembersComplete() const {
-    bool anyAlive = false;
+    int32 aliveCount = 0;
+    int32 completeCount = 0;
 
     for ( TacticalNpc* tnpc : memberCache_ ) {
         if ( !tnpc || tnpc->hp() <= 0 ) {
             continue;
         }
 
-        anyAlive = true;
+        ++aliveCount;
         TacticalNpcState st = tnpc->getState();
 
-        if ( st == TacticalNpcState::AttackWindup || st == TacticalNpcState::AttackRecover ) {
-            continue;
-        }
-        if ( !tnpc->isChargeComplete() ) {
-            return false;
+        // 공격 중인 멤버는 돌진 완료로 간주(애니메이션 진행 중)
+        if ( st == TacticalNpcState::AttackWindup || st == TacticalNpcState::AttackRecover
+            || tnpc->isChargeComplete() ) {
+            ++completeCount;
         }
     }
 
-    return anyAlive;
+    return aliveCount > 0 &&
+           static_cast<float>( completeCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
 void TacticalSquad::endActiveWedgeCharge( Room& room ) {
@@ -225,6 +232,41 @@ void TacticalSquad::endActiveWedgeCharge( Room& room ) {
 
     room.endWedgeCharge( activeWedgeChargeId_ );
     activeWedgeChargeId_ = 0;
+}
+
+void TacticalSquad::releaseWedgeCharge() {
+    if ( currentOrder_.type != SquadOrderType::WedgeCharge || wedgeChargeReleased_ ) {
+        return;
+    }
+
+    wedgeChargeReleased_ = true;
+    if ( wedgePrepared_ ) {
+        orderDirty_ = true; // 다음 tick에 pushCommandsToMembers로 돌진 명령 발행
+    }
+}
+
+float TacticalSquad::estimateWedgeHalfWidth( float spacingMult, bool reserveApex ) const {
+    int32 count = static_cast<int32>( memberIds_.size() ) + (reserveApex ? 1 : 0);
+    if ( count <= 1 ) {
+        return 0.f;
+    }
+
+    if ( spacingMult <= 0.f ) {
+        spacingMult = 1.f;
+    }
+    float spacing = std::max( memberSeparationRadius_ * 0.75f, 1.5f ) * spacingMult;
+
+    int32 placed = 0;
+    int32 row = 0;
+    int32 widestRow = 1;
+    while ( placed < count ) {
+        int32 rowCount = std::min( row + 1, count - placed );
+        widestRow = std::max( widestRow, rowCount );
+        placed += rowCount;
+        ++row;
+    }
+
+    return static_cast<float>( widestRow - 1 ) * spacing * 0.5f;
 }
 
 // ─── 슬롯 계산 ────────────────────────────────────────────────────────────────
@@ -440,7 +482,17 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
         forward = (flen > 0.01f) ? forward * (1.f / flen) : mu::Vec3( 1.f, 0.f, 0.f );
 
         if ( !wedgePrepared_ ) {
-            mu::Vec3 prepareApex = centroid + forward * WEDGE_PREP_APEX_DISTANCE;
+            mu::Vec3 prepareApex;
+            if ( ord.hasWedgeApex ) {
+                prepareApex = ord.wedgeApexPos;
+                mu::Vec3 toTarget = targetCenter - prepareApex;
+                if ( toTarget.len2() > 0.01f ) {
+                    forward = norm3( toTarget );  // 회랑 입구→타겟 방향으로 전진축 재정렬
+                }
+            }
+            else {
+                prepareApex = centroid + forward * WEDGE_PREP_APEX_DISTANCE;
+            }
             int32 slotCount = count + (ord.reserveWedgeApex ? 1 : 0);
             std::vector<mu::Vec3> slots = calcWedgeSlots( prepareApex, forward, slotCount, ord.wedgeSpacingMult );
             mu::Vec3 exitApex = targetCenter + forward * WEDGE_EXIT_DISTANCE;

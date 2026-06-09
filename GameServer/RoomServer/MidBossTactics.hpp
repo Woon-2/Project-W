@@ -74,14 +74,14 @@ private:
 
     enum class DivideTaskType : byte { None, Charge, Screen };
 
+    // 회랑(corridor) 포획 전술 단계: 준비 → 돌진 → 교전
+    enum class DivideStage : byte { Preparing, Charging, Engaging };
+
     struct DivideSquadTask {
         TacticalSquad*        squad{ nullptr };
         DivideTaskType        type{ DivideTaskType::None };
         uint32                targetId{ 0 };
         std::vector<uint32>   clusterPlayerIds{};
-        bool                  taskCompleted{ false };
-        bool                  engageIssued{ false };
-        Seconds               engageProtectTimer{};
     };
 
     struct BossTargetScore {
@@ -102,15 +102,19 @@ private:
     float        evaluatePlayerScore( const GameSession* s, const PlatoonLeader& leader ) const;
     int32        clusterPlayers( const Room& room, const PlatoonLeader& leader ) const;
     std::vector<PlayerCluster> buildPlayerClusters( const Room& room, const PlatoonLeader& leader ) const;
-    void         issueDivideAndConquer( PlatoonLeader& leader,
+    bool         issueDivideAndConquer( Room& room, PlatoonLeader& leader,
                                         const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters );
     void         updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader );
+    bool         calcCaptureClusterCentroid( Room& room, mu::Vec3& outCentroid ) const;
+    bool         isCaptureClusterInsideCorridor( Room& room ) const;
+    void         issueDivideEngage( Room& room, PlatoonLeader& leader );
     uint32       selectReplacementTarget( Room& room, const PlatoonLeader& leader, const std::vector<uint32>& playerIds ) const;
     int32        countLiveMembers( const std::vector<TacticalSquad*>& liveSquads ) const;
     int32        minMembersForEncircle( int32 playerCount ) const;
     bool         canStartEncircle( const std::vector<TacticalSquad*>& liveSquads, const PlayerCluster& cluster ) const;
     float        calcEncircleRadius( int32 liveMembers ) const;
     bool         allMembersArrived( const PlatoonLeader& leader ) const;
+    bool         formationReady( const PlatoonLeader& leader ) const;
     std::vector<mu::Vec3> calcSquadBoxOffsets( int32 numSquads ) const;
     bool         checkTacticsConditions( const PlatoonLeader& leader ) const;
 
@@ -122,11 +126,21 @@ private:
     Seconds          tacticTimer_{};
     Seconds          tacticCooldown_{};
     Seconds          phaseHoldTimer_{};   // 대형 완성 후 체류(과시) 시간 누적
+    Seconds          phaseElapsed_{};     // 현재 단계 누적 시간(타임아웃 폴백용)
+    Seconds          divideStageTimer_{}; // DivideAndConquer 스테이지 누적 시간(타임아웃 폴백용)
     mu::Vec3         boxAdvanceTargetPos_{};
     mu::Vec3         retreatTargetPos_{};
     uint32           primaryTargetId_{ 0 };
     int32            encircleIssuedLiveMembers_{ 0 };
     std::vector<DivideSquadTask> divideTasks_{};
+    DivideStage      divideStage_{ DivideStage::Preparing };
+    mu::Vec3         divideCorridorCenter_{};
+    mu::Vec3         divideCorridorForward_{ 1.f, 0.f, 0.f };
+    mu::Vec3         divideCorridorRight_{ 0.f, 0.f, 1.f };
+    float            divideCorridorHalfWidth_{ 0.f };
+    float            divideCorridorHalfLength_{ 0.f };
+    Seconds          divideEngageTimer_{};
+    std::vector<uint32> divideTargetPlayerIds_{};
     BossPersonalState bossPersonalState_{ BossPersonalState::EvaluateTarget };
     Seconds           bossPersonalTimer_{};
     Seconds           bossTargetEvalTimer_{};
@@ -143,12 +157,15 @@ private:
     static constexpr float TACTIC_SQUAD_RATIO            = 0.80f;
     static constexpr Seconds TACTIC_COOLDOWN_DURATION{ 8.0f };
     static constexpr Seconds TACTIC_FAIL_COOLDOWN_DURATION{ 5.0f };
-    static constexpr Seconds DIVIDE_ENGAGE_PROTECT_DURATION{ 3.0f };
-    static constexpr float SCREEN_BLOCK_SPACING          = 3.5f;
-    static constexpr float SCREEN_SLOT_SPACING_SCALE     = 0.65f;
-    static constexpr float SCREEN_SLOT_COLUMN_SCALE      = 3.0f;
-    static constexpr int32 SCREEN_SLOT_COLUMN_COUNT      = 7;
-    static constexpr float SCREEN_BLOCK_CENTER_BIAS      = 0.5f;
+    static constexpr Seconds DIVIDE_ENGAGE_DURATION{ 3.0f };
+    static constexpr Seconds FORMATION_TIMEOUT{ 7.0f };       // 박스/포위/경계/후퇴 집결 타임아웃 폴백
+    static constexpr Seconds DIVIDE_PREP_TIMEOUT{ 6.0f };     // 쐐기 준비+차단선 형성 타임아웃 폴백
+    static constexpr Seconds DIVIDE_CHARGE_TIMEOUT{ 5.0f };   // 쐐기 돌진 완료 타임아웃 폴백
+    static constexpr float CAPTURE_LINE_SPACING_SCALE    = 0.65f;  // 상대 배율(separationRadius 기준) — 스케일 불변
+    static constexpr float CAPTURE_CORRIDOR_CLEARANCE    = 2.5f;   // 인게임 스케일 (시뮬 6.0 × ~0.4)
+    static constexpr float CAPTURE_MIN_HALF_LENGTH       = 10.0f;  // 인게임 스케일 (시뮬 24.0 × ~0.4)
+    static constexpr float CAPTURE_ESCAPE_TOLERANCE      = 1.0f;   // 인게임 스케일 (시뮬 2.0 × ~0.4, 반올림)
+    static constexpr float CAPTURE_CHARGE_STANDOFF       = 4.0f;   // 차단선 후방 끝에서 쐐기 정점을 더 뒤로 띄우는 여유
     static constexpr float BOX_FRONT_OFFSET              = 6.f;
     static constexpr float BOX_SQUAD_SPACING             = 15.f;
     static constexpr float BOX_ARC_DEPTH                 = 4.f;

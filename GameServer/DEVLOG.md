@@ -695,6 +695,69 @@ HoldSlot, 박스=`boxRefreshTimer_` 0.1s 갱신). HP 임계/BossSolo 등 비상 
 (`applyBlockerAvoidance`). 박스 밀집 패킹 보존 위해 peer NPC는 제외, 슬롯 근처는 비활성. 후퇴/박스/포위/
 경계가 모두 HoldSlot이라 일괄 적용. Chase(공격 접근)엔 미적용(타깃 회피 방지) — 정면 충돌은 (A)가 처리.
 
+### [15] 홉고블린 DivideAndConquer 재설계 — 쐐기 돌진 + 좌우 차단선 회랑(corridor)
+
+NPCAI 시뮬레이터에서 각개격파 전술이 재설계되어 RoomServer로 1:1 포팅. 기존: 차단 부대가 **다른**
+클러스터를 `GuardBoss`로 막고, 쐐기는 슬롯 도착 즉시 자동 돌진(차단선과 무연동). 신규: 한 부대가
+**쐐기를 준비만 하고 대기**, 나머지 2개 부대가 돌진 대상 군집의 **좌우 측면에 일렬 차단선**을 세워
+회랑을 형성 → 회랑 완성 시 쐐기를 **동시에 release**해 군집을 가두며 관통.
+
+**(A) TacticalSquad 쐐기 release 게이트:** `SquadOrder.waitForChargeRelease`로 준비된 쐐기를
+`wedgeChargeReleased_`까지 보류. 리더가 `releaseWedgeCharge()` 호출 시 돌진 발동. 신규
+`isWedgePrepared()`/`estimateWedgeHalfWidth()`(쐐기 최대폭=회랑 반폭 산출용).
+
+**(B) GoblinMidBossTactic 회랑 상태머신:** `DivideStage{ Preparing, Charging, Engaging }`.
+회랑 좌표계(`divideCorridorForward_/Right_/Center_/HalfWidth_/HalfLength_`)를 chargeSquad→chargeCluster
+방향으로 구성. Preparing 매 틱 `isCaptureClusterInsideCorridor()`로 대상 이탈 검사(이탈 시 fail-cooldown).
+차단선은 `FormationGuard`+`slotColumnCount=멤버수`로 강제 일렬. **GameServer 적응:** FormationGuard
+핸들러가 살아있는 플레이어 id를 요구(`findLivingSessionByPlayerId`)하므로 screen `targetId`는
+`leader.getId()`(시뮬레이터) 대신 **군집 대표 플레이어 id**로 지정.
+
+**(C) 레거시 제거:** 구 `SCREEN_*` 상수 5개, `DivideSquadTask.taskCompleted/engageIssued/engageProtectTimer`,
+`DIVIDE_ENGAGE_PROTECT_DURATION` 삭제(완료-플래그 루프 → DivideStage 상태머신으로 대체). `GuardBoss`는
+다른 phase에서 계속 사용하므로 유지.
+
+**(D) 거리 상수 인게임 스케일 적용:** 설계 규약("전술 매크로 거리 상수는 인게임 스케일, 시뮬 수치
+직접 이식 금지")에 따라 시뮬 절대 거리를 기존 GameServer 쐐기 비율(EXIT 14 = 시뮬 35의 ≈0.4x)에 맞춰
+축소. `WEDGE_PREP_APEX_DISTANCE`/`WEDGE_EXIT_DISTANCE`는 기존값(4/14) 유지, `CAPTURE_MIN_HALF_LENGTH`
+24→**10**, `CAPTURE_CORRIDOR_CLEARANCE` 6→**2.5**, `CAPTURE_ESCAPE_TOLERANCE` 2→**1**. 비율형 배율
+`CAPTURE_LINE_SPACING_SCALE`(=0.65)는 separationRadius 기준 상대값이라 불변. 인게임(client) 검증 후 미세
+조정 여지 있음.
+
+### [16] 쐐기 돌진 시작점을 차단선 밖(회랑 후방 입구)으로
+
+[15] 인게임 검증 결과 쐐기가 차단선 **안쪽**에서 돌진을 시작함. 원인: 준비 정점이 돌진 부대
+현재 위치 기준(`centroid + forward*WEDGE_PREP_APEX_DISTANCE`)이라, 부대가 보스/플레이어 근처에
+모여 있으면 회랑 내부에 잡힘.
+
+**수정:** `SquadOrder`에 `wedgeApexPos`/`hasWedgeApex` 추가. WedgeCharge 준비 시 `hasWedgeApex`면
+부대 위치 대신 명시 정점을 사용하고 전진축을 `정점→타겟`으로 재정렬. `issueDivideAndConquer`에서
+차단선 길이(`divideCorridorHalfLength_`) 확정 **후** 돌진 명령을 발행하도록 순서를 옮기고, 정점을
+`divideCorridorCenter_ - divideCorridorForward_*(divideCorridorHalfLength_ + CAPTURE_CHARGE_STANDOFF=4)`로
+지정 → 쐐기가 회랑 후방 입구 밖에서 준비해 차단선 사이를 관통. 후방 입구는 돌진 부대 쪽(forward=부대→
+플레이어)이라 부대가 자연스럽게 정렬됨.
+
+### [17] 전술 NPC 정면 충돌(head-on) 교착 해소 — peer 스티어링 + 도착 게이트 보강
+
+증상: NPC끼리 정면으로 마주쳐 막히면 박스 대형 형성이 늦어 전술 발동이 지연되고, 전술 중에도
+슬롯/돌진 도착이 막혀 종료가 지연. 원인 3가지: (1) `updateHoldSlot`에 peer 회피 스티어링 부재
+(플레이어/보스만 회피), (2) Chase/Flank 분리력이 진행방향 수직 성분만이라 정확한 정면(180°)에서
+수직 성분≈0 → 대칭 교착, (3) 도착 게이트(`areMembersAtSlots`/`allMembersArrived`/
+`areChargeMembersComplete`)가 전원 100% 요구 → 끼인 1명이 전체 단계 stall.
+
+**수정 (A) head-on 해소 스티어링:** `TacticalNpc::applyPeerSeparation()` 신설(이웃 전술 NPC 분리력 +
+정면 감지 시 일관된 'veer-right' 측면 bias 주입 → 마주친 둘이 반대편으로 갈라져 통과, 차선 통행 규칙).
+`updateHoldSlot`(en route, 슬롯 근처는 비활성해 밀집 패킹 보존)·`updateChase`·`updateFlank`에 적용.
+상수 `HEADON_DOT_THRESHOLD=0.6`, `HEADON_BIAS=1.0`.
+
+**수정 (B) 임계비율 도착:** `areMembersAtSlots`/`areChargeMembersComplete`를 전원 → 살아있는 멤버 중
+`SLOT_ARRIVE_FRACTION=0.85` 이상 도착/완료로 완화.
+
+**수정 (C) 단계 타임아웃 폴백:** `GoblinMidBossTactic`에 `phaseElapsed_`(단계 누적)·`divideStageTimer_`
+추가. `formationReady()=allMembersArrived || phaseElapsed_>=FORMATION_TIMEOUT(7s)`로 박스/포위/경계/후퇴
+게이트 교체. DivideAndConquer Preparing/Charging에 `DIVIDE_PREP_TIMEOUT(6s)`/`DIVIDE_CHARGE_TIMEOUT(5s)`
+폴백 → stall 시에도 전술 진행·종료 보장(정상 흐름엔 무영향).
+
 ### 설계 규약 메모
 - **전술 trooper는 플레이어/보스와 물리 충돌하지 않음**(CollisionLayer). 경로 차단·대형 jam 방지용.
   되돌리려면 Room.cpp의 카테고리/마스크 태그만 제거(물리 코어는 기본값이라 무해)([14]).

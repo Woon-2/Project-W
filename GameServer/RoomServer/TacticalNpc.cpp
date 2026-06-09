@@ -608,12 +608,8 @@ void TacticalNpc::updateChase( Seconds dt, Room& room ) {
         return;
     }
 
-    mu::Vec3 chaseDir = norm3( targetPos - pos() );
-    nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
-    mu::Vec3 sepPerp = sep - chaseDir * mu::dot( sep, chaseDir );
-    mu::Vec3 moveDir = norm3( chaseDir + sepPerp * separationWeight_ );
+    mu::Vec3 moveDir = norm3( targetPos - pos() );
+    applyPeerSeparation( room, moveDir, separationRadius_ );   // peer 회피 + head-on 해소
 
     setFacingDir( *this, moveDir );
     setDesiredVel( mu::Vec3( moveDir.x() * moveSpeed_, 0.f, moveDir.z() * moveSpeed_ ) );
@@ -774,13 +770,8 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
         return;
     }
 
-    mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
-    nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
-    mu::Vec3 sepPerp = sep - slotDir * mu::dot( sep, slotDir );
-    mu::Vec3 moveDir = norm3( slotDir + sepPerp * separationWeight_ );
+    mu::Vec3 moveDir = norm3( assignedSlot_ - pos() );
+    applyPeerSeparation( room, moveDir, separationRadius_ );   // peer 회피 + head-on 해소
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
 
     setFacingDir( *this, moveDir );
@@ -903,6 +894,32 @@ void MU_CALLCONV TacticalNpc::applyBlockerAvoidance( Room& room, mu::Vec3& slotD
     slotDir = norm3( slotDir + sepPerp * separationWeight_ );
 }
 
+void MU_CALLCONV TacticalNpc::applyPeerSeparation( Room& room, mu::Vec3& moveDir, float radius ) {
+    if ( moveDir.len2() <= 0.01f ) {
+        return;
+    }
+
+    nearbyCache_.clear();
+    room.findNearbyNpcPositions( pos(), radius, getId(), nearbyCache_ );   // 이웃 전술 NPC(peer)
+    mu::Vec3 sep = calcSeparationForce( nearbyCache_, radius );
+    if ( sep.len2() < 1e-4f ) {
+        return;
+    }
+
+    mu::Vec3 sepPerp = sep - moveDir * mu::dot( sep, moveDir );   // 진행 방향에 수직 성분(기존 회피)
+    mu::Vec3 steer = moveDir + sepPerp * separationWeight_;
+
+    // 정면(head-on) 감지: 이웃이 진행방향 정면이면 sep가 moveDir 반대 → 수직 성분 소실 →
+    // 모든 NPC가 동일하게 '오른쪽'으로 비키는 bias를 줘 마주친 둘이 반대편으로 갈라지게 한다.
+    float forwardBlock = -mu::dot( norm3( sep ), moveDir );
+    if ( forwardBlock > HEADON_DOT_THRESHOLD ) {
+        mu::Vec3 right( moveDir.z(), 0.f, -moveDir.x() );   // 진행방향 기준 오른쪽(top-down)
+        steer = steer + right * (HEADON_BIAS * forwardBlock);
+    }
+
+    moveDir = norm3( steer );
+}
+
 void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( guardNearestPlayer_ ) {
@@ -931,6 +948,9 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
             mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
             applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
+            if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
+                applyPeerSeparation( room, slotDir, separationRadius_ );
+            }
             float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
             if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
                 spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
@@ -961,6 +981,9 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
     applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
+    if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
+        applyPeerSeparation( room, slotDir, separationRadius_ );
+    }
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
     if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
         spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );

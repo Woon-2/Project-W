@@ -262,6 +262,8 @@ void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLe
 void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) {
     const auto& squads = leader.getSquads();
 
+    phaseElapsed_ += dt;   // 현재 단계 누적 시간(타임아웃 폴백용)
+
     if ( !initialSizesSet_ ) {
         initialSizesSet_ = true;
         for ( TacticalSquad* sq : squads ) {
@@ -306,7 +308,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
             }
         }
 
-        if ( phaseOrderIssued_ && allMembersArrived( leader ) ) {
+        if ( phaseOrderIssued_ && formationReady( leader ) ) {
             GameSession* encircleTarget = selectPrimaryTarget( room, leader );
 
             if ( encircleTarget ) {
@@ -344,14 +346,14 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     }
 
     if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary ) {
-        if ( allMembersArrived( leader ) ) {
+        if ( formationReady( leader ) ) {
             phaseHoldTimer_ += dt;   // 박스 대형 완성 → 잠시 유지(과시) 후 다음 단계
         }
         else {
             phaseHoldTimer_ = 0s;    // 아직 미집결 → 체류 타이머 리셋
         }
 
-        if ( allMembersArrived( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
+        if ( formationReady( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
             if ( !tacticsUnlocked_ ) {
                 enterPhase( LeaderPhase::Engage );
 
@@ -384,7 +386,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         }
     }
 
-    if ( leaderPhase_ == LeaderPhase::Vigilance && phaseOrderIssued_ && allMembersArrived( leader ) ) {
+    if ( leaderPhase_ == LeaderPhase::Vigilance && phaseOrderIssued_ && formationReady( leader ) ) {
         auto clusters = buildPlayerClusters( room, leader );
         auto liveSquads = collectLiveSquads( leader );
 
@@ -401,7 +403,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 
     bool leaderAtRetreat = lenXZ( leader.pos() - retreatTargetPos_ ) <= 2.0f;
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat && phaseOrderIssued_
-        && allMembersArrived( leader ) && leaderAtRetreat
+        && formationReady( leader ) && leaderAtRetreat
     ) {
         phaseHoldTimer_ += dt;   // 후퇴 집결 완료 → 잠시 유지 후 박스 대형 전환
         if ( phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
@@ -444,6 +446,7 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
     leaderPhase_ = next;
     phaseOrderIssued_ = false;
     phaseHoldTimer_ = 0s;
+    phaseElapsed_ = 0s;   // 단계 누적 시간 리셋(타임아웃 폴백용)
 
     if ( next != LeaderPhase::Encircle ) {
         encircleIssuedLiveMembers_ = 0;
@@ -652,7 +655,10 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
             return;
         }
 
-        issueDivideAndConquer( leader, liveSquads, clusters );
+        if ( !issueDivideAndConquer( room, leader, liveSquads, clusters ) ) {
+            enterTacticFailCooldown( room, leader );
+            return;
+        }
         phaseOrderIssued_ = true;
         return;
     }
@@ -827,11 +833,16 @@ uint32 GoblinMidBossTactic::selectReplacementTarget( Room& room, const PlatoonLe
     return best ? static_cast<uint32>( best->id() ) : 0;
 }
 
-void GoblinMidBossTactic::issueDivideAndConquer( PlatoonLeader& leader,
+bool GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& leader,
                                                  const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters ) {
     divideTasks_.clear();
-    if ( liveSquads.empty() || clusters.size() <= 1 ) {
-        return;
+    divideTargetPlayerIds_.clear();
+    divideStage_ = DivideStage::Preparing;
+    divideEngageTimer_ = 0s;
+    divideStageTimer_ = 0s;
+
+    if ( liveSquads.size() < 3 || clusters.size() <= 1 ) {
+        return false;
     }
 
     std::vector<PlayerCluster> sorted = clusters;
@@ -842,9 +853,10 @@ void GoblinMidBossTactic::issueDivideAndConquer( PlatoonLeader& leader,
     );
 
     const PlayerCluster& chargeCluster = sorted[ 0 ];
+
+    // chargeCluster에 가장 가까운 부대를 돌진 부대로 선정
     int32 chargeSquadIdx = 0;
     float bestDist = -1.f;
-
     for ( int32 i = 0; i < static_cast<int32>( liveSquads.size() ); ++i ) {
         float d = ( liveSquads[ i ]->calcCentroid() - chargeCluster.centroid ).len();
         if ( bestDist < 0.f || d < bestDist ) {
@@ -854,162 +866,233 @@ void GoblinMidBossTactic::issueDivideAndConquer( PlatoonLeader& leader,
     }
 
     TacticalSquad* chargeSquad = liveSquads[ chargeSquadIdx ];
-    auto charge = SquadOrder{
-        .type = SquadOrderType::WedgeCharge,
-        .targetId = chargeCluster.representativeId,
-        .tacticCenter = chargeCluster.centroid,
-        .targetIds = chargeCluster.playerIds
-    };
+    if ( !chargeSquad || chargeSquad->isEmpty() ) {
+        return false;
+    }
+
+    // 회랑 좌표계: chargeSquad → chargeCluster 방향이 전진축, 그 수직이 좌우축
+    divideCorridorForward_ = chargeCluster.centroid - chargeSquad->calcCentroid();
+    if ( divideCorridorForward_.len2() <= 0.01f ) {
+        divideCorridorForward_ = chargeCluster.centroid - leader.pos();
+    }
+    if ( divideCorridorForward_.len2() <= 0.01f ) {
+        divideCorridorForward_ = mu::Vec3( 1.f, 0.f, 0.f );
+    }
+    else {
+        divideCorridorForward_ = norm3( divideCorridorForward_ );
+    }
+    divideCorridorRight_ = mu::Vec3( -divideCorridorForward_.z(), 0.f, divideCorridorForward_.x() );
+    divideCorridorCenter_ = chargeCluster.centroid;
+    divideCorridorHalfWidth_ = chargeSquad->estimateWedgeHalfWidth() + CAPTURE_CORRIDOR_CLEARANCE;
+    divideTargetPlayerIds_ = chargeCluster.playerIds;
+
+    // 나머지 부대를 chargeCluster 거리순으로 정렬해 가까운 2개를 차단선으로
+    // (차단선 길이 divideCorridorHalfLength_ 확정 후 돌진 정점을 회랑 후방 입구 밖으로 잡아야 하므로
+    //  돌진 명령은 차단선 루프 뒤에서 발행)
+    std::vector<TacticalSquad*> screenCandidates;
+    screenCandidates.reserve( liveSquads.size() - 1 );
+    for ( int32 i = 0; i < static_cast<int32>( liveSquads.size() ); ++i ) {
+        if ( i != chargeSquadIdx ) {
+            screenCandidates.push_back( liveSquads[ i ] );
+        }
+    }
+    std::sort( screenCandidates.begin(), screenCandidates.end(),
+        [&chargeCluster]( const TacticalSquad* a, const TacticalSquad* b ) {
+            return ( a->calcCentroid() - chargeCluster.centroid ).len2() <
+                   ( b->calcCentroid() - chargeCluster.centroid ).len2();
+        }
+    );
+
+    divideCorridorHalfLength_ = -1.f;
+    for ( int32 screenIdx = 0; screenIdx < 2; ++screenIdx ) {
+        TacticalSquad* screenSquad = screenCandidates[ screenIdx ];
+        if ( !screenSquad || screenSquad->isEmpty() ) {
+            return false;
+        }
+
+        int32 memberCount = static_cast<int32>( screenSquad->getMembers().size() );
+        if ( memberCount < 2 ) {
+            return false;
+        }
+
+        float separationRadius = 3.f;
+        if ( !screenSquad->getMemberCache().empty() && screenSquad->getMemberCache().front() ) {
+            separationRadius = screenSquad->getMemberCache().front()->getSeparationRadius();
+        }
+
+        // 차단선이 회랑 최소 길이를 덮도록 간격을 확장
+        float spacingScale = CAPTURE_LINE_SPACING_SCALE;
+        if ( memberCount > 1 ) {
+            float requiredSpacing = (CAPTURE_MIN_HALF_LENGTH * 2.f) / static_cast<float>( memberCount - 1 );
+            spacingScale = std::max( spacingScale, requiredSpacing / separationRadius );
+        }
+        float spacing = std::max( separationRadius * spacingScale, 1.2f );
+        float lineHalfLength = static_cast<float>( std::max( memberCount - 1, 0 ) ) * spacing * 0.5f;
+        if ( divideCorridorHalfLength_ < 0.f || lineHalfLength < divideCorridorHalfLength_ ) {
+            divideCorridorHalfLength_ = lineHalfLength;
+        }
+
+        float sideSign = (screenIdx == 0) ? 1.f : -1.f;
+        SquadOrder screen{};
+        screen.type = SquadOrderType::FormationGuard;
+        // FormationGuard 핸들러는 살아있는 플레이어 id를 요구하므로 군집 대표 플레이어를 지정
+        screen.targetId = chargeCluster.representativeId;
+        screen.slotSpacingScale = spacingScale;
+        screen.slotColumnCount = memberCount; // 강제 일렬 배치
+        screen.tacticCenter = divideCorridorCenter_ + divideCorridorRight_ * (divideCorridorHalfWidth_ * sideSign);
+        screen.formationTargetPos = divideCorridorCenter_;
+        screenSquad->receiveOrder( screen );
+        divideTasks_.push_back( { screenSquad, DivideTaskType::Screen, chargeCluster.representativeId, chargeCluster.playerIds } );
+    }
+
+    // 돌진 부대: 쐐기 준비만 하고 차단선 완성 전까지 release 대기.
+    // 준비 정점을 회랑 후방 입구 밖(차단선 끝보다 더 뒤)으로 잡아 차단선 사이를 관통하도록 함.
+    SquadOrder charge{};
+    charge.type = SquadOrderType::WedgeCharge;
+    charge.targetId = chargeCluster.representativeId;
+    charge.targetIds = chargeCluster.playerIds;
+    charge.tacticCenter = chargeCluster.centroid;
+    charge.waitForChargeRelease = true;
+    charge.hasWedgeApex = true;
+    charge.wedgeApexPos = divideCorridorCenter_
+        - divideCorridorForward_ * (divideCorridorHalfLength_ + CAPTURE_CHARGE_STANDOFF);
     chargeSquad->receiveOrder( charge );
     divideTasks_.push_back( { chargeSquad, DivideTaskType::Charge, chargeCluster.representativeId, chargeCluster.playerIds } );
 
-    mu::Vec3 supportCentroid{};
-    int32 supportCount{};
-    uint32 supportTargetId{};
-    std::vector<uint32> supportPlayerIds;
-
-    for ( int32 i = 1; i < sorted.size(); ++i ) {
-        const PlayerCluster& cl = sorted[ i ];
-        supportCentroid = supportCentroid + cl.centroid;
-        ++supportCount;
-
-        if ( supportTargetId == 0 ) {
-            supportTargetId = cl.representativeId;
-        }
-
-        supportPlayerIds.insert( supportPlayerIds.end(), cl.playerIds.begin(), cl.playerIds.end() );
+    // 남는 부대는 대기
+    for ( size_t i = 2; i < screenCandidates.size(); ++i ) {
+        SquadOrder idle{};
+        idle.type = SquadOrderType::Idle;
+        screenCandidates[ i ]->receiveOrder( idle );
     }
 
-    if ( supportCount == 0 ) {
-        return;
-    }
-
-    supportCentroid = supportCentroid * (1.f / static_cast<float>( supportCount ));
-
-    mu::Vec3 blockDir = norm3( supportCentroid - chargeCluster.centroid );
-    if ( blockDir.len2() < 0.001f ) {
-        blockDir = mu::Vec3( 1.f, 0.f, 0.f );
-    }
-
-    mu::Vec3 blockCenter = chargeCluster.centroid + (supportCentroid - chargeCluster.centroid) * SCREEN_BLOCK_CENTER_BIAS;
-    mu::Vec3 blockRight( -blockDir.z(), 0.f, blockDir.x() );
-    float baseAngle = std::atan2f( blockRight.z(), blockRight.x() );
-
-    int32 screenIdx{};
-    for ( int32 i = 0; i < static_cast<int32>( liveSquads.size() ); ++i ) {
-        if ( i == chargeSquadIdx ) {
-            continue;
-        }
-
-        float sideSign = (screenIdx % 2 == 0) ? 1.f : -1.f;
-
-        auto screen = SquadOrder{
-            .type = SquadOrderType::GuardBoss,
-            .targetId = ( supportTargetId != 0 ) ? supportTargetId : chargeCluster.representativeId,
-            .slotSpacingScale = SCREEN_SLOT_SPACING_SCALE,
-            .slotColumnScale = SCREEN_SLOT_COLUMN_SCALE,
-            .slotColumnCount = SCREEN_SLOT_COLUMN_COUNT,
-            .sectorAngle = baseAngle + ( sideSign < 0.f ? 3.14159265f : 0.f ),
-            .approachRadius = SCREEN_BLOCK_SPACING * ( 1.f + 0.5f * static_cast<float>( screenIdx / 2 ) ),
-            .formationTargetPos = supportCentroid,
-            .tacticCenter = blockCenter
-        };
-        liveSquads[ i ]->receiveOrder( screen );
-        divideTasks_.push_back( { liveSquads[ i ], DivideTaskType::Screen, screen.targetId, supportPlayerIds } );
-        ++screenIdx;
-    }
+    return divideTasks_.size() == 3;
 }
 
 void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader ) {
     if ( !phaseOrderIssued_ ) {
         return;
     }
-    if ( divideTasks_.empty() ) {
+    if ( divideTasks_.size() != 3 ) {
         enterTacticFailCooldown( room, leader );
         return;
     }
 
-    for ( auto& task : divideTasks_ ) {
-        if ( !task.squad || task.squad->isEmpty() ) {
-            task.taskCompleted = true;
-        }
-        else if ( !task.taskCompleted ) {
-            switch ( task.type ) {
-            case DivideTaskType::Charge:
-                task.taskCompleted = task.squad->areChargeMembersComplete();
-                break;
+    divideStageTimer_ += dt;   // 현재 스테이지 누적 시간(타임아웃 폴백용)
 
-            case DivideTaskType::Screen:
-                task.taskCompleted = task.squad->areMembersAtSlots();
-                break;
-
-            default:
-                break;
-            }
-        }
-        else {
-			// no-op
-        }
-    }
-
-    bool allScreensCompleted = true;
+    TacticalSquad* chargeSquad = nullptr;
+    bool screenSquadsReady = true;
     for ( const auto& task : divideTasks_ ) {
-        if ( task.type == DivideTaskType::Screen && !task.taskCompleted ) {
-            allScreensCompleted = false;
-            break;
+        if ( !task.squad || task.squad->isEmpty() ) {
+            // 배정된 부대가 전멸하면 진행 중 돌진을 정리하고 실패 처리
+            if ( task.type == DivideTaskType::Charge && task.squad ) {
+                task.squad->endActiveWedgeCharge( room );
+            }
+            else if ( chargeSquad ) {
+                chargeSquad->endActiveWedgeCharge( room );
+            }
+            enterTacticFailCooldown( room, leader );
+            return;
+        }
+
+        if ( task.type == DivideTaskType::Charge ) {
+            chargeSquad = task.squad;
+        }
+        else if ( task.type == DivideTaskType::Screen && !task.squad->areMembersAtSlots() ) {
+            screenSquadsReady = false;
         }
     }
-
-    bool allProtected = true;
-    for ( auto& task : divideTasks_ ) {
-        if ( task.taskCompleted && !task.engageIssued ) {
-            if ( task.type == DivideTaskType::Screen && !allScreensCompleted ) {
-                allProtected = false;
-                continue;
-            }
-
-            uint32 targetId = selectReplacementTarget( room, leader, task.clusterPlayerIds );
-            if ( targetId != 0 && task.squad && !task.squad->isEmpty() ) {
-                auto ord = SquadOrder{
-                    .type = SquadOrderType::Engage,
-                    .targetId = targetId
-				};
-                task.squad->receiveOrder( ord );
-                task.targetId = targetId;
-            }
-
-            task.engageIssued = true;
-            task.engageProtectTimer = 0s;
-        }
-
-        if ( task.engageIssued ) {
-            if ( task.targetId != 0 ) {
-                GameSession* target = room.findLivingSessionByPlayerId( static_cast<int32>(task.targetId) );
-
-                if ( !target ) {
-                    uint32 replacement = selectReplacementTarget( room, leader, task.clusterPlayerIds );
-                    task.targetId = replacement;
-
-                    if ( replacement != 0 && task.squad && !task.squad->isEmpty() ) {
-                        auto ord = SquadOrder{
-                            .type = SquadOrderType::Engage,
-                            .targetId = replacement
-                        };
-                        task.squad->receiveOrder( ord );
-                    }
-                }
-            }
-            task.engageProtectTimer += dt;
-        }
-
-        if ( !task.engageIssued || task.engageProtectTimer < DIVIDE_ENGAGE_PROTECT_DURATION ) {
-            allProtected = false;
-        }
+    if ( !chargeSquad ) {
+        enterTacticFailCooldown( room, leader );
+        return;
     }
 
-    if ( allProtected ) {
+    if ( divideStage_ == DivideStage::Preparing ) {
+        // 대상 군집이 회랑을 벗어나면 전술 취소
+        if ( !isCaptureClusterInsideCorridor( room ) ) {
+            chargeSquad->endActiveWedgeCharge( room );
+            enterTacticFailCooldown( room, leader );
+            return;
+        }
+
+        // 쐐기 준비 완료 + 좌우 차단선 완성(또는 타임아웃) → 돌진 동시 발동
+        if ( (chargeSquad->isWedgePrepared() && screenSquadsReady)
+            || divideStageTimer_ >= DIVIDE_PREP_TIMEOUT ) {
+            chargeSquad->releaseWedgeCharge();
+            divideStage_ = DivideStage::Charging;
+            divideStageTimer_ = 0s;
+        }
+        return;
+    }
+
+    if ( divideStage_ == DivideStage::Charging ) {
+        // 돌진 완료(또는 타임아웃)까지 대기 — 끼인 멤버로 인한 종료 지연 방지
+        if ( !chargeSquad->areChargeMembersComplete() && divideStageTimer_ < DIVIDE_CHARGE_TIMEOUT ) {
+            return;
+        }
+
+        chargeSquad->endActiveWedgeCharge( room );
+        issueDivideEngage( room, leader );
+        divideStage_ = DivideStage::Engaging;
+        divideStageTimer_ = 0s;
+        divideEngageTimer_ = DIVIDE_ENGAGE_DURATION;
+        return;
+    }
+
+    divideEngageTimer_ -= dt;
+    if ( divideEngageTimer_ <= 0s ) {
         tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
         enterPhase( LeaderPhase::Cooldown );
+    }
+}
+
+bool GoblinMidBossTactic::calcCaptureClusterCentroid( Room& room, mu::Vec3& outCentroid ) const {
+    mu::Vec3 sum{};
+    int32 count = 0;
+    for ( uint32 playerId : divideTargetPlayerIds_ ) {
+        GameSession* s = room.findLivingSessionByPlayerId( static_cast<int32>( playerId ) );
+        if ( !s ) {
+            continue;
+        }
+        sum = sum + s->player()->pos();
+        ++count;
+    }
+
+    if ( count <= 0 ) {
+        return false;
+    }
+    outCentroid = sum * (1.f / static_cast<float>( count ));
+    return true;
+}
+
+bool GoblinMidBossTactic::isCaptureClusterInsideCorridor( Room& room ) const {
+    mu::Vec3 clusterCenter{};
+    if ( !calcCaptureClusterCentroid( room, clusterCenter ) ) {
+        return false;
+    }
+
+    mu::Vec3 delta = clusterCenter - divideCorridorCenter_;
+    float lateral = std::fabs( dot( delta, divideCorridorRight_ ) );
+    float longitudinal = std::fabs( dot( delta, divideCorridorForward_ ) );
+    return lateral <= divideCorridorHalfWidth_ + CAPTURE_ESCAPE_TOLERANCE &&
+           longitudinal <= divideCorridorHalfLength_ + CAPTURE_ESCAPE_TOLERANCE;
+}
+
+void GoblinMidBossTactic::issueDivideEngage( Room& room, PlatoonLeader& leader ) {
+    uint32 targetId = selectReplacementTarget( room, leader, divideTargetPlayerIds_ );
+    if ( targetId == 0 ) {
+        GameSession* primary = selectPrimaryTarget( room, leader );
+        targetId = primary ? static_cast<uint32>( primary->id() ) : 0;
+    }
+
+    for ( TacticalSquad* squad : leader.getSquads() ) {
+        if ( !squad || squad->isEmpty() ) {
+            continue;
+        }
+        SquadOrder order{};
+        order.type = (targetId != 0) ? SquadOrderType::Engage : SquadOrderType::Idle;
+        order.targetId = targetId;
+        squad->receiveOrder( order );
     }
 }
 
@@ -1236,6 +1319,11 @@ bool GoblinMidBossTactic::allMembersArrived( const PlatoonLeader& leader ) const
         }
     }
     return anyAlive;
+}
+
+bool GoblinMidBossTactic::formationReady( const PlatoonLeader& leader ) const {
+    // 도착 완료 또는 단계 타임아웃 — 끼인 소수 멤버로 인한 무한 stall 방지
+    return allMembersArrived( leader ) || phaseElapsed_ >= FORMATION_TIMEOUT;
 }
 
 std::vector<mu::Vec3> GoblinMidBossTactic::calcSquadBoxOffsets( int32 numSquads ) const {

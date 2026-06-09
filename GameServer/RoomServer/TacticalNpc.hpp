@@ -131,6 +131,8 @@ protected:
     void updateHoldSlot     ( Room& room );
     // 슬롯 이동 방향(slotDir)을 큰 장애물(플레이어/보스) 회피로 옆으로 보정. en route에서만 동작.
     void MU_CALLCONV applyBlockerAvoidance( Room& room, mu::Vec3& slotDir, float distToSlot );
+    // 이웃 전술 NPC(peer) 회피로 이동 방향을 보정. 정면(head-on) 교착은 일관된 측면(veer-right) bias로 해소.
+    void MU_CALLCONV applyPeerSeparation( Room& room, mu::Vec3& moveDir, float radius );
     void updatePressureWait ( Seconds dt, Room& room );
     void updateDead         ( Room& room );
 
@@ -206,6 +208,9 @@ protected:
     static constexpr float TACTICAL_SLOT_ARRIVE_MULT                  = 1.5f;
     // 슬롯 이동(HoldSlot) 중 큰 장애물(플레이어/보스)을 옆으로 우회하는 회피 반경.
     static constexpr float TACTICAL_BLOCKER_AVOID_RADIUS              = 3.5f;
+    // 정면(head-on) 교착 해소: 이웃이 진행방향과 거의 반대(이 임계 초과)면 일관된 측면 bias를 준다.
+    static constexpr float HEADON_DOT_THRESHOLD                       = 0.6f;
+    static constexpr float HEADON_BIAS                                = 1.0f;
     static constexpr int   MAX_TACTICAL_ATTACKERS_PER_TARGET          = 5;
     static constexpr float TACTICAL_ATTACK_RESERVATION_MAX_DIST       = 8.0f;
     static constexpr Seconds TACTICAL_ATTACK_RESERVATION_STALE_TIME{ 3.0f };
