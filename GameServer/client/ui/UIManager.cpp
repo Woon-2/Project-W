@@ -7,15 +7,43 @@ namespace UI {
 void UIManager::setScreenSize(float w, float h) {
     screenWidth_ = w;
     screenHeight_ = h;
+
+    const float scaleX = (kBaseWidth > 0.f) ? screenWidth_ / kBaseWidth : 1.f;
+    const float scaleY = (kBaseHeight > 0.f) ? screenHeight_ / kBaseHeight : 1.f;
+    uiScale_ = std::max(0.01f, std::min(scaleX, scaleY));
+
+    safeAreaRect_.width = kBaseWidth * uiScale_;
+    safeAreaRect_.height = kBaseHeight * uiScale_;
+    safeAreaRect_.x = (screenWidth_ - safeAreaRect_.width) * 0.5f;
+    safeAreaRect_.y = (screenHeight_ - safeAreaRect_.height) * 0.5f;
+}
+
+float UIManager::screenToLayoutX(float x) const {
+    return (x - safeAreaRect_.x) / uiScale_;
+}
+
+float UIManager::screenToLayoutY(float y) const {
+    return (y - safeAreaRect_.y) / uiScale_;
+}
+
+float UIManager::screenLeftInsetToLayoutX(float baseInset) const {
+    return screenToLayoutX(baseInset * uiScale_);
+}
+
+float UIManager::screenTopInsetToLayoutY(float baseInset) const {
+    return screenToLayoutY(baseInset * uiScale_);
 }
 
 void UIManager::layout() {
-    // Root element must span the full screen so children inherit correct parent dimensions.
+    // Root element spans the centered 1024x768 safe area, scaled to the current screen.
+    root_.anchor = Anchors::TopLeft;
+    root_.pivot = Pivots::TopLeft;
+    root_.offsetX = DimValue::px(0.f);
+    root_.offsetY = DimValue::px(0.f);
     root_.width  = DimValue::pct(100.f);
     root_.height = DimValue::pct(100.f);
 
-    Rect screenRect{ 0.f, 0.f, screenWidth_, screenHeight_ };
-    root_.layout(screenRect);
+    root_.layout(safeAreaRect_, uiScale_);
 }
 
 void UIManager::update(float deltaTimeSec, GFX& gfx, FontHandle* defaultFont) {
@@ -25,6 +53,7 @@ void UIManager::update(float deltaTimeSec, GFX& gfx, FontHandle* defaultFont) {
     ctx.defaultFont = defaultFont;
     ctx.screenWidth = screenWidth_;
     ctx.screenHeight = screenHeight_;
+    ctx.uiScale = uiScale_;
 
     root_.updateTree(ctx);
 }
@@ -37,6 +66,7 @@ void UIManager::render(GFX& gfx) {
     RenderContext rc;
     rc.gfx = &gfx;
     rc.screenHeight = screenHeight_;
+    rc.uiScale = uiScale_;
     root_.renderTree(rc);
 
     if (debugMode_) {
@@ -227,7 +257,7 @@ void UIManager::renderDebugOverlay(GFX& gfx) {
     };
     for (auto& c : root_.children()) collect(c.get(), 0);
 
-    constexpr float kBorder = 2.f;
+    const float kBorder = 2.f * uiScale_;
 
     // Build world matrix for an arbitrary rect (mirrors UIElement::buildWorldMatrix).
     auto makeWorld = [&](float x, float y, float w, float h) -> mu::Mat4x4 {

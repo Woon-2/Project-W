@@ -24,8 +24,8 @@ struct DimValue {
     float value = 0.f;
     bool isPercent = false;
 
-    float resolve(float parentDim) const {
-        return isPercent ? (value * 0.01f * parentDim) : value;
+    float resolve(float parentDim, float pixelScale = 1.f) const {
+        return isPercent ? (value * 0.01f * parentDim) : (value * pixelScale);
     }
 
     static DimValue px(float v) { return { v, false }; }

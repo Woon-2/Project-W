@@ -32,8 +32,8 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         open_ = false;
     }
 
-    const float screenW = uiManager.screenWidth();
-    const float screenH = uiManager.screenHeight();
+    const float screenW = uiManager.layoutWidth();
+    const float screenH = uiManager.layoutHeight();
 
     // Full-screen overlay root. Hidden until open(); high zOrder so it sits above
     // the lobby / in-game content (siblings under uiManager.root()).

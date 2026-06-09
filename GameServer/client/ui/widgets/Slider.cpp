@@ -17,8 +17,9 @@ void Slider::onRender(const RenderContext& rc) {
 
     // Handle (positioned by value)
     if (handleTex) {
-        float handleHalf = handleWidthPx * 0.5f;
-        float trackUsable = rect.width - handleWidthPx;
+        const float handleWidth = handleWidthPx * rc.uiScale;
+        float handleHalf = handleWidth * 0.5f;
+        float trackUsable = rect.width - handleWidth;
         float handleCenterX = rect.x + handleHalf + trackUsable * value;
 
         mu::Vec3 scl{ handleHalf, rect.height * 0.5f, 1.f };
@@ -56,8 +57,11 @@ void Slider::onMouseUp(MouseButton btn, float localX, float localY) {
 }
 
 void Slider::updateValueFromLocal(float localX) {
-    float handleHalf = handleWidthPx * 0.5f;
-    float trackUsable = resolvedRect_.width - handleWidthPx;
+    const float scale = (width.value != 0.f && !width.isPercent)
+        ? (resolvedRect_.width / width.value) : 1.f;
+    const float handleWidth = handleWidthPx * scale;
+    float handleHalf = handleWidth * 0.5f;
+    float trackUsable = resolvedRect_.width - handleWidth;
     if (trackUsable <= 0.f) return;
 
     float newVal = std::clamp((localX - handleHalf) / trackUsable, 0.f, 1.f);

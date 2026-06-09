@@ -16,6 +16,14 @@ public:
     void setScreenSize(float w, float h);
     float screenWidth() const { return screenWidth_; }
     float screenHeight() const { return screenHeight_; }
+    float layoutWidth() const { return kBaseWidth; }
+    float layoutHeight() const { return kBaseHeight; }
+    float uiScale() const { return uiScale_; }
+    const Rect& safeAreaRect() const { return safeAreaRect_; }
+    float screenToLayoutX(float x) const;
+    float screenToLayoutY(float y) const;
+    float screenLeftInsetToLayoutX(float baseInset) const;
+    float screenTopInsetToLayoutY(float baseInset) const;
 
     // Root element. All UI elements are children of root.
     UIElement* root() { return &root_; }
@@ -47,9 +55,14 @@ private:
     void collectInteractive(UIElement* elem, std::vector<UIElement*>& out);
     void renderDebugOverlay(GFX& gfx);
 
+    static constexpr float kBaseWidth = 1024.f;
+    static constexpr float kBaseHeight = 768.f;
+
     UIElement root_;
     float screenWidth_  = 1024.f;
     float screenHeight_ = 768.f;
+    float uiScale_ = 1.f;
+    Rect  safeAreaRect_{ 0.f, 0.f, 1024.f, 768.f };
 
     UIElement* hoveredElement_ = nullptr;
     UIElement* pressedElement_ = nullptr;

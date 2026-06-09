@@ -116,7 +116,7 @@ void DamageNumberSystem::update(float dtSec) {
     }
 }
 
-void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, float screenH) {
+void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, float screenH, float uiScale) {
     if (!atlas_ || activeCount_ == 0) return;
 
     const mu::Mat4x4 viewProj = cam.view() * cam.proj();
@@ -142,7 +142,7 @@ void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, floa
         const float ageN = std::clamp(dn.age / lifetime, 0.f, 1.f);
 
         // Float up (screen pixels), fast early then easing out.
-        const float up = tuning_.floatUpPx * easeOutCubic(ageN);
+        const float up = tuning_.floatUpPx * uiScale * easeOutCubic(ageN);
 
         // Trailing fade + slight shrink over the last fadeOutDuration seconds.
         float alpha    = 1.f;
@@ -159,11 +159,13 @@ void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, floa
         const float punch = punchMul(dn.popAge * 1000.f, tuning_.impactScale);
         const float baseH = (dn.value >= tuning_.bigHitThreshold)
                                 ? tuning_.glyphHeightBig : tuning_.glyphHeightSmall;
+        const float scaledBaseH = baseH * uiScale;
         // Clamp only the steady base (size * perspective) for readability; the punch
         // then multiplies the clamped base IN FULL, so the spike is always visible
         // (the clamp must not swallow the punch).
-        const float baseSize = std::clamp(baseH * perspScale,
-                                          tuning_.glyphHeightMin, tuning_.glyphHeightMax);
+        const float baseSize = std::clamp(scaledBaseH * perspScale,
+                                          tuning_.glyphHeightMin * uiScale,
+                                          tuning_.glyphHeightMax * uiScale);
         const float glyphH = baseSize * punch * endScale;
 
         // White-base glyphs tinted per kind; alpha carries the fade.
@@ -183,8 +185,8 @@ void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, floa
 
         // Top-left-origin pixels; smaller Y is higher, so subtract the float-up.
         // jitter scales with perspective so near (big) numbers spread wider.
-        const float cx = std::clamp(sx + dn.jitterX * perspScale, 0.f, screenW);
-        const float cy = std::clamp(sy + dn.startYJitter - up, 0.f, screenH);
+        const float cx = std::clamp(sx + dn.jitterX * uiScale * perspScale, 0.f, screenW);
+        const float cy = std::clamp(sy + dn.startYJitter * uiScale - up, 0.f, screenH);
 
         DigitAtlas::emitNumber(gfx, atlas_, cx, cy, glyphH, screenH,
                                dn.value, color, DigitAtlas::Align::Center);

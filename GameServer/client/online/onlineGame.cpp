@@ -66,6 +66,11 @@ static constexpr float   kPiercingMultiLifetime     = 0.42f;
 static constexpr float   kPiercingMultiHalfWidth    = 2.5f;
 static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
+static constexpr float   kPlayerHpUiX               = 20.f;
+static constexpr float   kPlayerHpUiY               = 20.f;
+static constexpr float   kPlayerHpHeartSize         = 32.f;
+static constexpr float   kPlayerHpHeartGap          = 8.f;
+static constexpr float   kPlayerHpBarHeight         = 18.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -228,12 +233,6 @@ void Game::setupStage() {
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
-	constexpr float kPlayerHpUiX = 20.f;
-	constexpr float kPlayerHpUiY = 20.f;
-	constexpr float kPlayerHpHeartSize = 32.f;
-	constexpr float kPlayerHpHeartGap = 8.f;
-	constexpr float kPlayerHpBarHeight = 18.f;
-
 	playerHpHeart_ = static_cast<UI::Image*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Image>())
 	);
@@ -242,8 +241,6 @@ void Game::setupStage() {
 	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
 	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
 	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->offsetX = UI::DimValue::px(kPlayerHpUiX);
-	playerHpHeart_->offsetY = UI::DimValue::px(kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f);
 	playerHpHeart_->texture = assetManager_.playerHpHeart();
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
@@ -254,8 +251,6 @@ void Game::setupStage() {
 	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
 	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpBar_->offsetX = UI::DimValue::px(kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap);
-	playerHpBar_->offsetY = UI::DimValue::px(kPlayerHpUiY);
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
@@ -268,14 +263,13 @@ void Game::setupStage() {
 	playerHpText_->pivot   = UI::Pivots::TopLeft;
 	playerHpText_->width   = UI::DimValue::px(300.f);
 	playerHpText_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpText_->offsetX = playerHpBar_->offsetX;
-	playerHpText_->offsetY = playerHpBar_->offsetY;
 	playerHpText_->zOrder  = playerHpBar_->zOrder + 1;
 	playerHpText_->setTextHAlign(UI::TextHAlign::Center);
 	playerHpText_->setTextVAlign(UI::TextVAlign::Center);
 	playerHpText_->setFontSize(14.0f);
 	playerHpText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	playerHpText_->setText(L"100 / 100");
+	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
 	// be loading (filled in-place later) — DigitAtlas skips drawing until ready.
@@ -325,6 +319,23 @@ void Game::setupStage() {
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
 	gfx_.setMaxRenderObjectId(1000u);
+}
+
+void Game::updatePlayerHpHudLayout() {
+	if (!playerHpHeart_ || !playerHpBar_) return;
+
+	const float heartY = kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f;
+	const float barX = kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap;
+
+	playerHpHeart_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+	playerHpHeart_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(heartY));
+	playerHpBar_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(barX));
+	playerHpBar_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY));
+
+	if (playerHpText_) {
+		playerHpText_->offsetX = playerHpBar_->offsetX;
+		playerHpText_->offsetY = playerHpBar_->offsetY;
+	}
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -2606,6 +2617,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// HP 바 위치 및 값 갱신
 	{
 		constexpr float kBarHalfWidth = 40.f;
+		updatePlayerHpHudLayout();
 
 		if (player_) {
 			const int playerHp = player_->hp();
@@ -2636,8 +2648,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.player->hp()) /
 					static_cast<float>(entry.player->maxHp())
@@ -2668,8 +2680,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.goblin->hp()) /
 					static_cast<float>(entry.goblin->maxHp())
@@ -2699,8 +2711,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.obj->hp()) /
 					static_cast<float>(entry.obj->maxHp())
@@ -2908,7 +2920,7 @@ void Game::renderInGame() {
 
 	// Floating damage numbers: drawn just before the HUD so they share the UI pass
 	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
-	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight());
+	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
 
 	uiManager_.render(gfx_);
 

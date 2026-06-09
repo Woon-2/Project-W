@@ -61,7 +61,7 @@ public:
     void spawn(mu::Vec3 worldPos, int amount, DamageKind kind, std::uint16_t targetId);
 
     void update(float dtSec);
-    void render(GFX& gfx, const Camera& cam, float screenW, float screenH);
+    void render(GFX& gfx, const Camera& cam, float screenW, float screenH, float uiScale = 1.f);
     void clear();
 
     const DamageNumberTuning& tuning() const { return tuning_; }

@@ -122,6 +122,7 @@ private:
 	void clearLobbyCharacters();   // 전시 캐릭터 제거 + animSystem 트랙 해제
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
+	void updatePlayerHpHudLayout();
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
