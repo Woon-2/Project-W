@@ -48,7 +48,7 @@ return skill   -- 반드시 skill 테이블을 반환
 | `BoneAttach("bone")` | 해당 뼈의 월드 변환(애니메이션 추종). 스킬 대부분이 `spine_02` 사용 |
 | `BoneAttach("")` / attach 생략 (PlayVFX) | 시전자 루트(캐릭터 위치+방향) |
 | `VFXParticleAttach(vfxId, sysIdx)` (히트박스) | 해당 이펙트의 파티클들 — 파티클마다 히트박스 1개 |
-| `{ type = "Ground", align = false }` (히트박스) | **시전자 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=시전자 전방/우측 오프셋, center.y=표면 위 높이, OBB별 독립 스냅. `align=true`면 지면 노멀로 기울임 |
+| `GroundAttach{}` (히트박스) | **시전자 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=시전자 전방/우측 오프셋, center.y=표면 위 높이. 기본은 OBB별 독립 스냅(분산 융기). `anchor=N`이면 `SetGroundAnchor`로 등록한 앵커 프레임에 강체 배치(점 충돌). `align=true`면 지면 노멀로 기울임(분산 모드) |
 
 - **OBB 회전(`orient`)** 과 **PlayVFX `orient`** 는 모두 `{yaw, pitch, roll}` (도) 동일 규약.
 - 뼈에 붙은 박스는 `applyAttachRotation`으로 뼈 회전 추종 여부를 정한다:
@@ -131,6 +131,7 @@ return skill   -- 반드시 skill 테이블을 반환
 | `ApplyImpulse` | `strength`, `dir = Vec3` (공격자 로컬, 기본 forward) |
 | `CameraShake` | `magnitude`, `durationMs` |
 | `ModifyStat` | `hpDelta`, `speedMultiplier`, `durationMs` |
+| `SetGroundAnchor` | `id`(0~3), `offset = Vec3(우,상,전)`, `align`(bool) — 점 충돌 앵커 프레임 등록(§3.5 (3)) |
 
 > **참고:** `SpawnProjectile`, `SendGameplayEvent`는 타입만 존재하고 페이로드 파싱은 미구현(스텁)이다.
 > 현재 "투사체"는 별도 이동 오브젝트가 아니라 **날아가는 파티클 + 그 파티클에 부착한 히트박스**로 표현한다
@@ -223,10 +224,43 @@ attach = { type = "Ground", align = false }
   - `cz` = 시전자 기준 **전방(+)** 오프셋(m) — XZ는 시전 yaw로 회전되어 "전방 6m"가 시전 방향을 따른다
   - `cy` = **지면 표면 위 높이**(m). `0`이면 박스 중심이 표면 높이에 옴
   - `hx/hy/hz` = 반치수(반지름)
-- **OBB마다 독립적으로 지면 스냅** → 굴곡 지면에 여러 기둥을 한 def에 배열해도 각자 제 위치 높이에 맞는다.
-- `align = true`: 각 OBB를 지면 노멀로 기울임(급경사에서 박스가 기우니 보통 `false`).
+- `align = true`: OBB를 지면 노멀로 기울임(급경사에서 박스가 기우니 보통 `false`). **분산 모드에서만** 의미가 있다(점 충돌 모드는 등록 앵커의 align이 결정).
 - **결정론:** 클라/서버가 같은 시전자·같은 지형에서 같은 위치를 계산하므로, 신규 패킷 없이 서버 권위
   판정과 클라 예측이 일치한다(서버도 Ground attach를 미러).
+
+**두 배치 모드 — 분산 융기 vs 점 충돌**
+
+| `anchor` | 동작 | 용도 |
+|----------|------|------|
+| 없음(기본) | **OBB마다 독립적으로** 자기 XZ에서 지면 스냅. `center.y`=각자 발밑 표면 위 높이 | 굴곡 지면에 솟는 **기둥 그리드**(분산 융기) — 각 기둥이 제 발밑 높이에 맞음 |
+| `= N` | **등록된 지면 앵커 N 프레임에 강체 배치**(스냅 안 함, 앵커가 1회 스냅됨). `center`=앵커 프레임 내 오프셋 | **점 충돌**(메테오 폭발 링, 크레이터) — 여러 개의 **별도 히트박스**가 한 충돌점을 공유 |
+
+점 충돌은 **`SetGroundAnchor` 이벤트로 앵커 프레임을 먼저 등록**하고, 각 `SpawnHitbox`가 `anchor=N`으로 참조한다.
+**히트박스를 합칠 필요 없이** 박스마다 자기 `onHit`(예: 방사 방향 넉백)을 유지한 채 한 충돌점을 공유한다:
+
+```lua
+-- ① 충돌 앵커 프레임 등록(전방 5m, 지면 스냅). id 0~3
+skill:addEvent(1150, "SetGroundAnchor", GroundAnchor{ id = 0, offset = Vec3(0, 0, 5.0), align = false })
+
+-- ② 링 박스 각각이 앵커 0을 참조 — center는 앵커 프레임 기준 오프셋, 박스별 onHit 유지
+for i = 0, 7 do
+    local deg = i * 45.0
+    local s, c = math.sin(math.rad(deg)), math.cos(math.rad(deg))
+    local onHit = deepCopy(onHitBase); onHit.impulseDir = Vec3(s, 0, c)  -- 방사 넉백
+    skill:addEvent(1200, "SpawnHitbox", {
+        slot = i,
+        localOBBs = { OBB(1.65*s, 0, 1.65*c, 1.1, 1.2, 1.1, deg, 0, 0) },  -- 앵커 기준
+        attach = GroundAttach{ anchor = 0 },
+        onHit = onHit,
+    })
+end
+```
+
+- `SetGroundAnchor` = `{ id, offset=Vec3(우,상,전), align }`. 시전자 상대 오프셋을 시전 yaw로 회전 후 지면 스냅,
+  `align=true`면 프레임을 지면 노멀로 기울임. 앵커 슬롯은 0~3(`kMaxGroundAnchors`).
+- **반드시 참조 히트박스보다 먼저(같은/이전 타임)** 이벤트를 둘 것. 미등록 앵커를 참조하면 분산 모드로 폴백한다.
+- **이펙트와의 일치:** 점 충돌은 단일 원점 폭발 VFX(`groundSnap`, `groundAlign=false`)와 분포가 맞아떨어진다.
+  VFX를 `groundAlign`하지 않으면 앵커도 `align=false`(똑바로)로 두는 것이 자연스럽다.
 
 #### 조합 요약
 
@@ -235,7 +269,8 @@ attach = { type = "Ground", align = false }
 | 이펙트를 지면 위 특정 지점에 배치 | PlayVFX `groundSnap` (+ `offset.z`=전방거리, `offset.y`=lift) |
 | 떨어지는 파티클이 땅에서 소멸·폭발 | PlayVFX `particleCollision="GroundKill"` + 이펙트에 Death 서브이미터 |
 | 굴곡 지면에 솟는 기둥/면적 안착 | PlayVFX `particleConform="SnapAndAlign"` |
-| 지면에 박힌 판정(시전자 비추종) | SpawnHitbox `attach={type="Ground"}` |
+| 분산 기둥 그리드(각자 발밑 스냅) | SpawnHitbox `attach=GroundAttach{}`(기본) |
+| 점 충돌 클러스터(메테오 폭발 링) | `SetGroundAnchor`로 앵커 등록 + 각 SpawnHitbox `attach=GroundAttach{anchor=N}` |
 
 > 전체 설계·내부 동작은 `docs/terrainInteractingSkills.md` 참조.
 

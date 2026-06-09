@@ -134,19 +134,53 @@ bone을 따라가지 않고 **SpawnHitbox 시점에 1회 지면 스냅 후 세�
 
 - 앵커 = 시전자 XZ + yaw(시전 시점 캡처, `SkillInstance::castAnchor`).
 - lua OBB의 `center.x/z`는 시전자 전방/우측 오프셋, `center.y`는 표면 위 높이.
-- **OBB별 독립 스냅** → 지면 컨폼 기둥 그리드 지원.
-- `align=true`면 각 OBB를 지면 노멀로 기울임(기본 false=yaw만; 급경사 leaning 방지).
+- `align=true`면 OBB를 지면 노멀로 기울임(기본 false=yaw만; 급경사 leaning 방지).
 
-클라/서버 양쪽에서 동일하게 OBB를 생성하므로 권위적 판정이 클라 예측과 일치한다.
+**두 배치 모드 — 분산 융기 vs 점 충돌(등록 앵커)**
+
+서로 다른 게임플레이 프리미티브다(`AttachTarget::groundAnchorRef`):
+
+| `anchor` | XZ 처리 | Y | 용도 |
+|----------|---------|---|------|
+| 없음(-1, 기본) | OBB마다 자기 XZ | **OBB별 독립 스냅**(center.y=발밑 위 높이) | 분산 융기 — 굴곡 지면 기둥 그리드 |
+| `= N` | 등록 앵커 N 프레임 내 오프셋 | **스냅 안 함**(앵커가 1회 스냅됨) | 점 충돌 — 메테오 폭발 링·크레이터 |
+
+- **점 충돌은 `SetGroundAnchor` 이벤트로 앵커 프레임을 먼저 등록**(`SkillInstance::groundAnchors[id]`, 슬롯 0~3).
+  히트박스는 그 프레임의 **강체 자식**이 되어, `localOBBs[i].center`를 앵커 기준 오프셋으로 배치한다.
+- **핵심 이점**: 히트박스를 한 def로 합칠 필요가 없다. 링 박스 8개를 **각각 별도 `SpawnHitbox`**(자기 `onHit`·방사
+  `impulseDir`·`hitGroup` 유지)로 두고 모두 `anchor=0`을 참조하면 한 충돌점을 공유한다. ← localOBBs 인덱스
+  방식이 못 하던 것(한 def=하나의 onHit 강제)을 해결.
+- `SetGroundAnchor{ id, offset=Vec3(우,상,전), align }`: 시전자 상대 오프셋을 시전 yaw로 회전→지면 스냅,
+  `align`이면 프레임을 노멀로 기울임. 미등록 앵커 참조 시 분산 모드로 폴백.
+- **근본 원인 메모**: 메테오 폭발 이펙트(단일 원점 버스트)와 per-OBB 스냅(경사면 계단형 분포)이 어긋나던 문제를
+  공유 앵커 프레임으로 해결. 이펙트를 `groundAlign`하지 않으면 앵커도 `align=false`로 두면 일치.
+
+클라/서버 양쪽에서 동일하게 앵커·OBB를 생성하므로 권위적 판정이 클라 예측과 일치한다(`SetGroundAnchor`는
+서버에서도 파싱·디스패치되어 권위적, PlayVFX와 달리 no-op 아님).
 
 **lua 사용법:**
 ```lua
+-- (A) 평면 AOE / 분산 기둥: per-OBB 스냅
 skill:addEvent(250, "SpawnHitbox", {
     slot = 0,
     localOBBs = { OBB(0.0, 0.8, 6.5, 2.0, 1.5, 2.0, 0, 0, 0) }, -- 6.5m 전방, 지면에 평면 AOE
-    attach = { type = "Ground", align = false },  -- 척추 추종이 아닌 지면 고정
+    attach = GroundAttach{ align = false },  -- 척추 추종이 아닌 지면 고정
     onHit = onHit,
 })
+
+-- (B) 메테오 점 충돌: 앵커 등록 후 별도 히트박스들이 참조(각자 onHit 유지)
+skill:addEvent(1150, "SetGroundAnchor", GroundAnchor{ id = 0, offset = Vec3(0, 0, 5.0) })
+for i = 0, 7 do
+    local deg = i * 45.0
+    local s, c = math.sin(math.rad(deg)), math.cos(math.rad(deg))
+    local oh = deepCopy(onHitBase); oh.impulseDir = Vec3(s, 0, c)   -- 박스별 방사 넉백
+    skill:addEvent(1200, "SpawnHitbox", {
+        slot = i,
+        localOBBs = { OBB(1.65*s, 0, 1.65*c, 1.1, 1.2, 1.1, deg, 0, 0) },  -- 앵커 프레임 기준
+        attach = GroundAttach{ anchor = 0 },
+        onHit = oh,
+    })
+end
 ```
 
 ---
@@ -185,9 +219,10 @@ skill:addEvent(250, "SpawnHitbox", {
 |------|------|
 | GroundSampler | `client/groundSampler.hpp` (신규) |
 | 파티클 GFX | `client/particleModules.hpp`(ShapeModule/ParticleCollisionModule 필드), `particleSystem.hpp/.cpp`(spawn/충돌 hook), `particleEffect.hpp/.cpp`(`setGroundSampler`/`setGroundBehavior`) |
-| 스킬 타입(클라) | `client/skill/skillTypes.hpp` (flags, AttachType::Ground, AttachTarget::groundAlign) |
-| 스킬 런타임(클라) | `client/skill/skillSystem.hpp/.cpp` (ctx.ground, castAnchor, PlayVFX/Ground dispatch) |
-| 스킬 컴파일(클라) | `client/skill/skillCompiler.cpp` (groundSnap/groundAlign, "Ground" attach) |
+| 스킬 타입(클라) | `client/skill/skillTypes.hpp` (flags, AttachType::Ground, AttachTarget::groundAlign/groundAnchorRef, SetGroundAnchor 이벤트+페이로드, kGroundAnchorFlagAlign) |
+| 스킬 런타임(클라) | `client/skill/skillSystem.hpp/.cpp` (ctx.ground, castAnchor, SkillInstance::groundAnchors[], PlayVFX/Ground dispatch, SetGroundAnchor case, 등록앵커/per-OBB 분기) |
+| 스킬 컴파일(클라) | `client/skill/skillCompiler.cpp` (groundSnap/groundAlign, "Ground" attach anchor ref, SetGroundAnchor 파싱) |
+| 스킬 API(lua) | `resources/skills/lua/skill_api.lua` (`GroundAttach{align,anchor}`, `GroundAnchor{id,offset,align}` 헬퍼) |
 | 게임 배선(클라) | `client/standalone/game.cpp`, `client/online/onlineGame.cpp` (groundSampler_ 바인딩, 레거시 제거) |
 | 스킬(서버) | `RoomServer/skill/skillTypes.hpp`, `skillSystem.hpp/.cpp`, `skillCompiler.cpp` (미러) |
 | 게임 배선(서버) | `RoomServer/Room.hpp/.cpp` (`bindGroundQueries`) |
@@ -200,3 +235,5 @@ skill:addEvent(250, "SpawnHitbox", {
 - **바이너리 레이아웃**: 플래그는 기존 `flags` 바이트 재사용 → **PlayVFX 56바이트 유지**. AttachType/
   AttachTarget 변경은 `SkillAsset`(힙, 프로세스별 컴파일)에만 영향 → 와이어 무관.
 - **groundAlign 히트박스**: 급경사에서 OBB leaning 가능 → 기본 false(yaw만), align은 VFX 위주.
+- **점 충돌은 등록 앵커 방식**: `SetGroundAnchor`를 참조 히트박스보다 먼저 디스패치해야 함(미등록 참조 시 분산
+  모드 폴백). 앵커 슬롯은 `kMaxGroundAnchors`(=4)개로 고정. 별도 히트박스들이 자기 onHit를 유지한 채 공유.

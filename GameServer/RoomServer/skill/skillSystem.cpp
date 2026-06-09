@@ -395,28 +395,21 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
             const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
 
-            if (def.attach.groundSnapAnchor && !hb.localOBBs.empty()) {
-                // Point impact: the FIRST OBB is the anchor. Snap the ground ONCE at its
-                // caster-relative XZ, then place every OBB as a rigid offset from that single
-                // surface point. center.y is each box's lift above the shared impact ground
-                // height; horizontal spread is preserved. Mirrors the client.
-                const mu::Vec3 anchorOff = mu::Vec3(mu::Vec4(hb.localOBBs[0].center, 0.f) * yawRot);
-                mu::Vec3 groundPt = inst.castAnchor.pos + anchorOff;  // impact XZ; y set below
-                mu::NQuat alignQuat{};  // identity unless ground-aligned
-                if (ctx.groundHeight) {
-                    groundPt.setComponent(1, ctx.groundHeight(groundPt.x(), groundPt.z()));
-                    if (def.attach.groundAlign && ctx.groundNormal)
-                        alignQuat = alignQuatYToNormal(ctx.groundNormal(groundPt.x(), groundPt.z()));
-                }
-                const mu::Mat4x4 alignMat(alignQuat);
+            const int ref = def.attach.groundAnchorRef;
+            const bool useRegisteredAnchor =
+                ref >= 0 && ref < SkillInstance::kMaxGroundAnchors && inst.groundAnchors[ref].valid;
+
+            if (useRegisteredAnchor) {
+                // Point impact: place OBBs rigidly in a registered SetGroundAnchor frame, so a
+                // ring of separately-configured hitboxes (each with its own onHit) shares one
+                // impact point. center is an offset in the anchor frame. Mirrors the client.
+                const SkillInstance::GroundAnchor& ga = inst.groundAnchors[ref];
+                const mu::Mat4x4 frameRot(ga.orient);
                 for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
-                    const mu::Vec3 worldOff = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
-                    const mu::Vec3 rel{ worldOff.x() - anchorOff.x(),
-                                        hb.localOBBs[i].center.y(),
-                                        worldOff.z() - anchorOff.z() };
-                    hb.worldOBBs[i].center      = groundPt + mu::Vec3(mu::Vec4(rel, 0.f) * alignMat);
+                    hb.worldOBBs[i].center      = ga.pos
+                        + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * frameRot);
                     hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
-                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat * alignQuat;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * ga.orient;
                 }
             } else {
                 // Distributed eruption: each OBB snaps to the terrain at its own XZ.
@@ -501,6 +494,28 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
         if (!owner || p.hpDelta == 0) break;
         owner->setHp(owner->hp() + p.hpDelta);
+        break;
+    }
+
+    case SkillEventType::SetGroundAnchor: {
+        // Register a terrain-snapped frame referenced by subsequent Ground-attach hitboxes.
+        // Mirrors the client so authoritative hit positions match prediction.
+        const auto& p = ev.payload.setGroundAnchor;
+        if (p.anchorId >= SkillInstance::kMaxGroundAnchors) break;
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        if (!inst.castAnchor.valid) captureCastAnchor(inst, owner);
+
+        const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
+        const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
+        mu::Vec3 world = inst.castAnchor.pos
+                       + mu::Vec3(mu::Vec4(p.localOffset, 0.f) * yawRot);
+        mu::NQuat alignQuat{};
+        if (ctx.groundHeight) {
+            world.setComponent(1, ctx.groundHeight(world.x(), world.z()) + p.localOffset.y());
+            if ((p.flags & kGroundAnchorFlagAlign) && ctx.groundNormal)
+                alignQuat = alignQuatYToNormal(ctx.groundNormal(world.x(), world.z()));
+        }
+        inst.groundAnchors[p.anchorId] = { world, yawQuat * alignQuat, true };
         break;
     }
 

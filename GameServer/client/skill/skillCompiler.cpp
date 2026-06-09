@@ -37,6 +37,7 @@ static SkillEventType parseEventType(std::string_view s) {
     if (s == "CameraShake")       return SkillEventType::CameraShake;
     if (s == "SendGameplayEvent") return SkillEventType::SendGameplayEvent;
     if (s == "SpawnProjectile")   return SkillEventType::SpawnProjectile;
+    if (s == "SetGroundAnchor")   return SkillEventType::SetGroundAnchor;
     return SkillEventType::SIZE;  // unknown
 }
 
@@ -113,11 +114,11 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.targetName  = (*attach).get_or<std::string>("name", "");
         def.attach.vfxId       = static_cast<u8t>((*attach).get_or("vfxId", 0));
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
-        // Ground attach: tilt the planted OBBs to the terrain normal.
+        // Ground attach (per-OBB self snap only): tilt the planted OBBs to the terrain normal.
         def.attach.groundAlign = (*attach).get_or("align", false);
-        // Ground attach: rigid=true snaps once at the anchor and places OBBs as rigid
-        // offsets (point impact); false (default) snaps each OBB independently (eruption).
-        def.attach.groundSnapAnchor = (*attach).get_or("rigid", false);
+        // Ground attach: anchor = registered SetGroundAnchor id (>=0) -> place OBBs rigidly in
+        // that frame (point impact). Omitted/-1 -> each OBB snaps independently (eruption).
+        def.attach.groundAnchorRef = (*attach).get_or("anchor", -1);
     }
 
     // onHit
@@ -269,6 +270,21 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                 p.hpDelta      = evTbl.get_or("hpDelta", 0);
                 p.speedMultiplier = evTbl.get_or("speedMultiplier", 1.f);
                 p.duration     = Milliseconds{ static_cast<float>(evTbl.get_or("durationMs", 0)) };
+                break;
+            }
+            case SkillEventType::SetGroundAnchor: {
+                auto& p     = ev.payload.setGroundAnchor;
+                p.anchorId  = static_cast<u8t>(evTbl.get_or("id", 0));
+                p.flags     = 0;
+                if (evTbl.get_or("align", false))
+                    p.flags |= kGroundAnchorFlagAlign;
+                sol::optional<sol::table> off = evTbl["offset"];
+                if (off) {
+                    p.localOffset = mu::Vec3( (*off).get_or(1, 0.f),
+                            (*off).get_or(2, 0.f),
+                            (*off).get_or(3, 0.f)
+                    );
+                }
                 break;
             }
             default:

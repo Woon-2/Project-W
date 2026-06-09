@@ -32,8 +32,8 @@ struct AttachTarget {
     std::string targetName;       // bone name (e.g. "Weapon_R"); unused for VFXParticle
     u8t         vfxId            = 0;  // index into SkillDispatchContext::vfxById
     int         particleSystemIdx = 0;  // index into ParticleEffect::system(n)
-    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
-    bool        groundSnapAnchor = false;  // Ground attach: snap once at the anchor, place OBBs as rigid offsets (point impact). false = per-OBB snap (distributed eruption)
+    bool        groundAlign      = false;  // Ground attach (per-OBB self snap only): tilt OBBs to the terrain normal
+    i32t        groundAnchorRef  = -1;     // Ground attach: >=0 places OBBs in a registered SetGroundAnchor frame (rigid, point impact); -1 = per-OBB self snap (distributed eruption)
 };
 
 // ---------------------------------------------------------------------------
@@ -81,8 +81,12 @@ enum class SkillEventType : u8t {
     SpawnProjectile,
     ApplyImpulse,
     CameraShake,
+    SetGroundAnchor,
     SIZE
 };
+
+// SetGroundAnchor::flags bit definitions.
+static constexpr u8t kGroundAnchorFlagAlign = 0x01;  // tilt the anchor frame to the terrain normal
 
 // PlayVFX::flags bit definitions.
 //   bit0      : yawOnly      -- place effect on ground plane (ignore caster pitch/roll)
@@ -154,6 +158,12 @@ union SkillEventPayload {
         u8t  projectileAssetId;
         float speedMps;
     } spawnProjectile;
+
+    struct SetGroundAnchor {
+        mu::Vec3 localOffset;  // 12 bytes: caster-relative (right, up, forward); snapped to terrain
+        u8t      anchorId;     //  1 byte:  slot 0..kMaxGroundAnchors-1
+        u8t      flags;        //  1 byte:  bit0 = align frame to terrain normal
+    } setGroundAnchor;
 
     u8t raw[56];  // fixes union size at 56 bytes (PlayVFX is the largest member)
 };
