@@ -874,6 +874,18 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::Dropdown` | `Dropdown.hpp/cpp` | 파란 헤더 버튼 + 확장 리스트; `setup(items)` 후 `onSelectionChanged` 콜백 (`std::function<void(int)>`) |
 | `UI::TextInput` | `TextInput.hpp/cpp` | 한 줄 텍스트 입력; 포커스 시 `WM_CHAR` 수신, 내부 child `Label`로 표시 + `|` 캐럿; `uppercase`/`alnumOnly`/`maxLength`/`placeholder`, `onChange`/`onSubmit` 콜백. (`UIManager`가 `WM_CHAR`→`onChar`, 클릭 시 `onFocus`/`onBlur` 라우팅) |
 
+### 로비 / 설정창 UI (onlineGame에서 분리)
+
+설계 문서: `client/docs/lobbyUISeparation.md`
+
+| 항목 | 파일 | 설명 |
+|------|------|------|
+| `UI::Build::addSolid/addLabel/addButton/applyRect` | `ui/uiBuild.hpp` | 위젯 빌더 inline 자유함수(공용). `addChild + applyRect + 캡션 라벨` 보일러플레이트 래핑. LobbyUI/SettingsPanel 공유 |
+| `Online::LobbyUI` | `online/lobbyUI.hpp/cpp` | 로비 2D UI 레이어: 메인메뉴 + 스쿼드 스테이지(대기실) + 로딩 오버레이 + 로비 텍스처 소유. 위젯은 `uiManager_` 트리 소유(비소유 포인터). `loadTextures(gfx)` / `build(uiManager, Callbacks)` / `refresh(ViewState)` / `updateLoading(dt, visible, progress01)`. 버튼 액션은 `Callbacks`(create/join/leave/start/copy/openSettings/quit)로 Game에 라우팅. 접근자: `slotBay(i)`(포트레이트 합성), `setRootVisible/setLoadingVisible/setFlatBackgroundVisible/setMainMenuMessage/clearRoomCodeInput/hideAllSlotBays`, `panelTexture()/secondaryButtonTexture()` |
+| `GameSettings` | `ui/settingsPanel.hpp` | 게임플레이용 영속 설정 값 구조체(fullscreen/allyDamageVisible/resolutionIndex/monsterDamageOpacity). `Game`이 소유(`settings_`), 로비·인게임·게임플레이가 공유 |
+| `UI::SettingsPanel` | `ui/settingsPanel.hpp/cpp` | 씬 비종속 설정창. `uiManager_.root()` 직속(zOrder 50)에 빌드, `open()/close()/toggle()/isOpen()`로 토글 → 로비/인게임(ESC) 공용. `build(uiManager, panelTex, buttonTex, GameSettings&)`, `refreshPreview()`. 값 편집은 `GameSettings&`로 write-through |
+| `Game` 통합 | `online/onlineGame.cpp` | `enterLobby`: `lobbyUI_.loadTextures/build` + `settingsPanel_.build`. `refreshLobbyUI()`는 씬/세션 상태로 `LobbyUI::ViewState` 스냅샷을 만들어 `lobbyUI_.refresh()`에 위임(+메인메뉴 이탈 시 `settingsPanel_.close()`). `makeLobbyCallbacks()`가 버튼 액션을 `lobbyCreateRoom` 등에 연결. `LobbyScene`/`renderWaitingRoom`/`enterInGame`/`lobbyLeaveRoom`은 컴포넌트 메서드 호출 |
+
 ### 전투 피드백 UI (Damage Number / Kill Count)
 
 설계 문서: `client/docs/combatFeedbackUI.md`

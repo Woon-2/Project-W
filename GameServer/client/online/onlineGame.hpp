@@ -17,6 +17,8 @@
 #include "../animation.hpp"
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
+#include "../ui/settingsPanel.hpp"
+#include "lobbyUI.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Button.hpp"
@@ -131,18 +133,13 @@ private:
 	// setParticle()이 디스크 재파싱 없이 캐시에서 config를 꺼내 쓰도록 한다.
 	void prefetchParticleConfigs();
 
-	// 로비 UI 텍스처(배경/로고)를 메인 스레드에서 즉시 로드한다.
-	void loadLobbyTextures();
-
-	// 로비 UI 구성/갱신 (LobbyServer 룸 상태 기반).
-	void buildLobbyUI();
+	// 로비 UI(메인메뉴/스쿼드/로딩)와 설정창은 LobbyUI/SettingsPanel로 분리됨.
+	// refreshLobbyUI는 현재 씬/세션 상태로 ViewState 스냅샷을 만들어 lobbyUI_에 위임한다.
 	void refreshLobbyUI();
-	void refreshSettingsPreviewUI();
-
-	// Loading screen (black + logo + progress bar + spinner): build once, update per frame.
-	void buildLoadingScreen();
-	void updateLoadingScreen(float deltaTimeSec, bool visible);
 	float loadProgress01() const;
+
+	// 로비 버튼 액션을 lobbyUI_에 연결하는 콜백 묶음을 만든다.
+	LobbyUI::Callbacks makeLobbyCallbacks();
 
 	// 로비 mock 액션 (script.js 프로토타입 이식).
 	void lobbyCreateRoom();
@@ -261,6 +258,11 @@ private:
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
+
+	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
+	GameSettings         settings_{};
+	LobbyUI              lobbyUI_{};
+	UI::SettingsPanel    settingsPanel_{};
 
 	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
 	// their ground placement is now data-driven (skill PlayVFX groundSnap +
@@ -386,66 +388,7 @@ private:
 	uint16      handoffPort_ = 0;
 	std::string handoffCode_{};
 
-	// 로비 UI 텍스처 (메인 스레드에서 즉시 로드, 인게임 백그라운드 로드와 분리)
-	std::unordered_map<std::string, Texture> lobbyTexHashMap_{};
-	Texture lobbyBgTex_{};
-	Texture lobbyLogoTex_{};
-	Texture lobbyPanelTex_{};
-	Texture lobbyBtnPrimaryTex_{};
-	Texture lobbyBtnSecondaryTex_{};
-	Texture lobbyInputTex_{};
-
-	// 로비 UI (소유권은 uiManager_)
-	UI::UIElement* lobbyRoot_       = nullptr;
-	UI::Button*    lobbySkyBg_      = nullptr;
-	UI::Image*     lobbyBgImage_    = nullptr;
-	UI::Image*     lobbyLogoImage_  = nullptr;
-	UI::UIElement* mainMenuRoot_    = nullptr;
-	UI::UIElement* waitingRoomRoot_ = nullptr;
-	UI::Button*    settingsPanelBg_ = nullptr;
-	UI::Button*    settingsCloseButton_ = nullptr;
-	UI::Button*    settingsWindowedButton_ = nullptr;
-	UI::Button*    settingsFullscreenButton_ = nullptr;
-	UI::Button*    settingsResolutionPrevButton_ = nullptr;
-	UI::Button*    settingsResolutionNextButton_ = nullptr;
-	UI::Label*     settingsResolutionValueLabel_ = nullptr;
-	UI::Button*    settingsAllyDamageOffButton_ = nullptr;
-	UI::Button*    settingsAllyDamageOnButton_ = nullptr;
-	UI::Button*    settingsMonsterOpacityPrevButton_ = nullptr;
-	UI::Button*    settingsMonsterOpacityNextButton_ = nullptr;
-	UI::Button*    settingsMonsterOpacityFill_ = nullptr;
-	UI::Label*     settingsMonsterOpacityValueLabel_ = nullptr;
-	UI::TextInput* roomCodeInput_   = nullptr;
-	UI::Label*     mainMenuMsgLabel_= nullptr;
-	UI::Label*     roomCodeLabel_   = nullptr;
-	UI::Label*     playerCountLabel_= nullptr;
-	// 스쿼드 스테이지 슬롯(4칸). 반투명 배경은 제거하고 번호/이름/뱃지 텍스트만 유지.
-	// slotBays_: 포트레이트 RT(오프스크린 캐릭터)를 셀 sub-rect로 샘플해 합성하는 UI 이미지.
-	std::array<UI::Image*,     kMaxLobbyPlayers> slotBays_{};          // 모델 베이(포트레이트 합성)
-	std::array<UI::Button*,    kMaxLobbyPlayers> slotPanels_{};        // 캐릭터 뒤 배경 패널(불투명 scrim)
-	std::array<UI::Button*,    kMaxLobbyPlayers> slotNameplateBgs_{};  // 플레이어 이름 배경
-	std::array<UI::Label*,     kMaxLobbyPlayers> slotNumberLabels_{};  // "01".."04"
-	std::array<UI::Label*,     kMaxLobbyPlayers> slotNameLabels_{};    // 플레이어 이름
-	std::array<UI::Label*,     kMaxLobbyPlayers> slotHostBadgeLabels_{};
-	std::array<std::array<UI::Button*, 4>, kMaxLobbyPlayers> slotNameBorders_{};  // 호스트 이름 사각 테두리(상/하/좌/우)
-	UI::Button*    startGameButton_ = nullptr;
-	UI::Label*     startGameLabel_  = nullptr;
-	UI::Button*    waitMessageBg_   = nullptr;
-	UI::Label*     hostStatusLabel_ = nullptr;
-
-	bool         settingsFullscreen_ = true;
-	bool         settingsAllyDamageVisible_ = true;
-	int          settingsResolutionIndex_ = 0;
-	int          settingsMonsterDamageOpacity_ = 100;
-	float        settingsMonsterOpacityFillMaxWidth_ = 0.f;
-	std::wstring settingsCurrentResolutionText_{};
-
-	// Loading screen overlay (black + logo + progress bar + "loading..." + dot-ring spinner).
-	UI::UIElement*   loadingRoot_      = nullptr;
-	UI::ProgressBar* loadingBar_       = nullptr;
-	UI::Label*       loadingTextLabel_ = nullptr;
-	std::array<UI::Button*, 12> spinnerDots_{};
-	float            loadingSpinTime_  = 0.f;
+	// 로비 UI 텍스처/위젯/설정 상태는 lobbyUI_ · settingsPanel_ · settings_로 이동했다.
 	// 대기실 3D 준비(stageVisualReady_) 후, 로딩 오버레이 뒤에서 실제로 렌더된 프레임 수.
 	// 이 값이 kWarmupFrames에 도달해야 오버레이를 내려 팝인(첫 프레임 그려지는 과정)을 가린다.
 	// 메인 스레드 전용(render에서 증가, LobbyScene update에서 읽음) — atomic 불필요.
