@@ -18,9 +18,11 @@ using Build::addButton;
 
 void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
                           const Texture* buttonTex, GameSettings& settings,
-                          const std::vector<Resolution>& resolutions) {
+                          const std::vector<Resolution>& resolutions,
+                          std::function<void()> onQuitGame) {
     settings_ = &settings;
     resolutions_ = resolutions;
+    onQuitGame_ = std::move(onQuitGame);
 
     // Idempotent: on a rebuild (e.g. resolution change) drop the previous subtree.
     // open_ resets to false; the caller re-opens if the panel should stay visible.
@@ -185,6 +187,19 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     monsterOpacityValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
         controlW - 144.f, rowH * 0.60f, settingsInk, TextHAlign::Center, 3);
 
+    groupY = rowY + rowH + groupGap;
+    makeGroupTitle(L"게임", groupY);
+    rowY = groupY + 56.f;
+    makeSettingRow(L"게임 종료", rowY);
+    quitGameButton_ = addButton(scrim, L"종료하기",
+        controlX + controlW - 190.f, rowY + 7.f, 166.f, rowH - 14.f,
+        settingsInactive, settingsAccent, settingsAccent, 17.f,
+        [this]() {
+            if (onQuitGame_) onQuitGame_();
+        },
+        settingsButtonText);
+    quitGameButton_->zOrder = 22;
+
     // Close button (bottom-right). Sibling of the scrim so it draws on top.
     const XMFLOAT4 ink = { 0.090f, 0.125f, 0.200f, 1.f };
     closeButton_ = addButton(root_, L"닫기", 0.f, 0.f, 154.f, 52.f,
@@ -271,6 +286,7 @@ void SettingsPanel::refreshPreview() {
 
     paintButton(monsterOpacityPrevButton_, false, settings_->monsterDamageOpacity > 0);
     paintButton(monsterOpacityNextButton_, false, settings_->monsterDamageOpacity < 100);
+    paintButton(quitGameButton_, false, static_cast<bool>(onQuitGame_));
 
     if (monsterOpacityValueLabel_) {
         monsterOpacityValueLabel_->setText(std::to_wstring(settings_->monsterDamageOpacity) + L"%");

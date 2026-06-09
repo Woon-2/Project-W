@@ -183,6 +183,7 @@ private:
 	void releaseCursor();
 	void hideCursor();
 	void showCursor();
+	void applyCursorPolicy();
 
 	void importNode(std::ifstream& ifs);
 

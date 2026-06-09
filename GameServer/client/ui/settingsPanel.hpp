@@ -5,6 +5,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 
 struct Texture;
 
@@ -46,7 +47,8 @@ public:
     // list the < > stepper iterates over (resolutionIndex indexes into it). The
     // referenced GameSettings must outlive this panel.
     void build(UIManager& uiManager, const Texture* panelTex, const Texture* buttonTex,
-               GameSettings& settings, const std::vector<Resolution>& resolutions);
+               GameSettings& settings, const std::vector<Resolution>& resolutions,
+               std::function<void()> onQuitGame = {});
 
     void open();
     void close();
@@ -73,9 +75,11 @@ private:
     Button*    monsterOpacityNextButton_ = nullptr;
     Button*    monsterOpacityFill_ = nullptr;
     Label*     monsterOpacityValueLabel_ = nullptr;
+    Button*    quitGameButton_ = nullptr;
 
     float        monsterOpacityFillMaxWidth_ = 0.f;
     std::vector<Resolution> resolutions_;   // monitor-filtered windowed-resolution choices
+    std::function<void()> onQuitGame_;
     bool         open_ = false;
 };
 

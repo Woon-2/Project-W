@@ -2953,8 +2953,11 @@ void Game::enterLobby() {
 	// 설정창은 씬 비종속 재사용 컴포넌트. 로비/인게임 어디서나 열 수 있도록
 	// uiManager_.root() 직속에 빌드한다(로비 9-slice 텍스처 공유).
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(),
-		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_);
+		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_,
+		[]() { PostQuitMessage(0); });
 	refreshLobbyUI();
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
 	startInGameAssetLoad();
@@ -3197,11 +3200,13 @@ void Game::applyDisplaySettings() {
 	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
 	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(), lobbyUI_.secondaryButtonTexture(),
-		settings_, availableResolutions_);
+		settings_, availableResolutions_, []() { PostQuitMessage(0); });
 
 	// 5. 로비 위젯 상태 복원 + 설정창 다시 열기(사용자가 설정창에서 변경 중이므로 유지).
 	refreshLobbyUI();
 	settingsPanel_.open();
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 }
 
 void Game::LobbyScene(Milliseconds deltaTime) {
@@ -3403,6 +3408,8 @@ void Game::enterInGame() {
 
 	setupStage();
 	scene_ = Scene::InGame;
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 
 	// 플레이어/오브젝트 생성은 서버의 S_Enter 패킷이 담당한다.
 	// (패킷은 InGameScene의 SleepEx(alertable)에서 처리되므로, 씬 전환 후 첫 프레임부터 수신된다.)
@@ -3605,27 +3612,15 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	// Alt+Tab 등으로 윈도우가 포커스를 잃었다가 되찾은 경우,
 	// 커서와 관련된 플래그들을 읽어 커서 캡처, 커서 숨기기 등을 다시 수행한다.
 	case WM_SETFOCUS:
-		// 설정창이 열려 있으면 게임플레이 커서 캡처/숨김을 복원하지 않는다(UI 클릭 유지).
-		if (!settingsPanel_.isOpen()) {
-			if (cursorCaptureEnabled_) {
-				captureCursor();
-			}
-			if (!cursorShowEnabled_) {
-				hideCursor();
-			}
-		}
+		applyCursorPolicy();
 		break;
 
 	// Alt+Tab 등으로 윈도우가 포커스를 잃은 경우
-	// 커서와 관련된 플래그들을 읽어 커서 캡처 해제, 커서 보이기 등을 수행한다.
+	// 커서 캡처 해제, 커서 보이기 등을 수행한다.
 	// 다른 윈도우로 전환되었는데 커서가 보이지 않거나 안 움직여지면 곤란할 것이다.
 	case WM_KILLFOCUS:
-		if (cursorCaptureEnabled_) {
-			releaseCursor();
-		}
-		if (cursorShowEnabled_) {
-			showCursor();
-		}
+		releaseCursor();
+		showCursor();
 		break;
 
 	case WM_SIZE:
@@ -3688,15 +3683,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	// 전이 기반이라 ESC 토글이든 패널의 "닫기" 버튼이든 동일하게 처리된다.
 	const bool settingsOpen = settingsPanel_.isOpen();
 	if (settingsOpen != settingsOpenPrev_) {
-		if (settingsOpen) {
-			// UI 클릭을 위해 커서를 풀고 보여준다(게임플레이 플래그는 보존).
-			releaseCursor();
-			showCursor();
-		} else {
-			// 닫히면 게임플레이 커서 모드(캡처/숨김 플래그)를 복원한다.
-			if (cursorCaptureEnabled_) captureCursor();
-			if (!cursorShowEnabled_)   hideCursor();
-		}
+		applyCursorPolicy();
 		settingsOpenPrev_ = settingsOpen;
 	}
 
@@ -3709,29 +3696,6 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	processInputGame(deltaTime);
-
-	// 로비/게임 공통 입력 처리
-	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
-		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
-		if (cursorCaptureEnabled_) {
-			captureCursor();
-		}
-		else {
-			releaseCursor();
-		}
-	}
-
-	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
-		cursorShowEnabled_ = !cursorShowEnabled_;
-		if (cursorShowEnabled_) {
-			showCursor();
-		}
-		else {
-			hideCursor();
-		}
-	}
 }
 
 void Game::processInputGame(Milliseconds deltaTime) {
@@ -4055,6 +4019,25 @@ void Game::showCursor() {
 	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
 	// 반복 호출해 정확히 숨기거나 표시해야 한다.
 	while (ShowCursor(true) < 0) {}
+}
+
+void Game::applyCursorPolicy() {
+	if (GetForegroundWindow() != ghWnd) {
+		return;
+	}
+
+	// 전체화면/창모드와 관계없이 게임 창 안으로 커서를 묶는다.
+	// 단, 로비와 설정창에서는 포인터를 보여 UI를 클릭할 수 있게 한다.
+	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
+	cursorCaptureEnabled_ = true;
+	cursorShowEnabled_ = showCursorNow;
+
+	captureCursor();
+	if (showCursorNow) {
+		showCursor();
+	} else {
+		hideCursor();
+	}
 }
 
 }	// namespace Online
