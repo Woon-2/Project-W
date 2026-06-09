@@ -2453,7 +2453,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				if (dmg > 0) {
 					const uint16 targetId = static_cast<uint16>(routeId);
 					DamageKind kind = DamageKind::EnemyHit;
-					if (player_ && player_->getId() == routeId)
+					if (idPlayerMap_.find(targetId) != idPlayerMap_.end())
 						kind = DamageKind::PlayerHit;
 					else if (strongholdHpBars_.find(targetId) != strongholdHpBars_.end())
 						kind = DamageKind::StrongholdHit;

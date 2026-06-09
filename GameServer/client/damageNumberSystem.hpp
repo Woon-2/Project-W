@@ -16,7 +16,7 @@ class Camera;
 
 enum class DamageKind {
     EnemyHit,      // damage we deal to monsters (blue)
-    PlayerHit,     // damage the local player takes (red)
+    PlayerHit,     // damage a player takes (red)
     StrongholdHit, // damage we deal to strongholds (gold)
 };
 
@@ -39,11 +39,11 @@ struct DamageNumberTuning {
     int   bigHitThreshold  = 40;      // dmg >= this -> big glyph (simple constant, no stats system)
 
     // Perspective: glyph scales with view depth (clip.w). 1.0 at perspRefDepth.
-    float perspRefDepth    = 12.0f;
-    float perspScaleMin    = 0.55f;
-    float perspScaleMax    = 1.80f;
+    float perspRefDepth    = 4.0f;
+    float perspScaleMin    = 0.30f;
+    float perspScaleMax    = 1.70f;
     // Final glyph-height clamp so perspScale * punch cannot blow up.
-    float glyphHeightMin   = 14.0f;
+    float glyphHeightMin   = 10.0f;
     float glyphHeightMax   = 72.0f;
 
     float mergeWindow      = 0.25f;   // same-target hits within this window accumulate

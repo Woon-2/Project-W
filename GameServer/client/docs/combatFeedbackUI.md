@@ -69,9 +69,9 @@ DigitAtlas (공유 헬퍼)  ──┬─▶ DamageNumberSystem (월드앵커 떠
 | `impactScale` | 1.00 | **scale punch 강도**(키프레임 편차 배수, 1.0=원본). punch에만 적용 |
 | `glyphHeightSmall/Big` | 32 / 44px | 히트 강도 차등 높이 |
 | `bigHitThreshold` | 40 | 이 값 이상이면 큰 글자(단순 상수, 통계 시스템 아님) |
-| `perspRefDepth` | 12 | 이 뷰 깊이(clip.w)에서 perspScale=1 |
-| `perspScaleMin/Max` | 0.55 / 1.80 | 원근 스케일 클램프 |
-| `glyphHeightMin/Max` | 14 / 72px | **정상 base 크기(×persp) 클램프** — punch는 이 위에 곱(punch는 제한하지 않음) |
+| `perspRefDepth` | 4 | 이 뷰 깊이(clip.w)에서 perspScale=1 |
+| `perspScaleMin/Max` | 0.30 / 1.70 | 원근 스케일 클램프 |
+| `glyphHeightMin/Max` | 10 / 72px | **정상 base 크기(×persp) 클램프** — punch는 이 위에 곱(punch는 제한하지 않음) |
 | `mergeWindow` | 0.25s | 동일 대상 누적 병합 창 |
 | `jitterXMax` / `startYJitterMax` | 45 / 8px | 다중 히트 분산 (jitterX는 ×perspScale) |
 | `worldHeadOffsetY` | 1.2 | 앵커 오프셋(월드, 몸통/머리 아래에서 떠오름 시작) |
