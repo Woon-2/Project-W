@@ -84,6 +84,10 @@ private:
 	uint16 cnt_;
 };
 
+// Authoritative default player HP, shared by client and server so enter-time
+// HP sync agrees on the same value.
+constexpr int32 kPlayerMaxHp = 100;
+
 #pragma pack(push, 1)
 
 struct CEnterPacket : public PacketHeader {
@@ -93,6 +97,8 @@ struct CEnterPacket : public PacketHeader {
 struct PlayerInfo {
 	uint16 playerId;
 	uint16 materialSetIdx;
+	int32 hp;
+	int32 maxHp;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
@@ -103,6 +109,8 @@ struct ObjectInfo {
 	ObjectType type;
 	uint16 objectId;
 	uint16 materialSetIdx;
+	int32 hp;
+	int32 maxHp;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;

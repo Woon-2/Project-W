@@ -1000,6 +1000,32 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	}
 }
 
+// 거점 이벤트 처리: 고블린 핸들러에서 AnimBlender 포워딩·래그돌만 제거한 형태.
+// HP/사망 상태만 갱신한다(서버 권위; death 판정은 서버가 수행).
+void Stronghold::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Stronghold*>(pVoidOwner);
+	if (!pOwner) return;
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+		break;
+
+	case EventType::Death:
+		if (!pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			pOwner->hp_ = 0;
+		}
+		break;
+
+	case EventType::Respawn:
+		pOwner->isDead_ = false;
+		break;
+
+	default:
+		break;
+	}
+}
+
 void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
 	if (!terrainData_ || terrainData_->mesh.subMeshes.empty()) return;
 

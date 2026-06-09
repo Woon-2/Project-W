@@ -65,6 +65,7 @@ public:
     void onHitImpulse() override;
 
     NpcState getState()    const { return state_; }
+    int32    maxHp()       const { return static_cast<int32>(maxHp_); }  // network/UI HP (AI math uses float maxHp_)
     int32    getTargetId() const { return targetId_; }  // countNpcsTargeting용 — public 필수
     int      getGroupId()  const { return groupId_; }
     void     setGroupId(int id)  { groupId_ = id; }

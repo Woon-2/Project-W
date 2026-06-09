@@ -409,6 +409,7 @@ void Room::enter(GameSession* session) {
 	player->setScale(playerStarts_[sessions_.size() % playerStarts_.size()].scale());
 	player->body().setMotionType(MotionType::Kinematic);
 	player->body().snapToCurrent();
+	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -424,6 +425,8 @@ void Room::enter(GameSession* session) {
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
 		.materialSetIdx = 0,
+		.hp = kPlayerMaxHp,
+		.maxHp = kPlayerMaxHp,
 		.pos = player->pos().getXmf(),
 		.orient = player->orient().getXmf(),
 		.scale = player->scale().getXmf(),
@@ -438,6 +441,8 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Player,
 			.objectId = static_cast<uint16>(session->id()),
 			.materialSetIdx = 0,
+			.hp = session->player()->hp(),
+			.maxHp = kPlayerMaxHp,
 			.pos = session->player()->pos().getXmf(),
 			.orient = session->player()->orient().getXmf(),
 			.scale = session->player()->scale().getXmf(),
@@ -450,6 +455,8 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Goblin,
 			.objectId = static_cast<uint16>(g.getId()),
 			.materialSetIdx = 0,
+			.hp = g.hp(),
+			.maxHp = g.maxHp(),
 			.pos = g.pos().getXmf(),
 			.orient = g.orient().getXmf(),
 			.scale = g.scale().getXmf(),
@@ -461,6 +468,8 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Stronghold,
 			.objectId = static_cast<uint16>(sh.getId()),
 			.materialSetIdx = 0,
+			.hp = sh.hp(),
+			.maxHp = sh.strongholdMaxHp(),
 			.pos = sh.pos().getXmf(),
 			.orient = sh.orient().getXmf(),
 			.scale = sh.scale().getXmf(),

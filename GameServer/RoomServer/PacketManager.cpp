@@ -95,6 +95,8 @@ std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& pl
 		infos[i].type = objInfos[i].type;
 		infos[i].objectId = objInfos[i].objectId;
 		infos[i].materialSetIdx = objInfos[i].materialSetIdx;
+		infos[i].hp = objInfos[i].hp;
+		infos[i].maxHp = objInfos[i].maxHp;
 		infos[i].pos = objInfos[i].pos;
 		infos[i].orient = objInfos[i].orient;
 		infos[i].scale = objInfos[i].scale;

@@ -364,6 +364,26 @@ private:
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
+// 거점(Stronghold): 데미지를 받는 정적 구조물. 고블린/플레이어처럼 EventBus로
+// Hit/Death/Respawn을 일관되게 처리하되, 애니메이션이 없으므로 AnimBlender는 갖지 않는다
+// (setAnimBlender 미오버라이드 → renderState_.animBlender == nullptr).
+class Stronghold : public Object {
+public:
+	Stronghold() = default;
+	Stronghold(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	EventBus eventBus_{};
+};
+
 struct TerrainData;
 
 // Game entity wrapping TerrainData with a world transform.

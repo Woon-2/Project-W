@@ -220,8 +220,9 @@ private:
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 
 	// Strongholds are server-authoritative structures; the client renders them as
-	// placeholder cubes and tracks HP/destroyed state from server packets.
-	std::vector<std::shared_ptr<Cube>> strongholds_{};
+	// placeholder cubes and tracks HP/destroyed state from server packets. They are
+	// Object-derived with an EventBus (no AnimBlender) so Hit/Death route like goblins.
+	std::vector<std::shared_ptr<Stronghold>> strongholds_{};
 
 	// Client-local cosmetic trigger zones (BGM/camera/post-fx). Built from
 	// chunks_index.bin after the terrain index loads; tested each frame against
@@ -309,10 +310,9 @@ private:
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
 	struct StrongholdHpEntry {
-		Cube*            obj;          // non-owning; owned by shared_ptr in strongholds_
+		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_
 		UI::ProgressBar* hpBar;        // owned by uiManager_
 		float            worldYOffset;
-		bool             destroyed = false;
 		float            hpBarVisibleSeconds = 0.f;  // remaining seconds to show after a hit
 	};
 	std::unordered_map<uint16, StrongholdHpEntry> strongholdHpBars_{};

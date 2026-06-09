@@ -1645,8 +1645,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
-	player_->setHp(100);
-	player_->setMaxHp(100);
+	player_->setHp(playerInfo.hp);
+	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
 
 	player_->body().setMotionType(MotionType::Dynamic);
@@ -1724,8 +1724,8 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
-	otherPlayer->setHp(100);
-	otherPlayer->setMaxHp(100);
+	otherPlayer->setHp(otherPlayerInfo.hp);
+	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
@@ -1780,8 +1780,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
-	otherPlayer->setHp(100);
-	otherPlayer->setMaxHp(100);
+	otherPlayer->setHp(otherPlayerInfo.hp);
+	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
@@ -1845,8 +1845,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 		);
 	}
 
-	goblin->setHp(90);
-	goblin->setMaxHp(90);
+	goblin->setHp(goblinInfo.hp);
+	goblin->setMaxHp(goblinInfo.maxHp);
 	goblin->setFaction(Faction::Monsters);
 	goblin->enableBVRendering();
 
@@ -1887,7 +1887,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 }
 
 void Game::createStronghold(const ObjectInfo& info) {
-	auto sh = std::make_shared<Cube>();   // placeholder mesh (cube); structure model TBD
+	auto sh = std::make_shared<Stronghold>();   // placeholder mesh (cube); structure model TBD
 
 	sh->setId(info.objectId);
 	sh->setPos(DirectX::XMLoadFloat3(&info.pos));
@@ -1895,9 +1895,9 @@ void Game::createStronghold(const ObjectInfo& info) {
 	sh->setScale(DirectX::XMLoadFloat3(&info.scale));
 	sh->setModel(assetManager_.modelCube());
 	sh->setFaction(Faction::Monsters);
-	// HP is unknown from ObjectInfo; start full and learn maxHp from server packets.
-	sh->setHp(1);
-	sh->setMaxHp(1);
+	// HP/maxHp arrive in the enter packet (server-authoritative).
+	sh->setHp(info.hp);
+	sh->setMaxHp(info.maxHp);
 	sh->setRenderObjectId(nextRenderObjId_++);
 
 	// Static collidable obstacle: register to the client physics world so the
@@ -1917,20 +1917,28 @@ void Game::createStronghold(const ObjectInfo& info) {
 	bar->fillColor = { 0.9f, 0.7f, 0.1f, 1.f };
 	bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	bar->visible   = false;
-	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, false, 0.f };
+	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, 0.f };
 
 	strongholds_.push_back(sh);
 }
 
 void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 	auto it = strongholdHpBars_.find( strongholdId );
-	if ( it == strongholdHpBars_.end() ) return;
+	if ( it == strongholdHpBars_.end() || !it->second.obj ) return;
 
-	auto& e = it->second;
-	e.destroyed = ( state == 1 );
-	if ( e.obj ) {
-		if ( hp > e.obj->maxHp() ) e.obj->setMaxHp( hp );  // learn max-seen HP
-		e.obj->setHp( hp );
+	// S_StrongholdState는 파괴/재건 "상태 전이"에서만 온다(전투 중 HP 감소는 S_SkillHit/S_Hit
+	// 가 담당). 파괴/재건 전이는 EventBus 경로(EvDeath/EvRespawn)로 보내 isDead_를 단일화한다.
+	Stronghold* sh = it->second.obj;
+	if ( hp > sh->maxHp() ) sh->setMaxHp( hp );   // safety clamp (maxHp now arrives at enter)
+
+	if ( state == 1 ) {
+		// 파괴: HP→0은 EvDeath 핸들러가 소유한다. 여기서 setHp(0)을 하면 막타 데미지 넘버가
+		// 같은 프레임 디스패치 전에 prevHp를 잃어 0으로 계산되므로 setHp를 호출하지 않는다.
+		holdEvent( eventList_, EvDeath( strongholdId ) );    // idempotent via handler guard
+	} else {
+		// 재건/생존: 서버가 복구된 full HP를 함께 보낸다.
+		sh->setHp( hp );
+		holdEvent( eventList_, EvRespawn( strongholdId ) );
 	}
 }
 
@@ -2156,22 +2164,15 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 }
 
 void Game::applyHit( uint16 targetId, int32 newHp ) {
-	// 거점(Stronghold)은 EventBus(animBlender)가 없으므로 인라인으로 직접 처리한다.
-	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() ) {
-		if ( it->second.obj ) {
-			if ( newHp > it->second.obj->maxHp() ) it->second.obj->setMaxHp( newHp );
-			it->second.obj->setHp( newHp );
-		}
-		it->second.hpBarVisibleSeconds = 5.f;   // show HP bar briefly after a hit (same as goblins)
-		return;
-	}
-
-	// 고블린 HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다.
+	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(고블린/거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() )
+		it->second.hpBarVisibleSeconds = 5.f;
 
 	// HP / isDead / 래그돌 / 피격·사망 애니메이션은 EvHit/EvDeath 핸들러(Object::EventBus)가 소유한다.
-	// 디스패치 루프(InGameScene)에서 대상 객체의 eventBus로 분배된다.
+	// 디스패치 루프(InGameScene)에서 대상 객체의 eventBus로 분배되며, 데미지 넘버도 그곳에서 생성된다.
+	// 거점도 이제 Stronghold::EventBus를 가지므로 고블린/플레이어와 동일 경로를 탄다.
 	if ( newHp <= 0 )
 		holdEvent( eventList_, EvDeath( targetId ) );
 	else
@@ -2377,6 +2378,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				return it->second.get();
 			if (auto it = idGoblinMap_.find(static_cast<uint16>(id)); it != idGoblinMap_.end())
 				return it->second.get();
+			if (auto it = strongholdHpBars_.find(static_cast<uint16>(id)); it != strongholdHpBars_.end())
+				return it->second.obj;   // Stronghold* upcast → Object*
 			return nullptr;
 		};
 
@@ -2612,7 +2615,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		for (auto& [id, entry] : strongholdHpBars_) {
-			if (!entry.obj || entry.destroyed || entry.obj->maxHp() <= 0) {
+			if (!entry.obj || entry.obj->isDead() || entry.obj->maxHp() <= 0) {
 				entry.hpBar->visible = false;
 				entry.hpBarVisibleSeconds = 0.f;
 				continue;
@@ -2783,8 +2786,7 @@ void Game::renderInGame() {
 	}
 
 	for (auto& sh : strongholds_) {
-		auto it = strongholdHpBars_.find(static_cast<uint16>(sh->getId()));
-		if (it != strongholdHpBars_.end() && it->second.destroyed) continue;  // hide destroyed structure
+		if (sh->isDead()) continue;   // hide destroyed structure (isDead set by EvDeath)
 		sh->render(gfx_);
 	}
 
@@ -3246,7 +3248,17 @@ void Game::buildLobbyUI() {
 		{ 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Trailing);
 
 	// 방 코드 입력 + 참가 (프로토타입 joinRoomForm 대응)
-	makeSolid(mainPanel, "joinBox", 34.f, 220.f, mainPanelW - 68.f, 116.f, surfaceSoft);
+	// 단색 박스 대신 9-slice 패널 프레임으로 표시(작은 박스라 코너는 줄여 비례 보정).
+	{
+		auto* joinBox = makeSolid(mainPanel, "joinBox", 34.f, 220.f, mainPanelW - 68.f, 116.f, surface);
+		if (lobbyPanelTex_.res) {
+			joinBox->texNormal     = &lobbyPanelTex_;
+			joinBox->sliceUvBorderX = 0.30f; joinBox->sliceUvBorderY = 0.30f;
+			joinBox->sliceCornerX   = 22.f;  joinBox->sliceCornerY   = 22.f;
+		} else {
+			joinBox->bgColor = surfaceSoft;   // 텍스처 미로드 시 기존 단색 폴백
+		}
+	}
 	makeLabel(mainPanel, L"방 코드로 참가", 52.f, 234.f, 18.f, 240.f, 28.f, ink);
 	{
 		roomCodeInput_ = static_cast<UI::TextInput*>(
