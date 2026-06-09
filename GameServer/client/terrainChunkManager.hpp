@@ -81,6 +81,33 @@ private:
     // Expiring: Ready but outside the desired set, counting down its grace timer.
     enum class State { Unloaded, Loading, Ready, Expiring };
 
+    // ---- scatter (Unity Paint Tree / Paint Detail) ----
+
+    // One render part of a resolved scatter prototype (a tree model may have several
+    // meshes/submeshes; a billboard has exactly one).
+    struct ScatterDrawPart {
+        const Mesh*     mesh     = nullptr;
+        const SubMesh*  subMesh  = nullptr;
+        const Material* material = nullptr;
+        mu::Mat4x4      meshXform;            // model dress transform (identity for billboards)
+    };
+
+    // A scatter prototype resolved to renderable parts (+ optional collision model).
+    struct ResolvedScatterProto {
+        std::vector<ScatterDrawPart> parts;
+        AABB         localBounds{};           // union of part mesh bounds (model space)
+        const Model* model = nullptr;         // tree/mesh-detail model (model-space BVH); null for billboards
+        bool         collidable = false;      // model && !model->bvh.empty()
+    };
+
+    // A resident scattered instance on a loaded chunk. Kept (NOT emit-and-forget) so a
+    // future ScatterCollider can transform the prototype's model-space BVH to world space.
+    struct ScatterInstanceResolved {
+        u16t       protoIdx = 0;
+        mu::Mat4x4 world;                     // worldOffset + posLocal, yaw, scale [+ billboard size]
+        AABB       worldAABB{};               // culling + future collision broadphase
+    };
+
     struct LoadedChunk {
         ChunkIndexEntry entry;
         State           state = State::Unloaded;
@@ -89,6 +116,7 @@ private:
         std::shared_ptr<TerrainObject> object;
         std::size_t     physHandle = static_cast<std::size_t>(-1);  // PhysicsWorld::TerrainHandle
         float           expireSeconds = 0.f;  // accumulates while Expiring
+        std::vector<ScatterInstanceResolved> scatter;  // resident scattered foliage instances
     };
 
     // GPU resources of an unloaded chunk, retired for a few frames so the GPU is no
@@ -121,6 +149,13 @@ private:
     // Activates a chunk's render object + physics collider (data already finalized).
     void activateChunkRenderAndPhysics(LoadedChunk& slot);
 
+    // Scatter: loads prop models + billboard assets and resolves the prototype table
+    // (called once after the palette in init); resolves a chunk's instances on activate;
+    // and submits per-instance draw events (auto-instanced by the PBR pipelines).
+    void loadScatterAssets();
+    void resolveChunkScatter(LoadedChunk& slot);
+    void submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const;
+
     GFX*          gfx_          = nullptr;
     PhysicsWorld* physicsWorld_ = nullptr;
     ThreadPool*   threadPool_   = nullptr;
@@ -128,7 +163,23 @@ private:
 
     TerrainLayerPalette palette_;
     ChunkIndex          index_;
-    std::unordered_map<std::string, Texture>  texHashMap_;   // palette + per-chunk splats
+    std::unordered_map<std::string, Texture>  texHashMap_;   // palette + per-chunk splats + billboard textures
+
+    // Scatter assets (loaded once after the palette). propModels_ is environment-only
+    // (separate from AssetManager's per-character explicit members); keyed by prototype Name.
+    std::unordered_map<std::string, Model> propModels_;
+    std::vector<Material>                  billboardMaterials_;  // one per BillboardGrass prototype
+    Mesh                                   billboardMesh_;       // shared unit cross-quad (two-sided)
+    std::vector<ResolvedScatterProto>      resolvedProtos_;      // parallel to index_.scatterPrototypes
+    static constexpr float                 kFoliageAlphaCutoff = 0.33f;
+
+    // Detail draw-distance cull (Unity's "Detail Distance" analogue): details/grass are
+    // only emitted within this radius of the player; trees are always emitted (landmarks).
+    // Bounds per-frame DrawEvent count so the instancing buffers never overflow.
+    static constexpr float                 kDetailCullRadius = 80.f;
+    mu::Vec3                               cullCenter_{};
+    bool                                   hasCullCenter_ = false;
+
     std::unordered_map<int64_t, LoadedChunk>  chunks_;
     std::unordered_map<int64_t, const ChunkIndexEntry*> indexByCoord_;
     std::vector<PendingUnload> graveyard_;

@@ -322,6 +322,26 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         ly.roughness   = readFloat(ifs, "Roughness");
     }
 
+    // ---- scatter prototypes (global dedup table; index version >= 2) ----
+    // Tree / detail-mesh / billboard-grass prototypes. The Name is the mapping key
+    // (matches ModelExtractor's targetName). Older v1 indices omit this section.
+    if (result.version >= 2) {
+        const int PN = readInteger(ifs, "PrototypeCount");
+        result.scatterPrototypes.resize(PN);
+        for (int p = 0; p < PN; ++p) {
+            auto& proto = result.scatterPrototypes[p];
+            readHeadTag(ifs, "ScatterPrototype");
+            proto.name = readText(ifs, "Name");
+            proto.kind = static_cast<ScatterPrototype::Kind>(readInteger(ifs, "Kind"));
+            proto.texturePath = readText(ifs, "TexturePath");
+            const auto bbSize = readVec2(ifs, "BillboardSize");
+            proto.billboardWidth  = bbSize.x;
+            proto.billboardHeight = bbSize.y;
+            proto.tint = readVec4(ifs, "Tint");
+            readTailTag(ifs, "ScatterPrototype");
+        }
+    }
+
     // ---- chunk records ----
     const int C = readInteger(ifs, "ChunkCount");
     result.chunks.resize(C);
@@ -345,6 +365,29 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         }
         e.heightPath = readText(ifs, "HeightPath");
         e.splatPath  = readText(ifs, "SplatPath");
+
+        // ---- per-chunk scatter instances (index version >= 2) ----
+        if (result.version >= 2) {
+            const int instCount = readInteger(ifs, "InstanceCount");
+            e.scatter.resize(instCount);
+            for (int i = 0; i < instCount; ++i) {
+                auto& inst = e.scatter[i];
+                inst.protoIdx = static_cast<u16t>(readInteger(ifs, "ProtoIdx"));
+                const auto pl = readVec3(ifs, "PosLocal");
+                inst.posLocal = mu::Vec3(pl.x, pl.y, pl.z);
+                // v3+: full orientation quaternion. v2 (legacy): yaw-only float → build Y quaternion.
+                if (result.version >= 3) {
+                    inst.rot = readVec4(ifs, "Rot");
+                } else {
+                    const float yaw = readFloat(ifs, "Yaw");
+                    inst.rot = XMFLOAT4(0.f, std::sin(yaw * 0.5f), 0.f, std::cos(yaw * 0.5f));
+                }
+                const auto sc = readVec2(ifs, "Scale");
+                inst.scaleW = sc.x;
+                inst.scaleH = sc.y;
+            }
+        }
+
         readTailTag(ifs, "Chunk");
     }
 
@@ -419,7 +462,7 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
 
     gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks, "
                << L << " shared layers, " << S << " strongholds, " << Z << " zones, "
-               << M << " markers\n";
+               << M << " markers, " << result.scatterPrototypes.size() << " scatter prototypes\n";
     return result;
 }
 

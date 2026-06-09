@@ -21,6 +21,11 @@ struct Material {
 	float constantMetallic;
 	float constantAOStrength;
 	XMFLOAT3 constantEmmisive;
+
+	// Alpha-test cutoff for foliage (tree leaves / billboard grass). When > 0 the
+	// PBR/PBRDeferred pixel shader discards fragments whose albedo alpha is below it.
+	// 0 (default) = no alpha test (opaque), preserving prior behavior for all models.
+	float constantAlphaCutoff = 0.f;
 };
 
 struct MaterialSet {

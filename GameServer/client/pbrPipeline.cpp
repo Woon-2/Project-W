@@ -827,6 +827,7 @@ void Dispatcher::mainDraw() {
 				.cRoughness = drawEvent.material->constantRoughness,
 				.cMetallic = drawEvent.material->constantMetallic,
 				.cAOStrength = drawEvent.material->constantAOStrength,
+				.cAlphaCutoff = drawEvent.material->constantAlphaCutoff,
 				.cEmmisive = drawEvent.material->constantEmmisive
 			},
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
@@ -1112,6 +1113,7 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 					.cRoughness = drawEvent.material->constantRoughness,
 					.cMetallic = drawEvent.material->constantMetallic,
 					.cAOStrength = drawEvent.material->constantAOStrength,
+					.cAlphaCutoff = drawEvent.material->constantAlphaCutoff,
 					.cEmmisive = drawEvent.material->constantEmmisive
 				},
 				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스

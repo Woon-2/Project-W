@@ -77,6 +77,36 @@ struct TerrainLayerPalette {
     bool loaded = false;
 };
 
+// ---------------------------------------------------------------------------
+// Scatter (Unity Terrain Paint Tree / Paint Detail) — instanced static foliage
+// ---------------------------------------------------------------------------
+
+// One scatter prototype: a tree/detail-mesh/billboard kind plus the user-assigned
+// name used at extraction time. The name is the MAPPING KEY: it must match the
+// name given to the model when it was extracted with ModelExtractor (targetName).
+// Billboard grass carries its own texture path + quad size (no .bin model).
+struct ScatterPrototype {
+    enum class Kind : int { TreeMesh = 0, MeshDetail = 1, BillboardGrass = 2 };
+
+    std::string name;                  // = mapping key (ModelExtractor targetName)
+    Kind        kind = Kind::TreeMesh;
+    std::string texturePath;           // billboard only (relative to terrainDir)
+    float       billboardWidth  = 1.f; // billboard only (world units)
+    float       billboardHeight = 1.f; // billboard only
+    XMFLOAT4    tint{ 1.f, 1.f, 1.f, 1.f };
+};
+
+// One scattered instance, stored chunk-local (relative to the chunk's worldOffset).
+// Kept resident on the loaded chunk so a future ScatterCollider can transform the
+// prototype's model-space BVH into world space (see docs).
+struct ScatterInstance {
+    u16t     protoIdx = 0;             // index into ChunkIndex::scatterPrototypes
+    mu::Vec3 posLocal{};               // chunk-local position (world = worldOffset + posLocal)
+    XMFLOAT4 rot{ 0.f, 0.f, 0.f, 1.f };// orientation quaternion (Unity x,y,z,w): yaw + ground-align tilt
+    float    scaleW = 1.f;             // width scale  (Unity widthScale)
+    float    scaleH = 1.f;             // height scale (Unity heightScale)
+};
+
 // One chunk's metadata as parsed from chunks_index.bin (no heavy geometry).
 struct ChunkIndexEntry {
     int   col = 0, row = 0;
@@ -86,6 +116,7 @@ struct ChunkIndexEntry {
     std::vector<std::pair<int,int>> neighbors;   // 4-neighbor (col,row), existing only
     std::string heightPath;
     std::string splatPath;
+    std::vector<ScatterInstance> scatter;        // per-chunk scattered foliage (index ver >= 2)
 };
 
 // Parsed global index: shared palette descriptor + all chunk records.
@@ -93,6 +124,7 @@ struct ChunkIndex {
     int version = 0;
     TerrainLayerPalette palette;        // path/scalar info; textures loaded separately
     std::vector<ChunkIndexEntry> chunks;
+    std::vector<ScatterPrototype> scatterPrototypes;  // global dedup table (index ver >= 2)
     std::vector<ZoneDef> zones;         // trigger volumes (client uses local cosmetic zones)
     std::vector<MarkerDef> markers;     // generic placements (type+name+transform)
 };

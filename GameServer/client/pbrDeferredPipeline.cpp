@@ -527,6 +527,7 @@ void Dispatcher::gBufferDraw() {
                 .cRoughness           = de.material->constantRoughness,
                 .cMetallic            = de.material->constantMetallic,
                 .cAOStrength          = de.material->constantAOStrength,
+                .cAlphaCutoff         = de.material->constantAlphaCutoff,
                 .cEmmisive            = de.material->constantEmmisive
             },
             .firstInstanceOffset = static_cast<u32t>(gFirst - gBufferEvents_.begin())
@@ -688,6 +689,7 @@ void Dispatcher::addJobGBufferDraw(
                     .cRoughness            = de.material->constantRoughness,
                     .cMetallic             = de.material->constantMetallic,
                     .cAOStrength           = de.material->constantAOStrength,
+                    .cAlphaCutoff          = de.material->constantAlphaCutoff,
                     .cEmmisive             = de.material->constantEmmisive
                 },
                 .firstInstanceOffset = static_cast<u32t>(gFirst - gBufferEvents_.begin())

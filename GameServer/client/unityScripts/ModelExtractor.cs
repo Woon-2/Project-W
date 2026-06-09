@@ -115,6 +115,57 @@ public class ModelExtractorWindow : EditorWindow
         Debug.Log($"[TextureMapper] Found {textureMappings.Count} textures in {obj.name}");
     }
 
+    // 잘 알려진 albedo 프로퍼티 이름 후보.
+    static readonly string[] kAlbedoPropCandidates =
+        { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
+
+    // 머티리얼의 albedo(베이스 컬러) 텍스처를 견고하게 찾는다.
+    // 1) 알려진 프로퍼티 이름, 2) 셰이더 텍스처 프로퍼티 전체 스캔(노멀/마스크/이미시브 등은 제외,
+    // base/albedo/diffuse/main/color 류 이름 우선, 그래도 없으면 첫 번째 일반 텍스처).
+    static Texture FindAlbedoTexture(Material mat)
+    {
+        if (mat == null || mat.shader == null) return null;
+
+        foreach (var name in kAlbedoPropCandidates)
+            if (mat.HasProperty(name) && mat.GetTexture(name) != null)
+                return mat.GetTexture(name);
+
+        var shader = mat.shader;
+        int count = ShaderUtil.GetPropertyCount(shader);
+
+        bool IsExcluded(string lname) =>
+            lname.Contains("norm") || lname.Contains("bump") || lname.Contains("mask") ||
+            lname.Contains("metal") || lname.Contains("smooth") || lname.Contains("spec") ||
+            lname.Contains("gloss") || lname.Contains("occl") || lname.Contains("_ao") ||
+            lname.Contains("emiss") || lname.Contains("height") || lname.Contains("detail") ||
+            lname.Contains("lightmap");
+
+        // pass 1: albedo로 보이는 이름 우선
+        for (int i = 0; i < count; i++)
+        {
+            if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+            string pn = ShaderUtil.GetPropertyName(shader, i);
+            Texture tex = mat.GetTexture(pn);
+            if (tex == null) continue;
+            string l = pn.ToLowerInvariant();
+            if (IsExcluded(l)) continue;
+            if (l.Contains("base") || l.Contains("albedo") || l.Contains("diff") ||
+                l.Contains("main") || l.Contains("color") || l.Contains("col"))
+                return tex;
+        }
+        // pass 2: 제외 슬롯이 아닌 첫 번째 텍스처
+        for (int i = 0; i < count; i++)
+        {
+            if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+            string pn = ShaderUtil.GetPropertyName(shader, i);
+            Texture tex = mat.GetTexture(pn);
+            if (tex == null) continue;
+            if (IsExcluded(pn.ToLowerInvariant())) continue;
+            return tex;
+        }
+        return null;
+    }
+
     void ExtractRagdollConfig(GoblinRagdollConfig ragdoll)
     {
         var w = itemDataWriter;
@@ -315,10 +366,13 @@ public class ModelExtractorWindow : EditorWindow
             ExtractUtil.WriteHeadTag(geometryWriter, "Material");
 
             // 상수들 추출
-            // cAlbedo
-            if (materials[i].HasProperty("_Color"))
+            // cAlbedo: _Color / _BaseColor 우선, 없으면 불투명 흰색으로 기본값을 쓴다.
+            // (색상 상수가 비면 constantAlbedo가 (0,0,0,0)이 되어 검게 보이거나,
+            //  폴리지 알파테스트에서 알파 0으로 전부 클리핑되어 사라질 수 있다 — 트리 버그 원인)
             {
-                Color albedo = materials[i].GetColor("_Color");
+                Color albedo = Color.white;
+                if (materials[i].HasProperty("_Color"))          albedo = materials[i].GetColor("_Color");
+                else if (materials[i].HasProperty("_BaseColor")) albedo = materials[i].GetColor("_BaseColor");
                 ExtractUtil.WriteColor(geometryWriter, "cAlbedo", albedo);
             }
             // cEmmisive
@@ -354,19 +408,14 @@ public class ModelExtractorWindow : EditorWindow
             }
 
             // 텍스처들 추출
-            // AlbedoMap
-            string[] albedoMapPropCandidates = { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
-            foreach (var name in albedoMapPropCandidates)
+            // AlbedoMap: 잘 알려진 프로퍼티 이름을 먼저 시도하고, 없으면 셰이더의
+            // 텍스처 프로퍼티 전체를 훑어 albedo로 보이는 슬롯을 찾는다. 커스텀/Shader Graph
+            // 기반 트리처럼 albedo 슬롯 이름이 _MainTex/_BaseMap이 아닌 경우, 이 폴백이 없으면
+            // 머티리얼이 albedo 맵 없이 임포트되어 폴리지 알파테스트로 전부 클리핑(=안 보임)된다.
+            Texture albedoTex = FindAlbedoTexture(materials[i]);
+            if (albedoTex != null)
             {
-                if (materials[i].HasProperty(name))
-                {
-                    Texture mainAlbedoMap = materials[i].GetTexture(name);
-                    if (mainAlbedoMap != null)
-                    {
-                        ExtractUtil.WriteText(geometryWriter, "AlbedoMap", mainAlbedoMap.name);
-                        break;
-                    }
-                }
+                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", albedoTex.name);
             }
             // NormalMap
             if (materials[i].HasProperty("_BumpMap"))
