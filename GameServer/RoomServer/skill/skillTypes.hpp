@@ -56,6 +56,9 @@ enum class SkillEventType : u8t {
     SIZE
 };
 
+// PlayVFX::flags bit definitions (mirrors client; PlayVFX is a no-op on the server).
+static constexpr u8t kPlayVFXFlagYawOnly = 0x01;
+
 union SkillEventPayload {
     struct SpawnHitbox {
         u8t defIdx;
@@ -72,10 +75,12 @@ union SkillEventPayload {
 
     struct PlayVFX {
         mu::Vec3 localOffset;
+        mu::Vec3 localEulerDeg;        // attach-local orientation offset (yaw, pitch, roll degrees)
+        mu::Vec3 advanceForwardLocal;  // attach-local particle travel direction; zero = derive from orientation
         u8t      vfxId;
         u8t      attachType;
         u8t      attachVfxId;
-        u8t      pad;
+        u8t      flags;                // bit0 = yawOnly (ground-plane placement)
         char     attachTargetName[16];
     } playVFX;
 
@@ -105,7 +110,7 @@ union SkillEventPayload {
         float speedMps;
     } spawnProjectile;
 
-    u8t raw[32];
+    u8t raw[56];
 };
 
 struct TimelineEvent {

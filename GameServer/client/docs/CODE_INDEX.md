@@ -938,6 +938,10 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
 | `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
 | `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
+| `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
+| PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
+| PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
+| 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
 | `screenToRay(...)` | `camera.hpp` | 스크린 픽셀 → 월드 ray (inverse view-proj) |
 
 **입력 맵:** Space=재생/재시작, LMB=히트박스 피킹(ray + 화면근접 폴백), Esc=히트박스 편집 종료,

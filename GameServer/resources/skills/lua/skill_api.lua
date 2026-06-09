@@ -35,6 +35,19 @@ function VFXParticleAttach(vfxId, systemIdx)
     return { type = "VFXParticle", vfxId = vfxId, systemIdx = systemIdx or 0 }
 end
 
+-- PlayVFX event parameters (passed inline to skill:addEvent(ms, "PlayVFX", { ... })):
+--   vfxId      = <int>             -- index into the runtime ParticleEffect registry (required)
+--   offset     = Vec3(x, y, z)     -- attach-local placement (right, up, forward); forward = "N meters ahead"
+--   orient     = { yaw, pitch, roll } -- attach-local orientation offset in degrees (same convention as OBB)
+--                                     -- aims the effect relative to the caster (e.g. a fan to the side)
+--   advance    = Vec3(x, y, z)     -- attach-local particle travel direction; omit to derive from orient
+--   groundLock = true/false        -- place on the ground plane (ignore caster pitch/roll)
+--   attach     = BoneAttach(name)  -- follow a bone; omit/empty = caster root
+-- NOTE: the circle radius / fan radius+angle are authored in the effect prefab's shape config (.json),
+--       not here. PlayVFX only controls placement, orientation, and travel direction.
+-- Example -- forward 4m ground circle:   skill:addEvent(120,"PlayVFX",{ vfxId=7, offset=Vec3(0,0,4), groundLock=true })
+-- Example -- 45-degree fan to the left:   skill:addEvent(120,"PlayVFX",{ vfxId=8, offset=Vec3(0,0,2), orient={45,0,0} })
+
 -- Helper: on-hit response definition.
 function OnHit(params)
     return {

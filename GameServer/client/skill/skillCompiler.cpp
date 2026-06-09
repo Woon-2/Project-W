@@ -180,6 +180,29 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                             (*offset).get_or(3, 0.f)
                     );
                 }
+
+                // orient: attach-local orientation offset { yaw, pitch, roll } degrees (same convention as OBB).
+                // Aims the effect relative to the caster (e.g. a sector pointing 45 deg to the left).
+                sol::optional<sol::table> vfxOrient = evTbl["orient"];
+                if (vfxOrient) {
+                    p.localEulerDeg = mu::Vec3( (*vfxOrient).get_or(1, 0.f),
+                            (*vfxOrient).get_or(2, 0.f),
+                            (*vfxOrient).get_or(3, 0.f)
+                    );
+                }
+
+                // advance: attach-local particle travel direction. Omitted/zero -> derived from orientation.
+                sol::optional<sol::table> advance = evTbl["advance"];
+                if (advance) {
+                    p.advanceForwardLocal = mu::Vec3( (*advance).get_or(1, 0.f),
+                            (*advance).get_or(2, 0.f),
+                            (*advance).get_or(3, 0.f)
+                    );
+                }
+
+                // groundLock: place the effect on the ground plane (ignore caster pitch/roll).
+                if (evTbl.get_or("groundLock", false))
+                    p.flags |= kPlayVFXFlagYawOnly;
                 break;
             }
             case SkillEventType::ApplyImpulse: {

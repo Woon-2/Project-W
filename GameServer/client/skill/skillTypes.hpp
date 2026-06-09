@@ -81,6 +81,9 @@ enum class SkillEventType : u8t {
     SIZE
 };
 
+// PlayVFX::flags bit definitions.
+static constexpr u8t kPlayVFXFlagYawOnly = 0x01;  // place effect on ground plane (ignore caster pitch/roll)
+
 // Fixed-size payload union. All members are trivially copyable (no std::string).
 // String data lives in SkillAsset::hitboxDefs / vfxNames, referenced by index.
 union SkillEventPayload {
@@ -98,13 +101,15 @@ union SkillEventPayload {
     } playAnimation;
 
     struct PlayVFX {
-        mu::Vec3 localOffset;          // attach-local space offset (right, up, forward); zero = at attach origin
-        u8t      vfxId;                //  1 byte  [12]
-        u8t      attachType;           //  1 byte  [13]: AttachType ordinal; Bone + empty name = caster root
-        u8t      attachVfxId;          //  1 byte  [14]
-        u8t      pad;                  //  1 byte  [15]
-        char     attachTargetName[16]; // 16 bytes [16-31]: bone name, null-terminated; empty = use owner root
-        // total: 32 bytes
+        mu::Vec3 localOffset;          // 12 bytes [0-11]:  attach-local offset (right, up, forward); zero = at attach origin
+        mu::Vec3 localEulerDeg;        // 12 bytes [12-23]: attach-local orientation offset (yaw, pitch, roll degrees); zero = no offset
+        mu::Vec3 advanceForwardLocal;  // 12 bytes [24-35]: attach-local particle travel direction; zero = derive from orientation
+        u8t      vfxId;                //  1 byte  [36]
+        u8t      attachType;           //  1 byte  [37]: AttachType ordinal; Bone + empty name = caster root
+        u8t      attachVfxId;          //  1 byte  [38]
+        u8t      flags;                //  1 byte  [39]: bit0 = yawOnly (place on ground plane, ignore caster pitch/roll)
+        char     attachTargetName[16]; // 16 bytes [40-55]: bone name, null-terminated; empty = use owner root
+        // total: 56 bytes
     } playVFX;
 
     struct ModifyStat {
@@ -133,7 +138,7 @@ union SkillEventPayload {
         float speedMps;
     } spawnProjectile;
 
-    u8t raw[32];  // fixes union size at 32 bytes
+    u8t raw[56];  // fixes union size at 56 bytes (PlayVFX is the largest member)
 };
 
 // One entry in the timeline. Keep this small -- it lives in a sorted vector.

@@ -345,32 +345,32 @@
     <ClCompile Include="skill\skillSystem.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="trailPipeline.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="piercingMeshPipeline.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="piercingMaterial.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="piercingSlashMeshPipeline.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="piercingSlashMaterial.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="editor\skillDraft.cpp">
+    <ClCompile Include="ui\widgets\TextInput.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="editor\editorController.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="editor\skillDraft.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="trailPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="zone.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ui\widgets\TextInput.cpp">
-      <Filter>소스 파일</Filter>
+    <ClCompile Include="piercingMaterial.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingSlashMaterial.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingMeshPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingSlashMeshPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -698,41 +698,41 @@
     <ClInclude Include="skill\skillCompiler.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="trailPipeline.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="piercingMeshPipeline.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="piercingMaterial.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="piercingSlashMeshPipeline.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="piercingSlashMaterial.hpp">
+    <ClInclude Include="ui\widgets\TextInput.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="editor\characterSkillMap.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="editor\skillDraft.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="editor\editorController.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="editor\skillDraft.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="trailPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="zone.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\zoneDef.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingMaterial.hpp">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingSlashMaterial.hpp">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingMeshPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingSlashMeshPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\markerDef.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="ui\widgets\TextInput.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

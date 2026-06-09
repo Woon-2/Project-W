@@ -440,13 +440,43 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
                 }
             }
 
-            // localOffset is in attach-local space (right=X, up=Y, forward=Z).
-            // Vec4 w=1 transforms it as a point, naturally adding the translation.
+            // Pure-rotation basis from the attach transform. When yawOnly is set, strip
+            // pitch/roll so ground-plane effects (forward circles, fans) stay flat
+            // regardless of where the caster is looking.
+            mu::Mat4x4 baseRot;
+            if (p.flags & kPlayVFXFlagYawOnly) {
+                mu::Vec3 fwd = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * baseXform));
+                baseRot = mu::rotateYH(mu::Radian{ std::atan2(fwd.x(), fwd.z()) });
+            } else {
+                baseRot = mu::Mat4x4(mu::NQuat(mu::quatRotMat(baseXform)));
+            }
+
+            // Local orientation offset (yaw, pitch, roll degrees) -- same convention as OBB orient.
+            // Aims the effect relative to the caster (e.g. a sector pointing to the side).
+            mu::Mat4x4 eulerOff = mu::rotateRPYH(mu::Degree{ p.localEulerDeg.z() },   // roll
+                                                 mu::Degree{ p.localEulerDeg.y() },   // pitch
+                                                 mu::Degree{ p.localEulerDeg.x() });  // yaw
+            mu::Mat4x4 aim = eulerOff * baseRot;  // pure rotation: local euler then caster orientation
+
+            // localOffset is in the aimed frame (right=X, up=Y, forward=Z), added to the attach origin.
+            mu::Vec3 origin = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * baseXform);
             const mu::Vec3& off = p.localOffset;
-            worldPos    = mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 1.f) * baseXform);
-            worldOrient = mu::NQuat(mu::quatRotMat(baseXform));
+            worldPos    = origin + mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 0.f) * aim);
+            worldOrient = mu::NQuat(mu::quatRotMat(aim));
+
+            // advanceForwardLocal: explicit particle travel direction (4-arg play). Zero = derive from orient.
+            const mu::Vec3& adv = p.advanceForwardLocal;
+            if (adv.x() == 0.f && adv.y() == 0.f && adv.z() == 0.f) {
+                fx->play(worldPos, worldOrient);
+            } else {
+                mu::Vec3 worldAdvance = mu::normalize(
+                    mu::Vec3(mu::Vec4(adv.x(), adv.y(), adv.z(), 0.f) * aim));
+                fx->play(worldPos, aim, worldAdvance);
+            }
         }
-        fx->play(worldPos, worldOrient);
+        else {
+            fx->play(worldPos, worldOrient);  // no owner resolved: play at world origin
+        }
         break;
     }
 

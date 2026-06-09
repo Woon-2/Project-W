@@ -26,6 +26,7 @@ DirectX 12 game client. Supports two modes selected at compile/runtime:
 물리 아키텍처 참조 - `docs/physicsArchitecture.md`
 게임 아키텍처 참조 - `docs/gameArchitecture.md`
 스킬 시스템 아키텍처 참조 - `docs/skillArchitecture.md`
+스킬 제작 가이드 (Lua API + 유형별 레시피) - `docs/skillCreationGuide.md`
 
 ### 파일 인코딩 주의
 프로젝트의 기존 파일은 **UTF-8 with BOM** (utf-8-sig)으로 저장되어 있다.
