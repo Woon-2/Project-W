@@ -20,22 +20,36 @@ skill:addEvent(100, "PlayVFX", {
 })
 
 local onHit = OnHit({
-    damage          = 36,
+    damage          = 16,
     vfxId           = 255,
-    impulseStrength = 600.0,
-    impulseDir      = Vec3(0.0, 0.1, 1.0)
+    impulseStrength = 1200.0,
+    impulseDir      = Vec3(0.0, 0.0, 1.0)
 })
 
 skill:addEvent(130, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.2, 2.8, 0.5, 0.5, 2.8, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, -2.0, 0.0, 0.5, 3.4, 0.85, 0, 0, 0) },
+    attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
+    hitGroupCooldownMs  = 500,
     onHit               = onHit
 })
 
-skill:addEvent(420, "DestroyHitbox", { slot = 0 })
+local onHitTip = deepCopy(onHit)
+onHitTip.impulseStrength = 500.0
+
+skill:addEvent(300, "SpawnHitbox", {
+    slot                = 1,
+    localOBBs           = { OBB(0.0, -5.8, 0.0, 0.5, 1.4, 0.7, 0, 0, 0) },
+    attach              = BoneAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 500,
+    onHit               = onHitTip
+})
+
+skill:addEvent(360, "DestroyHitbox", { slot = 0 })
+skill:addEvent(400, "DestroyHitbox", { slot = 1 })
 
 return skill

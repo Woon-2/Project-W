@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name             = "CrystalsCrossFade"
-skill.totalDurationMs  = 800
+skill.totalDurationMs  = 1400
 skill.interruptible    = true
 
 skill:addVFX(9, "effects/crystals_cross_fade.json")
@@ -16,26 +16,30 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(150, "PlayVFX", {
     vfxId  = 9,
-    offset = Vec3(0.0, 0.0, 0.0)
+    offset = Vec3(0.0, 0.0, 0.0),
+    groundLock = true,
+    groundSnap = true,
+    particleConform = "SnapAndAlign"
 })
 
 local onHit = OnHit({
-    damage          = 38,
+    damage          = 48,
     vfxId           = 255,
-    impulseStrength = 450.0,
-    impulseDir      = Vec3(0.0, 0.6, 1.0)
+    impulseStrength = 600.0,
+    impulseDir      = Vec3(0.0, 0.7, 0.5)
 })
 
-skill:addEvent(250, "SpawnHitbox", {
+skill:addEvent(160, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.8, 0.0, 2.0, 1.2, 2.0, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.4, 1.2, 0.4, 0, 0, 0) },
+    attach              = VFXParticleAttach(9, 1),
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
+    hitGroupCooldownMs  = 1300,
+    useParticleSize     = false,
     onHit               = onHit
 })
 
-skill:addEvent(600, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1300, "DestroyHitbox", { slot = 0 })
 
 return skill

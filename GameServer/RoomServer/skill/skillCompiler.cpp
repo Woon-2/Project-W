@@ -86,6 +86,7 @@ SkillHitboxDef ServerSkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.vfxId       = static_cast<u8t>((*attach).get_or("vfxId", 0));
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
         def.attach.groundAlign = (*attach).get_or("align", false);
+        def.attach.groundSnapAnchor = (*attach).get_or("rigid", false);
     }
 
     sol::optional<sol::table> onHit = tbl["onHit"];

@@ -26,16 +26,21 @@ local onHit = OnHit({
     impulseDir      = Vec3(0.0, 0.1, 1.0)
 })
 
-skill:addEvent(140, "SpawnHitbox", {
-    slot                = 0,
-    localOBBs           = { OBB(0.0, -0.2, 3.0, 1.6, 0.5, 3.0, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
-    applyAttachRotation = true,
-    hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
-    onHit               = onHit
-})
+local count = 10
 
-skill:addEvent(500, "DestroyHitbox", { slot = 0 })
+for i = 0, count - 1 do
+    skill:addEvent(130, "SpawnHitbox", {
+        slot                = i,
+        localOBBs           = { OBB(0.0, 0.0, -0.3, 0.25, 0.25, 0.6, 0, 0, 0) },
+        attach              = VFXParticleAttach(11, i),
+        applyAttachRotation = true,
+        useParticleSize     = false,
+        hitGroup            = i,
+        hitGroupCooldownMs  = 550,
+        onHit               = onHit
+    })
+    skill:addEvent(650, "DestroyHitbox", { slot = i })
+end
+
 
 return skill

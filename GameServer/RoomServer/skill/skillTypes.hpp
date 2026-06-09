@@ -25,6 +25,7 @@ struct AttachTarget {
     u8t         vfxId            = 0;
     int         particleSystemIdx = 0;
     bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
+    bool        groundSnapAnchor = false;  // Ground attach: snap once at the anchor, place OBBs as rigid offsets (point impact). false = per-OBB snap (distributed eruption)
 };
 
 struct OnHitDef {

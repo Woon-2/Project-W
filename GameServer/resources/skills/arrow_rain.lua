@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name             = "ArrowRain"
-skill.totalDurationMs  = 900
+skill.totalDurationMs  = 2000
 skill.interruptible    = true
 
 skill:addVFX(12, "effects/arrow_rain.json")
@@ -16,26 +16,29 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(120, "PlayVFX", {
     vfxId  = 12,
-    offset = Vec3(0.0, 3.0, 4.0)
+    offset = Vec3(0.0, -1.5, 10.0),
+    groundSnap = true,
+    particleCollision = "GroundKill"
 })
 
 local onHit = OnHit({
-    damage          = 30,
+    damage          = 4,
     vfxId           = 255,
     impulseStrength = 300.0,
-    impulseDir      = Vec3(0.0, -0.3, 0.5)
+    impulseDir      = Vec3(0.0, -0.88, 0.47)
 })
 
-skill:addEvent(300, "SpawnHitbox", {
+skill:addEvent(130, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.8, 4.0, 2.0, 1.5, 2.0, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, 0.0, -0.3, 0.8, 0.6, 0.8, 0, 0, 0) },
+    attach              = VFXParticleAttach(12, 0),
     applyAttachRotation = true,
+    useParticleSize     = false,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
+    hitGroupCooldownMs  = 200,
     onHit               = onHit
 })
 
-skill:addEvent(700, "DestroyHitbox", { slot = 0 })
+skill:addEvent(2000, "DestroyHitbox", { slot = 0 })
 
 return skill

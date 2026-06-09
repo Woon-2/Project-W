@@ -419,21 +419,52 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             hb.resolvedAttach.boneIdx = -1;
             hb.resolvedAttach.pSystem = nullptr;
 
-            // Caster yaw rotates each OBB's horizontal offset; center.y becomes the
-            // height above the snapped surface (per-OBB, so grids conform to slopes).
+            // Caster yaw rotates each OBB's horizontal offset.
             const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
             const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
-            for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
-                mu::Vec3 wc = inst.castAnchor.pos
-                            + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
-                if (ctx.ground && *ctx.ground)
-                    wc.setComponent(1, ctx.ground->height(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
-                hb.worldOBBs[i].center      = wc;
-                hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
-                hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
-                if (def.attach.groundAlign && ctx.ground && *ctx.ground)
-                    hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
-                                           * alignQuatYToNormal(ctx.ground->normal(wc.x(), wc.z()));
+            const bool       haveGround = ctx.ground && *ctx.ground;
+
+            if (def.attach.groundSnapAnchor && !hb.localOBBs.empty()) {
+                // Point impact: the FIRST OBB is the anchor. Snap the ground ONCE at its
+                // caster-relative XZ, then place every OBB as a rigid offset from that single
+                // surface point (meteor explosion ring, blast crater). center.y is each box's
+                // lift above the shared impact ground height; horizontal spread is preserved.
+                // This keeps the whole cluster coherent and matched to a single-origin VFX.
+                const mu::Vec3 anchorOff = mu::Vec3(mu::Vec4(hb.localOBBs[0].center, 0.f) * yawRot);
+                mu::Vec3 groundPt = inst.castAnchor.pos + anchorOff;  // impact XZ; y set below
+                mu::NQuat alignQuat{};  // identity unless ground-aligned
+                if (haveGround) {
+                    groundPt.setComponent(1, ctx.ground->height(groundPt.x(), groundPt.z()));
+                    if (def.attach.groundAlign)
+                        alignQuat = alignQuatYToNormal(ctx.ground->normal(groundPt.x(), groundPt.z()));
+                }
+                const mu::Mat4x4 alignMat(alignQuat);
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    const mu::Vec3 worldOff = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                    // Horizontal offset from the anchor box; vertical = center.y above ground.
+                    const mu::Vec3 rel{ worldOff.x() - anchorOff.x(),
+                                        hb.localOBBs[i].center.y(),
+                                        worldOff.z() - anchorOff.z() };
+                    hb.worldOBBs[i].center      = groundPt + mu::Vec3(mu::Vec4(rel, 0.f) * alignMat);
+                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat * alignQuat;
+                }
+            } else {
+                // Distributed eruption: each OBB snaps to the terrain at its own XZ, so a
+                // grid of pillars conforms to slopes independently. center.y becomes the
+                // height above each OBB's own snapped surface point.
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    mu::Vec3 wc = inst.castAnchor.pos
+                                + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                    if (haveGround)
+                        wc.setComponent(1, ctx.ground->height(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
+                    hb.worldOBBs[i].center      = wc;
+                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
+                    if (def.attach.groundAlign && haveGround)
+                        hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
+                                               * alignQuatYToNormal(ctx.ground->normal(wc.x(), wc.z()));
+                }
             }
             hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;

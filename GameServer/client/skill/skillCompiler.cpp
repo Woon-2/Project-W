@@ -115,6 +115,9 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
         // Ground attach: tilt the planted OBBs to the terrain normal.
         def.attach.groundAlign = (*attach).get_or("align", false);
+        // Ground attach: rigid=true snaps once at the anchor and places OBBs as rigid
+        // offsets (point impact); false (default) snaps each OBB independently (eruption).
+        def.attach.groundSnapAnchor = (*attach).get_or("rigid", false);
     }
 
     // onHit

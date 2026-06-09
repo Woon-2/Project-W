@@ -33,6 +33,7 @@ struct AttachTarget {
     u8t         vfxId            = 0;  // index into SkillDispatchContext::vfxById
     int         particleSystemIdx = 0;  // index into ParticleEffect::system(n)
     bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
+    bool        groundSnapAnchor = false;  // Ground attach: snap once at the anchor, place OBBs as rigid offsets (point impact). false = per-OBB snap (distributed eruption)
 };
 
 // ---------------------------------------------------------------------------

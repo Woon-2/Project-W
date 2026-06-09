@@ -394,17 +394,44 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 
             const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
             const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
-            for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
-                mu::Vec3 wc = inst.castAnchor.pos
-                            + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
-                if (ctx.groundHeight)
-                    wc.setComponent(1, ctx.groundHeight(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
-                hb.worldOBBs[i].center      = wc;
-                hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
-                hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
-                if (def.attach.groundAlign && ctx.groundNormal)
-                    hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
-                                           * alignQuatYToNormal(ctx.groundNormal(wc.x(), wc.z()));
+
+            if (def.attach.groundSnapAnchor && !hb.localOBBs.empty()) {
+                // Point impact: the FIRST OBB is the anchor. Snap the ground ONCE at its
+                // caster-relative XZ, then place every OBB as a rigid offset from that single
+                // surface point. center.y is each box's lift above the shared impact ground
+                // height; horizontal spread is preserved. Mirrors the client.
+                const mu::Vec3 anchorOff = mu::Vec3(mu::Vec4(hb.localOBBs[0].center, 0.f) * yawRot);
+                mu::Vec3 groundPt = inst.castAnchor.pos + anchorOff;  // impact XZ; y set below
+                mu::NQuat alignQuat{};  // identity unless ground-aligned
+                if (ctx.groundHeight) {
+                    groundPt.setComponent(1, ctx.groundHeight(groundPt.x(), groundPt.z()));
+                    if (def.attach.groundAlign && ctx.groundNormal)
+                        alignQuat = alignQuatYToNormal(ctx.groundNormal(groundPt.x(), groundPt.z()));
+                }
+                const mu::Mat4x4 alignMat(alignQuat);
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    const mu::Vec3 worldOff = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                    const mu::Vec3 rel{ worldOff.x() - anchorOff.x(),
+                                        hb.localOBBs[i].center.y(),
+                                        worldOff.z() - anchorOff.z() };
+                    hb.worldOBBs[i].center      = groundPt + mu::Vec3(mu::Vec4(rel, 0.f) * alignMat);
+                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat * alignQuat;
+                }
+            } else {
+                // Distributed eruption: each OBB snaps to the terrain at its own XZ.
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    mu::Vec3 wc = inst.castAnchor.pos
+                                + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                    if (ctx.groundHeight)
+                        wc.setComponent(1, ctx.groundHeight(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
+                    hb.worldOBBs[i].center      = wc;
+                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
+                    if (def.attach.groundAlign && ctx.groundNormal)
+                        hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
+                                               * alignQuatYToNormal(ctx.groundNormal(wc.x(), wc.z()));
+                }
             }
             hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;

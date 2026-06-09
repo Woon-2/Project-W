@@ -35,6 +35,19 @@ function VFXParticleAttach(vfxId, systemIdx)
     return { type = "VFXParticle", vfxId = vfxId, systemIdx = systemIdx or 0 }
 end
 
+-- Helper: ground attachment target. Plants OBBs at a caster-relative point snapped to
+-- the terrain, then leaves them static (no bone tracking). opts:
+--   align = true  -- tilt OBBs to the terrain normal (default false: yaw only, slope-safe)
+--   rigid = true  -- point impact: snap ONCE at the anchor, place every OBB as a rigid
+--                    offset from that single surface point (meteor explosion, blast crater).
+--                    center.y becomes a vertical offset from the snapped anchor height.
+--   rigid = false -- (default) each OBB snaps to the terrain at its own XZ -> a grid of
+--                    pillars conforms to slopes independently (distributed eruption).
+function GroundAttach(opts)
+    opts = opts or {}
+    return { type = "Ground", align = opts.align or false, rigid = opts.rigid or false }
+end
+
 -- PlayVFX event parameters (passed inline to skill:addEvent(ms, "PlayVFX", { ... })):
 --   vfxId      = <int>             -- index into the runtime ParticleEffect registry (required)
 --   offset     = Vec3(x, y, z)     -- attach-local placement (right, up, forward); forward = "N meters ahead"
