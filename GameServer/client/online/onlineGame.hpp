@@ -137,6 +137,7 @@ private:
 	// 로비 UI 구성/갱신 (LobbyServer 룸 상태 기반).
 	void buildLobbyUI();
 	void refreshLobbyUI();
+	void refreshSettingsPreviewUI();
 
 	// Loading screen (black + logo + progress bar + spinner): build once, update per frame.
 	void buildLoadingScreen();
@@ -402,6 +403,18 @@ private:
 	UI::UIElement* mainMenuRoot_    = nullptr;
 	UI::UIElement* waitingRoomRoot_ = nullptr;
 	UI::Button*    settingsPanelBg_ = nullptr;
+	UI::Button*    settingsCloseButton_ = nullptr;
+	UI::Button*    settingsWindowedButton_ = nullptr;
+	UI::Button*    settingsFullscreenButton_ = nullptr;
+	UI::Button*    settingsResolutionPrevButton_ = nullptr;
+	UI::Button*    settingsResolutionNextButton_ = nullptr;
+	UI::Label*     settingsResolutionValueLabel_ = nullptr;
+	UI::Button*    settingsAllyDamageOffButton_ = nullptr;
+	UI::Button*    settingsAllyDamageOnButton_ = nullptr;
+	UI::Button*    settingsMonsterOpacityPrevButton_ = nullptr;
+	UI::Button*    settingsMonsterOpacityNextButton_ = nullptr;
+	UI::Button*    settingsMonsterOpacityFill_ = nullptr;
+	UI::Label*     settingsMonsterOpacityValueLabel_ = nullptr;
 	UI::TextInput* roomCodeInput_   = nullptr;
 	UI::Label*     mainMenuMsgLabel_= nullptr;
 	UI::Label*     roomCodeLabel_   = nullptr;
@@ -419,6 +432,13 @@ private:
 	UI::Label*     startGameLabel_  = nullptr;
 	UI::Button*    waitMessageBg_   = nullptr;
 	UI::Label*     hostStatusLabel_ = nullptr;
+
+	bool         settingsFullscreen_ = true;
+	bool         settingsAllyDamageVisible_ = true;
+	int          settingsResolutionIndex_ = 0;
+	int          settingsMonsterDamageOpacity_ = 100;
+	float        settingsMonsterOpacityFillMaxWidth_ = 0.f;
+	std::wstring settingsCurrentResolutionText_{};
 
 	// Loading screen overlay (black + logo + progress bar + "loading..." + dot-ring spinner).
 	UI::UIElement*   loadingRoot_      = nullptr;

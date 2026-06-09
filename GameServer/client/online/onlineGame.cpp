@@ -3363,7 +3363,7 @@ void Game::buildLobbyUI() {
 	settingsPanelBg_->offsetY = UI::DimValue::px(0.f);
 	settingsPanelBg_->width = UI::DimValue::pct(100.f);
 	settingsPanelBg_->height = UI::DimValue::pct(100.f);
-	settingsPanelBg_->interactive = false;
+	settingsPanelBg_->interactive = true;
 	settingsPanelBg_->bgColor = { 0.08f, 0.13f, 0.17f, 0.34f };
 	settingsPanelBg_->zOrder = 18;
 	settingsPanelBg_->visible = false;
@@ -3378,13 +3378,140 @@ void Game::buildLobbyUI() {
 		settingsPanelBg_->texTintPressed = settingsPanelBg_->texTint;
 	}
 
+	const XMFLOAT4 settingsInk = { 0.08f, 0.12f, 0.16f, 1.f };
+	const XMFLOAT4 settingsMuted = { 0.32f, 0.38f, 0.44f, 1.f };
+	const XMFLOAT4 settingsRow = { 0.02f, 0.04f, 0.05f, 0.18f };
+	const XMFLOAT4 settingsLine = { 0.06f, 0.12f, 0.16f, 0.28f };
+	const XMFLOAT4 settingsAccent = { 0.05f, 0.48f, 0.66f, 0.92f };
+	const XMFLOAT4 settingsInactive = { 0.10f, 0.13f, 0.15f, 0.18f };
+	const XMFLOAT4 settingsButtonText = { 1.f, 1.f, 1.f, 1.f };
+	const float titleX = screenW * 0.08f;
+	const float groupX = screenW * 0.16f;
+	const float rowX = screenW * 0.23f;
+	const float contentRight = screenW * 0.88f;
+	const float rowW = contentRight - rowX;
+	const float settingsY = screenH * 0.14f;
+	const float rowH = std::max(44.f, screenH * 0.052f);
+	const float rowGap = 7.f;
+	const float groupGap = screenH * 0.06f;
+	const float nameW = rowW * 0.43f;
+	const float controlX = rowX + nameW;
+	const float controlW = rowW - nameW;
+
+	settingsCurrentResolutionText_ =
+		std::to_wstring(static_cast<int>(screenW)) + L" × " + std::to_wstring(static_cast<int>(screenH));
+
+	makeLabel(settingsPanelBg_, L"설정", titleX, settingsY - 58.f, 42.f, rowW, 58.f,
+		settingsInk, UI::TextHAlign::Leading, 2);
+
+	auto makeDivider = [&](float y) {
+		makeSolid(settingsPanelBg_, "settingsDivider", groupX, y, contentRight - groupX, 2.f, settingsLine, 1);
+	};
+
+	auto makeGroupTitle = [&](const std::wstring& title, float y) {
+		makeLabel(settingsPanelBg_, title, groupX, y, 26.f, contentRight - groupX, 36.f,
+			settingsInk, UI::TextHAlign::Leading, 2);
+		makeDivider(y + 42.f);
+	};
+
+	auto makeSettingRow = [&](const std::wstring& name, float y) {
+		makeSolid(settingsPanelBg_, "settingsRowBg", rowX, y, rowW, rowH, settingsRow, 1);
+		makeLabel(settingsPanelBg_, name, rowX + 24.f, y, 19.f, nameW - 32.f, rowH,
+			settingsInk, UI::TextHAlign::Leading, 3);
+	};
+
+	auto makeToggleButtons = [&](float x, float y, float w, float h,
+	                             const std::wstring& left, const std::wstring& right,
+	                             std::function<void()> onLeft, std::function<void()> onRight,
+	                             UI::Button** leftOut, UI::Button** rightOut) {
+		const float halfW = (w - 8.f) * 0.5f;
+		auto* leftBtn = makeButton(settingsPanelBg_, left, x, y + 7.f, halfW, h - 14.f,
+			settingsInactive, settingsAccent, settingsAccent, 17.f, std::move(onLeft), settingsButtonText);
+		auto* rightBtn = makeButton(settingsPanelBg_, right, x + halfW + 8.f, y + 7.f, halfW, h - 14.f,
+			settingsInactive, settingsAccent, settingsAccent, 17.f, std::move(onRight), settingsButtonText);
+		leftBtn->zOrder = 22;
+		rightBtn->zOrder = 22;
+		*leftOut = leftBtn;
+		*rightOut = rightBtn;
+	};
+
+	auto makeArrowButton = [&](float x, float y, const std::wstring& text, std::function<void()> onClick) {
+		auto* btn = makeButton(settingsPanelBg_, text, x, y + 6.f, 46.f, rowH - 12.f,
+			settingsInactive, settingsAccent, settingsAccent, 22.f, std::move(onClick), settingsButtonText);
+		btn->zOrder = 22;
+		return btn;
+	};
+
+	float groupY = settingsY;
+	makeGroupTitle(L"화면", groupY);
+	float rowY = groupY + 56.f;
+	makeSettingRow(L"화면 모드", rowY);
+	makeToggleButtons(controlX + 24.f, rowY, controlW - 48.f, rowH,
+		L"창모드", L"전체화면",
+		[this]() { settingsFullscreen_ = false; refreshSettingsPreviewUI(); },
+		[this]() { settingsFullscreen_ = true; refreshSettingsPreviewUI(); },
+		&settingsWindowedButton_, &settingsFullscreenButton_);
+	rowY += rowH + rowGap;
+	makeSettingRow(L"해상도", rowY);
+	settingsResolutionPrevButton_ = makeArrowButton(controlX + 16.f, rowY, L"<", [this]() {
+		settingsResolutionIndex_ = std::max(0, settingsResolutionIndex_ - 1);
+		refreshSettingsPreviewUI();
+	});
+	settingsResolutionNextButton_ = makeArrowButton(controlX + controlW - 62.f, rowY, L">", [this]() {
+		settingsResolutionIndex_ = std::min(2, settingsResolutionIndex_ + 1);
+		refreshSettingsPreviewUI();
+	});
+	settingsResolutionValueLabel_ = makeLabel(settingsPanelBg_, L"", controlX + 72.f, rowY, 20.f,
+		controlW - 144.f, rowH, settingsInk, UI::TextHAlign::Center, 3);
+	makeSolid(settingsPanelBg_, "settingsResolutionLine",
+		controlX + 78.f, rowY + rowH - 9.f, controlW - 156.f, 2.f, settingsLine, 2);
+
+	groupY = rowY + rowH + groupGap;
+	makeGroupTitle(L"전투 표시", groupY);
+	rowY = groupY + 56.f;
+	makeSettingRow(L"동료 플레이어 데미지 표시", rowY);
+	makeToggleButtons(controlX + 24.f, rowY, controlW - 48.f, rowH,
+		L"OFF", L"ON",
+		[this]() { settingsAllyDamageVisible_ = false; refreshSettingsPreviewUI(); },
+		[this]() { settingsAllyDamageVisible_ = true; refreshSettingsPreviewUI(); },
+		&settingsAllyDamageOffButton_, &settingsAllyDamageOnButton_);
+	rowY += rowH + rowGap;
+	makeSettingRow(L"몬스터 데미지 투명도", rowY);
+	settingsMonsterOpacityPrevButton_ = makeArrowButton(controlX + 16.f, rowY, L"<", [this]() {
+		settingsMonsterDamageOpacity_ = std::max(0, settingsMonsterDamageOpacity_ - 5);
+		refreshSettingsPreviewUI();
+	});
+	settingsMonsterOpacityNextButton_ = makeArrowButton(controlX + controlW - 62.f, rowY, L">", [this]() {
+		settingsMonsterDamageOpacity_ = std::min(100, settingsMonsterDamageOpacity_ + 5);
+		refreshSettingsPreviewUI();
+	});
+	makeSolid(settingsPanelBg_, "settingsMonsterOpacityTrack",
+		controlX + 78.f, rowY + rowH - 11.f, controlW - 156.f, 3.f, settingsLine, 2);
+	settingsMonsterOpacityFillMaxWidth_ = controlW - 156.f;
+	settingsMonsterOpacityFill_ = makeSolid(settingsPanelBg_, "settingsMonsterOpacityFill",
+		controlX + 78.f, rowY + rowH - 12.f, settingsMonsterOpacityFillMaxWidth_, 5.f, settingsAccent, 3);
+	settingsMonsterOpacityValueLabel_ = makeLabel(settingsPanelBg_, L"", controlX + 72.f, rowY, 20.f,
+		controlW - 144.f, rowH * 0.60f, settingsInk, UI::TextHAlign::Center, 3);
+	refreshSettingsPreviewUI();
+
+	settingsCloseButton_ = makeButton(mainMenuRoot_, L"닫기", 0.f, 0.f, 154.f, 52.f,
+		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
+		[this]() {
+			if (settingsPanelBg_) settingsPanelBg_->visible = false;
+			if (settingsCloseButton_) settingsCloseButton_->visible = false;
+		}, ink);
+	applyRect(settingsCloseButton_, UI::Anchors::BottomRight, UI::Pivots::BottomRight,
+		-48.f, -38.f, 154.f, 52.f);
+	settingsCloseButton_->zOrder = 19;
+	settingsCloseButton_->visible = false;
+	styleSecondary(settingsCloseButton_);
+
 	const float quietW = (mainPanelW - 80.f) * 0.5f;
 	styleSecondary(makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
 		[this]() {
-			if (settingsPanelBg_) {
-				settingsPanelBg_->visible = !settingsPanelBg_->visible;
-			}
+			if (settingsPanelBg_) settingsPanelBg_->visible = true;
+			if (settingsCloseButton_) settingsCloseButton_->visible = true;
 		}, ink));
 	styleSecondary(makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
@@ -3526,6 +3653,63 @@ void Game::buildLobbyUI() {
 
 	// Full-screen loading overlay (built last so it sits on top by zOrder).
 	buildLoadingScreen();
+}
+
+void Game::refreshSettingsPreviewUI() {
+	const XMFLOAT4 selected = { 0.05f, 0.48f, 0.66f, 0.92f };
+	const XMFLOAT4 selectedHover = { 0.07f, 0.58f, 0.78f, 0.96f };
+	const XMFLOAT4 inactive = { 0.10f, 0.13f, 0.15f, 0.18f };
+	const XMFLOAT4 inactiveHover = { 0.10f, 0.13f, 0.15f, 0.28f };
+	const XMFLOAT4 disabled = { 0.10f, 0.12f, 0.13f, 0.10f };
+
+	auto paintButton = [&](UI::Button* btn, bool isSelected, bool isEnabled = true) {
+		if (!btn) return;
+		btn->interactive = isEnabled;
+		if (!isEnabled) {
+			btn->bgColor = disabled;
+			btn->bgColorHovered = disabled;
+			btn->bgColorPressed = disabled;
+			return;
+		}
+		btn->bgColor = isSelected ? selected : inactive;
+		btn->bgColorHovered = isSelected ? selectedHover : inactiveHover;
+		btn->bgColorPressed = selectedHover;
+	};
+
+	paintButton(settingsWindowedButton_, !settingsFullscreen_);
+	paintButton(settingsFullscreenButton_, settingsFullscreen_);
+	paintButton(settingsAllyDamageOffButton_, !settingsAllyDamageVisible_);
+	paintButton(settingsAllyDamageOnButton_, settingsAllyDamageVisible_);
+
+	const bool resolutionEnabled = !settingsFullscreen_;
+	paintButton(settingsResolutionPrevButton_, false, resolutionEnabled && settingsResolutionIndex_ > 0);
+	paintButton(settingsResolutionNextButton_, false, resolutionEnabled && settingsResolutionIndex_ < 2);
+
+	if (settingsResolutionValueLabel_) {
+		std::wstring resolutionText = settingsCurrentResolutionText_;
+		if (settingsResolutionIndex_ == 1) {
+			resolutionText = L"1280 × 720";
+		} else if (settingsResolutionIndex_ == 2) {
+			resolutionText = L"1920 × 1080";
+		}
+		settingsResolutionValueLabel_->setText(resolutionText);
+		if (resolutionEnabled) {
+			settingsResolutionValueLabel_->setTextColor(0.08f, 0.12f, 0.16f, 1.f);
+		} else {
+			settingsResolutionValueLabel_->setTextColor(0.38f, 0.43f, 0.48f, 1.f);
+		}
+	}
+
+	paintButton(settingsMonsterOpacityPrevButton_, false, settingsMonsterDamageOpacity_ > 0);
+	paintButton(settingsMonsterOpacityNextButton_, false, settingsMonsterDamageOpacity_ < 100);
+
+	if (settingsMonsterOpacityValueLabel_) {
+		settingsMonsterOpacityValueLabel_->setText(std::to_wstring(settingsMonsterDamageOpacity_) + L"%");
+	}
+	if (settingsMonsterOpacityFill_) {
+		const float t = static_cast<float>(settingsMonsterDamageOpacity_) / 100.f;
+		settingsMonsterOpacityFill_->width = UI::DimValue::px(std::max(0.f, settingsMonsterOpacityFillMaxWidth_ * t));
+	}
 }
 
 // Black full-screen loading overlay: centered logo, "loading..." text, a progress bar,
@@ -3699,6 +3883,7 @@ void Game::refreshLobbyUI() {
 	if (mainMenuRoot_)    mainMenuRoot_->visible    = inMain;
 	if (waitingRoomRoot_) waitingRoomRoot_->visible = !inMain;
 	if (settingsPanelBg_ && !inMain) settingsPanelBg_->visible = false;
+	if (settingsCloseButton_ && !inMain) settingsCloseButton_->visible = false;
 
 	if (inMain) {
 		return;
