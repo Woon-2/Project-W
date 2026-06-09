@@ -28,6 +28,13 @@ float MU_CALLCONV Room::groundHeightAtWorld(float x, float z) const {
 	return worldTerrain_ ? worldTerrain_->heightAtWorld(x, z) : 0.f;
 }
 
+void Room::bindGroundQueries(SkillDispatchContext& ctx) const {
+	if (!worldTerrain_) return;
+	const TerrainChunkManager* terrain = worldTerrain_;
+	ctx.groundHeight = [terrain](float x, float z) { return terrain->heightAtWorld(x, z); };
+	ctx.groundNormal = [terrain](float x, float z) { return terrain->normalAtWorld(x, z); };
+}
+
 mu::Vec3 MU_CALLCONV Room::randomSpawnInDisc(mu::Vec3 center, float radius) const {
 	static thread_local std::mt19937 rng{ std::random_device{}() };
 	std::uniform_real_distribution<float> distR(0.f, 1.f);
@@ -692,6 +699,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		objectById_.data(),
 		static_cast<int>(objectById_.size())
 	};
+	bindGroundQueries(ctx);
 
 	skillSystem_.update(dt, ctx);
 
@@ -749,6 +757,7 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	// Start server-side skill instance for authoritative hit detection.
 	// Reuse skillEvList_ (serialized with updateSkillSystem via the room job queue).
 	SkillDispatchContext startCtx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
+	bindGroundQueries(startCtx);
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(player->getId()),
 	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) });
 	clearEvents(skillEvList_);

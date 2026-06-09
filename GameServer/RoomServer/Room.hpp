@@ -111,6 +111,10 @@ public:
 	// World-routed terrain height (shared chunk height fields). Used by
 	// strongholds to snap monster spawn positions onto the ground.
 	float MU_CALLCONV groundHeightAtWorld( float x, float z ) const;
+
+	// Bind terrain height/normal callbacks onto a skill dispatch context so
+	// AttachType::Ground hitboxes snap to the same surface the client uses.
+	void bindGroundQueries( SkillDispatchContext& ctx ) const;
 	
 	// ── Tactical AI ──────────────────────────────────────────────────────────
 	bool     tryReserveTacticalAttackSlot(uint32_t targetId, uint32_t npcId);

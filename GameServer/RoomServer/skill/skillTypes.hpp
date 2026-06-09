@@ -16,6 +16,7 @@ using u16t = uint16;
 enum class AttachType : u8t {
     Bone,
     VFXParticle,
+    Ground,       // plant at a caster-relative ground point, snapped to terrain, then static
 };
 
 struct AttachTarget {
@@ -23,6 +24,7 @@ struct AttachTarget {
     std::string targetName;
     u8t         vfxId            = 0;
     int         particleSystemIdx = 0;
+    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
 };
 
 struct OnHitDef {
@@ -57,7 +59,15 @@ enum class SkillEventType : u8t {
 };
 
 // PlayVFX::flags bit definitions (mirrors client; PlayVFX is a no-op on the server).
-static constexpr u8t kPlayVFXFlagYawOnly = 0x01;
+// bits3-4 = particle ground-collision mode, bits5-6 = particle ground-conform mode
+// (client-only visual; unused here but kept for layout parity).
+static constexpr u8t kPlayVFXFlagYawOnly     = 0x01;
+static constexpr u8t kPlayVFXFlagGroundSnap  = 0x02;
+static constexpr u8t kPlayVFXFlagGroundAlign = 0x04;
+static constexpr u8t kPlayVFXParticleCollisionShift = 3;
+static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;
+static constexpr u8t kPlayVFXParticleConformShift   = 5;
+static constexpr u8t kPlayVFXParticleConformMask    = 0x60;
 
 union SkillEventPayload {
     struct SpawnHitbox {

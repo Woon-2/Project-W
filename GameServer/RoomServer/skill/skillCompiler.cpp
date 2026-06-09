@@ -3,6 +3,7 @@
 
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
+    if (s == "Ground")      return AttachType::Ground;
     return AttachType::Bone;
 }
 
@@ -84,6 +85,7 @@ SkillHitboxDef ServerSkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.targetName  = (*attach).get_or<std::string>("name", "");
         def.attach.vfxId       = static_cast<u8t>((*attach).get_or("vfxId", 0));
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
+        def.attach.groundAlign = (*attach).get_or("align", false);
     }
 
     sol::optional<sol::table> onHit = tbl["onHit"];

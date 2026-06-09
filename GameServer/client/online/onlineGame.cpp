@@ -248,7 +248,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot", "Piercing", "Piercing Slash", "Piercing Circle Slash", "Piercing Multi" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Energy Explosion Arrow", "Tornado Shot", "Piercing", "Piercing Slash", "Piercing Circle Slash", "Piercing Multi" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -1684,6 +1684,16 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.vfxByIdSize         = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
+
+		// Terrain query for ground-snapped placement (PlayVFX ground flags,
+		// AttachType::Ground hitboxes, particle ground-conform/collision).
+		groundSampler_.heightAt = [this](float x, float z) {
+			return chunkManager_.empty() ? 0.f : chunkManager_.heightAtWorld(x, z);
+		};
+		groundSampler_.normalAt = [this](float x, float z) {
+			return chunkManager_.empty() ? mu::Vec3{ 0.f, 1.f, 0.f } : chunkManager_.normalAtWorld(x, z);
+		};
+		skillCtx_.ground = &groundSampler_;
 	}
 }
 
@@ -4292,30 +4302,10 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			arrowVolleyEffect_.play( volleyOrigin, player_->orient() );
 			break;
 		}
-		case SwordEffect::ArrowRain: {
-			const auto muzzlePos = player_->renderState().pos + mu::Vec3{ 0.f, 1.2f, 0.f };
-			auto rainCenter = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( !chunkManager_.empty() ) {
-				const float groundY = chunkManager_.heightAtWorld( rainCenter.x(), rainCenter.z() );
-				rainCenter = { rainCenter.x(), groundY, rainCenter.z() };
-			}
-			arrowRainMuzzleEffect_.play( muzzlePos, player_->orient() );
-			arrowRainEffect_.play( rainCenter, player_->orient() );
-			debugBVView_.pushCircle( rainCenter, kArrowRainRadius, 1500ms, { 1.f, 0.f, 0.f, 1.f } );
-			break;
-		}
-		case SwordEffect::RedEnergyExplosion: {
-			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( !chunkManager_.empty() ) {
-				const float groundY = chunkManager_.heightAtWorld( explosionPos.x(), explosionPos.z() );
-				explosionPos = { explosionPos.x(), groundY + 0.1f, explosionPos.z() };
-			}
-			else {
-				explosionPos += mu::Vec3( 0.f, 0.1f, 0.f );
-			}
-			redEnergyExplosionEffect_.play( explosionPos, player_->orient(), player_->forward() );
-			break;
-		}
+		// ArrowRain / RedEnergyExplosion previously lived here with hardcoded
+		// terrain height snapping. Ground placement is now data-driven via the
+		// skill system (PlayVFX groundSnap flag + AttachType::Ground hitboxes),
+		// so these debug-preview cases were removed. See terrainInteractingSkills.md.
 		case SwordEffect::CrystalsCrossFade: {
 			crystalsCrossFadeEffect_.play( slashPos );
 			break;

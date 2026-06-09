@@ -24,7 +24,38 @@ ParticleSystem& ParticleEffect::addSystem(const ps::ParticleSystemConfig& cfg,
     entry.shapeBaseOrientation = cfg.shape.orientation;
     entry.meshBaseRotation = cfg.main.startRotation3D;
     entry.ps.init(cfg, maxParticles);
+    entry.ps.setGroundSampler(ground_);  // propagate to systems added after binding
     return entry.ps;
+}
+
+void ParticleEffect::setGroundSampler(const GroundSampler* g)
+{
+    ground_ = g;
+    for (auto& entry : systems_)
+        entry.ps.setGroundSampler(g);
+}
+
+void ParticleEffect::setGroundBehavior(ps::ParticleCollisionModule::Mode collision,
+                                       ps::ShapeModule::GroundConform     conform)
+{
+    for (auto& entry : systems_) {
+        auto& cfg = entry.ps.config();
+
+        // Conform applies to EVERY system, including sub-emitters. Crystal pillars,
+        // debris, etc. are commonly authored as Birth sub-emitters spawned at the
+        // parent particle's position (emitAt sets shape.position to that point), so
+        // snapping their spawn Y to the terrain is exactly what makes them sit on
+        // the ground at their own XZ.
+        if (conform != ps::ShapeModule::GroundConform::None)
+            cfg.shape.groundConform = conform;
+
+        // Collision is skipped for sub-emitters: a Death-burst child spawns AT the
+        // contact point, so GroundKill there would kill it the instant it appears.
+        if (collision != ps::ParticleCollisionModule::Mode::None && !entry.isSubEmitter) {
+            cfg.collision.enabled = true;
+            cfg.collision.mode    = collision;
+        }
+    }
 }
 
 void ParticleEffect::play(const mu::Vec3& pos)

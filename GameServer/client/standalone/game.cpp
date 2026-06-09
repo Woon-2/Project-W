@@ -785,6 +785,16 @@ void Game::setupStage() {
 		skillCtx_.vfxById        = skillVfxById_.data();
 		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera         = &camera_;
+
+		// Terrain query for ground-snapped placement (PlayVFX ground flags,
+		// AttachType::Ground hitboxes, particle ground-conform/collision).
+		groundSampler_.heightAt = [this](float x, float z) {
+			return chunkManager_.empty() ? 0.f : chunkManager_.heightAtWorld(x, z);
+		};
+		groundSampler_.normalAt = [this](float x, float z) {
+			return chunkManager_.empty() ? mu::Vec3{ 0.f, 1.f, 0.f } : chunkManager_.normalAtWorld(x, z);
+		};
+		skillCtx_.ground = &groundSampler_;
 	}
 
 	// Boot the skill / monster-pattern authoring tool on top of the standalone world.
@@ -797,9 +807,7 @@ void Game::setupStage() {
 	editorRefs.player      = player_;
 	editorRefs.goblin      = goblin_;
 	editorRefs.hwnd        = ghWnd;
-	editorRefs.terrainHeightAt = [this](float x, float z) -> float {
-		return chunkManager_.empty() ? 0.f : chunkManager_.heightAtWorld(x, z);
-	};
+	editorRefs.terrainHeightAt = groundSampler_.heightAt;
 	editor_.init(editorRefs);
 }
 

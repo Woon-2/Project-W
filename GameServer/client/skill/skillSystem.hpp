@@ -86,6 +86,16 @@ struct SkillInstance {
     bool              active        = false;
     bool              interrupted   = false;
 
+    // World anchor captured at skill start (caster position + yaw). Used by
+    // AttachType::Ground hitboxes to place planted, terrain-snapped OBBs that do
+    // NOT follow the caster. Derived from the same caster on client and server,
+    // so ground snapping lands at identical positions (no extra protocol).
+    struct CastAnchor {
+        mu::Vec3 pos   = { 0.f, 0.f, 0.f };
+        float    yaw   = 0.f;     // radians, about world up
+        bool     valid = false;
+    } castAnchor;
+
     // slot -> hitboxPool_ index (bone attach); -1 = empty
     std::vector<int> boneHitboxBySlot;
     // slot -> particleSources_ index (VFXParticle attach); -1 = empty
@@ -180,6 +190,10 @@ struct SkillDispatchContext {
     // VFX effect instances indexed by vfxId. Pre-allocated at game setup.
     ParticleEffect** vfxById        = nullptr;
     int              vfxByIdSize    = 0;
+
+    // Terrain query for ground-snapped placement (PlayVFX ground flags and
+    // AttachType::Ground hitboxes). Non-owning; null = no terrain (snapping skipped).
+    const GroundSampler* ground     = nullptr;
 
     Camera*          camera         = nullptr;
     Timer*           pTimer         = nullptr;

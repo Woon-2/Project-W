@@ -8,7 +8,23 @@
 
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
+    if (s == "Ground")      return AttachType::Ground;
     return AttachType::Bone;
+}
+
+// Ordinals match ps::ParticleCollisionModule::Mode (None,GroundStop,GroundKill,GroundBounce).
+static u8t parseParticleCollisionMode(std::string_view s) {
+    if (s == "GroundStop")   return 1;
+    if (s == "GroundKill")   return 2;
+    if (s == "GroundBounce") return 3;
+    return 0;
+}
+
+// Ordinals match ps::ShapeModule::GroundConform (None,SnapY,SnapAndAlign).
+static u8t parseParticleConformMode(std::string_view s) {
+    if (s == "SnapY")        return 1;
+    if (s == "SnapAndAlign") return 2;
+    return 0;
 }
 
 static SkillEventType parseEventType(std::string_view s) {
@@ -97,6 +113,8 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.targetName  = (*attach).get_or<std::string>("name", "");
         def.attach.vfxId       = static_cast<u8t>((*attach).get_or("vfxId", 0));
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
+        // Ground attach: tilt the planted OBBs to the terrain normal.
+        def.attach.groundAlign = (*attach).get_or("align", false);
     }
 
     // onHit
@@ -203,6 +221,25 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                 // groundLock: place the effect on the ground plane (ignore caster pitch/roll).
                 if (evTbl.get_or("groundLock", false))
                     p.flags |= kPlayVFXFlagYawOnly;
+                // groundSnap: drop the effect onto the terrain surface at its XZ
+                // (localOffset.y becomes the lift above ground). groundAlign tilts
+                // the effect to the surface normal.
+                if (evTbl.get_or("groundSnap", false))
+                    p.flags |= kPlayVFXFlagGroundSnap;
+                if (evTbl.get_or("groundAlign", false))
+                    p.flags |= kPlayVFXFlagGroundAlign;
+
+                // particleCollision / particleConform: drive the played effect's
+                // particle behaviour (fall-and-die, slope conform) from the skill,
+                // so no ground info is needed in the Unity-exported effect JSON.
+                {
+                    const u8t col = parseParticleCollisionMode(
+                        evTbl.get_or<std::string>("particleCollision", ""));
+                    p.flags |= (col << kPlayVFXParticleCollisionShift) & kPlayVFXParticleCollisionMask;
+                    const u8t conf = parseParticleConformMode(
+                        evTbl.get_or<std::string>("particleConform", ""));
+                    p.flags |= (conf << kPlayVFXParticleConformShift) & kPlayVFXParticleConformMask;
+                }
                 break;
             }
             case SkillEventType::ApplyImpulse: {

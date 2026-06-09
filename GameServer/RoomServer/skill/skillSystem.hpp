@@ -15,6 +15,7 @@
 #include "../object.hpp"
 #include <unordered_map>
 #include <vector>
+#include <functional>
 
 class Object;
 
@@ -82,6 +83,15 @@ struct SkillInstance {
     i32t              nextEventIdx  = 0;
     bool              active        = false;
     bool              interrupted   = false;
+
+    // World anchor captured at skill start (caster position + yaw). Used by
+    // AttachType::Ground hitboxes to place planted, terrain-snapped OBBs.
+    // Mirrors client SkillInstance::castAnchor for identical hit positions.
+    struct CastAnchor {
+        mu::Vec3 pos   = { 0.f, 0.f, 0.f };
+        float    yaw   = 0.f;     // radians, about world up
+        bool     valid = false;
+    } castAnchor;
 
     // slot -> hitboxPool_ index (bone attach); -1 = empty
     std::vector<int> boneHitboxBySlot;
@@ -167,6 +177,11 @@ struct SkillDispatchContext {
     // Sparse: objectById[id] is the Object with that ID, or nullptr.
     Object**         objectById     = nullptr;
     int              objectByIdSize = 0;
+
+    // Terrain query for AttachType::Ground hitboxes. Bound by Room to
+    // groundHeightAtWorld / worldTerrain_->normalAtWorld. Empty = no terrain.
+    std::function<float(float, float)>    groundHeight;
+    std::function<mu::Vec3(float, float)> groundNormal;
 
     // Always false on server (server is authoritative).
     bool             clientPredictionOnly = false;

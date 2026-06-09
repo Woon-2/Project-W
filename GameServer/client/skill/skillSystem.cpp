@@ -37,6 +37,32 @@ static AABB unionAABBOfOBBs(const std::vector<OBB>& obbs, float margin) {
     return out;
 }
 
+// Unit quaternion mapping world up (+Y) onto the given (assumed unit) terrain
+// normal. Identity when the normal is (near) vertical. Used by AttachType::Ground
+// hitboxes and PlayVFX ground-align placement.
+static mu::NQuat alignQuatYToNormal(mu::Vec3 n) {
+    const mu::Vec3 up{ 0.f, 1.f, 0.f };
+    const mu::Vec3 axis = mu::cross(up, n);
+    const float    s2   = mu::dot(axis, axis);
+    if (s2 < 1e-8f) return mu::NQuat{};
+    const float c     = std::clamp(mu::dot(up, n), -1.f, 1.f);
+    const float angle = std::acos(c);
+    return mu::NQuat(mu::quatRotMat(mu::rotateH(mu::Radian{ angle }, mu::Vec3(mu::normalize(axis)))));
+}
+
+// Capture the caster's world XZ + yaw at skill start. AttachType::Ground hitboxes
+// place their OBBs relative to this anchor (then snap to terrain), so they stay
+// planted where the skill was cast rather than following the caster's bones.
+static void captureCastAnchor(SkillInstance& inst, const Object* owner) {
+    inst.castAnchor.valid = false;
+    if (!owner) return;
+    const mu::Mat4x4 w = owner->renderState().world;
+    inst.castAnchor.pos = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * w);
+    const mu::Vec3 fwd  = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * w));
+    inst.castAnchor.yaw   = std::atan2(fwd.x(), fwd.z());
+    inst.castAnchor.valid = true;
+}
+
 // ---------------------------------------------------------------------------
 // SkillInstancePool (dynamic free-list + active-list)
 // ---------------------------------------------------------------------------
@@ -192,6 +218,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     // Fire t=0 events immediately
     SkillInstance& inst = instancePool_.instances[idx];
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
@@ -212,6 +239,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     // Fire all events that fall at or before initialElapsed
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
@@ -362,6 +390,53 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             }
             hb.worldAABB   = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask  = owner ? hostileMask(owner->faction()) : 0u;
+        } else if (def.attach.type == AttachType::Ground) {
+            // Ground attach: plant OBBs at a caster-relative point snapped to the
+            // terrain, then leave them static (updateHitboxes skips non-Bone).
+            int oldH = inst.getBoneHandle(slot);
+            if (oldH >= 0) freeHitbox(oldH);
+
+            int hi = allocHitbox();
+            if (hi < 0) break;
+            inst.setBoneHandle(slot, hi);
+
+            if (!inst.castAnchor.valid) captureCastAnchor(inst, owner);
+
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.particleSourceIdx      = -1;
+            hb.localOBBs              = def.localOBBs;
+            hb.worldOBBs.resize(def.localOBBs.size());
+            hb.onHit                  = def.onHit;
+            hb.ownerObjectId          = inst.ownerObjectId;
+            hb.instanceIdx            = static_cast<i32t>(&inst - instancePool_.instances.data());
+            hb.slot                   = static_cast<u8t>(slot);
+            hb.defIdx                 = defIdx;
+            hb.hitGroup               = def.hitGroup;
+            hb.hitGroupCooldownMs     = def.hitGroupCooldownMs;
+            hb.applyAttachRotation    = def.applyAttachRotation;
+            hb.resolvedAttach.type    = AttachType::Ground;   // static (skipped by updateHitboxes)
+            hb.resolvedAttach.boneIdx = -1;
+            hb.resolvedAttach.pSystem = nullptr;
+
+            // Caster yaw rotates each OBB's horizontal offset; center.y becomes the
+            // height above the snapped surface (per-OBB, so grids conform to slopes).
+            const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
+            const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
+            for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                mu::Vec3 wc = inst.castAnchor.pos
+                            + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                if (ctx.ground && *ctx.ground)
+                    wc.setComponent(1, ctx.ground->height(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
+                hb.worldOBBs[i].center      = wc;
+                hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
+                if (def.attach.groundAlign && ctx.ground && *ctx.ground)
+                    hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
+                                           * alignQuatYToNormal(ctx.ground->normal(wc.x(), wc.z()));
+            }
+            hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;
         } else {
             // VFXParticle: create a ParticleHitboxSource
             int oldS = inst.getParticleHandle(slot);
@@ -417,6 +492,21 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         ParticleEffect* fx = ctx.vfxById[p.vfxId];
         if (!fx) break;
 
+        // Let the effect's own emitters interact with the terrain (ground-conform
+        // spawn, ground collision) wherever it ends up being played.
+        fx->setGroundSampler(ctx.ground);
+
+        // Skill-driven particle ground behaviour (packed in flags bits 3-6). Drives
+        // the effect's particles (fall-and-die, conform-to-slope) from the Lua, so
+        // the Unity-exported effect JSON needs no ground keys.
+        {
+            const u8t colOrd  = (p.flags & kPlayVFXParticleCollisionMask) >> kPlayVFXParticleCollisionShift;
+            const u8t confOrd = (p.flags & kPlayVFXParticleConformMask)   >> kPlayVFXParticleConformShift;
+            if (colOrd != 0 || confOrd != 0)
+                fx->setGroundBehavior(static_cast<ps::ParticleCollisionModule::Mode>(colOrd),
+                                      static_cast<ps::ShapeModule::GroundConform>(confOrd));
+        }
+
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
         mu::Vec3  worldPos{};
         mu::NQuat worldOrient{};
@@ -463,6 +553,18 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             const mu::Vec3& off = p.localOffset;
             worldPos    = origin + mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 0.f) * aim);
             worldOrient = mu::NQuat(mu::quatRotMat(aim));
+
+            // Ground placement: drop the effect onto the terrain surface at its XZ
+            // (localOffset.y becomes the lift above ground) and optionally tilt to
+            // the surface normal. Replaces the legacy hardcoded ground-snap paths.
+            if ((p.flags & kPlayVFXFlagGroundSnap) && ctx.ground && *ctx.ground) {
+                worldPos.setComponent(1, ctx.ground->height(worldPos.x(), worldPos.z()) + off.y());
+                if (p.flags & kPlayVFXFlagGroundAlign) {
+                    aim = aim * mu::Mat4x4(alignQuatYToNormal(
+                        ctx.ground->normal(worldPos.x(), worldPos.z())));
+                    worldOrient = mu::NQuat(mu::quatRotMat(aim));
+                }
+            }
 
             // advanceForwardLocal: explicit particle travel direction (4-arg play). Zero = derive from orient.
             const mu::Vec3& adv = p.advanceForwardLocal;
@@ -863,6 +965,7 @@ int SkillSystem::startSkillAsset(const SkillAsset* asset, i32t ownerObjectId,
 
     // Fire t=0 events immediately (mirrors startSkill).
     SkillInstance& inst = instancePool_.instances[idx];
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);

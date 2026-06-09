@@ -523,6 +523,10 @@ void readShapeModule(const json::Value* shape,
     if (cfg.shape.type == ps::ShapeModule::Type::Box)
         cfg.shape.boxSize = cfg.shape.scale;
 
+    // NOTE: ground-conform / ground-collision are NOT read from the effect JSON
+    // (Unity-exported art asset; its schema is fixed). They are driven from the
+    // skill Lua (PlayVFX particleConform / particleCollision) and applied to the
+    // effect's systems at dispatch via ParticleEffect::setGroundBehavior().
 }
 
 void readColorModule(const json::Value* color, ps::ParticleSystemConfig& cfg) {

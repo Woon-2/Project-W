@@ -37,6 +37,30 @@ static AABB unionAABBOfOBBs(const std::vector<OBB>& obbs, float margin) {
     return out;
 }
 
+// Unit quaternion mapping world up (+Y) onto the given (assumed unit) terrain
+// normal. Identity when the normal is (near) vertical. Mirrors the client helper.
+static mu::NQuat alignQuatYToNormal(mu::Vec3 n) {
+    const mu::Vec3 up{ 0.f, 1.f, 0.f };
+    const mu::Vec3 axis = mu::cross(up, n);
+    const float    s2   = mu::dot(axis, axis);
+    if (s2 < 1e-8f) return mu::NQuat{};
+    const float c     = std::clamp(mu::dot(up, n), -1.f, 1.f);
+    const float angle = std::acos(c);
+    return mu::NQuat(mu::quatRotMat(mu::rotateH(mu::Radian{ angle }, mu::Vec3(mu::normalize(axis)))));
+}
+
+// Capture the caster's world XZ + yaw at skill start (mirrors client). Server
+// Object exposes pos()/orient() rather than a render-state world matrix.
+static void captureCastAnchor(SkillInstance& inst, const Object* owner) {
+    inst.castAnchor.valid = false;
+    if (!owner) return;
+    const mu::Mat4x4 orientMat(owner->orient());
+    const mu::Vec3   fwd = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * orientMat));
+    inst.castAnchor.pos   = owner->pos();
+    inst.castAnchor.yaw   = std::atan2(fwd.x(), fwd.z());
+    inst.castAnchor.valid = true;
+}
+
 // ---------------------------------------------------------------------------
 // SkillInstancePool (dynamic free-list + active-list)
 // ---------------------------------------------------------------------------
@@ -180,6 +204,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     if (idx < 0) return -1;
 
     SkillInstance& inst = instancePool_.instances[idx];
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
@@ -198,6 +223,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > initialElapsed) break;
@@ -338,6 +364,50 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             }
             hb.worldAABB   = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask  = owner ? hostileMask(owner->faction()) : 0u;
+        } else if (def.attach.type == AttachType::Ground) {
+            // Ground attach: plant OBBs at a caster-relative point snapped to the
+            // terrain, then leave them static (updateHitboxes skips non-Bone).
+            // Mirrors client so authoritative hit positions match prediction.
+            int oldH = inst.getBoneHandle(slot);
+            if (oldH >= 0) freeHitbox(oldH);
+
+            int hi = allocHitbox();
+            if (hi < 0) break;
+            inst.setBoneHandle(slot, hi);
+
+            if (!inst.castAnchor.valid) captureCastAnchor(inst, owner);
+
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.particleSourceIdx      = -1;
+            hb.localOBBs              = def.localOBBs;
+            hb.worldOBBs.resize(def.localOBBs.size());
+            hb.onHit                  = def.onHit;
+            hb.ownerObjectId          = inst.ownerObjectId;
+            hb.instanceIdx            = static_cast<i32t>(&inst - instancePool_.instances.data());
+            hb.slot                   = static_cast<u8t>(slot);
+            hb.hitGroup               = def.hitGroup;
+            hb.hitGroupCooldownMs     = def.hitGroupCooldownMs;
+            hb.applyAttachRotation    = def.applyAttachRotation;
+            hb.resolvedAttach.type    = AttachType::Ground;   // static (skipped by updateHitboxes)
+            hb.resolvedAttach.boneIdx = -1;
+
+            const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
+            const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
+            for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                mu::Vec3 wc = inst.castAnchor.pos
+                            + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                if (ctx.groundHeight)
+                    wc.setComponent(1, ctx.groundHeight(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
+                hb.worldOBBs[i].center      = wc;
+                hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
+                if (def.attach.groundAlign && ctx.groundNormal)
+                    hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
+                                           * alignQuatYToNormal(ctx.groundNormal(wc.x(), wc.z()));
+            }
+            hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;
         } else {
             // VFXParticle: create source entry; pSystem always null on server
             int oldS = inst.getParticleHandle(slot);

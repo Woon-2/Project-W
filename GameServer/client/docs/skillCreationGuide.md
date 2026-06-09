@@ -48,6 +48,7 @@ return skill   -- 반드시 skill 테이블을 반환
 | `BoneAttach("bone")` | 해당 뼈의 월드 변환(애니메이션 추종). 스킬 대부분이 `spine_02` 사용 |
 | `BoneAttach("")` / attach 생략 (PlayVFX) | 시전자 루트(캐릭터 위치+방향) |
 | `VFXParticleAttach(vfxId, sysIdx)` (히트박스) | 해당 이펙트의 파티클들 — 파티클마다 히트박스 1개 |
+| `{ type = "Ground", align = false }` (히트박스) | **시전자 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=시전자 전방/우측 오프셋, center.y=표면 위 높이, OBB별 독립 스냅. `align=true`면 지면 노멀로 기울임 |
 
 - **OBB 회전(`orient`)** 과 **PlayVFX `orient`** 는 모두 `{yaw, pitch, roll}` (도) 동일 규약.
 - 뼈에 붙은 박스는 `applyAttachRotation`으로 뼈 회전 추종 여부를 정한다:
@@ -85,18 +86,26 @@ return skill   -- 반드시 skill 테이블을 반환
 | `orient` | {0,0,0} | attach-local 방향 오프셋 {yaw,pitch,roll}. 부채꼴 등을 옆으로 조준 |
 | `advance` | (없음) | attach-local 파티클 진행 방향. 생략 시 orient에서 유도 |
 | `groundLock` | false | 지면 평면 배치(시전자 pitch/roll 무시) — 바닥 원형/부채꼴 AoE에 사용 |
+| `groundSnap` | false | **이펙트를 지면 표면에 스냅**(`offset.y`=표면 위 lift). 화살비 드롭존·낙하 마법구 착탄점 등 |
+| `groundAlign` | false | 지면 노멀로 정렬(yaw 보존). `groundSnap`과 함께 사용 |
+| `particleCollision` | (없음) | 이펙트 **파티클**의 지면 충돌: `"GroundStop"`/`"GroundKill"`/`"GroundBounce"`. GroundKill은 착탄 시 Death 서브이미터로 임팩트 버스트(JSON 무수정, sub-emitter 제외 top-level에만 적용) |
+| `particleConform` | (없음) | 이펙트 **파티클**의 스폰 지면 컨폼: `"SnapY"`/`"SnapAndAlign"`(면적 emitter가 슬로프 따라 안착) |
 | `attach` | 루트 | `BoneAttach(name)`; 생략 시 시전자 루트 |
 
 > **형상 크기(원형 반지름 M, 부채꼴 반지름 R·각도 A)는 PlayVFX가 아니라 이펙트 프리팹 `.json`의
 > shape config에 작성한다** (`shapeType`: Cone/Circle/Sphere…, `radius`, `angle`, `arc`).
 > PlayVFX는 **배치·방향·진행만** 제어한다. 즉 같은 형상을 여러 스킬이 위치/방향만 달리해 공유한다.
 
+> **지면 연계(얼음 기둥/화살비/낙하 마법구):** PlayVFX `groundSnap` + `particleCollision`/
+> `particleConform` + 히트박스 `attach={type="Ground"}`를 조합한다. 지면 정보는 **전부 lua에서**
+> 구동하며 effect `.json`은 수정하지 않는다. 상세 설계·예시는 `docs/terrainInteractingSkills.md`.
+
 #### SpawnHitbox — 피해 판정 박스 생성
 | 키 | 기본 | 설명 |
 |----|------|------|
 | `slot` | 0 | DestroyHitbox가 참조할 식별자 |
 | `localOBBs` | {} | `OBB(...)` 배열(여러 개 가능) |
-| `attach` | Bone | `BoneAttach` 또는 `VFXParticleAttach` |
+| `attach` | Bone | `BoneAttach` / `VFXParticleAttach` / `{type="Ground", align=}` (지면 고정) |
 | `applyAttachRotation` | true | §2 참조 |
 | `hitGroup` | 0 | 같은 그룹끼리 중복 피격 제거 공유 |
 | `hitGroupCooldownMs` | 0 | 0 = 대상당 1회 / >0 = N ms 후 재피격 |
@@ -157,6 +166,78 @@ return skill   -- 반드시 skill 테이블을 반환
 - 비용은 **활성 파티클 1개당 박스 1개**다. 투사체는 본체 파티클 수를 적게(이상적으로 1~소수) 유지하라.
   원형/콘 AoE를 파티클 정합으로 만들면 파티클 수가 그대로 박스 수가 되므로 방출량에 유의.
 - SpawnHitbox로 소스를 만들고 DestroyHitbox(같은 `slot`)로 정리한다. 정리 전까지 박스는 파티클을 계속 추종한다.
+
+### 3.5 지면 연계 (Terrain interaction) — 데이터 타입·사용법
+
+얼음 기둥 솟구침, 화살비, 낙하 마법구처럼 **지면(terrain)과 상호작용**하는 스킬은 아래 세 가지 lua 도구를
+조합한다. **지면 정보는 전부 스킬 lua에서 구동**하며 effect `.json`(Unity 익스포트 아트 에셋)은 수정하지
+않는다. 지형 높이/노멀 질의는 엔진이 결정론적으로 제공한다(클라/서버 동일).
+
+#### (1) 이펙트 지면 배치 — `PlayVFX`
+
+| 키 | 타입 | 의미 |
+|----|------|------|
+| `groundSnap` | bool | 이펙트 `worldPos.y`를 **지면 표면으로 스냅**. 이때 `offset.y`는 표면 위로 띄우는 높이(lift)가 된다 |
+| `groundAlign` | bool | 이펙트를 **지면 노멀로 기울임**(yaw 보존). `groundSnap`과 함께 사용 |
+
+> **`groundLock` vs `groundSnap` (혼동 주의):**
+> - `groundLock` = **방향**만 평탄화(시전자 pitch/roll 무시). 위치는 그대로. 시전자 발밑 바닥 원형 등.
+> - `groundSnap` = **위치 Y**를 지면으로 이동. 시전자에서 떨어진 지점(전방·상공)을 지면에 떨어뜨릴 때.
+> - 둘은 독립이며 함께 쓸 수 있다(예: 전방 지면 원형 = `groundSnap` + `groundLock`).
+
+#### (2) 이펙트 파티클의 지면 거동 — `PlayVFX`
+
+이펙트가 방출하는 **파티클**이 지면과 어떻게 상호작용할지. 문자열 열거값.
+
+| 키 | 값(문자열) | 의미 |
+|----|-----------|------|
+| `particleCollision` | `"GroundStop"` | 표면에서 정지(속도·중력 0). 쌓이는 잔해/얼음 파편 |
+| | `"GroundKill"` | 표면에 닿으면 소멸. **이펙트에 Death 서브이미터가 있으면 착탄 지점에서 임팩트 버스트가 자동 발생**. 화살비·낙하물 착탄 먼지 |
+| | `"GroundBounce"` | 수직 반사(기본 반발 0.3). 튀는 파편 |
+| `particleConform` | `"SnapY"` | 스폰 시 각 파티클 Y를 지면으로 스냅(면적 emitter가 굴곡 지면에 안착) |
+| | `"SnapAndAlign"` | 위 + 메시 파티클을 지면 노멀로 기울임(슬로프 따라 솟는 기둥) |
+
+> - **적용 범위:**
+>   - `particleConform`은 **모든 시스템(서브이미터 포함)** 에 적용된다. 얼음 기둥·잔해처럼 시각 본체가
+>     Birth 서브이미터로 부모 파티클 위치에 스폰되는 경우가 많으므로(예: `crystals_front_attack`의
+>     "Crystals" 서브 시스템), 자식까지 컨폼해야 각 조각이 제 XZ의 지면에 안착한다.
+>   - `particleCollision`은 **top-level 시스템에만** 적용된다(서브이미터=임팩트 버스트가 착탄점에서
+>     스폰되자마자 죽지 않도록 제외).
+> - 세부 수치(반발 계수, 표면 오프셋)는 lua로 노출하지 않고 엔진 기본값을 쓴다(필요 시 차후 확장).
+> - `SnapAndAlign`의 노멀 정렬(기울임)은 **메시 파티클**에만 보인다. Billboard/StretchedBillboard는
+>   카메라를 향하므로 기울지 않지만, `SnapY`(지면 높이 스냅)는 빌보드에도 적용된다.
+> - **클라 전용(시각).** 서버는 파티클이 없으므로 무시한다.
+> - 비용: 충돌은 낙하 파티클당 프레임 1회 지형 질의(`vel.y<0` 게이트). 수천 개 방출 emitter는 주의.
+
+#### (3) 지면 고정 히트박스 — `SpawnHitbox`의 `attach`
+
+```lua
+attach = { type = "Ground", align = false }
+```
+
+시전자를 따라다니지 않고 **시전 시점에 지면에 박혀 정적**으로 남는 판정 박스. 지면 AoE·솟구치는 기둥용.
+
+- **앵커** = 시전 순간의 시전자 위치 + yaw(바라보는 방향). 시전 후 이동해도 박스는 그 자리에 남는다.
+- `localOBBs`의 각 `OBB(cx, cy, cz, hx, hy, hz, ...)`:
+  - `cx` = 시전자 기준 **우측(+)/좌측(−)** 오프셋(m)
+  - `cz` = 시전자 기준 **전방(+)** 오프셋(m) — XZ는 시전 yaw로 회전되어 "전방 6m"가 시전 방향을 따른다
+  - `cy` = **지면 표면 위 높이**(m). `0`이면 박스 중심이 표면 높이에 옴
+  - `hx/hy/hz` = 반치수(반지름)
+- **OBB마다 독립적으로 지면 스냅** → 굴곡 지면에 여러 기둥을 한 def에 배열해도 각자 제 위치 높이에 맞는다.
+- `align = true`: 각 OBB를 지면 노멀로 기울임(급경사에서 박스가 기우니 보통 `false`).
+- **결정론:** 클라/서버가 같은 시전자·같은 지형에서 같은 위치를 계산하므로, 신규 패킷 없이 서버 권위
+  판정과 클라 예측이 일치한다(서버도 Ground attach를 미러).
+
+#### 조합 요약
+
+| 원하는 효과 | 사용 도구 |
+|-------------|-----------|
+| 이펙트를 지면 위 특정 지점에 배치 | PlayVFX `groundSnap` (+ `offset.z`=전방거리, `offset.y`=lift) |
+| 떨어지는 파티클이 땅에서 소멸·폭발 | PlayVFX `particleCollision="GroundKill"` + 이펙트에 Death 서브이미터 |
+| 굴곡 지면에 솟는 기둥/면적 안착 | PlayVFX `particleConform="SnapAndAlign"` |
+| 지면에 박힌 판정(시전자 비추종) | SpawnHitbox `attach={type="Ground"}` |
+
+> 전체 설계·내부 동작은 `docs/terrainInteractingSkills.md` 참조.
 
 ---
 
@@ -335,6 +416,133 @@ return skill
 
 **튜닝 팁:** "낙하 후 폭발"은 VFX 재생(150ms)과 히트박스 생성(300ms)의 시간차로 연출한다 — 이펙트가 떨어지는
 동안은 판정이 없다가 착탄 순간 박스가 켜진다. 착탄 반경은 박스 `hx/hz`(근사) 또는 이펙트 `radius`(정합).
+4-5는 `BoneAttach`라 박스가 시전자를 따라간다 — **지면에 고정**하려면 §4-6의 `attach={type="Ground"}`를 쓴다.
+
+---
+
+### 4-6. 지면 연계 (얼음 기둥 / 화살비 / 낙하 마법구)
+
+§3.5의 세 도구(PlayVFX `groundSnap`·`particleCollision`/`particleConform`, 히트박스 `Ground` attach)를
+조합한다. 기존 4-5(전방 메테오)와의 차이는 **판정·이펙트가 지면에 박혀 시전자를 따라가지 않는다**는 점.
+
+#### (a) 얼음 기둥 솟구침 (지면에 박힌 다중 기둥)
+
+**개념:** 시전자 전방 지면에서 얼음 기둥 여러 개가 솟아오른다. 굴곡 지면이면 각 기둥이 제 위치 높이에서
+솟고, 기둥 박스는 시전자를 따라가지 않고 그 자리에 박힌다.
+**구성:** PlayVFX `groundSnap`(+`particleConform="SnapAndAlign"`으로 메시 기둥이 슬로프 따라 솟음) +
+`Ground` attach 히트박스(한 def에 여러 OBB를 배열, OBB별 독립 지면 스냅).
+
+```lua
+local skill = Skill()
+skill.name = "IcePillars"; skill.totalDurationMs = 900
+
+skill:addVFX(5, "effects/spikes.json")   -- mesh 파티클 기둥(지면 정보는 json에 없음 — lua가 구동)
+skill:addEvent(0,   "PlayAnimation", { clipName = "Player_Attack", blendTime = 0.1 })
+-- 전방 4m 지점 지면에 이펙트 배치 + 파티클이 슬로프 따라 솟도록 컨폼
+skill:addEvent(150, "PlayVFX", {
+    vfxId = 5, offset = Vec3(0, 0, 4.0),
+    groundSnap = true, groundAlign = true,
+    particleConform = "SnapAndAlign",
+})
+
+local onHit = OnHit{ damage = 40, impulseStrength = 600, impulseDir = Vec3(0, 1.0, 0.3) } -- 위로 띄움
+
+-- 전방 일렬(또는 격자)로 기둥 3개. cz로 전방 거리, cx로 좌우 폭, cy=표면 위 높이(기둥 절반).
+-- 한 def의 OBB 3개가 각자 자기 XZ의 지면 높이에 독립 스냅된다.
+skill:addEvent(280, "SpawnHitbox", {
+    slot = 0,
+    localOBBs = {
+        OBB(-1.2, 1.2, 3.2, 0.5, 1.4, 0.5, 0,0,0),
+        OBB( 0.0, 1.2, 4.0, 0.5, 1.4, 0.5, 0,0,0),
+        OBB( 1.2, 1.2, 4.8, 0.5, 1.4, 0.5, 0,0,0),
+    },
+    attach = { type = "Ground", align = false },  -- 지면 고정(시전자 비추종)
+    hitGroup = 0, hitGroupCooldownMs = 0, onHit = onHit,
+})
+skill:addEvent(650, "DestroyHitbox", { slot = 0 })
+skill:addEvent(280, "CameraShake",   { magnitude = 0.4, durationMs = 150 })
+return skill
+```
+
+**튜닝 팁:** "솟아오름"은 PlayVFX(150ms)→히트박스(280ms) 시간차 + 기둥 메시의 size-over-lifetime(.json)으로
+연출. 기둥 높이는 `cy`(표면 위 중심 높이)와 `hy`(반높이)로 맞춘다. 급경사에서 기둥을 수직으로 세우려면
+`align=false`(노멀 정렬 끔)를 유지.
+
+#### (b) 화살비 (상공에서 낙하 → 지면 착탄)
+
+**개념:** 드롭존 상공에서 화살 파티클이 쏟아져 지면에 닿으면 사라지며 먼지가 튄다. 그동안 드롭존에는
+평평한 지면 AoE 판정이 깔린다.
+**구성:** PlayVFX `groundSnap`(드롭존 중심을 지면에)+`particleCollision="GroundKill"`(화살이 땅에서 소멸→
+Death 서브이미터 착탄 버스트) + `Ground` attach 평면 AoE 박스.
+
+```lua
+local skill = Skill()
+skill.name = "ArrowRain"; skill.totalDurationMs = 1200
+
+skill:addVFX(12, "effects/arrow_rain.json")  -- 중력으로 낙하 + Death 서브이미터(착탄 먼지)
+skill:addEvent(0,   "PlayAnimation", { clipName = "Player_Attack", blendTime = 0.1 })
+-- 전방 6.5m 드롭존을 지면에 스냅하고, 그 위 상공(offset.y)에서 방출되도록 이펙트 배치.
+-- 화살 파티클은 닿으면 소멸(GroundKill) → Death 서브이미터로 착탄 버스트.
+skill:addEvent(120, "PlayVFX", {
+    vfxId = 12, offset = Vec3(0, 8.0, 6.5),
+    groundSnap = true,
+    particleCollision = "GroundKill",
+})
+
+local onHit = OnHit{ damage = 8, impulseStrength = 150, impulseDir = Vec3(0, -0.2, 0.3) }
+
+-- 드롭존에 깔리는 평평한 지면 AoE 박스. 화살비가 지속되는 동안 다단히트(cooldown).
+skill:addEvent(300, "SpawnHitbox", {
+    slot = 0,
+    localOBBs = { OBB(0.0, 0.6, 6.5, 2.5, 1.2, 2.5, 0,0,0) }, -- cz=6.5 전방, cy=표면 위 낮게
+    attach = { type = "Ground", align = false },
+    hitGroup = 0, hitGroupCooldownMs = 300,  -- 0.3s마다 재피격(비처럼 지속 피해)
+    onHit = onHit,
+})
+skill:addEvent(1000, "DestroyHitbox", { slot = 0 })
+return skill
+```
+
+**튜닝 팁:** 낙하 높이는 `offset.y`(드롭존 표면 위), 드롭존 위치는 `offset.z`(전방거리). 지속 피해는
+`hitGroupCooldownMs`로 조절. 착탄 먼지는 이펙트 `.json`의 Death 서브이미터가 담당하므로 lua는
+`particleCollision="GroundKill"`만 켜면 된다.
+
+#### (c) 낙하 마법구 (공중에서 한 발 떨어져 착탄 폭발)
+
+**개념:** 마법구가 대상 지점 상공에서 떨어져 지면에 닿는 순간 폭발한다.
+**구성:** PlayVFX `groundSnap`(착탄점)+`particleCollision="GroundStop"`(또는 Kill) + 착탄 타이밍에 맞춘
+`Ground` attach 폭발 박스.
+
+```lua
+local skill = Skill()
+skill.name = "FallingOrb"; skill.totalDurationMs = 800
+
+skill:addVFX(8, "effects/red_energy_explosion.json")  -- 낙하 orb + 착탄 폭발(Death 서브이미터)
+skill:addEvent(0,   "PlayAnimation", { clipName = "Player_Attack", blendTime = 0.1 })
+-- 전방 5m 착탄점을 지면에 스냅하고 그 위 12m에서 orb 방출. 닿으면 정지(또는 GroundKill로 즉소멸).
+skill:addEvent(100, "PlayVFX", {
+    vfxId = 8, offset = Vec3(0, 12.0, 5.0),
+    groundSnap = true,
+    particleCollision = "GroundStop",
+})
+
+local onHit = OnHit{ damage = 55, impulseStrength = 800, impulseDir = Vec3(0, 0.6, 0.5) }
+
+-- 착탄 예상 시각(400ms)에 폭발 판정. 지면에 박혀 한 번 터진다.
+skill:addEvent(400, "SpawnHitbox", {
+    slot = 0,
+    localOBBs = { OBB(0.0, 0.8, 5.0, 2.2, 1.4, 2.2, 0,0,0) },
+    attach = { type = "Ground", align = true },  -- 폭발 디스크를 지면에 눕힘
+    hitGroup = 0, hitGroupCooldownMs = 0, onHit = onHit,
+})
+skill:addEvent(600, "DestroyHitbox", { slot = 0 })
+skill:addEvent(400, "CameraShake",   { magnitude = 0.6, durationMs = 200 })
+return skill
+```
+
+**튜닝 팁:** 낙하 시간은 `offset.y`(높을수록 오래 떨어짐)와 히트박스 생성 시각(400ms)을 시각적으로 맞춘다 —
+파티클이 땅에 닿는 순간과 박스가 켜지는 순간이 일치하도록 에디터에서 조정. 착탄 폭발 연출은 이펙트의
+Death 서브이미터가 담당한다.
 
 ---
 
@@ -348,5 +556,12 @@ return skill
 - [ ] 원형/부채꼴 **크기**는 lua가 아니라 `effects/*.json`의 shape(`radius`/`angle`/`arc`)에서 조정.
 - [ ] `VFXParticleAttach`(투사체·정합)는 ① 같은 `vfxId`가 PlayVFX로 먼저 재생되고 ② `systemIdx`가
       투사체 본체 시스템을 가리키는가. 파티클이 없으면 박스도 생기지 않는다(§3.4).
+- [ ] **지면 연계(§3.5):** 지면 위 배치는 PlayVFX `groundSnap`(위치) — `groundLock`(방향)과 혼동 금지.
+- [ ] 떨어지는 파티클을 땅에서 소멸·폭발시키려면 PlayVFX `particleCollision="GroundKill"` + 이펙트에
+      **Death 서브이미터**가 있어야 착탄 버스트가 나온다(없으면 그냥 사라짐).
+- [ ] 지면 AoE/기둥 판정은 `BoneAttach`(시전자 추종)가 아니라 `attach={type="Ground"}`(지면 고정)인가.
+      `Ground`에서 `cy`는 **표면 위 높이**, `cx/cz`는 시전자 상대 오프셋이다.
+- [ ] 낙하물(화살비·마법구)은 파티클 착지 순간과 `Ground` 히트박스 생성 `timeMs`를 맞췄는가
+      (이펙트 `offset.y` 높이 ↔ 낙하 시간 ↔ SpawnHitbox 시각).
 - **튜닝 도구:** standalone 스킬 에디터에서 박스를 시각적으로 잡고 euler/offset을 round-trip 편집할 수 있다
   (Space 재생, LMB 박스 선택, ↑/↓/←/→ 넛지, P diff 덤프). 자세한 키맵은 `CODE_INDEX.md` 스킬 에디터 절 참조.

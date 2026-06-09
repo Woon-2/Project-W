@@ -18,7 +18,9 @@ skill:addEvent(150, "PlayVFX", {
     vfxId  = 6,
     offset = Vec3(0.0, 0.0, 0.5),
     orient = {-90, 0, 0},
-    groundLock = true
+    groundLock = true,
+    groundSnap = true,
+    particleConform = "SnapAndAlign"
 })
 
 local onHit = OnHit({

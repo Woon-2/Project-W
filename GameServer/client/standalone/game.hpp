@@ -98,6 +98,7 @@ private:
 
 	SkillSystem          skillSystem_{};
 	SkillDispatchContext skillCtx_{};
+	GroundSampler        groundSampler_{};  // bound to chunkManager_; referenced by skillCtx_.ground
 	std::vector<Object*>         skillObjectById_{};
 	std::vector<ParticleEffect*> skillVfxById_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기

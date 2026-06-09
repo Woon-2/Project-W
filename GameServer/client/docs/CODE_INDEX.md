@@ -20,6 +20,7 @@
 10. [디버그 시각화](#10-디버그-시각화)
 11. [UI 시스템](#11-ui-시스템)
 12. [스킬 에디터 (standalone)](#12-스킬-에디터-standalone)
+13. [지면 연계 스킬 / 파티클](#13-지면-연계-스킬--파티클-terrain-interaction)
 
 ---
 
@@ -965,8 +966,41 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 
 ---
 
+---
+
+## 13. 지면 연계 스킬 / 파티클 (Terrain interaction)
+
+**설계 문서:** `docs/terrainInteractingSkills.md` (얼음 기둥/화살비/낙하 마법구 등 지면 연계)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `GroundSampler` struct | `groundSampler.hpp` | height/normal 콜백 번들; GFX/스킬 레이어 디커플링, `operator bool()`=지면 유무 |
+| `ParticleSystem::setGroundSampler` | `particleSystem.hpp` | 비소유 terrain 질의 바인딩 |
+| `ShapeModule::GroundConform` + `groundOffset` | `particleModules.hpp` | 스폰 시 지면 컨폼(None/SnapY/SnapAndAlign) |
+| 지면 컨폼 스폰 hook | `particleSystem.cpp` `spawnParticle` | origin.y 스냅 + SnapAndAlign 노멀 정렬 |
+| `ParticleCollisionModule` | `particleModules.hpp` | 지면 충돌(GroundStop/Kill/Bounce); Kill→Death 서브이미터 |
+| 지면 충돌 hook | `particleSystem.cpp` `update` 루프 | `vel.y<0` 게이트, 표면 교차 처리 |
+| `alignYToNormalMat` | `particleSystem.cpp` | +Y→노멀 회전 행렬 |
+| `ParticleEffect::setGroundBehavior` | `particleEffect.cpp` | lua 구동: **conform=전 시스템(서브이미터 포함, 기둥 본체가 Birth 서브이미터인 경우 대응)**, **collision=top-level만**(버스트 즉사 방지). **effect json은 지면 정보 미포함** |
+| `kPlayVFXFlagGroundSnap`/`GroundAlign` + `ParticleCollision/Conform` mask·shift | `skill/skillTypes.hpp` | PlayVFX 지면 스냅/정렬 + 파티클 충돌·컨폼 모드(flags 1바이트 패킹, 56B 유지) |
+| `AttachType::Ground` + `AttachTarget::groundAlign` | `skill/skillTypes.hpp` | 지면 고정 히트박스 attach |
+| `SkillInstance::CastAnchor` | `skill/skillSystem.hpp` | 시전자 pos+yaw(시전 시점), Ground 히트박스 앵커 |
+| `SkillDispatchContext::ground` | `skill/skillSystem.hpp` | `const GroundSampler*` 주입 |
+| `alignQuatYToNormal`/`captureCastAnchor` | `skill/skillSystem.cpp` | 정렬 쿼터니언 / 앵커 캡처 |
+| PlayVFX 지면 스냅 dispatch | `skill/skillSystem.cpp` `dispatchEvent` PlayVFX | worldPos.y 스냅 + `fx->setGroundSampler` |
+| SpawnHitbox Ground 브랜치 | `skill/skillSystem.cpp` `dispatchEvent` SpawnHitbox | castAnchor+yaw 회전 후 OBB별 지면 스냅 |
+| lua `groundSnap/groundAlign`, `particleCollision/particleConform`, `{type="Ground", align=}` | `skill/skillCompiler.cpp` | 플래그/파티클 모드/Ground attach 파싱 |
+| PlayVFX 파티클 거동 디코드+적용 | `skill/skillSystem.cpp` PlayVFX | flags 비트3-6 → `fx->setGroundBehavior` |
+| `groundSampler_` 바인딩 | `standalone/game.cpp`, `online/onlineGame.cpp` | chunkManager_→skillCtx_.ground |
+
+> 서버 미러: `RoomServer/skill/{skillTypes,skillSystem,skillCompiler}.*`, `Room::bindGroundQueries`.
+> 레거시 제거: `onlineGame.cpp`의 `SwordEffect::ArrowRain/RedEnergyExplosion` 하드코딩 지면 스냅 경로 삭제.
+
+---
+
 ## 관련 문서
 
+- `docs/terrainInteractingSkills.md` — 지면 연계 스킬/파티클 설계
 - `docs/skillEditor.md` — standalone 스킬 에디터 설계
 - `docs/graphicsArchitecture.md` — GFX 초기화 흐름, 파이프라인 구조
 - `docs/physicsArchitecture.md` — PhysicSystem::step 단계, BVH 변환 체인

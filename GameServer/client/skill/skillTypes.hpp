@@ -23,6 +23,7 @@
 enum class AttachType : u8t {
     Bone,         // follow a named skeleton bone of the caster
     VFXParticle,  // attach to all active particles of a ParticleSystem within a VFX effect
+    Ground,       // plant at a caster-relative ground point, snapped to terrain, then static
 };
 
 // String-based attach target. Resolved to a runtime handle once at SpawnHitbox dispatch.
@@ -31,6 +32,7 @@ struct AttachTarget {
     std::string targetName;       // bone name (e.g. "Weapon_R"); unused for VFXParticle
     u8t         vfxId            = 0;  // index into SkillDispatchContext::vfxById
     int         particleSystemIdx = 0;  // index into ParticleEffect::system(n)
+    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
 };
 
 // ---------------------------------------------------------------------------
@@ -82,7 +84,21 @@ enum class SkillEventType : u8t {
 };
 
 // PlayVFX::flags bit definitions.
-static constexpr u8t kPlayVFXFlagYawOnly = 0x01;  // place effect on ground plane (ignore caster pitch/roll)
+//   bit0      : yawOnly      -- place effect on ground plane (ignore caster pitch/roll)
+//   bit1      : groundSnap   -- snap final worldPos.y to terrain (localOffset.y = lift)
+//   bit2      : groundAlign  -- orient effect to the terrain normal (keeps yaw)
+//   bits3-4   : particle ground-collision mode (ps::ParticleCollisionModule::Mode ordinal)
+//   bits5-6   : particle ground-conform   mode (ps::ShapeModule::GroundConform ordinal)
+// The particle mode fields drive the *played effect's particles* (fall-and-die,
+// conform-to-slope) from the skill Lua, so the effect JSON needs no ground keys.
+static constexpr u8t kPlayVFXFlagYawOnly     = 0x01;
+static constexpr u8t kPlayVFXFlagGroundSnap  = 0x02;
+static constexpr u8t kPlayVFXFlagGroundAlign = 0x04;
+
+static constexpr u8t kPlayVFXParticleCollisionShift = 3;
+static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;  // bits 3-4
+static constexpr u8t kPlayVFXParticleConformShift   = 5;
+static constexpr u8t kPlayVFXParticleConformMask    = 0x60;  // bits 5-6
 
 // Fixed-size payload union. All members are trivially copyable (no std::string).
 // String data lives in SkillAsset::hitboxDefs / vfxNames, referenced by index.
