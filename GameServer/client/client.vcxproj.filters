@@ -348,6 +348,30 @@
     <ClCompile Include="trailPipeline.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="piercingMeshPipeline.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingMaterial.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingSlashMeshPipeline.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="piercingSlashMaterial.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="editor\skillDraft.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="editor\editorController.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="zone.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\TextInput.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -677,6 +701,39 @@
     <ClInclude Include="trailPipeline.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="piercingMeshPipeline.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingMaterial.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingSlashMeshPipeline.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingSlashMaterial.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="editor\characterSkillMap.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="editor\skillDraft.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="editor\editorController.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="zone.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\zoneDef.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\markerDef.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\TextInput.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -765,6 +822,8 @@
     </FxCompile>
     <FxCompile Include="twoSides.hlsl" />
     <FxCompile Include="trail.hlsl" />
+    <FxCompile Include="piercing.hlsl" />
+    <FxCompile Include="piercingSlash.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="bindless.hlsli">
@@ -777,6 +836,57 @@
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
     <None Include="..\resources\skills\lua\skill_api.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\aoe_slash_green.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\arrow.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\arrow_rain.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\arrow_volley.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\crystals_cross_fade.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\crystals_front_attack.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\energy_explosion_arrow.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\piercing.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\piercing_circle_slash.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\piercing_multi.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\piercing_slash.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\red_energy_explosion.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\slash_7.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\slash_combo.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\slash_wave.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\spikes.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\tornado_shot.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
   </ItemGroup>

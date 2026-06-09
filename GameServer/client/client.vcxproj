@@ -523,8 +523,25 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\resources\skills\aoe_slash_green.lua" />
+    <None Include="..\resources\skills\arrow.lua" />
+    <None Include="..\resources\skills\arrow_rain.lua" />
+    <None Include="..\resources\skills\arrow_volley.lua" />
+    <None Include="..\resources\skills\crystals_cross_fade.lua" />
+    <None Include="..\resources\skills\crystals_front_attack.lua" />
+    <None Include="..\resources\skills\energy_explosion_arrow.lua" />
     <None Include="..\resources\skills\lua\skill_api.lua" />
+    <None Include="..\resources\skills\piercing.lua" />
+    <None Include="..\resources\skills\piercing_circle_slash.lua" />
+    <None Include="..\resources\skills\piercing_multi.lua" />
+    <None Include="..\resources\skills\piercing_slash.lua" />
+    <None Include="..\resources\skills\red_energy_explosion.lua" />
+    <None Include="..\resources\skills\slash_7.lua" />
+    <None Include="..\resources\skills\slash_combo.lua" />
+    <None Include="..\resources\skills\slash_wave.lua" />
+    <None Include="..\resources\skills\spikes.lua" />
     <None Include="..\resources\skills\sword_slash.lua" />
+    <None Include="..\resources\skills\tornado_shot.lua" />
     <None Include="bindless.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
