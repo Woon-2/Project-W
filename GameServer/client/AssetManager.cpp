@@ -109,6 +109,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	// Combat feedback UI: damage-number digit atlas + kill-count skull icon.
 	// Clamp sampler avoids UV bleed across atlas cell borders.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PlayerHpHeart",
+		.texturePath     = "../resources/UI/hearts.dds",
+		.pDest           = &playerHpHeart_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "DamageDigits",
 		.texturePath     = "../resources/UI/damage_digits.dds",
 		.pDest           = &digitAtlasTex_,

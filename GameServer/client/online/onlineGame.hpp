@@ -253,7 +253,9 @@ private:
 	bool playerDead_{};
 
 	UI::UIManager    uiManager_{};
+	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
+	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};

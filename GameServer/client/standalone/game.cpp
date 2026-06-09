@@ -10,6 +10,7 @@
 #include "../particleImporter.hpp"
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
+#include "../ui/widgets/Image.hpp"
 
 extern RECT gClientRect;
 
@@ -746,6 +747,24 @@ void Game::setupStage() {
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
+	constexpr float kPlayerHpUiX = 20.f;
+	constexpr float kPlayerHpUiY = 20.f;
+	constexpr float kPlayerHpHeartSize = 32.f;
+	constexpr float kPlayerHpHeartGap = 8.f;
+	constexpr float kPlayerHpBarHeight = 18.f;
+
+	playerHpHeart_ = static_cast<UI::Image*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Image>())
+	);
+	playerHpHeart_->name    = "playerHpHeart";
+	playerHpHeart_->anchor  = UI::Anchors::TopLeft;
+	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
+	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
+	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
+	playerHpHeart_->offsetX = UI::DimValue::px(kPlayerHpUiX);
+	playerHpHeart_->offsetY = UI::DimValue::px(kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f);
+	playerHpHeart_->texture = assetManager_.playerHpHeart();
+
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
 	);
@@ -753,9 +772,9 @@ void Game::setupStage() {
 	playerHpBar_->anchor  = UI::Anchors::TopLeft;
 	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
-	playerHpBar_->height  = UI::DimValue::px(18.f);
-	playerHpBar_->offsetX = UI::DimValue::px(20.f);
-	playerHpBar_->offsetY = UI::DimValue::px(20.f);
+	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
+	playerHpBar_->offsetX = UI::DimValue::px(kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap);
+	playerHpBar_->offsetY = UI::DimValue::px(kPlayerHpUiY);
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
