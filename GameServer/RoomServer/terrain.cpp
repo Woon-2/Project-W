@@ -50,6 +50,20 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readFloat(ifs, "Roughness");
     }
 
+    // ---- scatter prototypes (read and discard; client render-only, index ver >= 2) ----
+    if (result.version >= 2) {
+        const int PN = readInteger(ifs, "PrototypeCount");
+        for (int p = 0; p < PN; ++p) {
+            readHeadTag(ifs, "ScatterPrototype");
+            readText(ifs, "Name");
+            readInteger(ifs, "Kind");
+            readText(ifs, "TexturePath");
+            readVec2(ifs, "BillboardSize");
+            readVec4(ifs, "Tint");
+            readTailTag(ifs, "ScatterPrototype");
+        }
+    }
+
     // ---- chunk records ----
     const int C = readInteger(ifs, "ChunkCount");
     result.chunks.resize(C);
@@ -73,6 +87,19 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         }
         e.heightPath = readText(ifs, "HeightPath");
         e.splatPath  = readText(ifs, "SplatPath");
+
+        // ---- per-chunk scatter instances (read and discard; ver >= 2) ----
+        if (result.version >= 2) {
+            const int instCount = readInteger(ifs, "InstanceCount");
+            for (int i = 0; i < instCount; ++i) {
+                readInteger(ifs, "ProtoIdx");
+                readVec3(ifs, "PosLocal");
+                if (result.version >= 3) readVec4(ifs, "Rot");   // v3+: orientation quaternion
+                else                     readFloat(ifs, "Yaw");  // v2 (legacy): yaw float
+                readVec2(ifs, "Scale");
+            }
+        }
+
         readTailTag(ifs, "Chunk");
     }
 

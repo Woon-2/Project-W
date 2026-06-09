@@ -35,6 +35,42 @@ function VFXParticleAttach(vfxId, systemIdx)
     return { type = "VFXParticle", vfxId = vfxId, systemIdx = systemIdx or 0 }
 end
 
+-- Helper: ground attachment target. Plants OBBs at a caster-relative point snapped to
+-- the terrain, then leaves them static (no bone tracking). opts:
+--   anchor = N    -- POINT IMPACT: place OBBs rigidly in the frame of registered ground
+--                    anchor N (see SetGroundAnchor / GroundAnchor below). center is an
+--                    offset in that frame (right/up/forward). Lets a cluster of SEPARATE
+--                    hitboxes -- each with its own onHit / impulse direction -- share one
+--                    coherent impact point (meteor ring, blast crater).
+--   anchor = nil  -- (default) DISTRIBUTED ERUPTION: each OBB snaps to the terrain at its
+--                    own caster-relative XZ; center.y = lift above its own surface point
+--                    (a grid of pillars conforms to slopes independently).
+--   align = true  -- distributed mode only: tilt each OBB to the terrain normal
+--                    (default false: yaw only, slope-safe). In anchor mode the registered
+--                    frame's own align controls tilt.
+function GroundAttach(opts)
+    opts = opts or {}
+    local t = { type = "Ground", align = opts.align or false }
+    if opts.anchor ~= nil then t.anchor = opts.anchor end
+    return t
+end
+
+-- Helper: register a ground anchor frame for point-impact skills. Emit this as a timeline
+-- event BEFORE the hitboxes that reference it:
+--   skill:addEvent(t, "SetGroundAnchor", GroundAnchor{ id = 0, offset = Vec3(0,0,5), align = false })
+-- then on each hitbox: attach = GroundAttach{ anchor = 0 }.
+--   id     = N            -- anchor slot (0..3)
+--   offset = Vec3(r,u,f)  -- caster-relative (right, up, forward); snapped to terrain
+--   align  = true         -- tilt the frame to the terrain normal (default false)
+function GroundAnchor(opts)
+    opts = opts or {}
+    return {
+        id     = opts.id     or 0,
+        offset = opts.offset or Vec3(0, 0, 0),
+        align  = opts.align  or false,
+    }
+end
+
 -- PlayVFX event parameters (passed inline to skill:addEvent(ms, "PlayVFX", { ... })):
 --   vfxId      = <int>             -- index into the runtime ParticleEffect registry (required)
 --   offset     = Vec3(x, y, z)     -- attach-local placement (right, up, forward); forward = "N meters ahead"

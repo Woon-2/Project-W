@@ -19,7 +19,7 @@ struct Material {
     float cRoughness;
     float cMetallic;
     float cAOStrength;
-    float padding0;
+    float cAlphaCutoff;   // foliage alpha-test threshold (0 = opaque)
     float3 cEmmisive;
     float padding1;
 };
@@ -100,6 +100,14 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		float3x3 TBN = float3x3(input.tangentV, input.bitangentV, input.normalV);
 		input.normalV = mul(normal, TBN);
 	}
-    
+
+    // Foliage alpha test. Gated on cAlphaCutoff > 0 so opaque materials pay nothing.
+    if (material.cAlphaCutoff > 0.0f) {
+        float alpha = (material.idxAlbedo.x >= 0)
+            ? sampleBindless(material.idxAlbedo, input.uv).a
+            : material.cAlbedo.a;
+        clip(alpha - material.cAlphaCutoff);
+    }
+
     return illuminateCSM(input.posV, input.posW, input.normalV, input.uv, input.normalW);
 }

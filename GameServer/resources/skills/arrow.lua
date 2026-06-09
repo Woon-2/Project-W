@@ -16,26 +16,28 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(120, "PlayVFX", {
     vfxId  = 10,
-    offset = Vec3(0.0, 1.0, 0.8)
+    offset = Vec3(0.0, 1.0, 0.8),
+    advance = Vec3(0.0, 0.0, 1.0)
 })
 
 local onHit = OnHit({
-    damage          = 35,
+    damage          = 10,
     vfxId           = 255,
-    impulseStrength = 500.0,
-    impulseDir      = Vec3(0.0, 0.1, 1.0)
+    impulseStrength = 350.0,
+    impulseDir      = Vec3(0.0, 0.0, 1.0)
 })
 
-skill:addEvent(140, "SpawnHitbox", {
+skill:addEvent(130, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.2, 2.5, 0.4, 0.4, 2.5, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, 0.0, -0.3, 0.25, 0.25, 0.6, 0, 0, 0) },
+    attach              = VFXParticleAttach(10, 0),
     applyAttachRotation = true,
+    useParticleSize     = false,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
-skill:addEvent(400, "DestroyHitbox", { slot = 0 })
+skill:addEvent(580, "DestroyHitbox", { slot = 0 })
 
 return skill

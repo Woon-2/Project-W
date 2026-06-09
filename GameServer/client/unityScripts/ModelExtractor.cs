@@ -24,6 +24,13 @@ public class ModelExtractorWindow : EditorWindow
     private List<Matrix4x4> bindposes = null;
     private int[] boneIdxMap = null;
 
+    // LOD 트리/식생 프리팹 대응:
+    // 최상위 LOD(LOD0)에 속한 렌더러는 항상 추출하고(lod0Renderers),
+    // 하위 LOD(LOD1+)에 속한 렌더러는 메시/재질을 건너뛴다(excludedLODRenderers).
+    // 노드(Transform) 자체는 그대로 남겨 NodeCnt/ChildCnt 정합성을 유지한다.
+    private HashSet<Renderer> lod0Renderers = new HashSet<Renderer>();
+    private HashSet<Renderer> excludedLODRenderers = new HashSet<Renderer>();
+
     [MenuItem("Tools/Model Extractor")]
     public static void OpenWindow()
     {
@@ -106,6 +113,57 @@ public class ModelExtractorWindow : EditorWindow
         }
 
         Debug.Log($"[TextureMapper] Found {textureMappings.Count} textures in {obj.name}");
+    }
+
+    // 잘 알려진 albedo 프로퍼티 이름 후보.
+    static readonly string[] kAlbedoPropCandidates =
+        { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
+
+    // 머티리얼의 albedo(베이스 컬러) 텍스처를 견고하게 찾는다.
+    // 1) 알려진 프로퍼티 이름, 2) 셰이더 텍스처 프로퍼티 전체 스캔(노멀/마스크/이미시브 등은 제외,
+    // base/albedo/diffuse/main/color 류 이름 우선, 그래도 없으면 첫 번째 일반 텍스처).
+    static Texture FindAlbedoTexture(Material mat)
+    {
+        if (mat == null || mat.shader == null) return null;
+
+        foreach (var name in kAlbedoPropCandidates)
+            if (mat.HasProperty(name) && mat.GetTexture(name) != null)
+                return mat.GetTexture(name);
+
+        var shader = mat.shader;
+        int count = ShaderUtil.GetPropertyCount(shader);
+
+        bool IsExcluded(string lname) =>
+            lname.Contains("norm") || lname.Contains("bump") || lname.Contains("mask") ||
+            lname.Contains("metal") || lname.Contains("smooth") || lname.Contains("spec") ||
+            lname.Contains("gloss") || lname.Contains("occl") || lname.Contains("_ao") ||
+            lname.Contains("emiss") || lname.Contains("height") || lname.Contains("detail") ||
+            lname.Contains("lightmap");
+
+        // pass 1: albedo로 보이는 이름 우선
+        for (int i = 0; i < count; i++)
+        {
+            if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+            string pn = ShaderUtil.GetPropertyName(shader, i);
+            Texture tex = mat.GetTexture(pn);
+            if (tex == null) continue;
+            string l = pn.ToLowerInvariant();
+            if (IsExcluded(l)) continue;
+            if (l.Contains("base") || l.Contains("albedo") || l.Contains("diff") ||
+                l.Contains("main") || l.Contains("color") || l.Contains("col"))
+                return tex;
+        }
+        // pass 2: 제외 슬롯이 아닌 첫 번째 텍스처
+        for (int i = 0; i < count; i++)
+        {
+            if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+            string pn = ShaderUtil.GetPropertyName(shader, i);
+            Texture tex = mat.GetTexture(pn);
+            if (tex == null) continue;
+            if (IsExcluded(pn.ToLowerInvariant())) continue;
+            return tex;
+        }
+        return null;
     }
 
     void ExtractRagdollConfig(GoblinRagdollConfig ragdoll)
@@ -308,10 +366,13 @@ public class ModelExtractorWindow : EditorWindow
             ExtractUtil.WriteHeadTag(geometryWriter, "Material");
 
             // 상수들 추출
-            // cAlbedo
-            if (materials[i].HasProperty("_Color"))
+            // cAlbedo: _Color / _BaseColor 우선, 없으면 불투명 흰색으로 기본값을 쓴다.
+            // (색상 상수가 비면 constantAlbedo가 (0,0,0,0)이 되어 검게 보이거나,
+            //  폴리지 알파테스트에서 알파 0으로 전부 클리핑되어 사라질 수 있다 — 트리 버그 원인)
             {
-                Color albedo = materials[i].GetColor("_Color");
+                Color albedo = Color.white;
+                if (materials[i].HasProperty("_Color"))          albedo = materials[i].GetColor("_Color");
+                else if (materials[i].HasProperty("_BaseColor")) albedo = materials[i].GetColor("_BaseColor");
                 ExtractUtil.WriteColor(geometryWriter, "cAlbedo", albedo);
             }
             // cEmmisive
@@ -347,19 +408,14 @@ public class ModelExtractorWindow : EditorWindow
             }
 
             // 텍스처들 추출
-            // AlbedoMap
-            string[] albedoMapPropCandidates = { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
-            foreach (var name in albedoMapPropCandidates)
+            // AlbedoMap: 잘 알려진 프로퍼티 이름을 먼저 시도하고, 없으면 셰이더의
+            // 텍스처 프로퍼티 전체를 훑어 albedo로 보이는 슬롯을 찾는다. 커스텀/Shader Graph
+            // 기반 트리처럼 albedo 슬롯 이름이 _MainTex/_BaseMap이 아닌 경우, 이 폴백이 없으면
+            // 머티리얼이 albedo 맵 없이 임포트되어 폴리지 알파테스트로 전부 클리핑(=안 보임)된다.
+            Texture albedoTex = FindAlbedoTexture(materials[i]);
+            if (albedoTex != null)
             {
-                if (materials[i].HasProperty(name))
-                {
-                    Texture mainAlbedoMap = materials[i].GetTexture(name);
-                    if (mainAlbedoMap != null)
-                    {
-                        ExtractUtil.WriteText(geometryWriter, "AlbedoMap", mainAlbedoMap.name);
-                        break;
-                    }
-                }
+                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", albedoTex.name);
             }
             // NormalMap
             if (materials[i].HasProperty("_BumpMap"))
@@ -419,12 +475,16 @@ public class ModelExtractorWindow : EditorWindow
         MeshFilter meshFilter = xform.gameObject.GetComponent<MeshFilter>();
         SkinnedMeshRenderer skinnedMeshRenderer = xform.gameObject.GetComponent<SkinnedMeshRenderer>();
 
+        // LOD 분류 반영: 하위 LOD 렌더러는 추출 대상에서 제외한다.
+        bool meshRendererUsable = IsRendererUsable(meshRenderer);
+        bool skinnedMeshRendererUsable = IsRendererUsable(skinnedMeshRenderer);
+
         Mesh mesh = null;
-        if (meshRenderer && meshFilter && meshRenderer.enabled)
+        if (meshRenderer && meshFilter && meshRendererUsable)
         {
             mesh = meshFilter.sharedMesh;
         }
-        else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
+        else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
             boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
@@ -477,11 +537,11 @@ public class ModelExtractorWindow : EditorWindow
         {
             // MaterialSetSelector가 없다면 기본으로 메시에 적용된 재질들 추출
             Material[] materials = null;
-            if (meshRenderer && meshRenderer.enabled)
+            if (meshRenderer && meshRendererUsable)
             {
                 materials = meshRenderer.sharedMaterials;
             }
-            else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
+            else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
             {
                 materials = skinnedMeshRenderer.sharedMaterials;
             }
@@ -506,6 +566,48 @@ public class ModelExtractorWindow : EditorWindow
 
         ExtractUtil.WriteTailTag(geometryWriter, "Children");
         ExtractUtil.WriteTailTag(geometryWriter, "Node");
+    }
+
+    // LODGroup이 있는 프리팹(나무/식생 등)에서 LOD0 렌더러와 하위 LOD 렌더러를 분류한다.
+    // LOD0은 항상 추출하고, LOD1+ 는 메시/재질을 건너뛰기 위함이다.
+    void CollectLODRenderers()
+    {
+        lod0Renderers.Clear();
+        excludedLODRenderers.Clear();
+
+        var lodGroups = targetObject.GetComponentsInChildren<LODGroup>(true);
+        foreach (var lg in lodGroups)
+        {
+            var lods = lg.GetLODs();
+            if (lods == null || lods.Length == 0) continue;
+
+            // LOD0 렌더러 (강제 포함)
+            foreach (var r in lods[0].renderers)
+            {
+                if (r != null) lod0Renderers.Add(r);
+            }
+
+            // LOD1+ 렌더러 (제외). 단, LOD0에도 참조된 렌더러는 제외하지 않는다.
+            for (int i = 1; i < lods.Length; i++)
+            {
+                foreach (var r in lods[i].renderers)
+                {
+                    if (r != null && !lod0Renderers.Contains(r))
+                        excludedLODRenderers.Add(r);
+                }
+            }
+        }
+    }
+
+    // 렌더러를 추출 대상으로 삼을지 판단한다.
+    // - 하위 LOD(excludedLODRenderers)면 추출하지 않는다.
+    // - LOD0(lod0Renderers)이면 씬뷰 상태로 enabled가 꺼져 있어도 강제 추출한다.
+    // - 그 외(LOD 없는 일반 오브젝트)는 기존 동작대로 enabled를 따른다.
+    bool IsRendererUsable(Renderer r)
+    {
+        if (r == null) return false;
+        if (excludedLODRenderers.Contains(r)) return false;
+        return r.enabled || lod0Renderers.Contains(r);
     }
 
     void ExtractGeometry()
@@ -653,6 +755,7 @@ public class ModelExtractorWindow : EditorWindow
         // (경로가 Key인 것보단 이름이 Key인 것이 SSO에서 유리할 것이다.)
         // (대신, 서로 다른 리소스간 중복된 텍스처 이름이 없어야 할 것.)
         if (targetSkeleton != null) ProcessBones();
+        CollectLODRenderers();
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();

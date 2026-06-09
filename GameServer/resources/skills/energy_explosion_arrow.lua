@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name             = "EnergyExplosionArrow"
-skill.totalDurationMs  = 800
+skill.totalDurationMs  = 3400
 skill.interruptible    = true
 
 skill:addVFX(13, "effects/energy_explosion_arrow.json")
@@ -19,23 +19,50 @@ skill:addEvent(120, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
-local onHit = OnHit({
-    damage          = 45,
+local onHitBase = OnHit({
+    damage          = 60,
     vfxId           = 255,
     impulseStrength = 800.0,
-    impulseDir      = Vec3(0.0, 0.3, 1.0)
+    impulseDir      = Vec3(0.0, 0.0, 0.0)
 })
 
-skill:addEvent(160, "SpawnHitbox", {
+local radius    = 2.0
+local count     = 8
+local spawnMs   = 160
+local destroyMs = 2800
+
+skill:addEvent(spawnMs, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.2, 3.0, 0.5, 0.5, 3.0, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.9, 1.4, 0.9, 0, 0, 0) },
+    attach              = VFXParticleAttach(13, 2),
     applyAttachRotation = true,
-    hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
-    onHit               = onHit
+    useParticleSize     = false,
+    hitGroup            = 2,
+    hitGroupCooldownMs  = 2400,
+    onHit               = onHitBase
 })
 
-skill:addEvent(600, "DestroyHitbox", { slot = 0 })
+skill:addEvent(destroyMs, "DestroyHitbox", { slot = 0 })
+
+for i = 1, count do
+    local deg = i * (360.0 / count)
+    local rad = math.rad(deg)
+    local s   = math.sin(rad)
+    local c   = math.cos(rad)
+
+    local onHit = deepCopy(onHitBase)
+    onHit.impulseDir = Vec3(s, 0.0, c)
+
+    skill:addEvent(spawnMs, "SpawnHitbox", {
+        slot                = i,
+        -- center on the ring; halfExtents: tangential X, height Y, radial Z.
+        localOBBs           = { OBB(0.75 * radius * s, 0.0, 0.75 * radius * c, 1.1, 1.4, 0.6, deg, 0, 0) },
+        attach              = VFXParticleAttach(13, 2),
+        hitGroup            = 2,
+        hitGroupCooldownMs  = 2400,
+        onHit               = onHit
+    })
+    skill:addEvent(destroyMs, "DestroyHitbox", { slot = i })
+end
 
 return skill

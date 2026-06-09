@@ -441,7 +441,7 @@ void GFX::createSwapChain() {
 	);
 	// PBR Pipeline ----
 	resourcesPBRPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapShader::PerInstanceData) * 16'384u, backBuffers_.size(), "PBR_Shadow_PerInstanceData"
 	);
 	resourcesPBRPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Shadow_PerDrawcallData"
@@ -450,7 +450,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBR_Shadow_PerFrameData"
 	);
 	resourcesPBRPipeline_.mainPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Main_PerInstanceData"
+		device_.Get(), sizeof(PBRShader::PerInstanceData) * 16'384u, backBuffers_.size(), "PBR_Main_PerInstanceData"
 	);
 	resourcesPBRPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Main_PerDrawcallData"
@@ -652,7 +652,7 @@ void GFX::createSwapChain() {
 	);
 	// PBR Deferred Pipeline ----
 	resourcesPBRDeferredPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapCSMShader::PerDrawcallData), 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallData"
@@ -661,7 +661,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferred_Shadow_PerFrameData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.lightData.init(
 		device_.Get(), sizeof(PBRDeferredGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferred_GBuffer_LightData"

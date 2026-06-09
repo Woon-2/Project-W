@@ -24,7 +24,8 @@ struct AttachTarget {
     std::string targetName;
     u8t         vfxId            = 0;
     int         particleSystemIdx = 0;
-    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
+    bool        groundAlign      = false;  // Ground attach (per-OBB self snap only): tilt OBBs to the terrain normal
+    i32t        groundAnchorRef  = -1;     // Ground attach: >=0 places OBBs in a registered SetGroundAnchor frame (rigid, point impact); -1 = per-OBB self snap (distributed eruption)
 };
 
 struct OnHitDef {
@@ -55,8 +56,11 @@ enum class SkillEventType : u8t {
     SpawnProjectile,
     ApplyImpulse,
     CameraShake,
+    SetGroundAnchor,
     SIZE
 };
+
+static constexpr u8t kGroundAnchorFlagAlign = 0x01;  // tilt the anchor frame to the terrain normal
 
 // PlayVFX::flags bit definitions (mirrors client; PlayVFX is a no-op on the server).
 // bits3-4 = particle ground-collision mode, bits5-6 = particle ground-conform mode
@@ -119,6 +123,12 @@ union SkillEventPayload {
         u8t  projectileAssetId;
         float speedMps;
     } spawnProjectile;
+
+    struct SetGroundAnchor {
+        mu::Vec3 localOffset;  // caster-relative (right, up, forward); snapped to terrain
+        u8t      anchorId;     // slot 0..kMaxGroundAnchors-1
+        u8t      flags;        // bit0 = align frame to terrain normal
+    } setGroundAnchor;
 
     u8t raw[56];
 };

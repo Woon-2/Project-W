@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name             = "PiercingMulti"
-skill.totalDurationMs  = 700
+skill.totalDurationMs  = 1100
 skill.interruptible    = true
 
 skill:addVFX(18, "effects/piercing_multi.json")
@@ -20,22 +20,26 @@ skill:addEvent(100, "PlayVFX", {
 })
 
 local onHit = OnHit({
-    damage          = 30,
+    damage          = 8,
     vfxId           = 255,
-    impulseStrength = 500.0,
-    impulseDir      = Vec3(0.0, 0.1, 1.0)
+    impulseStrength = 450.0,
+    impulseDir      = Vec3(0.0, 0.0, 1.0)
 })
 
-skill:addEvent(130, "SpawnHitbox", {
-    slot                = 0,
-    localOBBs           = { OBB(0.0, -0.2, 2.8, 1.4, 0.6, 2.8, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
-    applyAttachRotation = true,
-    hitGroup            = 0,
-    hitGroupCooldownMs  = 600,
-    onHit               = onHit
-})
+local count = 20
 
-skill:addEvent(500, "DestroyHitbox", { slot = 0 })
+for i = 0, count - 1 do
+    skill:addEvent(130, "SpawnHitbox", {
+        slot                = i,
+        localOBBs           = { OBB(2.0, 0.0, 0.0, 3.0, 1.2, 1.2, 0, 0, 0) },
+        attach              = VFXParticleAttach(18, i),
+        applyAttachRotation = true,
+        useParticleSize     = false,
+        hitGroup            = 0,
+        hitGroupCooldownMs  = 300,
+        onHit               = onHit
+    })
+    skill:addEvent(330 + i * 30, "DestroyHitbox", { slot = i })
+end
 
 return skill

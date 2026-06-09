@@ -96,6 +96,18 @@ struct SkillInstance {
         bool     valid = false;
     } castAnchor;
 
+    // Registered ground anchors (SetGroundAnchor event). A terrain-snapped frame that
+    // multiple *separate* Ground-attach hitboxes can reference (attach.groundAnchorRef),
+    // so a cluster of independently-configured hitboxes (each with its own onHit /
+    // impulse direction) shares one coherent impact point. Point-impact archetype.
+    static constexpr int kMaxGroundAnchors = 4;
+    struct GroundAnchor {
+        mu::Vec3  pos    = { 0.f, 0.f, 0.f };
+        mu::NQuat orient = {};       // yaw (* terrain align)
+        bool      valid  = false;
+    };
+    GroundAnchor groundAnchors[kMaxGroundAnchors];
+
     // slot -> hitboxPool_ index (bone attach); -1 = empty
     std::vector<int> boneHitboxBySlot;
     // slot -> particleSources_ index (VFXParticle attach); -1 = empty
@@ -126,6 +138,7 @@ struct SkillInstance {
     void resetSlots() {
         boneHitboxBySlot.clear();
         particleSourceBySlot.clear();
+        for (auto& a : groundAnchors) a.valid = false;
         // Keep hitGroups entries (and bucket capacity) for reuse; just empty the
         // per-target records. Avoids per-cast unordered_map churn.
         for (auto& [g, st] : hitGroups) st.lastHitByTarget.clear();

@@ -418,9 +418,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체, chunk streaming 함수 선언 |
-| `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
-| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`(인덱스 청크 평균 월드 좌표, 로비 카메라 포커스) |
+| `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체 + scatter(`ScatterPrototype`/`ScatterInstance`, `ChunkIndex::scatterPrototypes`/`ChunkIndexEntry::scatter`), chunk streaming 함수 선언 |
+| `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`(v2: ScatterPrototypes 전역 섹션 + Chunk 내 Scatter 블록; v3: per-instance `Rot` 쿼터니언, v2는 `Yaw` 레거시→Y쿼터니언 변환)/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + 디테일 거리 컬링 `kDetailCullRadius`·트리는 전부), `buildCrossQuadMesh`(양면 빌보드). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384) |
+| `docs/scatterSystem.md` | Scatter 시스템 설계: 포맷 v3(per-instance Rot 쿼터니언·Align To Ground 베이크), 이름 매핑(ModelExtractor targetName), 자동 인스턴싱, 알파 컷아웃(+albedo 맵 누락 클리핑 함정), 빌보드, 충돌 대비 |
+| `docs/scatterAuthoringGuide.md` | 지형에 Tree/Rock/Flower/Bush/Plant 띄우는 실전 작성 가이드(ModelExtractor→TerrainExtractor→DDS 변환→배치→실행, 트러블슈팅) |
+| `unityScripts/TerrainExtractor.cs` | 지형+산포 추출(Export All Chunks). chunks_index v3 작성, `ScanPrototypes`(이름=매핑키), `GatherScatter`(트리=treeInstances·디테일=`ComputeDetailInstanceTransforms`), per-instance `Rot` 쿼터니언에 Align To Ground 틸트 베이크 |
+| `unityScripts/ModelExtractor.cs` | 프롭/캐릭터 `.bin` 추출. LODGroup이면 **LOD0만**(`CollectLODRenderers`/`IsRendererUsable`), `FindAlbedoTexture`(셰이더 TexEnv 폴백으로 albedo 견고 추출), `cAlbedo` 흰색 기본값 |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
 | `terrainDeferred.hlsl` | Terrain VS/GBufferOutput PS (Deferred path: GBuffer 기록, 조명 없음) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
@@ -1014,13 +1018,17 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `alignYToNormalMat` | `particleSystem.cpp` | +Y→노멀 회전 행렬 |
 | `ParticleEffect::setGroundBehavior` | `particleEffect.cpp` | lua 구동: **conform=전 시스템(서브이미터 포함, 기둥 본체가 Birth 서브이미터인 경우 대응)**, **collision=top-level만**(버스트 즉사 방지). **effect json은 지면 정보 미포함** |
 | `kPlayVFXFlagGroundSnap`/`GroundAlign` + `ParticleCollision/Conform` mask·shift | `skill/skillTypes.hpp` | PlayVFX 지면 스냅/정렬 + 파티클 충돌·컨폼 모드(flags 1바이트 패킹, 56B 유지) |
-| `AttachType::Ground` + `AttachTarget::groundAlign` | `skill/skillTypes.hpp` | 지면 고정 히트박스 attach |
+| `AttachType::Ground` + `AttachTarget::groundAlign/groundAnchorRef` | `skill/skillTypes.hpp` | 지면 고정 히트박스 attach (align=분산모드 노멀정렬, anchorRef>=0=등록앵커 강체 점충돌) |
+| `SetGroundAnchor` 이벤트 + 페이로드 + `kGroundAnchorFlagAlign` | `skill/skillTypes.hpp` | 점 충돌 앵커 프레임 등록 이벤트 |
+| `SkillInstance::groundAnchors[kMaxGroundAnchors]` | `skill/skillSystem.hpp` | 등록된 지면 앵커 프레임(pos+orient), 여러 별도 히트박스가 공유 |
+| `SetGroundAnchor` dispatch | `skill/skillSystem.cpp` `dispatchEvent` | 시전 yaw 회전+지면 스냅+옵션 align → groundAnchors[id] 등록(서버도 권위적, no-op 아님) |
 | `SkillInstance::CastAnchor` | `skill/skillSystem.hpp` | 시전자 pos+yaw(시전 시점), Ground 히트박스 앵커 |
 | `SkillDispatchContext::ground` | `skill/skillSystem.hpp` | `const GroundSampler*` 주입 |
 | `alignQuatYToNormal`/`captureCastAnchor` | `skill/skillSystem.cpp` | 정렬 쿼터니언 / 앵커 캡처 |
 | PlayVFX 지면 스냅 dispatch | `skill/skillSystem.cpp` `dispatchEvent` PlayVFX | worldPos.y 스냅 + `fx->setGroundSampler` |
-| SpawnHitbox Ground 브랜치 | `skill/skillSystem.cpp` `dispatchEvent` SpawnHitbox | castAnchor+yaw 회전 후 OBB별 지면 스냅 |
-| lua `groundSnap/groundAlign`, `particleCollision/particleConform`, `{type="Ground", align=}` | `skill/skillCompiler.cpp` | 플래그/파티클 모드/Ground attach 파싱 |
+| SpawnHitbox Ground 브랜치 | `skill/skillSystem.cpp` `dispatchEvent` SpawnHitbox | **anchorRef<0: OBB별 독립 스냅(분산 융기) / anchorRef>=0: 등록 앵커 프레임에 강체 배치(점 충돌, 별도 히트박스가 onHit 유지한 채 공유)** |
+| lua `groundSnap/groundAlign`, `particleCollision/particleConform`, `{type="Ground", align=, anchor=}`, `SetGroundAnchor{id,offset,align}` | `skill/skillCompiler.cpp` | 플래그/파티클 모드/Ground attach·앵커 이벤트 파싱 |
+| `GroundAttach{align,anchor}` / `GroundAnchor{id,offset,align}` 헬퍼 | `resources/skills/lua/skill_api.lua` | Ground attach + 앵커 등록 lua 헬퍼 |
 | PlayVFX 파티클 거동 디코드+적용 | `skill/skillSystem.cpp` PlayVFX | flags 비트3-6 → `fx->setGroundBehavior` |
 | `groundSampler_` 바인딩 | `standalone/game.cpp`, `online/onlineGame.cpp` | chunkManager_→skillCtx_.ground |
 
