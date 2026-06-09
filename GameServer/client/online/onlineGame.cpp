@@ -3528,11 +3528,14 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	// Alt+Tab 등으로 윈도우가 포커스를 잃었다가 되찾은 경우,
 	// 커서와 관련된 플래그들을 읽어 커서 캡처, 커서 숨기기 등을 다시 수행한다.
 	case WM_SETFOCUS:
-		if (cursorCaptureEnabled_) {
-			captureCursor();
-		}
-		if (!cursorShowEnabled_) {
-			hideCursor();
+		// 설정창이 열려 있으면 게임플레이 커서 캡처/숨김을 복원하지 않는다(UI 클릭 유지).
+		if (!settingsPanel_.isOpen()) {
+			if (cursorCaptureEnabled_) {
+				captureCursor();
+			}
+			if (!cursorShowEnabled_) {
+				hideCursor();
+			}
 		}
 		break;
 
@@ -3598,6 +3601,35 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
+
+	// ESC: 인게임 설정창 토글(로비의 "설정" 버튼과 동일한 패널을 재사용).
+	if ( (keyboardStateCurr_[VK_ESCAPE] & 0x80) && !(keyboardStatePrev_[VK_ESCAPE] & 0x80) ) {
+		settingsPanel_.toggle();
+	}
+
+	// 설정창 열림/닫힘 전이에 맞춰 커서 모드를 전환한다.
+	// 전이 기반이라 ESC 토글이든 패널의 "닫기" 버튼이든 동일하게 처리된다.
+	const bool settingsOpen = settingsPanel_.isOpen();
+	if (settingsOpen != settingsOpenPrev_) {
+		if (settingsOpen) {
+			// UI 클릭을 위해 커서를 풀고 보여준다(게임플레이 플래그는 보존).
+			releaseCursor();
+			showCursor();
+		} else {
+			// 닫히면 게임플레이 커서 모드(캡처/숨김 플래그)를 복원한다.
+			if (cursorCaptureEnabled_) captureCursor();
+			if (!cursorShowEnabled_)   hideCursor();
+		}
+		settingsOpenPrev_ = settingsOpen;
+	}
+
+	// 설정창이 열려 있는 동안에는 인게임 입력을 차단한다(카메라/이동/공격/스킬/커서 토글).
+	// 누적된 마우스 델타도 비워 닫은 직후 카메라가 튀지 않게 한다.
+	if (settingsOpen) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
 
 	processInputGame(deltaTime);
 

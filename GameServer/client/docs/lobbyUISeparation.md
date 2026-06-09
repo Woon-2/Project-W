@@ -29,9 +29,16 @@ UI를 **전용 컴포넌트 클래스**로 추출하되 2D UI 레이어만 분�
 
 로비 UI 코드는 전부 메인 스레드(LobbyScene/render/lobby recv APC)에서만 실행된다. 분리 후에도 스레딩 모델·직렬화는 변하지 않는다. 로드 진행 atomic은 Game 쪽에 남아 `loadProgress01()`에서만 읽힌다.
 
-## 인게임 ESC 재사용 (후속 작업, 이번 범위 아님)
+## 인게임 ESC 재사용 (구현 완료)
 
-설정창이 씬 비종속이므로, 인게임 입력 핸들러에 `settingsPanel_.toggle()` 한 줄과, 패널이 열렸을 때 `receiveWndMsg`에서 게임 입력을 가로채는 처리만 추가하면 된다. `settingsAllyDamageVisible_`/`monsterDamageOpacity_` 등 값의 게임플레이 연결도 후속(현재는 UI에서 편집만 되고 소비처 없음).
+설정창이 씬 비종속이라(uiManager_.root() 직속, lobbyRoot_ 가시성과 무관) 인게임에서도 그대로 떠 있고, `InGameScene`이 매 프레임 `uiManager_.layout/update/render`를 호출하므로 입력·렌더가 동작한다.
+
+- **열기/닫기**: `processInput()`(인게임에서만 호출)에서 `VK_ESCAPE` 엣지를 감지해 `settingsPanel_.toggle()`. 닫기는 ESC 재입력 또는 패널의 "닫기" 버튼 둘 다 가능.
+- **입력 차단**: `settingsPanel_.isOpen()`이면 `processInputGame()`과 Enter/Space 커서 토글을 건너뛰고(early return) 누적 마우스 델타를 비운다 → 카메라/이동/공격/스킬/커서 토글이 전부 막히고, 닫은 직후 카메라 튐도 없다.
+- **커서**: 설정창 열림/닫힘 **전이**를 추적(`settingsOpenPrev_`). 열리면 `releaseCursor()+showCursor()`로 커서를 풀어 UI 클릭 가능, 닫히면 `cursorCaptureEnabled_`/`cursorShowEnabled_` 플래그 기준으로 게임플레이 커서 모드를 복원. 전이 기반이라 ESC·"닫기" 버튼 어느 경로로 닫혀도 일관되게 복원된다.
+- **포커스 복귀 가드**: `WM_SETFOCUS`에서 설정창이 열려 있으면 게임플레이 커서 캡처/숨김을 복원하지 않는다(Alt-Tab 복귀 시 UI 클릭 유지).
+
+남은 후속: `settingsAllyDamageVisible_`/`monsterDamageOpacity_`/`resolutionIndex`/`fullscreen` 값의 실제 게임플레이·렌더 반영(현재는 `GameSettings`에 저장만 되고 소비처 없음).
 
 ## 메모
 

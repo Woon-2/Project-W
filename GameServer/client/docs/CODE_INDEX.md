@@ -885,6 +885,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `GameSettings` | `ui/settingsPanel.hpp` | 게임플레이용 영속 설정 값 구조체(fullscreen/allyDamageVisible/resolutionIndex/monsterDamageOpacity). `Game`이 소유(`settings_`), 로비·인게임·게임플레이가 공유 |
 | `UI::SettingsPanel` | `ui/settingsPanel.hpp/cpp` | 씬 비종속 설정창. `uiManager_.root()` 직속(zOrder 50)에 빌드, `open()/close()/toggle()/isOpen()`로 토글 → 로비/인게임(ESC) 공용. `build(uiManager, panelTex, buttonTex, GameSettings&)`, `refreshPreview()`. 값 편집은 `GameSettings&`로 write-through |
 | `Game` 통합 | `online/onlineGame.cpp` | `enterLobby`: `lobbyUI_.loadTextures/build` + `settingsPanel_.build`. `refreshLobbyUI()`는 씬/세션 상태로 `LobbyUI::ViewState` 스냅샷을 만들어 `lobbyUI_.refresh()`에 위임(+메인메뉴 이탈 시 `settingsPanel_.close()`). `makeLobbyCallbacks()`가 버튼 액션을 `lobbyCreateRoom` 등에 연결. `LobbyScene`/`renderWaitingRoom`/`enterInGame`/`lobbyLeaveRoom`은 컴포넌트 메서드 호출 |
+| 인게임 ESC 토글 + 입력 차단 | `online/onlineGame.cpp` (`processInput`/`receiveWndMsg`) | `processInput`에서 `VK_ESCAPE` 엣지→`settingsPanel_.toggle()`. 열려 있으면 `processInputGame`/Enter·Space 토글 skip + 마우스 델타 클리어(early return)로 인게임 입력 차단. 열림/닫힘 전이(`settingsOpenPrev_`)에 따라 커서 해제·표시↔게임플레이 모드(`cursorCaptureEnabled_`/`cursorShowEnabled_`) 복원. `WM_SETFOCUS`는 설정창 열림 시 커서 복원 생략 |
 
 ### 전투 피드백 UI (Damage Number / Kill Count)
 

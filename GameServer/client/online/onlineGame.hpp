@@ -333,6 +333,8 @@ private:
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
 	bool cursorShowEnabled_ = true;
+	// 인게임 설정창(ESC) 열림 전이 추적. 열림→커서 해제/표시, 닫힘→게임플레이 커서 모드 복원.
+	bool settingsOpenPrev_ = false;
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
