@@ -24,6 +24,13 @@ public class ModelExtractorWindow : EditorWindow
     private List<Matrix4x4> bindposes = null;
     private int[] boneIdxMap = null;
 
+    // LOD 트리/식생 프리팹 대응:
+    // 최상위 LOD(LOD0)에 속한 렌더러는 항상 추출하고(lod0Renderers),
+    // 하위 LOD(LOD1+)에 속한 렌더러는 메시/재질을 건너뛴다(excludedLODRenderers).
+    // 노드(Transform) 자체는 그대로 남겨 NodeCnt/ChildCnt 정합성을 유지한다.
+    private HashSet<Renderer> lod0Renderers = new HashSet<Renderer>();
+    private HashSet<Renderer> excludedLODRenderers = new HashSet<Renderer>();
+
     [MenuItem("Tools/Model Extractor")]
     public static void OpenWindow()
     {
@@ -419,12 +426,16 @@ public class ModelExtractorWindow : EditorWindow
         MeshFilter meshFilter = xform.gameObject.GetComponent<MeshFilter>();
         SkinnedMeshRenderer skinnedMeshRenderer = xform.gameObject.GetComponent<SkinnedMeshRenderer>();
 
+        // LOD 분류 반영: 하위 LOD 렌더러는 추출 대상에서 제외한다.
+        bool meshRendererUsable = IsRendererUsable(meshRenderer);
+        bool skinnedMeshRendererUsable = IsRendererUsable(skinnedMeshRenderer);
+
         Mesh mesh = null;
-        if (meshRenderer && meshFilter && meshRenderer.enabled)
+        if (meshRenderer && meshFilter && meshRendererUsable)
         {
             mesh = meshFilter.sharedMesh;
         }
-        else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
+        else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
             boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
@@ -477,11 +488,11 @@ public class ModelExtractorWindow : EditorWindow
         {
             // MaterialSetSelector가 없다면 기본으로 메시에 적용된 재질들 추출
             Material[] materials = null;
-            if (meshRenderer && meshRenderer.enabled)
+            if (meshRenderer && meshRendererUsable)
             {
                 materials = meshRenderer.sharedMaterials;
             }
-            else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
+            else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
             {
                 materials = skinnedMeshRenderer.sharedMaterials;
             }
@@ -506,6 +517,48 @@ public class ModelExtractorWindow : EditorWindow
 
         ExtractUtil.WriteTailTag(geometryWriter, "Children");
         ExtractUtil.WriteTailTag(geometryWriter, "Node");
+    }
+
+    // LODGroup이 있는 프리팹(나무/식생 등)에서 LOD0 렌더러와 하위 LOD 렌더러를 분류한다.
+    // LOD0은 항상 추출하고, LOD1+ 는 메시/재질을 건너뛰기 위함이다.
+    void CollectLODRenderers()
+    {
+        lod0Renderers.Clear();
+        excludedLODRenderers.Clear();
+
+        var lodGroups = targetObject.GetComponentsInChildren<LODGroup>(true);
+        foreach (var lg in lodGroups)
+        {
+            var lods = lg.GetLODs();
+            if (lods == null || lods.Length == 0) continue;
+
+            // LOD0 렌더러 (강제 포함)
+            foreach (var r in lods[0].renderers)
+            {
+                if (r != null) lod0Renderers.Add(r);
+            }
+
+            // LOD1+ 렌더러 (제외). 단, LOD0에도 참조된 렌더러는 제외하지 않는다.
+            for (int i = 1; i < lods.Length; i++)
+            {
+                foreach (var r in lods[i].renderers)
+                {
+                    if (r != null && !lod0Renderers.Contains(r))
+                        excludedLODRenderers.Add(r);
+                }
+            }
+        }
+    }
+
+    // 렌더러를 추출 대상으로 삼을지 판단한다.
+    // - 하위 LOD(excludedLODRenderers)면 추출하지 않는다.
+    // - LOD0(lod0Renderers)이면 씬뷰 상태로 enabled가 꺼져 있어도 강제 추출한다.
+    // - 그 외(LOD 없는 일반 오브젝트)는 기존 동작대로 enabled를 따른다.
+    bool IsRendererUsable(Renderer r)
+    {
+        if (r == null) return false;
+        if (excludedLODRenderers.Contains(r)) return false;
+        return r.enabled || lod0Renderers.Contains(r);
     }
 
     void ExtractGeometry()
@@ -653,6 +706,7 @@ public class ModelExtractorWindow : EditorWindow
         // (경로가 Key인 것보단 이름이 Key인 것이 SSO에서 유리할 것이다.)
         // (대신, 서로 다른 리소스간 중복된 텍스처 이름이 없어야 할 것.)
         if (targetSkeleton != null) ProcessBones();
+        CollectLODRenderers();
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();
