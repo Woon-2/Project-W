@@ -155,10 +155,11 @@ void Dropdown::setup(std::vector<std::string> items) {
 void Dropdown::onRender(const RenderContext& rc) {
     const auto& r       = resolvedRect_;
     const Texture* wTex = rc.gfx->solidColorTex();
+    const float headerH = headerHeight * rc.uiScale;
 
     // White header background (behind label + toggle button)
     rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-        .world    = makeSubQuadWorld(r.x, r.y, r.width, headerHeight, rc.screenHeight),
+        .world    = makeSubQuadWorld(r.x, r.y, r.width, headerH, rc.screenHeight),
         .pTex     = wTex,
         .pCopySrc = nullptr,
         .colorMul = headerBgColor
@@ -166,9 +167,9 @@ void Dropdown::onRender(const RenderContext& rc) {
 
     // List background strip (behind item buttons)
     if (open_) {
-        float listH = static_cast<float>(items_.size()) * itemHeight;
+        float listH = static_cast<float>(items_.size()) * itemHeight * rc.uiScale;
         rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-            .world    = makeSubQuadWorld(r.x, r.y + headerHeight, r.width, listH,
+            .world    = makeSubQuadWorld(r.x, r.y + headerH, r.width, listH,
                                         rc.screenHeight),
             .pTex     = wTex,
             .pCopySrc = nullptr,

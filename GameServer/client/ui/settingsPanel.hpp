@@ -4,8 +4,18 @@
 // No Korean comments in new files (encoding issue per CLAUDE.md).
 
 #include <string>
+#include <vector>
+#include <functional>
 
 struct Texture;
+
+// A selectable windowed resolution (client area, pixels). The list of choices is
+// built at runtime and filtered to the current monitor (see Game), so options that
+// don't fit the display are never offered.
+struct Resolution {
+    int w = 0;
+    int h = 0;
+};
 
 namespace UI {
 class UIManager;
@@ -17,9 +27,9 @@ class Label;
 // Persistent, gameplay-facing settings edited through SettingsPanel. Owned by the
 // game so the lobby, the in-game HUD and gameplay systems all read the same values.
 struct GameSettings {
-    bool fullscreen           = true;
+    bool fullscreen           = false;  // default windowed -> resolution control is enabled from the start
     bool allyDamageVisible    = true;
-    int  resolutionIndex      = 0;    // 0 = native, 1 = 1280x720, 2 = 1920x1080
+    int  resolutionIndex      = 0;    // index into the runtime windowed-resolution list (0 = smallest/default)
     int  monsterDamageOpacity = 100;  // percent, [0..100]
 };
 
@@ -33,9 +43,12 @@ class SettingsPanel {
 public:
     // Build the widget tree under uiManager.root(). panelTex/buttonTex are optional
     // 9-slice frame textures for the scrim background and the close button (null ->
-    // solid-color fallback). The referenced GameSettings must outlive this panel.
+    // solid-color fallback). `resolutions` is the monitor-filtered windowed-resolution
+    // list the < > stepper iterates over (resolutionIndex indexes into it). The
+    // referenced GameSettings must outlive this panel.
     void build(UIManager& uiManager, const Texture* panelTex, const Texture* buttonTex,
-               GameSettings& settings);
+               GameSettings& settings, const std::vector<Resolution>& resolutions,
+               std::function<void()> onQuitGame = {});
 
     void open();
     void close();
@@ -62,9 +75,11 @@ private:
     Button*    monsterOpacityNextButton_ = nullptr;
     Button*    monsterOpacityFill_ = nullptr;
     Label*     monsterOpacityValueLabel_ = nullptr;
+    Button*    quitGameButton_ = nullptr;
 
     float        monsterOpacityFillMaxWidth_ = 0.f;
-    std::wstring currentResolutionText_;
+    std::vector<Resolution> resolutions_;   // monitor-filtered windowed-resolution choices
+    std::function<void()> onQuitGame_;
     bool         open_ = false;
 };
 

@@ -126,6 +126,7 @@ private:
 	void clearLobbyCharacters();   // 전시 캐릭터 제거 + animSystem 트랙 해제
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
+	void updatePlayerHpHudLayout();
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -144,6 +145,13 @@ private:
 
 	// 로비 버튼 액션을 lobbyUI_에 연결하는 콜백 묶음을 만든다.
 	LobbyUI::Callbacks makeLobbyCallbacks();
+
+	// 설정창에서 바뀐 디스플레이 설정(해상도/전체화면)을 프레임 안전 지점에서 실제 적용한다.
+	// update() 진입부에서 1프레임 지연 호출 — 버튼 콜백 안에서 위젯을 재빌드하면
+	// UIManager의 입력 포인터가 dangling되므로 반드시 콜백 밖에서 적용한다.
+	void applyPendingDisplaySettings();
+	// 창모드/전체화면 전환 + 윈도우/스왑체인/GBuffer/HiZ 재생성 + UIManager 재설정 + 로비/설정 UI 재빌드.
+	void applyDisplaySettings();
 
 	// 로비 mock 액션 (script.js 프로토타입 이식).
 	void lobbyCreateRoom();
@@ -186,6 +194,7 @@ private:
 	void releaseCursor();
 	void hideCursor();
 	void showCursor();
+	void applyCursorPolicy();
 
 	void importNode(std::ifstream& ifs);
 
@@ -276,6 +285,13 @@ private:
 	GameSettings         settings_{};
 	LobbyUI              lobbyUI_{};
 	UI::SettingsPanel    settingsPanel_{};
+	// 현재 화면에 적용된 디스플레이 설정. settings_와 다르면 applyPendingDisplaySettings가 적용.
+	int                  appliedResolutionIndex_ = 0;
+	bool                 appliedFullscreen_      = false;  // GameSettings::fullscreen 기본값과 일치
+	// 현재 모니터에 맞게 필터된 창모드 해상도 목록. settings_.resolutionIndex가 이 목록을 가리킨다.
+	std::vector<Resolution> availableResolutions_{};
+	// 현재 모니터 크기로 availableResolutions_를 다시 구성한다(후보 중 모니터에 들어가는 것만).
+	void rebuildAvailableResolutions();
 
 	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
 	// their ground placement is now data-driven (skill PlayVFX groundSnap +
@@ -346,6 +362,8 @@ private:
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
 	bool cursorShowEnabled_ = true;
+	// 인게임 설정창(ESC) 열림 전이 추적. 열림→커서 해제/표시, 닫힘→게임플레이 커서 모드 복원.
+	bool settingsOpenPrev_ = false;
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};

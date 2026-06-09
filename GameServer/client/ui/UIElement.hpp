@@ -15,11 +15,13 @@ struct UpdateContext {
     FontHandle* defaultFont = nullptr;
     float screenWidth = 1024.f;
     float screenHeight = 768.f;
+    float uiScale = 1.f;
 };
 
 struct RenderContext {
     GFX* gfx = nullptr;
     float screenHeight = 768.f;
+    float uiScale = 1.f;
 };
 
 // Emits 9 textured quads (a 9-slice) covering `rect`. Corners keep a fixed
@@ -56,7 +58,7 @@ public:
     UIElement* findChild(std::string_view name) const;
 
     // --- Layout ---
-    void layout(const Rect& parentRect);
+    void layout(const Rect& parentRect, float pixelScale = 1.f);
     const Rect& resolvedRect() const { return resolvedRect_; }
 
     // --- Update / Render ---

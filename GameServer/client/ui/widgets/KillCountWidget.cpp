@@ -57,9 +57,9 @@ void KillCountWidget::onRender(const RenderContext& rc) {
         float bounce = 0.f;
         const float bAge = popAge_ - tuning_.skullDelay;
         if (bAge >= 0.f && bAge < tuning_.popDuration) {
-            bounce = tuning_.skullBouncePx * std::sin((bAge / tuning_.popDuration) * kPi);
+            bounce = tuning_.skullBouncePx * rc.uiScale * std::sin((bAge / tuning_.popDuration) * kPi);
         }
-        const float sz  = tuning_.skullSizePx;
+        const float sz  = tuning_.skullSizePx * rc.uiScale;
         const float scx = r.x + sz * 0.5f;
         const float scy = cy - bounce;
         const mu::Vec3 scl{ sz * 0.5f, sz * 0.5f, 1.f };
@@ -73,16 +73,16 @@ void KillCountWidget::onRender(const RenderContext& rc) {
 
     // Accumulated kill count (left-aligned, right of the skull).
     const float numH = tuning_.glyphHeight * pop;
-    const float numX = r.x + tuning_.skullSizePx + tuning_.gapPx;
-    DigitAtlas::emitNumber(gfx, digitAtlas_, numX, cy, numH, screenH,
+    const float numX = r.x + (tuning_.skullSizePx + tuning_.gapPx) * rc.uiScale;
+    DigitAtlas::emitNumber(gfx, digitAtlas_, numX, cy, numH * rc.uiScale, screenH,
                            killCount_, numColor, DigitAtlas::Align::Left);
 
     // Streak count: small and gold, shown briefly after each kill.
     if (streakCount_ >= tuning_.streakShowMin && streakTimer_ < tuning_.streakShowTime) {
         const float a = std::clamp((1.f - streakTimer_ / tuning_.streakShowTime) * 1.5f, 0.f, 1.f);
         const XMFLOAT4 streakColor{ 1.0f, 0.75f, 0.1f, a };
-        const float sy = cy + tuning_.glyphHeight * 0.6f + tuning_.streakGlyphH * 0.6f;
-        DigitAtlas::emitNumber(gfx, digitAtlas_, numX, sy, tuning_.streakGlyphH, screenH,
+        const float sy = cy + (tuning_.glyphHeight * 0.6f + tuning_.streakGlyphH * 0.6f) * rc.uiScale;
+        DigitAtlas::emitNumber(gfx, digitAtlas_, numX, sy, tuning_.streakGlyphH * rc.uiScale, screenH,
                                streakCount_, streakColor, DigitAtlas::Align::Left);
     }
 }

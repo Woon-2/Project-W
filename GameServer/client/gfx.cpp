@@ -1413,6 +1413,91 @@ void GFX::recordTerrainResourceLoad(
 	if (wait) waitOnFence("LoadFence");
 }
 
+void GFX::resize(u32t width, u32t height) {
+	if (!swapChain_ || width == 0u || height == 0u) {
+		return;
+	}
+
+	// 1. GPU가 모든 인플라이트 프레임 작업을 끝낼 때까지 대기(소멸자와 동일한 idle 패턴).
+	//    이후 해상도 의존 리소스를 안전하게 해제/재생성할 수 있다.
+	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
+		waitOnFence("FrameFence"s + std::to_string(i));
+	}
+	waitOnFence("LoadFence");
+
+	// 2. 해상도 의존 리소스 해제 + 디스크립터 풀 슬롯 반납.
+	//    (포트레이트 RT는 셀 고정 크기라 해상도와 무관 → 건드리지 않는다.)
+	SharedResources::GBuffer::eraseGBuffer(rtvPool_, dsvPool_, srvTexPool_);
+	SharedResources::HiZMap::eraseHiZMaps(srvTexPool_, uavPool_, dsvPool_);
+
+	for (int idx : allocatedRtvIndices_) { rtvPool_.free(idx); }
+	allocatedRtvIndices_.clear();
+	backBufferRtvs_.clear();
+
+	for (int idx : allocatedDsvIndices_) { dsvPool_.free(idx); }
+	allocatedDsvIndices_.clear();
+	depthBufferDsvs_.clear();
+
+	// ResizeBuffers 전 백버퍼 리소스 참조를 모두 해제해야 한다.
+	backBuffers_.clear();
+	depthBuffers_.clear();
+
+	// 3. 스왑체인 백버퍼 리사이즈(개수/포맷/플래그는 생성 시와 동일).
+	DISPLAY_ERROR_DX_HR(
+		swapChain_->ResizeBuffers(
+			static_cast<UINT>(3), width, height,
+			DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+		),
+		true
+	);
+	scd_.Width  = width;
+	scd_.Height = height;
+
+	// 4. 백버퍼 + RTV 재생성 (createSwapChain과 동일한 절차).
+	backBuffers_.resize(3u);
+	for (int i = 0; i < 3; ++i) {
+		DISPLAY_ERROR_DX_HR(
+			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
+			true
+		);
+		setD3DName(backBuffers_[i].Get(), "BackBuffer"s + std::to_string(i));
+	}
+	for (int i = 0; i < 3; ++i) {
+		auto idx = allocatedRtvIndices_.emplace_back(rtvPool_.alloc());
+		auto cpuHandle = backBufferRtvs_.emplace_back(rtvPool_.cpuHandle(idx));
+		DISPLAY_ERROR_DX_VOID(
+			device_->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, cpuHandle),
+			true
+		);
+	}
+
+	// 5. 깊이 버퍼 + DSV 재생성. createDepthBuffer는 gClientRect를 읽으므로
+	//    호출 전에 gClientRect가 새 해상도로 갱신돼 있어야 한다(applyClientResolution).
+	for (int i = 0; i < 3; ++i) {
+		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D32_FLOAT,
+			DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
+		);
+		setD3DName(depthBuffer.Get(), "DepthBuffer"s + std::to_string(i));
+		depthBuffers_.push_back(std::move(depthBuffer));
+	}
+	for (int i = 0; i < 3; ++i) {
+		auto idx = allocatedDsvIndices_.emplace_back(dsvPool_.alloc());
+		auto cpuHandle = depthBufferDsvs_.emplace_back(dsvPool_.cpuHandle(idx));
+		DISPLAY_ERROR_DX_VOID(
+			device_->CreateDepthStencilView(depthBuffers_[i].Get(), nullptr, cpuHandle),
+			true
+		);
+	}
+
+	// 6. GBuffer + HiZ맵을 새 해상도로 재생성 (deferred path / occlusion culling).
+	SharedResources::GBuffer::addGBuffer(
+		device_.Get(), width, height, backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
+	);
+	SharedResources::HiZMap::addHiZMaps(
+		device_.Get(), width, height, backBuffers_.size(), srvTexPool_, uavPool_, dsvPool_
+	);
+}
+
 void GFX::render() {
 	// 예외 검사
 	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] GFX::render: 활성화된 그래픽 어댑터가 없습니다. "

@@ -2670,8 +2670,8 @@ void Game::update(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.monster->hp()) /
 					static_cast<float>(entry.monster->maxHp())

@@ -17,11 +17,23 @@ using Build::addLabel;
 using Build::addButton;
 
 void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
-                          const Texture* buttonTex, GameSettings& settings) {
+                          const Texture* buttonTex, GameSettings& settings,
+                          const std::vector<Resolution>& resolutions,
+                          std::function<void()> onQuitGame) {
     settings_ = &settings;
+    resolutions_ = resolutions;
+    onQuitGame_ = std::move(onQuitGame);
 
-    const float screenW = uiManager.screenWidth();
-    const float screenH = uiManager.screenHeight();
+    // Idempotent: on a rebuild (e.g. resolution change) drop the previous subtree.
+    // open_ resets to false; the caller re-opens if the panel should stay visible.
+    if (root_) {
+        uiManager.root()->removeChild(root_);
+        root_ = nullptr;
+        open_ = false;
+    }
+
+    const float screenW = uiManager.layoutWidth();
+    const float screenH = uiManager.layoutHeight();
 
     // Full-screen overlay root. Hidden until open(); high zOrder so it sits above
     // the lobby / in-game content (siblings under uiManager.root()).
@@ -82,9 +94,6 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     const float controlX     = rowX + nameW;
     const float controlW     = rowW - nameW;
 
-    currentResolutionText_ =
-        std::to_wstring(static_cast<int>(screenW)) + L" × " + std::to_wstring(static_cast<int>(screenH));
-
     addLabel(scrim, L"설정", titleX, settingsY - 58.f, 42.f, rowW, 58.f,
         settingsInk, TextHAlign::Leading, 2);
 
@@ -142,7 +151,8 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         refreshPreview();
     });
     resolutionNextButton_ = makeArrowButton(controlX + controlW - 62.f, rowY, L">", [this]() {
-        settings_->resolutionIndex = std::min(2, settings_->resolutionIndex + 1);
+        const int lastIdx = resolutions_.empty() ? 0 : static_cast<int>(resolutions_.size()) - 1;
+        settings_->resolutionIndex = std::min(lastIdx, settings_->resolutionIndex + 1);
         refreshPreview();
     });
     resolutionValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
@@ -176,6 +186,19 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         controlX + 78.f, rowY + rowH - 12.f, monsterOpacityFillMaxWidth_, 5.f, settingsAccent, 3);
     monsterOpacityValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
         controlW - 144.f, rowH * 0.60f, settingsInk, TextHAlign::Center, 3);
+
+    groupY = rowY + rowH + groupGap;
+    makeGroupTitle(L"게임", groupY);
+    rowY = groupY + 56.f;
+    makeSettingRow(L"게임 종료", rowY);
+    quitGameButton_ = addButton(scrim, L"종료하기",
+        controlX + controlW - 190.f, rowY + 7.f, 166.f, rowH - 14.f,
+        settingsInactive, settingsAccent, settingsAccent, 17.f,
+        [this]() {
+            if (onQuitGame_) onQuitGame_();
+        },
+        settingsButtonText);
+    quitGameButton_->zOrder = 22;
 
     // Close button (bottom-right). Sibling of the scrim so it draws on top.
     const XMFLOAT4 ink = { 0.090f, 0.125f, 0.200f, 1.f };
@@ -238,16 +261,20 @@ void SettingsPanel::refreshPreview() {
     paintButton(allyDamageOffButton_, !settings_->allyDamageVisible);
     paintButton(allyDamageOnButton_,   settings_->allyDamageVisible);
 
+    // 해상도는 런타임 목록(resolutions_) 위를 < > 로 이동. 목록은 모니터에 맞게 필터됨.
+    const int lastIdx = resolutions_.empty() ? 0 : static_cast<int>(resolutions_.size()) - 1;
+    if (settings_->resolutionIndex < 0)        settings_->resolutionIndex = 0;
+    if (settings_->resolutionIndex > lastIdx)  settings_->resolutionIndex = lastIdx;
+
     const bool resolutionEnabled = !settings_->fullscreen;
     paintButton(resolutionPrevButton_, false, resolutionEnabled && settings_->resolutionIndex > 0);
-    paintButton(resolutionNextButton_, false, resolutionEnabled && settings_->resolutionIndex < 2);
+    paintButton(resolutionNextButton_, false, resolutionEnabled && settings_->resolutionIndex < lastIdx);
 
     if (resolutionValueLabel_) {
-        std::wstring resolutionText = currentResolutionText_;
-        if (settings_->resolutionIndex == 1) {
-            resolutionText = L"1280 × 720";
-        } else if (settings_->resolutionIndex == 2) {
-            resolutionText = L"1920 × 1080";
+        std::wstring resolutionText = L"--";
+        if (!resolutions_.empty()) {
+            const Resolution& r = resolutions_[settings_->resolutionIndex];
+            resolutionText = std::to_wstring(r.w) + L" × " + std::to_wstring(r.h);
         }
         resolutionValueLabel_->setText(resolutionText);
         if (resolutionEnabled) {
@@ -259,6 +286,7 @@ void SettingsPanel::refreshPreview() {
 
     paintButton(monsterOpacityPrevButton_, false, settings_->monsterDamageOpacity > 0);
     paintButton(monsterOpacityNextButton_, false, settings_->monsterDamageOpacity < 100);
+    paintButton(quitGameButton_, false, static_cast<bool>(onQuitGame_));
 
     if (monsterOpacityValueLabel_) {
         monsterOpacityValueLabel_->setText(std::to_wstring(settings_->monsterDamageOpacity) + L"%");

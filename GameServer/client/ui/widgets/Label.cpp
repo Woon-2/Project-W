@@ -41,7 +41,8 @@ void Label::onUpdate(const UpdateContext& ctx) {
     FontHandle* font = nullptr;
 
     if (autoSize_) {
-        float lo = autoSizeMin_, hi = autoSizeMax_;
+        float lo = autoSizeMin_ * ctx.uiScale;
+        float hi = autoSizeMax_ * ctx.uiScale;
         for (int i = 0; i < 8; ++i) {
             float mid = (lo + hi) * 0.5f;
             FontHandle tryFont = ctx.gfx->createFont(mid);
@@ -61,9 +62,10 @@ void Label::onUpdate(const UpdateContext& ctx) {
         }
         font = &ownedFont_;
     } else if (fontSize_ > 0.f) {
-        if (fontSize_ != prevFontSize_) {
-            ownedFont_    = ctx.gfx->createFont(fontSize_);
-            prevFontSize_ = fontSize_;
+        const float scaledFontSize = fontSize_ * ctx.uiScale;
+        if (scaledFontSize != prevFontSize_) {
+            ownedFont_    = ctx.gfx->createFont(scaledFontSize);
+            prevFontSize_ = scaledFontSize;
         }
         font = &ownedFont_;
     } else {

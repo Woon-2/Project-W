@@ -12,6 +12,11 @@
 
 extern HWND ghWnd;
 extern RECT gClientRect;
+// main.cpp: 창모드/전체화면(borderless)을 전환하며 윈도우·전역 RECT를 갱신하고
+// 결과 클라이언트 크기를 out*에 돌려준다(런타임 디스플레이 모드 변경).
+extern void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outClientW, int* outClientH);
+// main.cpp: 현재 윈도우가 걸친 모니터의 전체 해상도를 돌려준다.
+extern void getCurrentMonitorSize(int* outW, int* outH);
 
 namespace Online {
 
@@ -73,6 +78,11 @@ static constexpr float   kPiercingMultiLifetime     = 0.42f;
 static constexpr float   kPiercingMultiHalfWidth    = 2.5f;
 static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
+static constexpr float   kPlayerHpUiX               = 20.f;
+static constexpr float   kPlayerHpUiY               = 20.f;
+static constexpr float   kPlayerHpHeartSize         = 32.f;
+static constexpr float   kPlayerHpHeartGap          = 8.f;
+static constexpr float   kPlayerHpBarHeight         = 18.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -235,12 +245,6 @@ void Game::setupStage() {
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
-	constexpr float kPlayerHpUiX = 20.f;
-	constexpr float kPlayerHpUiY = 20.f;
-	constexpr float kPlayerHpHeartSize = 32.f;
-	constexpr float kPlayerHpHeartGap = 8.f;
-	constexpr float kPlayerHpBarHeight = 18.f;
-
 	playerHpHeart_ = static_cast<UI::Image*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Image>())
 	);
@@ -249,8 +253,6 @@ void Game::setupStage() {
 	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
 	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
 	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->offsetX = UI::DimValue::px(kPlayerHpUiX);
-	playerHpHeart_->offsetY = UI::DimValue::px(kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f);
 	playerHpHeart_->texture = assetManager_.playerHpHeart();
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
@@ -261,8 +263,6 @@ void Game::setupStage() {
 	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
 	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpBar_->offsetX = UI::DimValue::px(kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap);
-	playerHpBar_->offsetY = UI::DimValue::px(kPlayerHpUiY);
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
@@ -275,14 +275,13 @@ void Game::setupStage() {
 	playerHpText_->pivot   = UI::Pivots::TopLeft;
 	playerHpText_->width   = UI::DimValue::px(300.f);
 	playerHpText_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpText_->offsetX = playerHpBar_->offsetX;
-	playerHpText_->offsetY = playerHpBar_->offsetY;
 	playerHpText_->zOrder  = playerHpBar_->zOrder + 1;
 	playerHpText_->setTextHAlign(UI::TextHAlign::Center);
 	playerHpText_->setTextVAlign(UI::TextVAlign::Center);
 	playerHpText_->setFontSize(14.0f);
 	playerHpText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	playerHpText_->setText(L"100 / 100");
+	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
 	// be loading (filled in-place later) — DigitAtlas skips drawing until ready.
@@ -332,6 +331,23 @@ void Game::setupStage() {
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
 	gfx_.setMaxRenderObjectId(1000u);
+}
+
+void Game::updatePlayerHpHudLayout() {
+	if (!playerHpHeart_ || !playerHpBar_) return;
+
+	const float heartY = kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f;
+	const float barX = kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap;
+
+	playerHpHeart_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+	playerHpHeart_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(heartY));
+	playerHpBar_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(barX));
+	playerHpBar_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY));
+
+	if (playerHpText_) {
+		playerHpText_->offsetX = playerHpBar_->offsetX;
+		playerHpText_->offsetY = playerHpBar_->offsetY;
+	}
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -2439,6 +2455,9 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// 설정창에서 바뀐 디스플레이 설정(해상도/전체화면)을 씬 갱신/렌더 이전(프레임 안전 지점)에 적용한다.
+	applyPendingDisplaySettings();
+
 	switch (scene_) {
 	case Scene::Lobby:  LobbyScene(deltaTime);  break;
 	case Scene::InGame: InGameScene(deltaTime); break;
@@ -2735,6 +2754,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// HP 바 위치 및 값 갱신
 	{
 		constexpr float kBarHalfWidth = 40.f;
+		updatePlayerHpHudLayout();
 
 		if (player_) {
 			const int playerHp = player_->hp();
@@ -2765,8 +2785,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.player->hp()) /
 					static_cast<float>(entry.player->maxHp())
@@ -2797,8 +2817,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.goblin->hp()) /
 					static_cast<float>(entry.goblin->maxHp())
@@ -2828,8 +2848,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			entry.hpBar->visible = onScreen;
 			if (onScreen) {
-				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
-				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.obj->hp()) /
 					static_cast<float>(entry.obj->maxHp())
@@ -3037,7 +3057,7 @@ void Game::renderInGame() {
 
 	// Floating damage numbers: drawn just before the HUD so they share the UI pass
 	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
-	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight());
+	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
 
 	uiManager_.render(gfx_);
 
@@ -3077,11 +3097,16 @@ void Game::enterLobby() {
 	// (build가 이 텍스처를 위젯에 연결하므로 빌드 전에 로드해야 한다.)
 	lobbyUI_.loadTextures(gfx_);
 	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
+	// 현재 모니터에 맞는 창모드 해상도 목록 구성(설정창 빌드 전에 준비).
+	rebuildAvailableResolutions();
 	// 설정창은 씬 비종속 재사용 컴포넌트. 로비/인게임 어디서나 열 수 있도록
 	// uiManager_.root() 직속에 빌드한다(로비 9-slice 텍스처 공유).
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(),
-		lobbyUI_.secondaryButtonTexture(), settings_);
+		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_,
+		[]() { PostQuitMessage(0); });
 	refreshLobbyUI();
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
 	startInGameAssetLoad();
@@ -3262,6 +3287,75 @@ LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	cb.onOpenSettings = [this]() { settingsPanel_.open(); };
 	cb.onQuit         = []() { PostQuitMessage(0); };
 	return cb;
+}
+
+void Game::applyPendingDisplaySettings() {
+	if (settings_.resolutionIndex == appliedResolutionIndex_
+		&& settings_.fullscreen == appliedFullscreen_) {
+		return;
+	}
+
+	applyDisplaySettings();
+
+	appliedResolutionIndex_ = settings_.resolutionIndex;
+	appliedFullscreen_      = settings_.fullscreen;
+}
+
+void Game::rebuildAvailableResolutions() {
+	// 후보 창모드 해상도(오름차순). 현재 모니터에 들어가는 것만 노출한다
+	// → FHD 모니터에선 2560×1440이 자동으로 숨겨지고, 더 큰 모니터에선 자동 노출된다.
+	static constexpr Resolution kCandidates[] = {
+		{ 1024, 768 }, { 1280, 720 }, { 1920, 1080 }, { 2560, 1440 }
+	};
+
+	int monW = 0, monH = 0;
+	getCurrentMonitorSize(&monW, &monH);
+
+	availableResolutions_.clear();
+	for (const auto& c : kCandidates) {
+		if (c.w <= monW && c.h <= monH) {
+			availableResolutions_.push_back(c);
+		}
+	}
+	// 안전장치: 모니터 정보를 못 얻었거나 모든 후보가 잘린 경우 최소 1개는 보장.
+	if (availableResolutions_.empty()) {
+		availableResolutions_.push_back(Resolution{ 1024, 768 });
+	}
+}
+
+void Game::applyDisplaySettings() {
+	// 현재 모니터 기준으로 창모드 해상도 목록을 갱신하고, 인덱스를 유효 범위로 클램프.
+	rebuildAvailableResolutions();
+	const int lastIdx = static_cast<int>(availableResolutions_.size()) - 1;
+	settings_.resolutionIndex = std::clamp(settings_.resolutionIndex, 0, lastIdx);
+
+	// 창모드 목표 해상도(전체화면이면 모니터 해상도를 쓰므로 무시된다).
+	const int windowedW = availableResolutions_[settings_.resolutionIndex].w;
+	const int windowedH = availableResolutions_[settings_.resolutionIndex].h;
+
+	// 1. UIManager 입력 포인터 무효화 — 곧 위젯 트리를 재빌드하므로 dangling 방지.
+	uiManager_.resetInteractionState();
+
+	// 2. 창모드/전체화면(borderless) 전환 + 윈도우/전역 RECT 갱신. 결과 클라이언트 크기를 받는다.
+	//    (gClientRect는 GFX 뷰포트/깊이버퍼가 읽는다.)
+	int clientW = windowedW, clientH = windowedH;
+	applyDisplayMode(settings_.fullscreen, windowedW, windowedH, &clientW, &clientH);
+
+	// 3. 스왑체인 백버퍼/깊이/GBuffer/HiZ 재생성 (GPU idle 후).
+	gfx_.resize(static_cast<u32t>(clientW), static_cast<u32t>(clientH));
+
+	// 4. UI 화면 크기 갱신 + 픽셀 기반 UI(로비/설정창) 재빌드.
+	//    (HUD/데미지 넘버는 앵커·월드 좌표 기반이라 setScreenSize + 매 프레임 worldToScreen로 추종.)
+	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
+	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
+	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(), lobbyUI_.secondaryButtonTexture(),
+		settings_, availableResolutions_, []() { PostQuitMessage(0); });
+
+	// 5. 로비 위젯 상태 복원 + 설정창 다시 열기(사용자가 설정창에서 변경 중이므로 유지).
+	refreshLobbyUI();
+	settingsPanel_.open();
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 }
 
 void Game::LobbyScene(Milliseconds deltaTime) {
@@ -3463,6 +3557,8 @@ void Game::enterInGame() {
 
 	setupStage();
 	scene_ = Scene::InGame;
+	settingsOpenPrev_ = settingsPanel_.isOpen();
+	applyCursorPolicy();
 
 	// 플레이어/오브젝트 생성은 서버의 S_Enter 패킷이 담당한다.
 	// (패킷은 InGameScene의 SleepEx(alertable)에서 처리되므로, 씬 전환 후 첫 프레임부터 수신된다.)
@@ -3665,24 +3761,15 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	// Alt+Tab 등으로 윈도우가 포커스를 잃었다가 되찾은 경우,
 	// 커서와 관련된 플래그들을 읽어 커서 캡처, 커서 숨기기 등을 다시 수행한다.
 	case WM_SETFOCUS:
-		if (cursorCaptureEnabled_) {
-			captureCursor();
-		}
-		if (!cursorShowEnabled_) {
-			hideCursor();
-		}
+		applyCursorPolicy();
 		break;
 
 	// Alt+Tab 등으로 윈도우가 포커스를 잃은 경우
-	// 커서와 관련된 플래그들을 읽어 커서 캡처 해제, 커서 보이기 등을 수행한다.
+	// 커서 캡처 해제, 커서 보이기 등을 수행한다.
 	// 다른 윈도우로 전환되었는데 커서가 보이지 않거나 안 움직여지면 곤란할 것이다.
 	case WM_KILLFOCUS:
-		if (cursorCaptureEnabled_) {
-			releaseCursor();
-		}
-		if (cursorShowEnabled_) {
-			showCursor();
-		}
+		releaseCursor();
+		showCursor();
 		break;
 
 	case WM_SIZE:
@@ -3736,30 +3823,28 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
+	// ESC: 인게임 설정창 토글(로비의 "설정" 버튼과 동일한 패널을 재사용).
+	if ( (keyboardStateCurr_[VK_ESCAPE] & 0x80) && !(keyboardStatePrev_[VK_ESCAPE] & 0x80) ) {
+		settingsPanel_.toggle();
+	}
+
+	// 설정창 열림/닫힘 전이에 맞춰 커서 모드를 전환한다.
+	// 전이 기반이라 ESC 토글이든 패널의 "닫기" 버튼이든 동일하게 처리된다.
+	const bool settingsOpen = settingsPanel_.isOpen();
+	if (settingsOpen != settingsOpenPrev_) {
+		applyCursorPolicy();
+		settingsOpenPrev_ = settingsOpen;
+	}
+
+	// 설정창이 열려 있는 동안에는 인게임 입력을 차단한다(카메라/이동/공격/스킬/커서 토글).
+	// 누적된 마우스 델타도 비워 닫은 직후 카메라가 튀지 않게 한다.
+	if (settingsOpen) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	processInputGame(deltaTime);
-
-	// 로비/게임 공통 입력 처리
-	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
-		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
-		if (cursorCaptureEnabled_) {
-			captureCursor();
-		}
-		else {
-			releaseCursor();
-		}
-	}
-
-	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
-		cursorShowEnabled_ = !cursorShowEnabled_;
-		if (cursorShowEnabled_) {
-			showCursor();
-		}
-		else {
-			hideCursor();
-		}
-	}
 }
 
 void Game::processInputGame(Milliseconds deltaTime) {
@@ -4083,6 +4168,25 @@ void Game::showCursor() {
 	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
 	// 반복 호출해 정확히 숨기거나 표시해야 한다.
 	while (ShowCursor(true) < 0) {}
+}
+
+void Game::applyCursorPolicy() {
+	if (GetForegroundWindow() != ghWnd) {
+		return;
+	}
+
+	// 전체화면/창모드와 관계없이 게임 창 안으로 커서를 묶는다.
+	// 단, 로비와 설정창에서는 포인터를 보여 UI를 클릭할 수 있게 한다.
+	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
+	cursorCaptureEnabled_ = true;
+	cursorShowEnabled_ = showCursorNow;
+
+	captureCursor();
+	if (showCursorNow) {
+		showCursor();
+	} else {
+		hideCursor();
+	}
 }
 
 }	// namespace Online

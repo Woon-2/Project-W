@@ -10,6 +10,9 @@ void emitNineSlice(const RenderContext& rc, const Rect& rect, const Texture* tex
                    const XMFLOAT4& colorMul) {
     if (!tex) return;
 
+    cornerX *= rc.uiScale;
+    cornerY *= rc.uiScale;
+
     // Clamp so opposite corners never overlap, then snap edges to whole pixels
     // (shared rounded edges keep adjacent slices seamless).
     cornerX = std::min(cornerX, rect.width  * 0.5f);
@@ -80,15 +83,15 @@ UIElement* UIElement::findChild(std::string_view childName) const {
     return nullptr;
 }
 
-void UIElement::layout(const Rect& parentRect) {
+void UIElement::layout(const Rect& parentRect, float pixelScale) {
     float refX = parentRect.x + anchor.x * parentRect.width;
     float refY = parentRect.y + anchor.y * parentRect.height;
 
-    float w = width.resolve(parentRect.width);
-    float h = height.resolve(parentRect.height);
+    float w = width.resolve(parentRect.width, pixelScale);
+    float h = height.resolve(parentRect.height, pixelScale);
 
-    float ox = offsetX.resolve(parentRect.width);
-    float oy = offsetY.resolve(parentRect.height);
+    float ox = offsetX.resolve(parentRect.width, pixelScale);
+    float oy = offsetY.resolve(parentRect.height, pixelScale);
 
     resolvedRect_.x = refX + ox - pivot.x * w;
     resolvedRect_.y = refY + oy - pivot.y * h;
@@ -96,7 +99,7 @@ void UIElement::layout(const Rect& parentRect) {
     resolvedRect_.height = h;
 
     for (auto& child : children_) {
-        child->layout(resolvedRect_);
+        child->layout(resolvedRect_, pixelScale);
     }
 }
 

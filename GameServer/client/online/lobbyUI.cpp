@@ -71,8 +71,15 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 
     auto* root = uiManager.root();
 
-    const float screenW = uiManager.screenWidth();
-    const float screenH = uiManager.screenHeight();
+    // Idempotent: on a rebuild (e.g. resolution change) drop the previous widget
+    // subtree first. All member pointers below are reassigned during this build.
+    if (lobbyRoot_) {
+        root->removeChild(lobbyRoot_);
+        lobbyRoot_ = nullptr;
+    }
+
+    const float screenW = uiManager.layoutWidth();
+    const float screenH = uiManager.layoutHeight();
     const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
     const float mainPanelH = 500.f;
     // The waiting room is a wide squad-stage layout over the 3D map.
@@ -396,16 +403,18 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 void LobbyUI::buildLoadingScreen(UI::UIManager& uiManager) {
     if (!lobbyRoot_) return;
 
-    const float screenW = uiManager.screenWidth();
-    const float screenH = uiManager.screenHeight();
+    const float screenX = uiManager.screenToLayoutX(0.f);
+    const float screenY = uiManager.screenToLayoutY(0.f);
+    const float screenW = uiManager.screenWidth() / uiManager.uiScale();
+    const float screenH = uiManager.screenHeight() / uiManager.uiScale();
     constexpr int kZ = 100;  // above all lobby UI
 
     loadingRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
     loadingRoot_->name    = "loadingRoot";
     loadingRoot_->anchor  = UI::Anchors::TopLeft;
     loadingRoot_->pivot   = UI::Pivots::TopLeft;
-    loadingRoot_->offsetX = UI::DimValue::px(0.f);
-    loadingRoot_->offsetY = UI::DimValue::px(0.f);
+    loadingRoot_->offsetX = UI::DimValue::px(screenX);
+    loadingRoot_->offsetY = UI::DimValue::px(screenY);
     loadingRoot_->width   = UI::DimValue::px(screenW);
     loadingRoot_->height  = UI::DimValue::px(screenH);
     loadingRoot_->zOrder  = kZ;
