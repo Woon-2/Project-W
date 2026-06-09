@@ -2406,11 +2406,15 @@ void Game::InGameScene(Milliseconds deltaTime) {
 					? prevHp - static_cast<const EvHit*>(pEv)->hp
 					: prevHp;   // Death: remaining HP is the killing-blow damage
 				if (dmg > 0) {
-					const DamageKind kind = (player_ && player_->getId() == routeId)
-						? DamageKind::PlayerHit : DamageKind::EnemyHit;
+					const uint16 targetId = static_cast<uint16>(routeId);
+					DamageKind kind = DamageKind::EnemyHit;
+					if (player_ && player_->getId() == routeId)
+						kind = DamageKind::PlayerHit;
+					else if (strongholdHpBars_.find(targetId) != strongholdHpBars_.end())
+						kind = DamageKind::StrongholdHit;
 					const mu::Vec3 anchor = obj->renderState().pos
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
-					damageNumberSystem_.spawn(anchor, dmg, kind, static_cast<uint16>(routeId));
+					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
 				}
 				// Kill count: a goblin death not already counted (guards duplicate EvDeath).
 				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()

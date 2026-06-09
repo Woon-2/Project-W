@@ -167,9 +167,19 @@ void DamageNumberSystem::render(GFX& gfx, const Camera& cam, float screenW, floa
         const float glyphH = baseSize * punch * endScale;
 
         // White-base glyphs tinted per kind; alpha carries the fade.
-        XMFLOAT4 color = (dn.kind == DamageKind::PlayerHit)
-            ? XMFLOAT4{ 1.0f, 0.30f, 0.25f, alpha }    // red: incoming damage
-            : XMFLOAT4{ 1.0f, 0.92f, 0.55f, alpha };   // warm white: our hits
+        XMFLOAT4 color{};
+        switch (dn.kind) {
+        case DamageKind::PlayerHit:
+            color = XMFLOAT4{ 1.0f, 0.30f, 0.25f, alpha };   // red: incoming damage
+            break;
+        case DamageKind::StrongholdHit:
+            color = XMFLOAT4{ 1.0f, 0.74f, 0.18f, alpha };   // gold: structure damage
+            break;
+        case DamageKind::EnemyHit:
+        default:
+            color = XMFLOAT4{ 0.35f, 0.72f, 1.0f, alpha };   // blue: monster damage
+            break;
+        }
 
         // Top-left-origin pixels; smaller Y is higher, so subtract the float-up.
         // jitter scales with perspective so near (big) numbers spread wider.

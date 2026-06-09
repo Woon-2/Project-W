@@ -15,8 +15,9 @@ class Camera;
 // game thread inside the event-dispatch loop, so no locking is required.
 
 enum class DamageKind {
-    EnemyHit,    // damage we deal to monsters  (warm white)
-    PlayerHit,   // damage the local player takes (red)
+    EnemyHit,      // damage we deal to monsters (blue)
+    PlayerHit,     // damage the local player takes (red)
+    StrongholdHit, // damage we deal to strongholds (gold)
 };
 
 // All presentation values live here as a single tunable bundle. These are the

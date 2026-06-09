@@ -46,7 +46,7 @@ DigitAtlas (공유 헬퍼)  ──┬─▶ DamageNumberSystem (월드앵커 떠
 - `onlineGame.cpp` 이벤트 디스패치 루프에서 `obj->eventBus()->receive()` **직전**에 `prevHp = obj->hp()` 캡처(핸들러가 hp/dead를 바꾸기 전).
   - `EvHit`: `dmg = prevHp - EvHit::hp`.
   - `EvDeath`: `dmg = prevHp`(잔여 = 막타 데미지). 대상이 고블린이고 `!isDead()`면 `KillCountWidget::addKill()`.
-- 대상이 로컬 플레이어면 `PlayerHit`(빨강), 아니면 `EnemyHit`(웜 화이트).
+- 대상이 로컬 플레이어면 `PlayerHit`(빨강), 거점이면 `StrongholdHit`(금색), 그 외 몬스터는 `EnemyHit`(파랑).
 
 ## 동시성
 
@@ -109,5 +109,4 @@ DigitAtlas (공유 헬퍼)  ──┬─▶ DamageNumberSystem (월드앵커 떠
 
 - **크리티컬 색/연출**: 패킷에 crit 플래그 없음 → v1은 단색 + 대형값 강조만. 정식 crit은 서버 플래그(`SHitPacket`/`SSkillHitPacket`) 추가 후.
 - **streak `xN` 표기**: 현재 아틀라스는 0~9뿐이라 streak는 숫자만 금색 표시. `x` 글리프 추가(아틀라스 12칸 확장) 시 `xN` 표기.
-- **거점(Stronghold) 데미지 숫자**: `applyHit` early-return 경로라 현재 제외. 필요 시 별도 훅.
 - **standalone 모드 미러링**: 본 작업은 온라인 우선. `standalone/game`에도 동일 훅 적용 가능.
