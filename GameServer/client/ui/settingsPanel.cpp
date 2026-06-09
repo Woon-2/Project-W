@@ -17,8 +17,10 @@ using Build::addLabel;
 using Build::addButton;
 
 void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
-                          const Texture* buttonTex, GameSettings& settings) {
+                          const Texture* buttonTex, GameSettings& settings,
+                          const std::vector<Resolution>& resolutions) {
     settings_ = &settings;
+    resolutions_ = resolutions;
 
     // Idempotent: on a rebuild (e.g. resolution change) drop the previous subtree.
     // open_ resets to false; the caller re-opens if the panel should stay visible.
@@ -90,9 +92,6 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     const float controlX     = rowX + nameW;
     const float controlW     = rowW - nameW;
 
-    currentResolutionText_ =
-        std::to_wstring(static_cast<int>(screenW)) + L" × " + std::to_wstring(static_cast<int>(screenH));
-
     addLabel(scrim, L"설정", titleX, settingsY - 58.f, 42.f, rowW, 58.f,
         settingsInk, TextHAlign::Leading, 2);
 
@@ -150,7 +149,8 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         refreshPreview();
     });
     resolutionNextButton_ = makeArrowButton(controlX + controlW - 62.f, rowY, L">", [this]() {
-        settings_->resolutionIndex = std::min(2, settings_->resolutionIndex + 1);
+        const int lastIdx = resolutions_.empty() ? 0 : static_cast<int>(resolutions_.size()) - 1;
+        settings_->resolutionIndex = std::min(lastIdx, settings_->resolutionIndex + 1);
         refreshPreview();
     });
     resolutionValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
@@ -246,16 +246,20 @@ void SettingsPanel::refreshPreview() {
     paintButton(allyDamageOffButton_, !settings_->allyDamageVisible);
     paintButton(allyDamageOnButton_,   settings_->allyDamageVisible);
 
+    // 해상도는 런타임 목록(resolutions_) 위를 < > 로 이동. 목록은 모니터에 맞게 필터됨.
+    const int lastIdx = resolutions_.empty() ? 0 : static_cast<int>(resolutions_.size()) - 1;
+    if (settings_->resolutionIndex < 0)        settings_->resolutionIndex = 0;
+    if (settings_->resolutionIndex > lastIdx)  settings_->resolutionIndex = lastIdx;
+
     const bool resolutionEnabled = !settings_->fullscreen;
     paintButton(resolutionPrevButton_, false, resolutionEnabled && settings_->resolutionIndex > 0);
-    paintButton(resolutionNextButton_, false, resolutionEnabled && settings_->resolutionIndex < 2);
+    paintButton(resolutionNextButton_, false, resolutionEnabled && settings_->resolutionIndex < lastIdx);
 
     if (resolutionValueLabel_) {
-        std::wstring resolutionText = currentResolutionText_;
-        if (settings_->resolutionIndex == 1) {
-            resolutionText = L"1280 × 720";
-        } else if (settings_->resolutionIndex == 2) {
-            resolutionText = L"1920 × 1080";
+        std::wstring resolutionText = L"--";
+        if (!resolutions_.empty()) {
+            const Resolution& r = resolutions_[settings_->resolutionIndex];
+            resolutionText = std::to_wstring(r.w) + L" × " + std::to_wstring(r.h);
         }
         resolutionValueLabel_->setText(resolutionText);
         if (resolutionEnabled) {

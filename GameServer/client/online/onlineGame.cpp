@@ -15,6 +15,8 @@ extern RECT gClientRect;
 // main.cpp: 창모드/전체화면(borderless)을 전환하며 윈도우·전역 RECT를 갱신하고
 // 결과 클라이언트 크기를 out*에 돌려준다(런타임 디스플레이 모드 변경).
 extern void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outClientW, int* outClientH);
+// main.cpp: 현재 윈도우가 걸친 모니터의 전체 해상도를 돌려준다.
+extern void getCurrentMonitorSize(int* outW, int* outH);
 
 namespace Online {
 
@@ -2946,10 +2948,12 @@ void Game::enterLobby() {
 	// (build가 이 텍스처를 위젯에 연결하므로 빌드 전에 로드해야 한다.)
 	lobbyUI_.loadTextures(gfx_);
 	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
+	// 현재 모니터에 맞는 창모드 해상도 목록 구성(설정창 빌드 전에 준비).
+	rebuildAvailableResolutions();
 	// 설정창은 씬 비종속 재사용 컴포넌트. 로비/인게임 어디서나 열 수 있도록
 	// uiManager_.root() 직속에 빌드한다(로비 9-slice 텍스처 공유).
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(),
-		lobbyUI_.secondaryButtonTexture(), settings_);
+		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_);
 	refreshLobbyUI();
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
@@ -3145,14 +3149,37 @@ void Game::applyPendingDisplaySettings() {
 	appliedFullscreen_      = settings_.fullscreen;
 }
 
-void Game::applyDisplaySettings() {
-	// 창모드 목표 해상도. 인덱스 0 = 기본(1024×768). 전체화면이면 모니터 해상도를 쓰므로 무시된다.
-	int windowedW = 1024, windowedH = 768;
-	switch (settings_.resolutionIndex) {
-	case 1:  windowedW = 1280; windowedH = 720;  break;
-	case 2:  windowedW = 1920; windowedH = 1080; break;
-	default: windowedW = 1024; windowedH = 768;  break;
+void Game::rebuildAvailableResolutions() {
+	// 후보 창모드 해상도(오름차순). 현재 모니터에 들어가는 것만 노출한다
+	// → FHD 모니터에선 2560×1440이 자동으로 숨겨지고, 더 큰 모니터에선 자동 노출된다.
+	static constexpr Resolution kCandidates[] = {
+		{ 1024, 768 }, { 1280, 720 }, { 1920, 1080 }, { 2560, 1440 }
+	};
+
+	int monW = 0, monH = 0;
+	getCurrentMonitorSize(&monW, &monH);
+
+	availableResolutions_.clear();
+	for (const auto& c : kCandidates) {
+		if (c.w <= monW && c.h <= monH) {
+			availableResolutions_.push_back(c);
+		}
 	}
+	// 안전장치: 모니터 정보를 못 얻었거나 모든 후보가 잘린 경우 최소 1개는 보장.
+	if (availableResolutions_.empty()) {
+		availableResolutions_.push_back(Resolution{ 1024, 768 });
+	}
+}
+
+void Game::applyDisplaySettings() {
+	// 현재 모니터 기준으로 창모드 해상도 목록을 갱신하고, 인덱스를 유효 범위로 클램프.
+	rebuildAvailableResolutions();
+	const int lastIdx = static_cast<int>(availableResolutions_.size()) - 1;
+	settings_.resolutionIndex = std::clamp(settings_.resolutionIndex, 0, lastIdx);
+
+	// 창모드 목표 해상도(전체화면이면 모니터 해상도를 쓰므로 무시된다).
+	const int windowedW = availableResolutions_[settings_.resolutionIndex].w;
+	const int windowedH = availableResolutions_[settings_.resolutionIndex].h;
 
 	// 1. UIManager 입력 포인터 무효화 — 곧 위젯 트리를 재빌드하므로 dangling 방지.
 	uiManager_.resetInteractionState();
@@ -3169,7 +3196,8 @@ void Game::applyDisplaySettings() {
 	//    (HUD/데미지 넘버는 앵커·월드 좌표 기반이라 setScreenSize + 매 프레임 worldToScreen로 추종.)
 	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
 	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
-	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(), lobbyUI_.secondaryButtonTexture(), settings_);
+	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(), lobbyUI_.secondaryButtonTexture(),
+		settings_, availableResolutions_);
 
 	// 5. 로비 위젯 상태 복원 + 설정창 다시 열기(사용자가 설정창에서 변경 중이므로 유지).
 	refreshLobbyUI();

@@ -273,6 +273,10 @@ private:
 	// 현재 화면에 적용된 디스플레이 설정. settings_와 다르면 applyPendingDisplaySettings가 적용.
 	int                  appliedResolutionIndex_ = 0;
 	bool                 appliedFullscreen_      = false;  // GameSettings::fullscreen 기본값과 일치
+	// 현재 모니터에 맞게 필터된 창모드 해상도 목록. settings_.resolutionIndex가 이 목록을 가리킨다.
+	std::vector<Resolution> availableResolutions_{};
+	// 현재 모니터 크기로 availableResolutions_를 다시 구성한다(후보 중 모니터에 들어가는 것만).
+	void rebuildAvailableResolutions();
 
 	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
 	// their ground placement is now data-driven (skill PlayVFX groundSnap +

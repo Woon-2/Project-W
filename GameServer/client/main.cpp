@@ -25,6 +25,15 @@ inline constexpr DWORD kWndStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 //
 // 전체화면은 exclusive(SetFullscreenState)가 아니라 borderless(WS_POPUP + 모니터 전체 덮기)다.
 // flip-model 스왑체인과 잘 맞고 alt-tab/모드전환 문제가 없으며, GFX::resize를 그대로 재사용한다.
+// 현재 윈도우가 걸쳐 있는 모니터의 전체 해상도를 돌려준다(해상도 목록 필터링용).
+void getCurrentMonitorSize(int* outW, int* outH) {
+	HMONITOR mon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+	MONITORINFO mi{ sizeof(MONITORINFO) };
+	GetMonitorInfo(mon, &mi);
+	if (outW) *outW = mi.rcMonitor.right - mi.rcMonitor.left;
+	if (outH) *outH = mi.rcMonitor.bottom - mi.rcMonitor.top;
+}
+
 void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outClientW, int* outClientH) {
 	if (fullscreen) {
 		// 현재 윈도우가 걸쳐 있는 모니터의 전체 영역을 덮는다.

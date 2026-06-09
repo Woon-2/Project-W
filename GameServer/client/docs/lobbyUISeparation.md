@@ -40,7 +40,9 @@ UI를 **전용 컴포넌트 클래스**로 추출하되 2D UI 레이어만 분�
 
 ## 디스플레이 설정 런타임 변경 (해상도 + 전체화면, 구현 완료)
 
-설정창의 해상도(`GameSettings::resolutionIndex`: 0=1024×768 기본, 1=1280×720, 2=1920×1080)와 화면 모드(`GameSettings::fullscreen`)를 바꾸면 즉시 실제 적용된다. 기본값은 **창모드**(`fullscreen=false`)라 해상도 컨트롤이 처음부터 활성. 해상도 컨트롤은 기존 설계대로 **창모드일 때만 활성**(전체화면이면 모니터 해상도를 쓰므로 비활성).
+설정창의 해상도(`GameSettings::resolutionIndex`)와 화면 모드(`GameSettings::fullscreen`)를 바꾸면 즉시 실제 적용된다. 기본값은 **창모드**(`fullscreen=false`)라 해상도 컨트롤이 처음부터 활성. 해상도 컨트롤은 기존 설계대로 **창모드일 때만 활성**(전체화면이면 모니터 해상도를 쓰므로 비활성).
+
+**창모드 해상도 목록은 모니터에 맞게 자동 필터**된다: 후보 `{1024×768, 1280×720, 1920×1080, 2560×1440}` 중 현재 모니터 해상도(`getCurrentMonitorSize`) 이하인 것만 `Game::rebuildAvailableResolutions()`가 `availableResolutions_`에 담는다. 따라서 FHD 모니터에선 1440p가 자동으로 숨겨지고, 더 큰 모니터에선 자동 노출된다("FHD면 1440p 숨김"을 하드코딩하지 않음). `resolutionIndex`는 이 목록의 인덱스이며, `SettingsPanel::build`가 목록을 받아 `< >` 스텝 범위와 "W × H" 라벨을 목록 기준으로 처리한다. 목록/인덱스는 `enterLobby`와 매 `applyDisplaySettings`에서 현재 모니터로 재구성·클램프된다.
 
 **전체화면 방식**: exclusive(`SetFullscreenState`)가 아니라 **borderless**(`WS_POPUP` + 모니터 전체 덮기)다. flip-model 스왑체인과 잘 맞고 alt-tab/모드전환 문제가 없으며, `GFX::resize`를 그대로 재사용한다(스왑체인은 계속 windowed).
 
