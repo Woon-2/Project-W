@@ -59,7 +59,6 @@ private:
         Engage,
         TacticalRetreat,
         Encircle,
-        Vigilance,
         DivideAndConquer,
         Cooldown,
         BossSolo
@@ -169,7 +168,6 @@ private:
     static constexpr float BOX_SQUAD_SPACING             = 15.f;
     static constexpr float BOX_ARC_DEPTH                 = 4.f;
     static constexpr float REGROUP_DIST                  = 25.f;
-    static constexpr float VIGILANCE_GUARD_RADIUS        = 8.f;
     static constexpr float TACTICAL_SPEED_MULT           = 3.f;
     static constexpr Seconds BOSS_TARGET_EVAL_INTERVAL{ 0.5f };
     static constexpr float BOSS_TARGET_SWITCH_MARGIN     = 120.f;

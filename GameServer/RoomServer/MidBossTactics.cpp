@@ -381,24 +381,11 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
                     enterTacticFailCooldown( room, leader );
                 }
                 else {
-                    enterPhase( LeaderPhase::Vigilance );
+                    // 박스에서 클러스터 ≥2 → 경계 단계 없이 곧장 쐐기. 쐐기 명령 발행 시
+                    // 클러스터를 다시 검사해 ≤1이면 포위/실패로 폴백하므로 재판단은 보존된다.
+                    enterPhase( LeaderPhase::DivideAndConquer );
                 }
             }
-        }
-    }
-
-    if ( leaderPhase_ == LeaderPhase::Vigilance && phaseOrderIssued_ && formationReady( leader ) ) {
-        auto clusters = buildPlayerClusters( room, leader );
-        auto liveSquads = collectLiveSquads( leader );
-
-        if ( clusters.size() <= 1 && !clusters.empty() && canStartEncircle( liveSquads, clusters.front() ) ) {
-            enterPhase( LeaderPhase::Encircle );
-        }
-        else if ( clusters.size() <= 1 ) {
-            enterTacticFailCooldown( room, leader );
-        }
-        else {
-            enterPhase( LeaderPhase::DivideAndConquer );
         }
     }
 
@@ -608,34 +595,6 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
                 .tacticCenter = boxCenter
             };
             sqByLat[ i ].second->receiveOrder( ord );
-        }
-
-        phaseOrderIssued_ = true;
-        return;
-    }
-
-    if ( leaderPhase_ == LeaderPhase::Vigilance ) {
-        if ( phaseOrderIssued_ ) {
-            return;
-        }
-
-        mu::Vec3 playerCent = calcPlayerCentroid( room, leader.pos() );
-        mu::Vec3 toPlayers = playerCent - leader.pos();
-        float len = toPlayers.len();
-        mu::Vec3 forward = (len > 0.01f) ? toPlayers * (1.f / len) : mu::Vec3( 1.f, 0.f, 0.f );
-        float baseAngle = std::atan2f( forward.z(), forward.x() );
-        constexpr float TWO_PI = 2.f * 3.14159265f;
-
-        for ( int32 i = 0; i < numSquads; ++i ) {
-            auto ord = SquadOrder{
-                .type = SquadOrderType::GuardBoss,
-                .targetId = primaryTargetId_,
-                .sectorAngle = baseAngle + TWO_PI * static_cast<float>( i ) / static_cast<float>( numSquads ),
-                .approachRadius = VIGILANCE_GUARD_RADIUS,
-                .formationTargetPos = playerCent,
-                .tacticCenter = leader.pos()
-            };
-            liveSquads[ i ]->receiveOrder( ord );
         }
 
         phaseOrderIssued_ = true;
