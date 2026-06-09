@@ -30,7 +30,6 @@
 #include "../particleSystem.hpp"
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
-#include "../ui/widgets/Dropdown.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
@@ -275,9 +274,9 @@ private:
 
 	UI::UIManager    uiManager_{};
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
+	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
-	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
@@ -292,13 +291,6 @@ private:
 	std::vector<Resolution> availableResolutions_{};
 	// 현재 모니터 크기로 availableResolutions_를 다시 구성한다(후보 중 모니터에 들어가는 것만).
 	void rebuildAvailableResolutions();
-
-	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
-	// their ground placement is now data-driven (skill PlayVFX groundSnap +
-	// AttachType::Ground), not a hardcoded heightAtWorld snap. Keep this list in
-	// the same order as the dropdown setup() strings (idx -> enum by cast).
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, CrystalsCrossFade, Arrow, ArrowVolley, EnergyExplosionArrow, TornadoShot, Piercing, PiercingSlash, PiercingCircleSlash, PiercingMulti };
-	SwordEffect currentEffect_ = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

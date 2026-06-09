@@ -25,6 +25,7 @@ public:
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	const Texture* playerHpHeart() const { return &playerHpHeart_; }
+	const Texture* heavyArrow() const { return &heavyArrow_; }
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
 	const Texture* flameTex() const { return &flameTex_; }
@@ -93,6 +94,7 @@ private:
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
 	Texture playerHpHeart_{};
+	Texture heavyArrow_{};
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
 	Texture flameTex_{};

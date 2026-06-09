@@ -118,6 +118,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "heavy-arrow",
+		.texturePath     = "../resources/UI/heavy-arrow.dds",
+		.pDest           = &heavyArrow_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "DamageDigits",
 		.texturePath     = "../resources/UI/damage_digits.dds",
 		.pDest           = &digitAtlasTex_,

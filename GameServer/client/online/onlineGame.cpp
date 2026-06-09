@@ -4,7 +4,6 @@
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
 #include "../particleImporter.hpp"
-#include "../ui/widgets/Dropdown.hpp"
 #include "SendBuffer.hpp"
 #include "../PacketManager.hpp"
 #include "../ClientApp.hpp"
@@ -80,8 +79,9 @@ static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
 static constexpr float   kPlayerHpUiX               = 20.f;
 static constexpr float   kPlayerHpUiY               = 20.f;
-static constexpr float   kPlayerHpHeartSize         = 32.f;
-static constexpr float   kPlayerHpHeartGap          = 8.f;
+static constexpr float   kPlayerHpHeartSize         = 60.f;
+static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 하트 크기 대비 % (해상도 무관, 부모 비율로 스케일)
+static constexpr float   kPlayerHpHeartBarOverlap   = 12.f;
 static constexpr float   kPlayerHpBarHeight         = 18.f;
 
 Game::Game() {
@@ -253,7 +253,21 @@ void Game::setupStage() {
 	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
 	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
 	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
+	playerHpHeart_->zOrder  = 2;
 	playerHpHeart_->texture = assetManager_.playerHpHeart();
+
+	// 하트 위에 겹쳐 그리는 무기 아이콘. 하트의 자식으로 두어 부모(하트) 대비 비율로
+	// 크기를 잡고 중앙 정렬한다 → 하트가 해상도에 맞게 스케일되면 아이콘도 같은 비율로 따라가
+	// 항상 하트 안쪽에 들어간다. 렌더 순서상 부모 다음에 그려지므로 자연히 하트 위에 겹쳐진다.
+	playerWeaponIcon_ = static_cast<UI::Image*>(
+		playerHpHeart_->addChild(std::make_unique<UI::Image>())
+	);
+	playerWeaponIcon_->name    = "playerWeaponIcon";
+	playerWeaponIcon_->anchor  = UI::Anchors::Center;
+	playerWeaponIcon_->pivot   = UI::Pivots::Center;
+	playerWeaponIcon_->width   = UI::DimValue::pct(kPlayerWeaponIconScale);
+	playerWeaponIcon_->height  = UI::DimValue::pct(kPlayerWeaponIconScale);
+	playerWeaponIcon_->texture = assetManager_.heavyArrow();
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -299,19 +313,6 @@ void Game::setupStage() {
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 
-	effectDropdown_ = static_cast<UI::Dropdown*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Dropdown>())
-	);
-	effectDropdown_->name    = "effectDropdown";
-	effectDropdown_->anchor  = UI::Anchors::TopRight;
-	effectDropdown_->pivot   = UI::Pivots::TopRight;
-	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
-	effectDropdown_->offsetY = UI::DimValue::px(12.f);
-	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Energy Explosion Arrow", "Tornado Shot", "Piercing", "Piercing Slash", "Piercing Circle Slash", "Piercing Multi" });
-	effectDropdown_->onSelectionChanged = [this](int idx) {
-		currentEffect_ = static_cast<SwordEffect>(idx);
-	};
 	hiZStatsLabel_ = static_cast<UI::Label*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Label>())
 	);
@@ -337,7 +338,7 @@ void Game::updatePlayerHpHudLayout() {
 	if (!playerHpHeart_ || !playerHpBar_) return;
 
 	const float heartY = kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f;
-	const float barX = kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap;
+	const float barX = kPlayerHpUiX + kPlayerHpHeartSize - kPlayerHpHeartBarOverlap;
 
 	playerHpHeart_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
 	playerHpHeart_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(heartY));
@@ -3967,79 +3968,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		switch (currentEffect_) {
-		case SwordEffect::SlashCombo: swordSlashComboEffect_.play(slashPos);                    break;
-		case SwordEffect::Slash7:     swordSlash7Effect_.play(slashPos);                        break;
-		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);                        break;
-		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
-		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);                       break;
-		case SwordEffect::Piercing:            piercingEffect_.play( slashPos, player_->orient() );              break;
-		case SwordEffect::PiercingSlash:       piercingSlashEffect_.play( slashPos, player_->orient() );         break;
-		case SwordEffect::PiercingCircleSlash: piercingCircleSlashEffect_.play( slashPos, player_->orient() );   break;
-		case SwordEffect::PiercingMulti: {
-			const auto multiCenter = player_->renderState().pos
-				+ player_->forward() * (kPiercingMultiRadius + 1.f)
-				+ mu::Vec3( 0.f, 1.0f, 0.f );
-			piercingMultiEffect_.play( multiCenter, player_->orient() );
-			break;
-		}
-		case SwordEffect::CrystalsFrontAttack: {
-			const auto crystalPos = player_->renderState().pos + player_->forward() * 1.f;
-			const mu::Mat4x4 crystalOrient = mu::rotateYH( mu::Degree( -90.f ) ) * player_->orient().mat4();
-			crystalsFrontAttackEffect_.play( crystalPos, crystalOrient, player_->forward() );
-			break;
-		}
-		case SwordEffect::AoESlashGreen: {
-			const auto aoePos = slashPos + player_->forward() * 5.5f;
-			aoESlashGreenEffect_.play( aoePos, player_->orient(), player_->forward() );
-			break;
-		}
-		case SwordEffect::Arrow: {
-			const auto arrowOrigin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.5f;
-			arrowEffect_.play( arrowOrigin, player_->orient() );
-			break;
-		}
-		case SwordEffect::ArrowVolley: {
-			const auto volleyOrigin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.6f;
-			arrowVolleyMuzzleEffect_.play( volleyOrigin, player_->orient() );
-			arrowVolleyEffect_.play( volleyOrigin, player_->orient() );
-			break;
-		}
-		// ArrowRain / RedEnergyExplosion previously lived here with hardcoded
-		// terrain height snapping. Ground placement is now data-driven via the
-		// skill system (PlayVFX groundSnap flag + AttachType::Ground hitboxes),
-		// so these debug-preview cases were removed. See terrainInteractingSkills.md.
-		case SwordEffect::CrystalsCrossFade: {
-			crystalsCrossFadeEffect_.play( slashPos );
-			break;
-		}
-		case SwordEffect::EnergyExplosionArrow: {
-			const auto origin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.5f;
-			energyExplosionArrowEffect_.play( origin, player_->orient() );
-			break;
-		}
-		case SwordEffect::TornadoShot: {
-			if ( tornadoShotActive_ )
-				tornadoShotEffect_.stop();
-			const auto origin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 0.8f, 0.f }
-				+ player_->forward() * 0.5f;
-			tornadoMuzzleEffect_.play( origin );
-			tornadoShotEffect_.play( origin, player_->orient() );
-			tornadoShotActive_  = true;
-			tornadoShotPos_     = origin;
-			tornadoShotDir_     = player_->forward();
-			tornadoShotOrient_  = player_->orient();
-			tornadoShotElapsed_ = 0s;
-			break;
-		}
-		}
+		slashWaveEffect_.play(slashPos, player_->orient());
 	}
 }
 
