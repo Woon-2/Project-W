@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "MidBossTactics.hpp"
 #include "PlatoonLeader.hpp"
 #include "Room.hpp"
@@ -16,6 +16,11 @@
 static mu::Vec3 norm3( mu::Vec3 v ) {
     float l = v.len();
     return l > 0.0001f ? v * (1.f / l) : mu::Vec3( 0.f, 0.f, 0.f );
+}
+
+// 수평(XZ) 거리. 보스는 지형 높이에 붙으므로 후퇴 도착 판정은 Y를 무시(슬롯/후퇴 목표는 평평한 Y).
+static float lenXZ( mu::Vec3 v ) {
+    return mu::Vec3( v.x(), 0.f, v.z() ).len();
 }
 
 /*---------------------------
@@ -332,40 +337,49 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     GameSession* primary = selectPrimaryTarget(room, leader);
 
     if ( leaderPhase_ != LeaderPhase::BossSolo && !tacticsUnlocked_
-        && primary && checkTacticsConditions( leader ) 
+        && primary && checkTacticsConditions( leader )
     ) {
         tacticsUnlocked_ = true;
         enterPhase( LeaderPhase::TacticalRetreat );
     }
 
-    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary && allMembersArrived( leader ) ) {
-        if ( !tacticsUnlocked_ ) {
-            enterPhase( LeaderPhase::Engage );
-
-            for ( auto* sq : squads ) {
-                if ( sq->isEmpty() ) {
-                    continue;
-                }
-
-                auto ord = SquadOrder{
-                    .type = SquadOrderType::Engage,
-                    .targetId = primaryTargetId_
-                };
-                sq->receiveOrder( ord );
-            }
+    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary ) {
+        if ( allMembersArrived( leader ) ) {
+            phaseHoldTimer_ += dt;   // 박스 대형 완성 → 잠시 유지(과시) 후 다음 단계
         }
         else {
-            auto clusters = buildPlayerClusters( room, leader );
-            auto liveSquads = collectLiveSquads( leader );
+            phaseHoldTimer_ = 0s;    // 아직 미집결 → 체류 타이머 리셋
+        }
 
-            if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
-                enterPhase( LeaderPhase::Encircle );
-            }
-            else if ( clusters.size() == 1 ) {
-                enterTacticFailCooldown( room, leader );
+        if ( allMembersArrived( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
+            if ( !tacticsUnlocked_ ) {
+                enterPhase( LeaderPhase::Engage );
+
+                for ( auto* sq : squads ) {
+                    if ( sq->isEmpty() ) {
+                        continue;
+                    }
+
+                    auto ord = SquadOrder{
+                        .type = SquadOrderType::Engage,
+                        .targetId = primaryTargetId_
+                    };
+                    sq->receiveOrder( ord );
+                }
             }
             else {
-                enterPhase( LeaderPhase::Vigilance );
+                auto clusters = buildPlayerClusters( room, leader );
+                auto liveSquads = collectLiveSquads( leader );
+
+                if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
+                    enterPhase( LeaderPhase::Encircle );
+                }
+                else if ( clusters.size() == 1 ) {
+                    enterTacticFailCooldown( room, leader );
+                }
+                else {
+                    enterPhase( LeaderPhase::Vigilance );
+                }
             }
         }
     }
@@ -385,11 +399,17 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         }
     }
 
-    bool leaderAtRetreat = ( leader.pos() - retreatTargetPos_ ).len() <= 1.5f;
+    bool leaderAtRetreat = lenXZ( leader.pos() - retreatTargetPos_ ) <= 2.0f;
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat && phaseOrderIssued_
         && allMembersArrived( leader ) && leaderAtRetreat
     ) {
-        enterPhase( LeaderPhase::BoxAdvance );
+        phaseHoldTimer_ += dt;   // 후퇴 집결 완료 → 잠시 유지 후 박스 대형 전환
+        if ( phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
+            enterPhase( LeaderPhase::BoxAdvance );
+        }
+    }
+    else if ( leaderPhase_ == LeaderPhase::TacticalRetreat ) {
+        phaseHoldTimer_ = 0s;    // 아직 집결 전 → 체류 타이머 리셋
     }
 
     tacticTimer_ -= dt;
@@ -400,14 +420,19 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat ) {
         mu::Vec3 toRetreat = retreatTargetPos_ - leader.pos();
-        float d = toRetreat.len();
+        float d = lenXZ( toRetreat );   // 수평 거리(보스는 지형에 붙으므로 Y 무시)
 
-        if ( d > 1.f ) {
-            mu::Vec3 dir = toRetreat * (1.f / d);
+        constexpr float RETREAT_ARRIVE = 1.0f;
+        constexpr float RETREAT_SLOW   = 5.0f;
+        if ( d > RETREAT_ARRIVE ) {
+            mu::Vec3 dir = mu::Vec3( toRetreat.x() / d, 0.f, toRetreat.z() / d );   // XZ 방향
             float spd = leader.getLeaderMoveSpeed() * TACTICAL_SPEED_MULT;
-            float yVel = leader.body().linearVel().y();
-            leader.setLinearVel( mu::Vec3( dir.x() * spd, yVel, dir.z() * spd ) );
+            if ( d < RETREAT_SLOW ) spd *= std::max( 0.2f, d / RETREAT_SLOW );   // 도착 감속(오버슈트 방지)
+            leader.setDesiredVel( mu::Vec3( dir.x() * spd, 0.f, dir.z() * spd ) );
             leader.setFacing( dir );
+        }
+        else {
+            leader.setDesiredVel( mu::Vec3{} );   // 도착 → 정지(leaderAtRetreat 안정화)
         }
         return;
     }
@@ -418,6 +443,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
     leaderPhase_ = next;
     phaseOrderIssued_ = false;
+    phaseHoldTimer_ = 0s;
 
     if ( next != LeaderPhase::Encircle ) {
         encircleIssuedLiveMembers_ = 0;
@@ -1004,6 +1030,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Plat
         bossTargetEvalTimer_ = BOSS_TARGET_EVAL_INTERVAL;
 
         if ( bossPersonalTargetId_ == 0 ) {
+            leader.setDesiredVel( mu::Vec3{} );   // 타깃 없음 → 정지(잔여 motor 속도 제거)
             leader.transitionTacticalState( TacticalNpcState::Idle );
             return true;
         }
@@ -1056,6 +1083,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Plat
         if ( dist <= leader.getAttackRange() ) {
             bossPersonalTimer_ = 0s;
             bossPersonalState_ = BossPersonalState::AttackWindup;
+            leader.setDesiredVel( mu::Vec3{} );   // 사거리 진입 → 정지(공격 중 미끄러짐 방지)
             leader.transitionTacticalState( TacticalNpcState::AttackWindup );
             return true;
         }
@@ -1065,6 +1093,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Plat
     }
 
     if ( bossPersonalState_ == BossPersonalState::AttackWindup ) {
+        leader.setDesiredVel( mu::Vec3{} );   // 공격 윈드업 중 정지 유지
         leader.setFacing( dir );
         bossPersonalTimer_ += dt;
 
@@ -1084,6 +1113,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Plat
     }
 
     if ( bossPersonalState_ == BossPersonalState::AttackRecover ) {
+        leader.setDesiredVel( mu::Vec3{} );   // 공격 후딜 중 정지 유지
         leader.setFacing( dir );
         bossPersonalTimer_ += dt;
 
@@ -1180,8 +1210,7 @@ void GoblinMidBossTactic::moveBossToward( PlatoonLeader& leader, mu::Vec3 target
     leader.setFacing( dir );
 
     float spd = leader.getLeaderMoveSpeed() * speedMult;
-    float yVel = leader.body().linearVel().y();
-    leader.setLinearVel( mu::Vec3( dir.x() * spd, yVel, dir.z() * spd ) );
+    leader.setDesiredVel( mu::Vec3( dir.x() * spd, 0.f, dir.z() * spd ) );
 }
 
 float GoblinMidBossTactic::evaluatePlayerScore( const GameSession* s, const PlatoonLeader& leader ) const {

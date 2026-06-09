@@ -23,6 +23,7 @@
 enum class AttachType : u8t {
     Bone,         // follow a named skeleton bone of the caster
     VFXParticle,  // attach to all active particles of a ParticleSystem within a VFX effect
+    Ground,       // plant at a caster-relative ground point, snapped to terrain, then static
 };
 
 // String-based attach target. Resolved to a runtime handle once at SpawnHitbox dispatch.
@@ -31,6 +32,7 @@ struct AttachTarget {
     std::string targetName;       // bone name (e.g. "Weapon_R"); unused for VFXParticle
     u8t         vfxId            = 0;  // index into SkillDispatchContext::vfxById
     int         particleSystemIdx = 0;  // index into ParticleEffect::system(n)
+    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
 };
 
 // ---------------------------------------------------------------------------
@@ -50,6 +52,11 @@ struct OnHitDef {
 
 struct SkillHitboxDef {
     std::vector<OBB> localOBBs;    // OBBs in attachment-local space (bone or particle space)
+    // Authoring Euler angles (degrees, yaw/pitch/roll) for each entry in localOBBs.
+    // Populated by the Lua compiler so the in-game skill editor can present and round-trip
+    // rotation exactly as written in the .lua source. Parallel to localOBBs (same size).
+    // Not used by the runtime collision path.
+    std::vector<mu::Vec3> localOBBEulerDeg;
     AttachTarget     attach;
     OnHitDef         onHit;
     u8t              slot                 = 0;      // DestroyHitbox references this slot
@@ -76,6 +83,23 @@ enum class SkillEventType : u8t {
     SIZE
 };
 
+// PlayVFX::flags bit definitions.
+//   bit0      : yawOnly      -- place effect on ground plane (ignore caster pitch/roll)
+//   bit1      : groundSnap   -- snap final worldPos.y to terrain (localOffset.y = lift)
+//   bit2      : groundAlign  -- orient effect to the terrain normal (keeps yaw)
+//   bits3-4   : particle ground-collision mode (ps::ParticleCollisionModule::Mode ordinal)
+//   bits5-6   : particle ground-conform   mode (ps::ShapeModule::GroundConform ordinal)
+// The particle mode fields drive the *played effect's particles* (fall-and-die,
+// conform-to-slope) from the skill Lua, so the effect JSON needs no ground keys.
+static constexpr u8t kPlayVFXFlagYawOnly     = 0x01;
+static constexpr u8t kPlayVFXFlagGroundSnap  = 0x02;
+static constexpr u8t kPlayVFXFlagGroundAlign = 0x04;
+
+static constexpr u8t kPlayVFXParticleCollisionShift = 3;
+static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;  // bits 3-4
+static constexpr u8t kPlayVFXParticleConformShift   = 5;
+static constexpr u8t kPlayVFXParticleConformMask    = 0x60;  // bits 5-6
+
 // Fixed-size payload union. All members are trivially copyable (no std::string).
 // String data lives in SkillAsset::hitboxDefs / vfxNames, referenced by index.
 union SkillEventPayload {
@@ -93,13 +117,15 @@ union SkillEventPayload {
     } playAnimation;
 
     struct PlayVFX {
-        mu::Vec3 localOffset;          // attach-local space offset (right, up, forward); zero = at attach origin
-        u8t      vfxId;                //  1 byte  [12]
-        u8t      attachType;           //  1 byte  [13]: AttachType ordinal; Bone + empty name = caster root
-        u8t      attachVfxId;          //  1 byte  [14]
-        u8t      pad;                  //  1 byte  [15]
-        char     attachTargetName[16]; // 16 bytes [16-31]: bone name, null-terminated; empty = use owner root
-        // total: 32 bytes
+        mu::Vec3 localOffset;          // 12 bytes [0-11]:  attach-local offset (right, up, forward); zero = at attach origin
+        mu::Vec3 localEulerDeg;        // 12 bytes [12-23]: attach-local orientation offset (yaw, pitch, roll degrees); zero = no offset
+        mu::Vec3 advanceForwardLocal;  // 12 bytes [24-35]: attach-local particle travel direction; zero = derive from orientation
+        u8t      vfxId;                //  1 byte  [36]
+        u8t      attachType;           //  1 byte  [37]: AttachType ordinal; Bone + empty name = caster root
+        u8t      attachVfxId;          //  1 byte  [38]
+        u8t      flags;                //  1 byte  [39]: bit0 = yawOnly (place on ground plane, ignore caster pitch/roll)
+        char     attachTargetName[16]; // 16 bytes [40-55]: bone name, null-terminated; empty = use owner root
+        // total: 56 bytes
     } playVFX;
 
     struct ModifyStat {
@@ -128,7 +154,7 @@ union SkillEventPayload {
         float speedMps;
     } spawnProjectile;
 
-    u8t raw[32];  // fixes union size at 32 bytes
+    u8t raw[56];  // fixes union size at 56 bytes (PlayVFX is the largest member)
 };
 
 // One entry in the timeline. Keep this small -- it lives in a sorted vector.

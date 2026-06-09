@@ -24,6 +24,7 @@ enum class PacketType : uint16 {
 
 	S_NpcMove,
 	S_NpcMoveBatch,
+	S_NpcSpawnBatch,
 
 	C_Attack,
 	S_NpcAttack,
@@ -180,6 +181,20 @@ struct SNpcMoveBatchPacket : public PacketHeader {
 	NpcMoveList getNpcMoveList() {
 		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
 		return NpcMoveList(reinterpret_cast<SNpcMoveInfo*>(dataStart), npcCount);
+	}
+};
+
+// 런타임에 동적으로 스폰된 NPC들을 클라이언트에 통보. 진입 스냅샷(S_Enter)과
+// 동일한 ObjectInfo 리스트 직렬화를 재사용하며, 클라이언트는 각 항목을
+// S_Enter와 같은 방식(ObjectType 분기)으로 생성한다.
+struct SNpcSpawnBatchPacket : public PacketHeader {
+	uint16 dataOffset;   // ObjectInfo 배열 시작 위치 (this 기준)
+	uint16 objCnt;
+
+	using ObjectList = DataList<ObjectInfo>;
+	ObjectList getObjectList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return ObjectList(reinterpret_cast<ObjectInfo*>(dataStart), objCnt);
 	}
 };
 

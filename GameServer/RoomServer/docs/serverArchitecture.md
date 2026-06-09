@@ -107,6 +107,8 @@ bone world-space = boneModelXform * entityWorldMatrix      // 모델→월드 �
 
 클라이언트 스킬 시스템과 구조가 동일하되 렌더링·VFX 관련 요소가 제거된 서버 권위 버전이다. 히트 판정·데미지·충격량 모두 서버에서 처리하며 결과를 `S_SkillHit`로 브로드캐스트한다.
 
+`SkillAsset` 레지스트리는 사양이 방마다 동일하므로 `AssetManager::loadAssets()`에서 부팅 시 1회만 컴파일하여 전 룸이 공유한다(각 `Room::SkillSystem`은 `bindRegistry()`로 참조만 한다). 상세는 `docs/skillArchitecture.md`의 "스킬 에셋 로딩" 참조.
+
 ---
 
 ## NPC / 고블린 AI

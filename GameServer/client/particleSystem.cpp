@@ -140,6 +140,20 @@ static mu::Mat4x4 buildShapeRotation(const ps::ShapeModule& s) {
     return buildEulerRotation(s.rotation) * s.orientation;
 }
 
+// Rotation that maps world up (+Y) onto the given (assumed unit) surface normal.
+// Used by ShapeModule::GroundConform::SnapAndAlign to tilt mesh particles to the
+// terrain slope. Returns identity when the normal is already (near) vertical.
+static mu::Mat4x4 alignYToNormalMat(mu::Vec3 n) {
+    const mu::Vec3 up{ 0.f, 1.f, 0.f };
+    const mu::Vec3 axis = mu::cross(up, n);
+    const float    s2   = mu::dot(axis, axis);
+    if (s2 < 1e-8f)
+        return mu::Mat4x4{};  // parallel (or anti-parallel) to up: no tilt
+    const float c     = std::clamp(mu::dot(up, n), -1.f, 1.f);
+    const float angle = std::acos(c);
+    return mu::rotateH(mu::Radian{ angle }, mu::Vec3(mu::normalize(axis)));
+}
+
 static mu::Vec3 rotateVector(mu::Vec3 v, mu::Mat4x4 rotation) {
     return mu::Vec3(mu::Vec4(v.x(), v.y(), v.z(), 0.f) * rotation);
 }
@@ -341,6 +355,33 @@ void ParticleSystem::update(Seconds dt) {
         p.motionVelocity = p.vel + calcVelocityOverLifetime(config_, p);
         p.pos      += p.motionVelocity * scaledDtf;
         p.lifetime -= scaledDtf;
+
+        // Terrain collision. Only relevant for descending/static particles, so
+        // gate the (cheap but non-free) ground query on a downward velocity for
+        // the modes that imply falling. GroundKill funnels into the existing
+        // lifetime<=0 death path below, which fires Death sub-emitters at p.pos.
+        if (config_.collision.enabled && ground_ && *ground_
+            && config_.collision.mode != ps::ParticleCollisionModule::Mode::None
+            && (p.motionVelocity.y() < 0.f
+                || config_.collision.mode == ps::ParticleCollisionModule::Mode::GroundStop)) {
+            const float surfY = ground_->height(p.pos.x(), p.pos.z()) + config_.collision.radiusOffset;
+            if (p.pos.y() <= surfY) {
+                switch (config_.collision.mode) {
+                case ps::ParticleCollisionModule::Mode::GroundStop:
+                    p.pos.setComponent(1, surfY);
+                    p.vel = {}; p.gravity = {}; p.motionVelocity = {};
+                    break;
+                case ps::ParticleCollisionModule::Mode::GroundBounce:
+                    p.pos.setComponent(1, surfY);
+                    p.vel.setComponent(1, -p.vel.y() * config_.collision.bounce);
+                    break;
+                case ps::ParticleCollisionModule::Mode::GroundKill:
+                    p.lifetime = 0.f;
+                    break;
+                default: break;
+                }
+            }
+        }
 
         // Trail capture + ageing. Stored coordinate follows MainModule::simulationSpace
         // (World -> world-space; Local -> emitter-local). For Local space we apply
@@ -700,6 +741,15 @@ void ParticleSystem::spawnParticle() {
         origin = sampleShapeOrigin();
         dir    = sampleShapeDirection(origin);
     }
+
+    // Ground conform: snap the spawn Y to the terrain surface at the sampled XZ.
+    // Skipped when no sampler is bound (e.g. terrain not loaded) so particles are
+    // not yanked to y = 0.
+    if (config_.shape.groundConform != ps::ShapeModule::GroundConform::None
+        && ground_ && *ground_) {
+        origin.setComponent(1, ground_->height(origin.x(), origin.z()) + config_.shape.groundOffset);
+    }
+
     const float    speed  = randomFloat(config_.main.speedMin, config_.main.speedMax);
 
     p.pos             = origin;
@@ -779,6 +829,12 @@ void ParticleSystem::spawnParticle() {
         const mu::Mat4x4 startRotationMatrix = buildEulerRotation(startRotation);
         p.baseRotation = startRotationMatrix * p.baseRotation;
         p.billboardRotation3D = startRotationMatrix;
+    }
+    // Ground conform (SnapAndAlign): tilt the base orientation to the terrain
+    // slope so mesh particles (erupting pillars, decals) follow the surface.
+    if (config_.shape.groundConform == ps::ShapeModule::GroundConform::SnapAndAlign
+        && ground_ && *ground_) {
+        p.baseRotation = p.baseRotation * alignYToNormalMat(ground_->normal(p.pos.x(), p.pos.z()));
     }
     p.custom1Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.custom2Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };

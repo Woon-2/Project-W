@@ -2,6 +2,7 @@
 #define __particleSystem_HPP
 
 #include "particleModules.hpp"
+#include "groundSampler.hpp"
 
 #include <array>
 #include <cstdint>
@@ -113,6 +114,11 @@ public:
     ps::ParticleSystemConfig&       config()       { return config_; }
     const ps::ParticleSystemConfig& config() const { return config_; }
 
+    // Bind a terrain query for ground-conform spawn (ShapeModule::groundConform)
+    // and ground collision (ParticleCollisionModule). Non-owning; the pointed-to
+    // GroundSampler must outlive this system. nullptr disables ground awareness.
+    void setGroundSampler(const GroundSampler* g) { ground_ = g; }
+
 private:
     struct ShapeSample { mu::Vec3 origin; mu::Vec3 dir; };
 
@@ -133,6 +139,7 @@ private:
     std::mt19937 rng_{ std::random_device{}() };
 
     ps::ParticleSystemConfig config_;
+    const GroundSampler*      ground_ = nullptr;  // non-owning terrain query (optional)
     std::vector<int>          burstNextCycle_;
     float                    emitAccumNew_   = 0.f;
     bool                     continuousNew_  = false;

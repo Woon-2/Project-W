@@ -16,6 +16,7 @@ using u16t = uint16;
 enum class AttachType : u8t {
     Bone,
     VFXParticle,
+    Ground,       // plant at a caster-relative ground point, snapped to terrain, then static
 };
 
 struct AttachTarget {
@@ -23,6 +24,7 @@ struct AttachTarget {
     std::string targetName;
     u8t         vfxId            = 0;
     int         particleSystemIdx = 0;
+    bool        groundAlign      = false;  // Ground attach: tilt OBBs to the terrain normal
 };
 
 struct OnHitDef {
@@ -56,6 +58,17 @@ enum class SkillEventType : u8t {
     SIZE
 };
 
+// PlayVFX::flags bit definitions (mirrors client; PlayVFX is a no-op on the server).
+// bits3-4 = particle ground-collision mode, bits5-6 = particle ground-conform mode
+// (client-only visual; unused here but kept for layout parity).
+static constexpr u8t kPlayVFXFlagYawOnly     = 0x01;
+static constexpr u8t kPlayVFXFlagGroundSnap  = 0x02;
+static constexpr u8t kPlayVFXFlagGroundAlign = 0x04;
+static constexpr u8t kPlayVFXParticleCollisionShift = 3;
+static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;
+static constexpr u8t kPlayVFXParticleConformShift   = 5;
+static constexpr u8t kPlayVFXParticleConformMask    = 0x60;
+
 union SkillEventPayload {
     struct SpawnHitbox {
         u8t defIdx;
@@ -72,10 +85,12 @@ union SkillEventPayload {
 
     struct PlayVFX {
         mu::Vec3 localOffset;
+        mu::Vec3 localEulerDeg;        // attach-local orientation offset (yaw, pitch, roll degrees)
+        mu::Vec3 advanceForwardLocal;  // attach-local particle travel direction; zero = derive from orientation
         u8t      vfxId;
         u8t      attachType;
         u8t      attachVfxId;
-        u8t      pad;
+        u8t      flags;                // bit0 = yawOnly (ground-plane placement)
         char     attachTargetName[16];
     } playVFX;
 
@@ -105,7 +120,7 @@ union SkillEventPayload {
         float speedMps;
     } spawnProjectile;
 
-    u8t raw[32];
+    u8t raw[56];
 };
 
 struct TimelineEvent {

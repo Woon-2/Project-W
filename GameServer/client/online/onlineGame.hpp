@@ -189,6 +189,7 @@ private:
 
 	SkillSystem          skillSystem_{};
 	SkillDispatchContext skillCtx_{};
+	GroundSampler        groundSampler_{};  // bound to chunkManager_; referenced by skillCtx_.ground
 	std::vector<Object*>          skillObjectById_{};
 	std::vector<ParticleEffect*>  skillVfxById_{};
 
@@ -260,7 +261,11 @@ private:
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, ArrowVolley, ArrowRain, EnergyExplosionArrow, TornadoShot, Piercing, PiercingSlash, PiercingCircleSlash, PiercingMulti };
+	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
+	// their ground placement is now data-driven (skill PlayVFX groundSnap +
+	// AttachType::Ground), not a hardcoded heightAtWorld snap. Keep this list in
+	// the same order as the dropdown setup() strings (idx -> enum by cast).
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, CrystalsCrossFade, Arrow, ArrowVolley, EnergyExplosionArrow, TornadoShot, Piercing, PiercingSlash, PiercingCircleSlash, PiercingMulti };
 	SwordEffect currentEffect_ = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};

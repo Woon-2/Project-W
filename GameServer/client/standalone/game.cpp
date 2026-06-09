@@ -730,83 +730,8 @@ void Game::setupStage() {
 		static_cast<float>(gClientRect.bottom - gClientRect.top)
 	);
 	uiManager_.requestDebugResources(gfx_);
-	auto* pLabel = static_cast<UI::Label*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Label>())
-	);
-	pLabel->name    = "hpLabel";
-	pLabel->anchor  = UI::Anchors::Center; // 부모의 어느 점에 붙을 지
-	pLabel->pivot   = UI::Pivots::Center;	 // 내 박스의 어느 점에 못을 걸지	
-	pLabel->width   = UI::DimValue::px(1000.0f);
-	pLabel->height  = UI::DimValue::px(500.0f);
-	pLabel->offsetX = UI::DimValue::px( -225.f );
-	pLabel->offsetY = UI::DimValue::px( -250.f );
-	pLabel->setTextHAlign(UI::TextHAlign::Center);
-	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nG: GBuffer 버퍼내용 순환(0=None, 1=Albedo, ..., 7=Depth)\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
-	pLabel->setFontSize(20.0f);
-	//pLabel->setAutoSize( true );
-	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
-
-	constexpr float kPlayerHpUiX = 20.f;
-	constexpr float kPlayerHpUiY = 20.f;
-	constexpr float kPlayerHpHeartSize = 32.f;
-	constexpr float kPlayerHpHeartGap = 8.f;
-	constexpr float kPlayerHpBarHeight = 18.f;
-
-	playerHpHeart_ = static_cast<UI::Image*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Image>())
-	);
-	playerHpHeart_->name    = "playerHpHeart";
-	playerHpHeart_->anchor  = UI::Anchors::TopLeft;
-	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
-	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->offsetX = UI::DimValue::px(kPlayerHpUiX);
-	playerHpHeart_->offsetY = UI::DimValue::px(kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f);
-	playerHpHeart_->texture = assetManager_.playerHpHeart();
-
-	playerHpBar_ = static_cast<UI::ProgressBar*>(
-		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
-	);
-	playerHpBar_->name    = "playerHpBar";
-	playerHpBar_->anchor  = UI::Anchors::TopLeft;
-	playerHpBar_->pivot   = UI::Pivots::TopLeft;
-	playerHpBar_->width   = UI::DimValue::px(300.f);
-	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpBar_->offsetX = UI::DimValue::px(kPlayerHpUiX + kPlayerHpHeartSize + kPlayerHpHeartGap);
-	playerHpBar_->offsetY = UI::DimValue::px(kPlayerHpUiY);
-	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
-	playerHpBar_->setProgress(1.f);
-
-	effectDropdown_ = static_cast<UI::Dropdown*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Dropdown>())
-	);
-	effectDropdown_->name    = "effectDropdown";
-	effectDropdown_->anchor  = UI::Anchors::TopRight;
-	effectDropdown_->pivot   = UI::Pivots::TopRight;
-	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
-	effectDropdown_->offsetY = UI::DimValue::px(12.f);
-	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot", "Piercing", "Piercing Slash", "Piercing Circle Slash", "Piercing Multi" });
-	effectDropdown_->onSelectionChanged = [this](int idx) {
-		currentEffect_ = static_cast<SwordEffect>(idx);
-	};
-	hiZStatsLabel_ = static_cast<UI::Label*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Label>())
-	);
-	hiZStatsLabel_->name    = "hiZStatsLabel";
-	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
-	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
-	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
-	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
-	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
-	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
-	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
-	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
-	hiZStatsLabel_->setFontSize(18.0f);
-	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
-	hiZStatsLabel_->setText(L"HiZ: OFF");
+	// 기존 standalone HUD(도움말 라벨/플레이어 HP바/HiZ 라벨)는 에디터 UI와 겹쳐 제거했다.
+	// 조작법·상태·편집 패널은 EditorController가 별도로 구성한다.
 
 	// Hi-Z occlusion culling용 renderObjectId 할당
 	{
@@ -833,15 +758,58 @@ void Game::setupStage() {
 		if (player_) { player_->setFaction(Faction::Players);  skillObjectById_[0] = player_.get(); }
 		if (goblin_) { goblin_->setFaction(Faction::Monsters); skillObjectById_[1] = goblin_.get(); }
 
-		skillVfxById_.assign(2, nullptr);
-		skillVfxById_[1] = &swordSlash1Effect_;  // effects/sword_slash_1.json
+		// vfxId 0 is reserved for hit/blood VFX (none bound in editor -> no-op).
+		// vfxId 1..18 bind 1:1 to each built ParticleEffect, mirroring the skill
+		// foundation .lua files (each PlayVFX vfxId indexes this array directly).
+		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
+		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
+		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
+		skillVfxById_[4]  = &swordSlash7Effect_;          // Slash7
+		skillVfxById_[5]  = &spikesAttackEffect_;         // Spikes
+		skillVfxById_[6]  = &crystalsFrontAttackEffect_;  // CrystalsFrontAttack
+		skillVfxById_[7]  = &aoESlashGreenEffect_;        // AoESlashGreen
+		skillVfxById_[8]  = &redEnergyExplosionEffect_;   // RedEnergyExplosion
+		skillVfxById_[9]  = &crystalsCrossFadeEffect_;    // CrystalsCrossFade
+		skillVfxById_[10] = &arrowEffect_;                // Arrow
+		skillVfxById_[11] = &arrowVolleyEffect_;          // ArrowVolley
+		skillVfxById_[12] = &arrowRainEffect_;            // ArrowRain
+		skillVfxById_[13] = &energyExplosionArrowEffect_; // EnergyExplosionArrow
+		skillVfxById_[14] = &tornadoShotEffect_;          // TornadoShot
+		skillVfxById_[15] = &piercingEffect_;             // Piercing
+		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
+		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
+		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
 
 		skillCtx_.objectById     = skillObjectById_.data();
 		skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
 		skillCtx_.vfxById        = skillVfxById_.data();
 		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera         = &camera_;
+
+		// Terrain query for ground-snapped placement (PlayVFX ground flags,
+		// AttachType::Ground hitboxes, particle ground-conform/collision).
+		groundSampler_.heightAt = [this](float x, float z) {
+			return chunkManager_.empty() ? 0.f : chunkManager_.heightAtWorld(x, z);
+		};
+		groundSampler_.normalAt = [this](float x, float z) {
+			return chunkManager_.empty() ? mu::Vec3{ 0.f, 1.f, 0.f } : chunkManager_.normalAtWorld(x, z);
+		};
+		skillCtx_.ground = &groundSampler_;
 	}
+
+	// Boot the skill / monster-pattern authoring tool on top of the standalone world.
+	Editor::Controller::InitRefs editorRefs{};
+	editorRefs.skillSystem = &skillSystem_;
+	editorRefs.skillCtx    = &skillCtx_;
+	editorRefs.camera      = &camera_;
+	editorRefs.uiManager   = &uiManager_;
+	editorRefs.debugBV     = &debugBVView_;
+	editorRefs.player      = player_;
+	editorRefs.goblin      = goblin_;
+	editorRefs.hwnd        = ghWnd;
+	editorRefs.terrainHeightAt = groundSampler_.heightAt;
+	editor_.init(editorRefs);
 }
 
 void Game::setupMonsterHpBars() {
@@ -2477,20 +2445,21 @@ void Game::update(Milliseconds deltaTime) {
 	// 입력 처리
 	processInput(deltaTime);
 
+	// 에디터 슬로모션/일시정지: 시뮬레이션 계열(물리/스킬/애니메이션)에만 timeScale 적용.
+	// 입력·카메라·UI는 실시간(deltaTime)으로 동작시켜 조작 반응성을 유지한다.
+	const float editorScale = editor_.timeScale();
+	const Milliseconds simDt = deltaTime * editorScale;
+
 	// debug BV 갱신 (TTL 감소 + 소멸 조건 평가)
 	debugBVView_.update(deltaTime);
 
-	// 몬스터 AI 공격 처리
-	// 쿨타임 감소 후 플레이어와 AABB 교차 시 EvAttack + EvHit 발생
-	if (!playerDead_) {
-		combatSystem_.update(deltaTime, player_->getId(), eventList_);
-	}
+	// 몬스터 AI는 에디터 모드에서 비활성화한다. 스킬은 Space 재생으로만 구동.
 
 	// Skill system: advance timers, fire timeline events, update hitboxes, detect collisions.
-	if (!playerDead_) {
-		skillSystem_.update(deltaTime, skillCtx_);
-		if (skillDebugBV_) skillSystem_.renderDebugHitboxes(debugBVView_);
-	}
+	skillSystem_.update(simDt, skillCtx_);
+
+	// 에디터: 선택 히트박스 하이라이트 + 패널 갱신 (worldOBB 최신 상태에서 push).
+	editor_.refresh();
 
 	// 이벤트 처리
 	for (auto pEvRaw : eventList_) {
@@ -2579,7 +2548,7 @@ void Game::update(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	const Seconds clampedDt = std::min(Seconds(simDt), kMaxPhysicsDeltaTime);
 	physicUpdateAcc_ += clampedDt * rdDebugTimeScale_;
 
 	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
@@ -2656,12 +2625,12 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / effectiveInterval;
 
-	player_->update(deltaTime, tPhysicInterpolation);
-	goblin_->update(deltaTime, tPhysicInterpolation);
+	player_->update(simDt, tPhysicInterpolation);
+	goblin_->update(simDt, tPhysicInterpolation);
 	for (auto& g : goblins_) {
-		g->update(deltaTime, tPhysicInterpolation);
+		g->update(simDt, tPhysicInterpolation);
 	}
-	
+
 	animSystem_.updatePriorities(
 		std::chrono::duration_cast<Seconds>(deltaTime),
 		player_->pos()
@@ -2670,7 +2639,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 지형 청크 스트리밍 틱 (카메라 갱신 전에 호출하여 카메라가 최신 지형을 질의하도록 함).
 	chunkManager_.update(player_->pos(), deltaTime);
 
-	camera_.update(deltaTime);
+	editor_.updateCamera(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -2725,8 +2694,8 @@ void Game::update(Milliseconds deltaTime) {
 	uiManager_.layout();
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
-	// 애니메이션 업데이트
-	animSystem_.update(0.01s);
+	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
+	animSystem_.update(Seconds(0.01f * editorScale));
 
 	// Ragdoll 활성화: 이번 프레임 사망 → finalXformData 확정 후 seed + activate
 	// Ragdoll 동기화: 활성 ragdoll body 위치를 finalXformData에 덮어씀
@@ -2839,31 +2808,34 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	// 파티클
+	// 환경 파티클(불꽃/연기/먼지)은 실시간(deltaTime)으로 유지해 씬을 살아 있게 둔다.
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
-	swordSlash1Effect_.update( deltaTime );
-	swordSlash7Effect_.update( deltaTime );
-	swordSlashComboEffect_.update( deltaTime );
-	slashWaveEffect_.update( deltaTime );
-	spikesAttackEffect_.update( deltaTime );
-	piercingEffect_.update( deltaTime );
-	piercingMultiEffect_.update( deltaTime );
-	piercingSlashEffect_.update( deltaTime );
-	piercingCircleSlashEffect_.update( deltaTime );
-	crystalsFrontAttackEffect_.update( deltaTime );
-	aoESlashGreenEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
-	redEnergyExplosionEffect_.update( deltaTime );
-	crystalsCrossFadeEffect_.update( deltaTime );
-	arrowEffect_.update( deltaTime );
-	arrowVolleyMuzzleEffect_.update( deltaTime );
-	arrowVolleyEffect_.update( deltaTime );
-	arrowRainMuzzleEffect_.update( deltaTime );
-	arrowRainEffect_.update( deltaTime );
-	energyExplosionArrowEffect_.update( deltaTime );
-	tornadoShotEffect_.update( deltaTime );
-	tornadoMuzzleEffect_.update( deltaTime );
-	tornadoHitEffect_.update( deltaTime );
+	// 스킬 VFX 이펙트는 시뮬레이션 계열이므로 simDt(에디터 timeScale 적용)로 구동한다.
+	// 일시정지 시 함께 멈춰야 VFXParticleAttach 히트박스가 파티클을 따라 계속 움직이지 않는다.
+	swordSlash1Effect_.update( simDt );
+	swordSlash7Effect_.update( simDt );
+	swordSlashComboEffect_.update( simDt );
+	slashWaveEffect_.update( simDt );
+	spikesAttackEffect_.update( simDt );
+	piercingEffect_.update( simDt );
+	piercingMultiEffect_.update( simDt );
+	piercingSlashEffect_.update( simDt );
+	piercingCircleSlashEffect_.update( simDt );
+	crystalsFrontAttackEffect_.update( simDt );
+	aoESlashGreenEffect_.update( simDt );
+	redEnergyExplosionEffect_.update( simDt );
+	crystalsCrossFadeEffect_.update( simDt );
+	arrowEffect_.update( simDt );
+	arrowVolleyMuzzleEffect_.update( simDt );
+	arrowVolleyEffect_.update( simDt );
+	arrowRainMuzzleEffect_.update( simDt );
+	arrowRainEffect_.update( simDt );
+	energyExplosionArrowEffect_.update( simDt );
+	tornadoShotEffect_.update( simDt );
+	tornadoMuzzleEffect_.update( simDt );
+	tornadoHitEffect_.update( simDt );
 
 	// Advance tornado shot origin forward each frame
 	if ( tornadoShotActive_ ) {
@@ -3040,195 +3012,10 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 이동 가속도만 담당. 감속은 PhysicsWorld의 linearDamping(마찰)이 처리한다.
-	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
-	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
-	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
-	const bool rightMouseDragging = !uiManager_.needsCursor() && (keyboardStateCurr_[VK_RBUTTON] & 0x80);
-
-	if (moveXSign || moveZSign) {
-		if (!rightMouseDragging && std::abs(static_cast<float>(cameraYaw_)) > 1e-5f) {
-			player_->setOrient(player_->orient() * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), cameraYaw_));
-			cameraYaw_ = 0.f;
-		}
-
-		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
-		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
-		const auto moveDirection = mu::NVec3(
-			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
-		);
-
-		// x/z 방향으로만 가속. y(중력)는 물리 엔진이 담당.
-		const auto fullVel = player_->velocity();
-		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
-		float newX = fullVel.x() + accel.x();
-		float newZ = fullVel.z() + accel.z();
-
-		// x/z 속도만 클램프 (y는 건드리지 않음).
-		const float hSpd2 = newX * newX + newZ * newZ;
-		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
-			newX *= scale;
-			newZ *= scale;
-		}
-		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
-	}
-
-	// Q key: trigger SwordSlash skill on the player.
-	if ( !playerDead_
-		&& !uiManager_.needsCursor()
-		&& (keyboardStateCurr_['Q'] & 0x80)
-		&& !(keyboardStatePrev_['Q'] & 0x80)
-		) {
-		skillSystem_.startSkill("SwordSlash", player_->getId(), skillCtx_);
-	}
-
-	// H key: toggle skill hitbox BV debug rendering.
-	if ( (keyboardStateCurr_['H'] & 0x80)
-		&& !(keyboardStatePrev_['H'] & 0x80)
-		) {
-		skillDebugBV_ = !skillDebugBV_;
-	}
-
-	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사
-	if ( !playerDead_
-		&& !uiManager_.needsCursor()
-		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		) {
-		combatSystem_.onPlayerAttack( player_->getId(), eventList_ );
-		// 공격 발동 시 플레이어 attack hitbox를 1500ms 동안 live 추적으로 렌더링
-		if ( auto spec = combatSystem_.queryAttackSpec( player_->getId() ) ) {
-			debugBVView_.pushLive( spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms );
-		}
-
-		// 검기 이펙트 emit: SlashPath가 플레이어 forward 방향으로 날아가도록 회전을 함께 전달한다.
-		const auto slashPos = player_->renderState().pos
-			+ player_->forward() * 1.f
-			+ mu::Vec3( 0.f, 1.0f, 0.f );
-		switch ( currentEffect_ ) {
-		case SwordEffect::SlashCombo: swordSlashComboEffect_.play( slashPos ); break;
-		case SwordEffect::Slash7:     swordSlash7Effect_.play( slashPos );     break;
-		case SwordEffect::Slash1:     swordSlash1Effect_.play( slashPos );     break;
-		case SwordEffect::SlashWave:  slashWaveEffect_.play( slashPos, player_->orient() );       break;
-		case SwordEffect::Spikes:              spikesAttackEffect_.play( slashPos );          break;
-		case SwordEffect::Piercing:            piercingEffect_.play( slashPos, player_->orient() );              break;
-		case SwordEffect::PiercingSlash:       piercingSlashEffect_.play( slashPos, player_->orient() );         break;
-		case SwordEffect::PiercingCircleSlash: piercingCircleSlashEffect_.play( slashPos, player_->orient() );   break;
-		case SwordEffect::PiercingMulti: {
-			const auto multiCenter = player_->renderState().pos
-				+ player_->forward() * (kPiercingMultiRadius + 1.f)
-				+ mu::Vec3( 0.f, 1.0f, 0.f );
-			piercingMultiEffect_.play( multiCenter, player_->orient() );
-			break;
-		}
-		case SwordEffect::CrystalsFrontAttack: {
-			const auto crystalPos = player_->renderState().pos + player_->forward() * 1.f;
-			const mu::Mat4x4 crystalOrient = mu::rotateYH( mu::Degree( -90.f ) ) * player_->orient().mat4();
-			crystalsFrontAttackEffect_.play( crystalPos, crystalOrient, player_->forward() );
-			break;
-		}
-		case SwordEffect::AoESlashGreen: {
-			const auto aoePos = slashPos + player_->forward() * 5.5f;
-			aoESlashGreenEffect_.play( aoePos, player_->orient(), player_->forward() );
-			break;
-		}
-		case SwordEffect::Arrow: {
-			const auto arrowOrigin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.5f;
-			arrowEffect_.play( arrowOrigin, player_->orient() );
-			break;
-		}
-		case SwordEffect::ArrowVolley: {
-			const auto volleyOrigin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.6f;
-			arrowVolleyMuzzleEffect_.play( volleyOrigin, player_->orient() );
-			arrowVolleyEffect_.play( volleyOrigin, player_->orient() );
-			break;
-		}
-		case SwordEffect::ArrowRain: {
-			const auto muzzlePos = player_->renderState().pos + mu::Vec3{ 0.f, 1.2f, 0.f };
-			auto rainCenter = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( !chunkManager_.empty() ) {
-				const float groundY = chunkManager_.heightAtWorld( rainCenter.x(), rainCenter.z() );
-				rainCenter = { rainCenter.x(), groundY, rainCenter.z() };
-			}
-			arrowRainMuzzleEffect_.play( muzzlePos, player_->orient() );
-			arrowRainEffect_.play( rainCenter, player_->orient() );
-			debugBVView_.pushCircle( rainCenter, kArrowRainRadius, 1500ms, { 1.f, 0.f, 0.f, 1.f } );
-			break;
-		}
-		case SwordEffect::RedEnergyExplosion: {
-			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( !chunkManager_.empty() ) {
-				const float groundY = chunkManager_.heightAtWorld( explosionPos.x(), explosionPos.z() );
-				explosionPos = { explosionPos.x(), groundY + 0.1f, explosionPos.z() };
-			}
-			else {
-				explosionPos += mu::Vec3( 0.f, 0.1f, 0.f );
-			}
-			redEnergyExplosionEffect_.play( explosionPos, player_->orient(), player_->forward() );
-			break;
-		}
-		case SwordEffect::CrystalsCrossFade: {
-			crystalsCrossFadeEffect_.play( slashPos );
-			break;
-		}
-		case SwordEffect::EnergyExplosionArrow: {
-			const auto origin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 1.2f, 0.f }
-				+ player_->forward() * 0.5f;
-			energyExplosionArrowEffect_.play( origin, player_->orient() );
-			break;
-		}
-		case SwordEffect::TornadoShot: {
-			if ( tornadoShotActive_ )
-				tornadoShotEffect_.stop();
-			const auto origin = player_->renderState().pos
-				+ mu::Vec3{ 0.f, 0.8f, 0.f }
-				+ player_->forward() * 0.5f;
-			tornadoMuzzleEffect_.play( origin );
-			tornadoShotEffect_.play( origin, player_->orient() );
-			tornadoShotActive_  = true;
-			tornadoShotPos_     = origin;
-			tornadoShotDir_     = player_->forward();
-			tornadoShotOrient_  = player_->orient();
-			tornadoShotElapsed_ = 0s;
-			break;
-		}
-		}
-	}
-
-	// 마우스 민감도를 기반으로 플레이어 yaw, 카메라 pitch를 계산한다.
-	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
-    const auto mouseSensitivity = mu::pi * 2.f;
-
-	const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
-	auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
-
-	cameraPitch_ = std::clamp(
-		static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-		-mu::pi * 0.16f,
-		mu::pi * 0.3f
-	);
-
-	if (!playerDead_) {
-		if (rightMouseDragging) {
-			cameraYaw_ += yaw;
-		}
-		else if (std::abs(static_cast<float>(yaw)) > 1e-6f) {
-			player_->setOrient(player_->orient() * yawRotation);
-			cameraYaw_ = 0.f;
-		}
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-	}
-	else {
-		cameraYaw_ += yaw;
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-	}
-
+	// 모든 게임플레이/카메라 입력은 EditorController에 위임한다
+	// (캐스터 이동, 카메라 follow/free, 히트박스 피킹, 필드 넛지, 스킬 재생 등).
+	editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
+		mouseDeltaX_, mouseDeltaY_, deltaTime);
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
@@ -3241,11 +3028,6 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			releaseCursor();
 		}
-	}
-
-	// C key: toggle CSM cascade debug visualization
-	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
-		gfx_.toggleCsmDebugVisualization();
 	}
 
 	// H key: toggle Hi-Z occlusion culling
@@ -3275,77 +3057,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		dumpLog();
 	}
 
-	// F key: emit particles for testing
-	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
-		const auto slashPos = player_->renderState().pos
-			+ player_->forward() * 1.f
-			+ mu::Vec3( 0.f, 1.0f, 0.f );
-		swordSlash1Effect_.play(slashPos);
-	}
-
-	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
-		cursorShowEnabled_ = !cursorShowEnabled_;
-		if (cursorShowEnabled_) {
-			showCursor();
-		}
-		else {
-			hideCursor();
-		}
-	}
-
 	// Z 키를 누르면 중력을 켜고 끈다 (임시 디버그 기능).
 	if ( (keyboardStateCurr_['Z'] & 0x80) && !(keyboardStatePrev_['Z'] & 0x80) ) {
 		gravityEnabled_ = !gravityEnabled_;
 		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
 	}
 
-	// --- Physics constraint / ragdoll debug tools ---
-	// Keys 1-5: spawn test structures. K: clear all. R: impulse ray.
-	// Comma/Period: halve/double impulse strength. M: slow motion cycle.
-	// 1-8: spawn test object. V: OBB visualization. I: random blast. P: freeze toggle.
-#define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
-	if (RD_KEY_DOWN('1')) spawnTestObject(1);
-	if (RD_KEY_DOWN('2')) spawnTestObject(2);
-	if (RD_KEY_DOWN('3')) spawnTestObject(3);
-	if (RD_KEY_DOWN('4')) spawnTestObject(4);
-	if (RD_KEY_DOWN('5')) spawnTestObject(5);
-	if (RD_KEY_DOWN('6')) spawnTestObject(6);
-	if (RD_KEY_DOWN('7')) spawnTestObject(7);
-	if (RD_KEY_DOWN('8')) spawnTestObject(8);
-	if (RD_KEY_DOWN('K')) clearTestObjects();
-	if (RD_KEY_DOWN('R')) fireImpulseRay();
-
-	if (RD_KEY_DOWN(VK_OEM_COMMA))  rdImpulseStrength_ = std::max(0.5f,  rdImpulseStrength_ * 0.5f);
-	if (RD_KEY_DOWN(VK_OEM_PERIOD)) rdImpulseStrength_ = std::min(500.f, rdImpulseStrength_ * 2.0f);
-
-	if (RD_KEY_DOWN('M')) {
-		if      (rdDebugTimeScale_ >= 1.f)   rdDebugTimeScale_ = 0.25f;
-		else if (rdDebugTimeScale_ >= 0.25f) rdDebugTimeScale_ = 0.05f;
-		else                                  rdDebugTimeScale_ = 1.0f;
-	}
-	if (RD_KEY_DOWN('V')) rdShowBodies_ = !rdShowBodies_;
-
-	if (RD_KEY_DOWN('I')) {
-		static std::mt19937 rng{ std::random_device{}() };
-		std::uniform_real_distribution<float> d(-1.f, 1.f);
-		for (auto& obj : rdObjects_) {
-			for (auto& b : obj.bodies) {
-				if (b->motionType() != MotionType::Dynamic) continue;
-				// Bias upward component so blasts send bodies outward, not into the floor.
-				const mu::Vec3 rawDir{ d(rng), std::abs(d(rng)) * 0.5f + 0.3f, d(rng) };
-				const mu::Vec3 dir = mu::Vec3(mu::NVec3(rawDir));
-				b->applyImpulse(dir * rdImpulseStrength_, b->pos());
-			}
-		}
-	}
-
-	if (RD_KEY_DOWN('P')) {
-		rdFrozen_ = !rdFrozen_;
-		if (rdFrozen_)
-			for (auto& obj : rdObjects_) obj.freezeAll();
-	}
-#undef RD_KEY_DOWN
 }
 
 void Game::cullObjects() {

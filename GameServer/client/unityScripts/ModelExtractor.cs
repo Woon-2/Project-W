@@ -561,6 +561,10 @@ public class ModelExtractorWindow : EditorWindow
                 ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
 
+                // static 여부 (본에 붙은 박스는 본의, 그 외는 대상 오브젝트의 static 플래그를 따른다)
+                bool isStatic = box.bone != null ? box.bone.gameObject.isStatic : targetObject.isStatic;
+                ExtractUtil.WriteInteger(geometryWriter, "IsStatic", isStatic ? 1 : 0);
+
                 ExtractUtil.WriteTailTag(geometryWriter, "Box");
             }
 

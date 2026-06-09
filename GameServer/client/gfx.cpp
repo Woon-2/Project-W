@@ -709,11 +709,16 @@ void GFX::createSwapChain() {
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleIndices.init(
 		device_.Get(), sizeof(u32t) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleIndices"
 	);
-	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupCnt.initReadback(
-		device_.Get(), sizeof(u32t) * 1000u
+	// visibility feedback: 단일 리소스 2-slot ring (roomCnt=1, byteWidth = 2 * slotBytes).
+	// DEFAULT(UAV) 면과 READBACK 면 모두 단일 리소스로 2슬롯을 byte offset으로 표현한다.
+	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibilityFeedback.init(
+		device_.Get(),
+		2u * static_cast<u64t>(PBRDeferredSkinnedPipeline::Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t),
+		1u, "PBRDeferredSkinned_HiZ_VisibilityFeedback"
 	);
-	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleFlags.initReadback(
-		device_.Get(), sizeof(u32t) * 200'000u
+	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibilityFeedback.initReadback(
+		device_.Get(),
+		2u * static_cast<u64t>(PBRDeferredSkinnedPipeline::Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t)
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
@@ -1837,7 +1842,8 @@ void GFX::render() {
 		std::move(drawEventsPBRDeferredSkinnedPipeline_), std::move(lightDataPBRDeferredSkinnedPipeline_),
 		mainDirectionalLightPBRDeferredSkinnedPipeline_, cameraDataPBRDeferredSkinnedPipeline_,
 		frameDataPBRDeferredSkinnedPipeline_,
-		frameIdx_ % backBuffers_.size()
+		frameIdx_ % backBuffers_.size(),
+		static_cast<u32t>(frameIdx_ % 2u)   // visibility ring slot (2-slot, backbuffer 수와 무관)
 	);
 
 	// UI Pipeline의 Dispatch

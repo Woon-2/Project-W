@@ -158,19 +158,40 @@ Light::updateCSMCascades()
 
 **5단계 GPU 파이프라인 (`hiZPassCompute()`):**
 1. **Clear** — perGroupCnt / groupOffsets / visibleFlags 초기화
-2. **Cull** — HiZ depth map으로 각 DrawEvent visibility 판정 → `visibleFlags[]` (u32t per DrawEvent, 0=culled, 1=visible)
+2. **Cull** — HiZ depth map으로 각 DrawEvent visibility 판정. 출력 2갈래:
+   - `visibleFlags[]` (u32t per DrawEvent, 0/1) — indirect draw용(Compact가 소비)
+   - `visibilityFeedback`(u3) — CPU feedback용 packed 엔트리 `(objId<<1 | visBit)`
+
+   **Cull 입력 AABB (포즈/랙돌 추종):** 셰이더는 `world × aabbMin/aabbMax`를 스크린 투영해
+   occlusion을 판정한다. 스킨드 메시는 `mesh->bounds`(rest-pose 로컬) × `e.world`(객체 루트)가
+   본 변형(애니/랙돌)을 반영하지 못해, 특히 **랙돌 시 사망 시점 위치의 stale AABB**로 잘못
+   컬링된다(몸/옷이 별도 메시·별도 bounds라 옷만 사라지는 증상). 따라서 `Object::worldCullBounds()`가
+   `body_.worldBVH()`의 **본 부착 노드 합집합 AABB**(포즈를 따라가는 월드 공간 바운드, +15% 마진)를
+   제공하고, 유효하면(`DrawEvent::hasWorldCullBounds`) cull 스테이징이 이를 **identity world**로
+   투영한다(없으면 rest-pose × world로 폴백). 같은 객체의 모든 draw event가 동일 AABB를 공유해
+   몸/옷이 일관되게 판정되며, frustum culling이 신뢰하는 `worldBVH` 소스와 동일하다.
 3. **PrefixSum** — groupOffsets 계산
 4. **Compact** — visibleFlags(SRV)를 읽어 visibleIndices 작성
 5. **Command** — indirect draw args 생성 → `gBufferIndirectDraw()`에서 소비
 
-**visibleFlags readback (1-frame delay):**
-- Compact Pass 이후, `CopyBufferRegion`으로 `visibilityReadback`(READBACK heap)에 복사
-- 다음 프레임 `hiZPassUpdate()`에서 CPU 읽기 → `objectVisibility[]` 집계 (OR)
-- `DrawEvent::renderObjectId` 쿠키로 GPU→CPU 역매핑 (GFX/game 레이어 분리 유지)
+**visibility feedback (2-slot ring buffer, objId 패킹):**
+- 단일 `RWStructuredBuffer visibilityFeedback`(roomCnt=1, byteWidth = 2*slotBytes, +readback).
+  byte offset으로 2슬롯 표현(슬롯 s = `s * slotBytes`). `parity = frameIdx % 2`가 슬롯 선택.
+- Cull이 u3에 슬롯 offset으로 바인딩되어 `gVisibility[idx] = (objId<<1)|vis`를 dense하게 기록
+  (모든 instance 한 엔트리, visible/culled 무관). 엔트리에 objId가 패킹돼 **self-describing** —
+  프레임 간 DrawEvent 순서/개수와 무관해 슬롯을 자유롭게 교차 판독 가능.
+- Cull 직후 `copyToReadback`으로 같은 슬롯 offset에 복사. **전용 fence 없음** —
+  coherency는 전역 프레임 펜스(매 프레임 `FrameFence[N-2]` 대기)가 제공.
+- 다음 프레임 `hiZPassUpdate()`가 **두 슬롯을 모두 읽어** `objectVisibility[oid]`를 OR 집계.
+  same-parity 슬롯(=N-2, 이번에 덮어쓸 슬롯)은 펜스로 완성·coherent 보장, 나머지는 torn 가능하나
+  **OR-only + objId bounds-check**로 최악이 보수적(과다 visible) → 안전. 렌더 누락 불가능.
+- slot별 엔트리 수는 GPU readback이 아니라 **CPU가 직접 추적**(`slotEntryCount[2]` =
+  그 슬롯을 쓴 프레임의 `gBufferEvents_.size()`). 시작 프레임(데이터 없음)은 전부 visible로 시작.
 
-**readback 타이밍 규칙:** `visibleFlags`는 Compact Pass에서 SRV로 소비되므로, CopyBufferRegion은 반드시 Compact Pass 완료 이후에 수행. Cull Pass 직후 복사 시 상태 전환 충돌.
+**room 비종속:** visibility는 한 프레임 종속 자원이 아니라 2-slot ring으로 충분하므로,
+이 버퍼는 backbuffer 수(triple buffering)와 무관하게 항상 2슬롯이다(roomCnt=1).
 
-**visibleFlags readback 용도:** `objectVisibility[]` 집계를 통한 **애니메이션 최적화 및 디버그 전용**.
+**용도:** `objectVisibility[]` 집계를 통한 **애니메이션/물리 연산 스킵 및 디버그 전용**.
 Draw call skip에는 사용하지 않는다 — GPU indirect draw가 직접 instance count를 결정하므로.
 
 **컬링 아키텍처 — compact event array 설계:**
@@ -186,8 +207,9 @@ DrawEvent 내 플래그로 컬링 상태를 전달하며, `sortDrawEvents()` 시
 - `perInstanceData`는 항상 compact — culled 인스턴스는 삽입조차 안 됨 (zero-init placeholder 없음)
 - `firstInstanceOffset = gFirst - gBufferEvents_.begin()` (또는 `shadowEvents_`) — compact 배열 기준 절대 오프셋
 - Hi-Z 5단계 compute 및 indirect draw 도 `gBufferEvents_` 기준으로 동작
-  - `hiZPassUpdate()`: `perInstanceDataCull/Compact`, `lastDrawEventObjectIds` 크기 = `gBufferEvents_.size()`
-  - `hiZPassCompute()`: Cull/Compact dispatch = `gBufferEvents_.size()`, readback 복사 크기 동일
+  - `hiZPassUpdate()`: `perInstanceDataCull/Compact` 크기 = `gBufferEvents_.size()`,
+    `perInstanceDataCull[i].instanceObjId = gBufferEvents_[i].renderObjectId` 패킹
+  - `hiZPassCompute()`: Cull/Compact dispatch = `gBufferEvents_.size()`, visibility 슬롯 복사 크기 동일
 
 **컬링 플래그 분리 (self-reinforcing culling 방지):**
 

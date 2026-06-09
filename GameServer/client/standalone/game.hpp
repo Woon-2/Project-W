@@ -30,6 +30,8 @@
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Image.hpp"
 
+#include "../editor/editorController.hpp"
+
 class Timer;
 
 namespace StandAlone {
@@ -97,6 +99,7 @@ private:
 
 	SkillSystem          skillSystem_{};
 	SkillDispatchContext skillCtx_{};
+	GroundSampler        groundSampler_{};  // bound to chunkManager_; referenced by skillCtx_.ground
 	std::vector<Object*>         skillObjectById_{};
 	std::vector<ParticleEffect*> skillVfxById_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
@@ -142,6 +145,10 @@ private:
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	SwordEffect      currentEffect_  = SwordEffect::SlashWave;
 	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
+
+	// In-game skill / monster-pattern authoring tool. The standalone mode boots
+	// straight into this editor (see CLAUDE editor design doc).
+	Editor::Controller editor_{};
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

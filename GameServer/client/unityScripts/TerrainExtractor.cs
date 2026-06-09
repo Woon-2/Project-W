@@ -290,14 +290,12 @@ public class TerrainExtractor : EditorWindow
             for (int i = 0; i < L; i++)
             {
                 var ly = layers[i];
-                ExtractUtil.WriteText (w, "DiffusePath", engineBasePath + $"layer_{i}_diffuse.dds");
-                ExtractUtil.WriteText (w, "NormalPath",  engineBasePath + $"layer_{i}_normal.dds");
-                ExtractUtil.WriteFloat(w, "TileSizeX",   ly != null ? ly.tileSize.x   : 1f);
-                ExtractUtil.WriteFloat(w, "TileSizeY",   ly != null ? ly.tileSize.y   : 1f);
-                ExtractUtil.WriteFloat(w, "TileOffsetX", ly != null ? ly.tileOffset.x : 0f);
-                ExtractUtil.WriteFloat(w, "TileOffsetY", ly != null ? ly.tileOffset.y : 0f);
-                ExtractUtil.WriteFloat(w, "Metallic",    ly != null ? ly.metallic     : 0f);
-                ExtractUtil.WriteFloat(w, "Roughness",   ly != null ? 1.0f - ly.smoothness : 0.85f);
+                ExtractUtil.WriteText  (w, "DiffusePath", engineBasePath + $"layer_{i}_diffuse.dds");
+                ExtractUtil.WriteText  (w, "NormalPath",  engineBasePath + $"layer_{i}_normal.dds");
+                ExtractUtil.WriteVector(w, "TileSize",    ly != null ? ly.tileSize   : Vector2.one);
+                ExtractUtil.WriteVector(w, "TileOffset",  ly != null ? ly.tileOffset : Vector2.zero);
+                ExtractUtil.WriteFloat (w, "Metallic",    ly != null ? ly.metallic     : 0f);
+                ExtractUtil.WriteFloat (w, "Roughness",   ly != null ? 1.0f - ly.smoothness : 0.85f);
             }
 
             // ---- chunk records ----
@@ -307,9 +305,7 @@ public class TerrainExtractor : EditorWindow
                 ExtractUtil.WriteHeadTag(w, "Chunk");
                 ExtractUtil.WriteInteger(w, "Col", r.col);
                 ExtractUtil.WriteInteger(w, "Row", r.row);
-                ExtractUtil.WriteFloat  (w, "SizeX", r.sizeX);
-                ExtractUtil.WriteFloat  (w, "SizeY", r.sizeY);
-                ExtractUtil.WriteFloat  (w, "SizeZ", r.sizeZ);
+                ExtractUtil.WriteVector (w, "Size", new Vector3(r.sizeX, r.sizeY, r.sizeZ));
                 ExtractUtil.WriteInteger(w, "Resolution", r.resolution);
                 ExtractUtil.WriteInteger(w, "AlphamapResolution", r.alphamapResolution);
                 ExtractUtil.WriteInteger(w, "NeighborCount", r.neighbors.Count);
@@ -332,16 +328,9 @@ public class TerrainExtractor : EditorWindow
                 var t = m.transform;
                 ExtractUtil.WriteHeadTag(w, "Stronghold");
                 ExtractUtil.WriteInteger(w, "Id", s);                       // id = export index (stable per export)
-                ExtractUtil.WriteFloat(w, "CenterX", t.position.x);
-                ExtractUtil.WriteFloat(w, "CenterY", t.position.y);
-                ExtractUtil.WriteFloat(w, "CenterZ", t.position.z);
-                ExtractUtil.WriteFloat(w, "OrientX", t.rotation.x);
-                ExtractUtil.WriteFloat(w, "OrientY", t.rotation.y);
-                ExtractUtil.WriteFloat(w, "OrientZ", t.rotation.z);
-                ExtractUtil.WriteFloat(w, "OrientW", t.rotation.w);
-                ExtractUtil.WriteFloat(w, "ScaleX", t.lossyScale.x);
-                ExtractUtil.WriteFloat(w, "ScaleY", t.lossyScale.y);
-                ExtractUtil.WriteFloat(w, "ScaleZ", t.lossyScale.z);
+                ExtractUtil.WriteVector(w, "Center", t.position);
+                ExtractUtil.WriteQuaternion(w, "Orient", t.rotation);
+                ExtractUtil.WriteVector(w, "Scale", t.lossyScale);
                 ExtractUtil.WriteFloat(w, "ActivityRadius", m.activityRadius);
                 ExtractUtil.WriteFloat(w, "SpawnRadius", m.spawnRadius);
                 ExtractUtil.WriteInteger(w, "MaxHp", m.maxHp);
@@ -384,16 +373,9 @@ public class TerrainExtractor : EditorWindow
                     Vector3    half = Vector3.Scale(v.size, absScale) * 0.5f;
 
                     ExtractUtil.WriteInteger(w, "Shape", (int)v.shape);
-                    ExtractUtil.WriteFloat(w, "CenterX", wc.x);
-                    ExtractUtil.WriteFloat(w, "CenterY", wc.y);
-                    ExtractUtil.WriteFloat(w, "CenterZ", wc.z);
-                    ExtractUtil.WriteFloat(w, "OrientX", wq.x);
-                    ExtractUtil.WriteFloat(w, "OrientY", wq.y);
-                    ExtractUtil.WriteFloat(w, "OrientZ", wq.z);
-                    ExtractUtil.WriteFloat(w, "OrientW", wq.w);
-                    ExtractUtil.WriteFloat(w, "HalfX", half.x);
-                    ExtractUtil.WriteFloat(w, "HalfY", half.y);
-                    ExtractUtil.WriteFloat(w, "HalfZ", half.z);
+                    ExtractUtil.WriteVector(w, "Center", wc);
+                    ExtractUtil.WriteQuaternion(w, "Orient", wq);
+                    ExtractUtil.WriteVector(w, "Half", half);
                     ExtractUtil.WriteFloat(w, "Radius", v.radius * maxScale);
                 }
                 ExtractUtil.WriteTailTag(w, "Zone");
@@ -410,16 +392,9 @@ public class TerrainExtractor : EditorWindow
                 ExtractUtil.WriteText(w, "Type", mk.markerType);
                 ExtractUtil.WriteText(w, "Name",
                     string.IsNullOrEmpty(mk.markerName) ? mk.gameObject.name : mk.markerName);
-                ExtractUtil.WriteFloat(w, "PosX", mt.position.x);
-                ExtractUtil.WriteFloat(w, "PosY", mt.position.y);
-                ExtractUtil.WriteFloat(w, "PosZ", mt.position.z);
-                ExtractUtil.WriteFloat(w, "OrientX", mt.rotation.x);
-                ExtractUtil.WriteFloat(w, "OrientY", mt.rotation.y);
-                ExtractUtil.WriteFloat(w, "OrientZ", mt.rotation.z);
-                ExtractUtil.WriteFloat(w, "OrientW", mt.rotation.w);
-                ExtractUtil.WriteFloat(w, "ScaleX", mt.lossyScale.x);
-                ExtractUtil.WriteFloat(w, "ScaleY", mt.lossyScale.y);
-                ExtractUtil.WriteFloat(w, "ScaleZ", mt.lossyScale.z);
+                ExtractUtil.WriteVector(w, "Pos", mt.position);
+                ExtractUtil.WriteQuaternion(w, "Orient", mt.rotation);
+                ExtractUtil.WriteVector(w, "Scale", mt.lossyScale);
                 ExtractUtil.WriteTailTag(w, "Marker");
             }
 

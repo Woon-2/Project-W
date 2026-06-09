@@ -4,6 +4,8 @@
 
 스킬 시스템은 타임라인 기반 이벤트 방식으로 동작한다. 스킬 정의는 Lua 스크립트로 작성하고 `SkillCompiler`가 C++ 데이터(`SkillAsset`)로 컴파일한다. 런타임에는 컴파일된 에셋만 참조하며 Lua 의존성이 없다.
 
+> **스킬 작성 가이드(Lua API + 유형별 레시피)는 `skillCreationGuide.md` 참조.** 이 문서는 시스템 구조를, 가이드는 작성법을 다룬다.
+
 **공유 파일:**
 - `client/skill/skillTypes.hpp` — 불변 에셋 구조체 (SkillAsset, SkillHitboxDef, OnHitDef, TimelineEvent)
 - `client/skill/skillCompiler.hpp/.cpp` — Lua → SkillAsset 변환
@@ -34,7 +36,17 @@ TimelineEvent
   time      — 발동 시간 (ms)
   type      — SpawnHitbox / DestroyHitbox / PlayAnimation / PlayVFX /
               ApplyImpulse / CameraShake / ModifyStat / ...
-  payload   — 고정 크기 union (힙 할당 없음)
+  payload   — 고정 크기 union (힙 할당 없음, 56 bytes)
+
+PlayVFX payload — 시전자 기준 이펙트 배치/방향 제어 (형상 크기는 이펙트 .json 소관)
+  vfxId               — ParticleEffect 레지스트리 인덱스
+  localOffset         — attach-local 배치 (right, up, forward); forward.z = "전방 N미터"
+  localEulerDeg       — attach-local 방향 오프셋 (yaw, pitch, roll deg, OBB와 동일 규약)
+                        → 부채꼴 등을 시전자 기준 특정 방향으로 조준
+  advanceForwardLocal — attach-local 파티클 진행 방향 (zero = orient에서 유도, 4-인자 play)
+  flags               — bit0 kPlayVFXFlagYawOnly: 지면 평면 배치(pitch/roll 무시)
+  lua 키: vfxId / offset / orient={yaw,pitch,roll} / advance=Vec3 / groundLock=bool / attach
+  디스패치: aim = rotateRPYH(localEuler) * baseRot(yawOnly면 yaw만) → play(pos, orient[, advance])
 ```
 
 ---

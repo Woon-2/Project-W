@@ -40,6 +40,16 @@ public:
     void update() override;
     std::vector<BodyPair> queryPairs() override;
 
+    // Remove all bodies (membership rebuilt per frame by some callers, e.g. the
+    // NPC separation broad phase). Keeps allocated capacity for reuse.
+    void clear() { bodies_.clear(); endpoints_.clear(); }
+
+    // Fatten every body's AABB by this margin on each side before overlap tests.
+    // Default 0 leaves behavior identical (physics instance). A non-zero margin
+    // turns the broad phase into a radius-style neighbor query: bodies within
+    // ~margin of each other are reported as candidate pairs.
+    void setFatMargin(float m) { fatMargin_ = m; }
+
 private:
     struct Endpoint {
         float      value;
@@ -49,8 +59,9 @@ private:
 
     std::vector<RigidBody*> bodies_;
     std::vector<Endpoint>   endpoints_;
+    float                   fatMargin_ = 0.f;
 
-    static bool overlapYZ(const AABB& a, const AABB& b);
+    static bool overlapYZ(const AABB& a, const AABB& b, float margin);
 };
 
 #endif // room_server_broadPhase_hpp

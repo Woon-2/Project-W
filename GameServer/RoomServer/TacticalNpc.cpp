@@ -25,6 +25,12 @@ static mu::Vec3 norm3( mu::Vec3 v ) {
     return l > 0.0001f ? v * (1.f / l) : mu::Vec3( 0.f, 0.f, 0.f );
 }
 
+// 수평(XZ) 거리. NPC는 중력으로 지형 높이에 붙으므로 슬롯 도착 판정은 Y를 무시해야 한다
+// (슬롯 Y는 평평한 명목값이라 기복 지형에서 3D 거리가 부풀려져 도착 판정이 깨짐).
+static float lenXZ( mu::Vec3 v ) {
+    return mu::Vec3( v.x(), 0.f, v.z() ).len();
+}
+
 // XZ 방향벡터로 Y축 회전 설정
 static void setFacingDir( Object& obj, mu::Vec3 dir ) {
     if ( dir.len2() > 0.01f ) {
@@ -82,7 +88,7 @@ TacticalNpcConfig TacticalNpc::getConfig() const {
 bool TacticalNpc::isAtSlot() const {
     switch ( state_ ) {
     case TacticalNpcState::HoldSlot:
-        return (pos() - assignedSlot_).len() < separationRadius_ * 0.25f;
+        return lenXZ( pos() - assignedSlot_ ) < separationRadius_ * TACTICAL_SLOT_ARRIVE_MULT;
 
     case TacticalNpcState::ChargeThrough:
         return chargeComplete_;
@@ -105,7 +111,8 @@ void TacticalNpc::receiveCommand( const TacticalCommand& cmd ) {
 
 void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
     setPos( p );
-    setLinearVel( mu::Vec3( 0.f, 0.f, 0.f ) );
+    setLinearVel( mu::Vec3{} );      // 순간이동 잔여 속도 제거
+    setDesiredVel( mu::Vec3{} );     // motor 목표도 정지
     setHp( static_cast<int32>(maxHp_) );
     state_                    = TacticalNpcState::Idle;
     pendingCmd_               = {};
@@ -297,9 +304,11 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
     frameHits_.clear();
 
     if ( hp() <= 0 ) {
+        bool wasDead = ( state_ == TacticalNpcState::Dead );
         updateDead( room );
         TacticalNpcUpdateResult result;
         result.hits = std::move( frameHits_ );
+        result.justDied = !wasDead;   // Dead로 막 전이된 첫 틱
         return result;
     }
 
@@ -328,7 +337,7 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
 // ─── Idle ─────────────────────────────────────────────────────────────────────
 
 void TacticalNpc::updateIdle() {
-    setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+    setDesiredVel( mu::Vec3{} );
 }
 
 // ─── 공격 슬롯 예약 헬퍼 ────────────────────────────────────────────────────
@@ -550,7 +559,6 @@ void TacticalNpc::moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targe
         }
     }
 
-    float yVel = body().linearVel().y();
     mu::Vec3 xzVel( 0.f, 0.f, 0.f );
 
     if (distToDesired <= TACTICAL_PRESSURE_STOP_RADIUS || moveDir.len2() <= 0.01f) {
@@ -558,7 +566,7 @@ void TacticalNpc::moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targe
             xzVel = overlapDrift * (moveSpeed_ * TACTICAL_PRESSURE_OVERLAP_DRIFT_MULT);
         }
 
-        setLinearVel(mu::Vec3(xzVel.x(), yVel, xzVel.z()));
+        setDesiredVel(mu::Vec3(xzVel.x(), 0.f, xzVel.z()));
         return;
     }
 
@@ -571,7 +579,7 @@ void TacticalNpc::moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targe
         xzVel = xzVel + overlapDrift * (moveSpeed_ * TACTICAL_PRESSURE_OVERLAP_DRIFT_MULT);
     }
 
-    setLinearVel( mu::Vec3( xzVel.x(), yVel, xzVel.z() ) );
+    setDesiredVel( mu::Vec3( xzVel.x(), 0.f, xzVel.z() ) );
 }
 
 // ─── Chase ────────────────────────────────────────────────────────────────────
@@ -582,7 +590,7 @@ void TacticalNpc::updateChase( Seconds dt, Room& room ) {
         releaseAttackReservation( room );
         targetId_ = 0;
         transitionTo( TacticalNpcState::Idle );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -596,7 +604,7 @@ void TacticalNpc::updateChase( Seconds dt, Room& room ) {
     mu::Vec3 targetPos = target->player()->pos();
     if ( (pos() - targetPos).len2() <= attackRange_ * attackRange_ ) {
         transitionTo( TacticalNpcState::AttackWindup );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -608,7 +616,7 @@ void TacticalNpc::updateChase( Seconds dt, Room& room ) {
     mu::Vec3 moveDir = norm3( chaseDir + sepPerp * separationWeight_ );
 
     setFacingDir( *this, moveDir );
-    setLinearVel( mu::Vec3( moveDir.x() * moveSpeed_, body().linearVel().y(), moveDir.z() * moveSpeed_ ) );
+    setDesiredVel( mu::Vec3( moveDir.x() * moveSpeed_, 0.f, moveDir.z() * moveSpeed_ ) );
 }
 
 // ─── AttackWindup ─────────────────────────────────────────────────────────────
@@ -651,7 +659,7 @@ void TacticalNpc::updateAttackRecover( Seconds dt, Room& room ) {
         releaseAttackReservation( room );
         targetId_ = 0;
         transitionTo( TacticalNpcState::Idle );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -666,7 +674,7 @@ void TacticalNpc::updateAttackRecover( Seconds dt, Room& room ) {
     }
 
     setFacingDir( *this, target->player()->pos() - pos() );
-    setLinearVel( mu::Vec3( driftVel.x(), body().linearVel().y(), driftVel.z() ) );
+    setDesiredVel( mu::Vec3( driftVel.x(), 0.f, driftVel.z() ) );
 
     recoverTimer_ += dt;
 
@@ -688,7 +696,7 @@ void TacticalNpc::updatePressureWait( Seconds dt, Room& room ) {
         releaseAttackReservation( room );
         targetId_ = 0;
         transitionTo( TacticalNpcState::Idle );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -704,7 +712,7 @@ void TacticalNpc::updatePressureWait( Seconds dt, Room& room ) {
 
         if ( (pos() - targetPos).len2() <= attackRange_ * attackRange_ ) {
             transitionTo( TacticalNpcState::AttackWindup );
-            setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+            setDesiredVel( mu::Vec3{} );
             return;
         }
 
@@ -721,7 +729,7 @@ void TacticalNpc::updatePressureWait( Seconds dt, Room& room ) {
             float spd = moveSpeed_ * TACTICAL_PRESSURE_REENTER_SPEED_MULT;
 
             setFacingDir( *this, moveDir );
-            setLinearVel( mu::Vec3( moveDir.x() * spd, body().linearVel().y(), moveDir.z() * spd ) );
+            setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
         }
         return;
     }
@@ -738,7 +746,7 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
         releaseAttackReservation( room );
         targetId_ = 0;
         transitionTo( TacticalNpcState::Idle );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -747,7 +755,7 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
         return;
     }
 
-    float distToSlot = (pos() - assignedSlot_).len();
+    float distToSlot = lenXZ( pos() - assignedSlot_ );
 
     if ( distToSlot < 0.5f ) {
         float distToTarget = (pos() - target->player()->pos()).len();
@@ -762,7 +770,7 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
                 : TacticalNpcState::PressureWait );
         }
 
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -776,7 +784,7 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
 
     setFacingDir( *this, moveDir );
-    setLinearVel( mu::Vec3( moveDir.x() * spd, body().linearVel().y(), moveDir.z() * spd ) );
+    setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }
 
 // ─── ChargeThrough ────────────────────────────────────────────────────────────
@@ -789,7 +797,7 @@ void TacticalNpc::updateChargeThrough( Room& room ) {
             setFacingDir( *this, target->player()->pos() - pos() );
         }
 
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -813,10 +821,10 @@ void TacticalNpc::updateChargeThrough( Room& room ) {
         }
     }
 
-    if ( (pos() - assignedSlot_).len() < 0.75f ) {
+    if ( lenXZ( pos() - assignedSlot_ ) < 0.75f ) {
         chargeComplete_ = true;
         setFacingDir( *this, chargeDir_ );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
@@ -825,7 +833,7 @@ void TacticalNpc::updateChargeThrough( Room& room ) {
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
 
     setFacingDir( *this, moveDir );
-    setLinearVel( mu::Vec3( moveDir.x() * spd, body().linearVel().y(), moveDir.z() * spd ) );
+    setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }
 
 // ─── Confused ─────────────────────────────────────────────────────────────────
@@ -873,10 +881,27 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
 
     float spd = moveSpeed_ * CONFUSED_SPEED_MULT;
     setFacingDir( *this, moveDir );
-    setLinearVel( mu::Vec3( moveDir.x() * spd, body().linearVel().y(), moveDir.z() * spd ) );
+    setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }
 
 // ─── HoldSlot ─────────────────────────────────────────────────────────────────
+
+void MU_CALLCONV TacticalNpc::applyBlockerAvoidance( Room& room, mu::Vec3& slotDir, float distToSlot ) {
+    // 슬롯 근처에선 정밀 정렬을 위해 회피 비활성(en route에서만 우회).
+    if ( distToSlot <= separationRadius_ ) {
+        return;
+    }
+
+    nearbyCache_.clear();
+    room.findNearbyBlockerPositions( pos(), TACTICAL_BLOCKER_AVOID_RADIUS, nearbyCache_ );   // 플레이어 + 보스
+    if ( nearbyCache_.empty() ) {
+        return;
+    }
+
+    mu::Vec3 sep = calcSeparationForce( nearbyCache_, TACTICAL_BLOCKER_AVOID_RADIUS );
+    mu::Vec3 sepPerp = sep - slotDir * mu::dot( sep, slotDir );   // 진행 방향에 수직인 성분만(전진 유지)
+    slotDir = norm3( slotDir + sepPerp * separationWeight_ );
+}
 
 void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
@@ -896,28 +921,31 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     if ( !target ) {
         if ( useHoldFacing_ ) {
-            float distToSlot = (pos() - assignedSlot_).len();
+            float distToSlot = lenXZ( pos() - assignedSlot_ );
 
             if ( distToSlot < separationRadius_ * 0.25f ) {
                 setFacingDir( *this, holdFacing_ );
-                setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+                setDesiredVel( mu::Vec3{} );
                 return;
             }
 
             mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
+            applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
             float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
+            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
+                spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
             setFacingDir( *this, slotDir );
-            setLinearVel( mu::Vec3( slotDir.x() * spd, body().linearVel().y(), slotDir.z() * spd ) );
+            setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
             return;
         }
 
         targetId_ = 0;
         transitionTo( TacticalNpcState::Idle );
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
-    float distToSlot = (pos() - assignedSlot_).len();
+    float distToSlot = lenXZ( pos() - assignedSlot_ );
 
     if ( distToSlot < separationRadius_ * 0.25f ) {
         if ( useHoldFacing_ && holdFacing_.len2() > 0.01f ) {
@@ -927,14 +955,17 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             setFacingDir( *this, target->player()->pos() - pos() );
         }
 
-        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        setDesiredVel( mu::Vec3{} );
         return;
     }
 
     mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
+    applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
+    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
+        spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
     setFacingDir( *this, slotDir );
-    setLinearVel( mu::Vec3( slotDir.x() * spd, body().linearVel().y(), slotDir.z() * spd ) );
+    setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
 }
 
 // ─── Dead ─────────────────────────────────────────────────────────────────────
@@ -947,7 +978,7 @@ void TacticalNpc::updateDead( Room& room ) {
         transitionTo( TacticalNpcState::Dead );
     }
 
-    setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+    setDesiredVel( mu::Vec3{} );
 }
 
 // ─── resolveTarget / recordHit ────────────────────────────────────────────────

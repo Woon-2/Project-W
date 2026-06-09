@@ -57,6 +57,19 @@ public:
     void setOrigin(const mu::Vec3& pos, mu::NQuat orient);
     void setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform);
 
+    // Binds a terrain query used by ground-conform spawn and ground collision on
+    // every sub-system (including ones added later). Non-owning; nullptr clears.
+    void setGroundSampler(const GroundSampler* g);
+
+    // Skill-driven (Lua PlayVFX) ground behaviour. Overrides the played effect's
+    // particle config so a skill can make an effect's particles collide with /
+    // conform to the terrain WITHOUT touching the Unity-exported JSON. Applied to
+    // top-level systems only (sub-emitter children, e.g. impact bursts, are left
+    // alone so they are not killed the instant they spawn at the contact point).
+    // Mode::None / GroundConform::None leave the respective behaviour unchanged.
+    void setGroundBehavior(ps::ParticleCollisionModule::Mode collision,
+                           ps::ShapeModule::GroundConform     conform);
+
     // Calls stopContinuous() on all sub-systems.
     void stop();
 
@@ -85,6 +98,7 @@ private:
     std::vector<PendingSubEmitterBurst> pendingBursts_;
     std::mt19937                        rng_{ std::random_device{}() };
     mu::Vec3                            advanceForward_ = { 0.f, 0.f, 1.f };
+    const GroundSampler*                ground_ = nullptr;  // non-owning terrain query (optional)
 };
 
 #endif  // __particleEffect_HPP

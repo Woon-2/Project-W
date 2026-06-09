@@ -19,6 +19,8 @@
 9. [게임 루프](#9-게임-루프)
 10. [디버그 시각화](#10-디버그-시각화)
 11. [UI 시스템](#11-ui-시스템)
+12. [스킬 에디터 (standalone)](#12-스킬-에디터-standalone)
+13. [지면 연계 스킬 / 파티클](#13-지면-연계-스킬--파티클-terrain-interaction)
 
 ---
 
@@ -334,6 +336,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
 | `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::worldCullBounds()` | `object.cpp` | Hi-Z cull용 월드 AABB = worldBVH 본 부착 노드 합집합(+15% 마진), 포즈/랙돌 추종. 비스킨이면 nullopt |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
@@ -374,7 +377,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `ShaderInputBuffer` class | `gfxUtil.hpp #186` | Upload Heap 기반 CPU→GPU 버퍼 베이스 클래스 (room 단위 다중 CommandList 지원) |
 | `ConstantBuffer` class | `gfxUtil.hpp #240` | ShaderInputBuffer 상속 — `SetGraphicsRootConstantBufferView` 바인딩 |
 | `StructuredBuffer` class | `gfxUtil.hpp #257` | ShaderInputBuffer 상속 — `SetGraphicsRootShaderResourceView` 바인딩 |
-| `RWStructuredBuffer` class | `gfxUtil.hpp #275` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback` |
+| `RWStructuredBuffer` class | `gfxUtil.hpp #283` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback`. **offset 오버로드**: `bindCompute(...,byteOffset)` / `copyToReadback(...,dstByteOffset,srcByteOffset)` / `readbackPtr<T>(roomIdx,byteOffset)` — 단일 리소스 내 다중 슬롯(Hi-Z visibility 2-slot ring) 표현용 |
 | `ConstantBufferArray` struct | `gfxUtil.hpp #356` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
 
 **파일:** `client/gfx.hpp` / `client/gfx.cpp`
@@ -919,8 +922,100 @@ if (uiManager_.onWndMsg(msg, wParam, lParam)) return 0;
 
 ---
 
+## 12. 스킬 에디터 (standalone)
+
+standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동작한다.
+`StandAlone::Game`이 월드(에셋/씬/물리/gfx)를 셋업하는 호스트이고, 에디터 로직은
+`client/editor/` 모듈이 담당한다. 설계 문서: `docs/skillEditor.md`.
+
+**파일:** `client/editor/`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수 (Player 18스킬/Goblin) |
+| `Editor::SkillDraft` | `editor/skillDraft.hpp/.cpp` | 컴파일 에셋의 original/draft 사본 + 편집 필드 목록 + diff 콘솔 덤프 |
+| `SkillDraft::Field` / `FieldType` | `editor/skillDraft.hpp` | 편집 가능한 스칼라 필드(center/half/euler/onHit/time/duration) |
+| `SkillDraft::load/buildFields/applyDelta/dumpDiff` | `editor/skillDraft.cpp` | 로드/필드구성/넛지/가이드 출력 |
+| `Editor::Controller` | `editor/editorController.hpp/.cpp` | 드롭다운 2개, 히트박스 피킹, nudge 편집, slow-mo/pause, free-fly 카메라 |
+| `Controller::handleInput` | `editor/editorController.cpp` | 키/마우스 처리 (Game::processInput에서 위임) |
+| `Controller::updateCamera` | `editor/editorController.cpp` | follow(camera_.update) / free-fly(camera_.setView) 분기 |
+| `Controller::refresh` | `editor/editorController.cpp` | 선택 히트박스 하이라이트 + 패널 갱신 |
+| `Controller::pickHitbox` | `editor/editorController.cpp` | screenToRay + SkillSystem::pickHitbox |
+
+**SkillSystem 에디터 API:** `skill/skillSystem.hpp/.cpp`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `SkillSystem::startSkillAsset` | `skillSystem.cpp` | 레지스트리 외부의 draft 에셋(포인터)으로 재생 |
+| `SkillSystem::collectActiveHitboxes` | `skillSystem.cpp` | 활성 bone 히트박스 열거(`ActiveHitboxRef`) |
+| `SkillSystem::pickHitbox` | `skillSystem.cpp` | ray로 최근접 활성 히트박스 OBB 선택 |
+| `SkillSystem::setHitboxLocalOBBs/setHitboxOnHit` | `skillSystem.cpp` | 활성 히트박스 live override (pause 중 즉시 반영) |
+| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
+| `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
+| `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
+| `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
+| PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
+| PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
+| 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
+| `screenToRay(...)` | `camera.hpp` | 스크린 픽셀 → 월드 ray (inverse view-proj) |
+
+**입력 맵:** Space=재생/재시작, LMB=히트박스 피킹(ray + 화면근접 폴백), Esc=히트박스 편집 종료,
+↑/↓=필드 이동, ←/→=넛지(Shift=coarse), [ / ]=timeScale, 0=pause,
+F=free 카메라(WASD+RMB look, Q/E 상하), P=diff 덤프, R=리셋.
+
+**기타:** 드롭다운 2개는 좌우 배치(캐릭터|스킬), 조작법은 우상단 helpLabel, 상태는 좌상단
+statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDummyInFront()`가 caster
+정면 3.5m·지형 높이(InitRefs::terrainHeightAt)로 배치. 기존 standalone HUD는 제거됨.
+
+**이펙트↔스킬 1:1 기반:** 기존 이펙트 드롭다운 18종 ParticleEffect와 1:1로 짝지은 기본 스킬 lua를
+`resources/skills/`에 추가(`SkillCompiler::compileAll`이 디렉터리 스캔→자동 등록). VFX는 경로가
+아니라 lua `PlayVFX{vfxId}`→`StandAlone::Game::skillVfxById_[vfxId]`(`ParticleEffect*` 배열) 인덱스
+바인딩(`standalone/game.cpp`, 0=hit/blood 예약 nullptr, 1~18=각 Effect). 스킬명은
+`kCharacterSkillMap` Player에 등록. vfxId↔Effect↔skill/lua 매핑표는 `docs/skillEditor.md`.
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| 18종 스킬 lua (slash_wave/slash_combo/.../piercing_multi) | `resources/skills/*.lua` | 이펙트당 기본 스킬(PlayAnimation+PlayVFX+SpawnHitbox/Destroy+OnHit 시작값) |
+| `skillVfxById_` 1~18 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
+
+---
+
+---
+
+## 13. 지면 연계 스킬 / 파티클 (Terrain interaction)
+
+**설계 문서:** `docs/terrainInteractingSkills.md` (얼음 기둥/화살비/낙하 마법구 등 지면 연계)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `GroundSampler` struct | `groundSampler.hpp` | height/normal 콜백 번들; GFX/스킬 레이어 디커플링, `operator bool()`=지면 유무 |
+| `ParticleSystem::setGroundSampler` | `particleSystem.hpp` | 비소유 terrain 질의 바인딩 |
+| `ShapeModule::GroundConform` + `groundOffset` | `particleModules.hpp` | 스폰 시 지면 컨폼(None/SnapY/SnapAndAlign) |
+| 지면 컨폼 스폰 hook | `particleSystem.cpp` `spawnParticle` | origin.y 스냅 + SnapAndAlign 노멀 정렬 |
+| `ParticleCollisionModule` | `particleModules.hpp` | 지면 충돌(GroundStop/Kill/Bounce); Kill→Death 서브이미터 |
+| 지면 충돌 hook | `particleSystem.cpp` `update` 루프 | `vel.y<0` 게이트, 표면 교차 처리 |
+| `alignYToNormalMat` | `particleSystem.cpp` | +Y→노멀 회전 행렬 |
+| `ParticleEffect::setGroundBehavior` | `particleEffect.cpp` | lua 구동: **conform=전 시스템(서브이미터 포함, 기둥 본체가 Birth 서브이미터인 경우 대응)**, **collision=top-level만**(버스트 즉사 방지). **effect json은 지면 정보 미포함** |
+| `kPlayVFXFlagGroundSnap`/`GroundAlign` + `ParticleCollision/Conform` mask·shift | `skill/skillTypes.hpp` | PlayVFX 지면 스냅/정렬 + 파티클 충돌·컨폼 모드(flags 1바이트 패킹, 56B 유지) |
+| `AttachType::Ground` + `AttachTarget::groundAlign` | `skill/skillTypes.hpp` | 지면 고정 히트박스 attach |
+| `SkillInstance::CastAnchor` | `skill/skillSystem.hpp` | 시전자 pos+yaw(시전 시점), Ground 히트박스 앵커 |
+| `SkillDispatchContext::ground` | `skill/skillSystem.hpp` | `const GroundSampler*` 주입 |
+| `alignQuatYToNormal`/`captureCastAnchor` | `skill/skillSystem.cpp` | 정렬 쿼터니언 / 앵커 캡처 |
+| PlayVFX 지면 스냅 dispatch | `skill/skillSystem.cpp` `dispatchEvent` PlayVFX | worldPos.y 스냅 + `fx->setGroundSampler` |
+| SpawnHitbox Ground 브랜치 | `skill/skillSystem.cpp` `dispatchEvent` SpawnHitbox | castAnchor+yaw 회전 후 OBB별 지면 스냅 |
+| lua `groundSnap/groundAlign`, `particleCollision/particleConform`, `{type="Ground", align=}` | `skill/skillCompiler.cpp` | 플래그/파티클 모드/Ground attach 파싱 |
+| PlayVFX 파티클 거동 디코드+적용 | `skill/skillSystem.cpp` PlayVFX | flags 비트3-6 → `fx->setGroundBehavior` |
+| `groundSampler_` 바인딩 | `standalone/game.cpp`, `online/onlineGame.cpp` | chunkManager_→skillCtx_.ground |
+
+> 서버 미러: `RoomServer/skill/{skillTypes,skillSystem,skillCompiler}.*`, `Room::bindGroundQueries`.
+> 레거시 제거: `onlineGame.cpp`의 `SwordEffect::ArrowRain/RedEnergyExplosion` 하드코딩 지면 스냅 경로 삭제.
+
+---
+
 ## 관련 문서
 
+- `docs/terrainInteractingSkills.md` — 지면 연계 스킬/파티클 설계
+- `docs/skillEditor.md` — standalone 스킬 에디터 설계
 - `docs/graphicsArchitecture.md` — GFX 초기화 흐름, 파이프라인 구조
 - `docs/physicsArchitecture.md` — PhysicSystem::step 단계, BVH 변환 체인
 - `docs/gameArchitecture.md` — 게임 루프, 이벤트 시스템, CombatSystem 구조

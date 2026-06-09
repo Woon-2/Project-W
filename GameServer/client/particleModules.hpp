@@ -129,6 +129,16 @@ struct ShapeModule {
     float    randomDirectionAmount   = 0.f;
     float    sphericalDirectionAmount = 0.f;
     float    randomPositionAmount    = 0.f;
+
+    // Ground conform. After the shape origin is sampled, snap the spawned
+    // particle's world Y to the terrain height at its (x,z). For area emitters
+    // (Circle/Box/Edge) this plants every particle on uneven ground (ground fog,
+    // erupting pillars, cracks). Requires a GroundSampler bound on the owning
+    // ParticleSystem; ignored otherwise. SnapAndAlign additionally tilts the
+    // particle's base orientation to the surface normal (mesh-mode pillars).
+    enum class GroundConform { None, SnapY, SnapAndAlign };
+    GroundConform groundConform = GroundConform::None;
+    float         groundOffset  = 0.f;   // lift above the surface (avoid z-fighting)
 };
 
 // ---------------------------------------------------------------------------
@@ -548,6 +558,25 @@ struct TrailModule {
 };
 
 // ---------------------------------------------------------------------------
+// Collision Module
+// Tests living particles against the terrain surface each simulation step.
+// Requires a GroundSampler bound on the owning ParticleSystem; disabled
+// otherwise. Used by falling effects (arrow rain, descending orbs, debris)
+// that should stop / die / bounce when they reach the ground.
+//
+// GroundKill sets the particle's lifetime to 0, reusing the existing Death
+// sub-emitter path so an impact burst spawns at the exact contact point with
+// no extra code.
+// ---------------------------------------------------------------------------
+struct ParticleCollisionModule {
+    enum class Mode { None, GroundStop, GroundKill, GroundBounce };
+    bool  enabled      = false;
+    Mode  mode         = Mode::None;
+    float bounce       = 0.3f;   // GroundBounce: vertical restitution [0,1]
+    float radiusOffset = 0.f;    // treat the surface as terrainY + radiusOffset
+};
+
+// ---------------------------------------------------------------------------
 // ParticleSystemConfig
 // ---------------------------------------------------------------------------
 struct ParticleSystemConfig {
@@ -563,6 +592,7 @@ struct ParticleSystemConfig {
     SubEmittersModule           subEmitters;
     TrailModule                 trail;
     RendererModule              renderer;
+    ParticleCollisionModule     collision;
 };
 
 }  // namespace ps

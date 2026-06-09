@@ -37,6 +37,32 @@ static AABB unionAABBOfOBBs(const std::vector<OBB>& obbs, float margin) {
     return out;
 }
 
+// Unit quaternion mapping world up (+Y) onto the given (assumed unit) terrain
+// normal. Identity when the normal is (near) vertical. Used by AttachType::Ground
+// hitboxes and PlayVFX ground-align placement.
+static mu::NQuat alignQuatYToNormal(mu::Vec3 n) {
+    const mu::Vec3 up{ 0.f, 1.f, 0.f };
+    const mu::Vec3 axis = mu::cross(up, n);
+    const float    s2   = mu::dot(axis, axis);
+    if (s2 < 1e-8f) return mu::NQuat{};
+    const float c     = std::clamp(mu::dot(up, n), -1.f, 1.f);
+    const float angle = std::acos(c);
+    return mu::NQuat(mu::quatRotMat(mu::rotateH(mu::Radian{ angle }, mu::Vec3(mu::normalize(axis)))));
+}
+
+// Capture the caster's world XZ + yaw at skill start. AttachType::Ground hitboxes
+// place their OBBs relative to this anchor (then snap to terrain), so they stay
+// planted where the skill was cast rather than following the caster's bones.
+static void captureCastAnchor(SkillInstance& inst, const Object* owner) {
+    inst.castAnchor.valid = false;
+    if (!owner) return;
+    const mu::Mat4x4 w = owner->renderState().world;
+    inst.castAnchor.pos = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * w);
+    const mu::Vec3 fwd  = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * w));
+    inst.castAnchor.yaw   = std::atan2(fwd.x(), fwd.z());
+    inst.castAnchor.valid = true;
+}
+
 // ---------------------------------------------------------------------------
 // SkillInstancePool (dynamic free-list + active-list)
 // ---------------------------------------------------------------------------
@@ -192,6 +218,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     // Fire t=0 events immediately
     SkillInstance& inst = instancePool_.instances[idx];
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
@@ -212,6 +239,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     // Fire all events that fall at or before initialElapsed
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
@@ -340,6 +368,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             hb.ownerObjectId         = inst.ownerObjectId;
             hb.instanceIdx           = static_cast<i32t>(&inst - instancePool_.instances.data());
             hb.slot                  = static_cast<u8t>(slot);
+            hb.defIdx                = defIdx;
             hb.hitGroup              = def.hitGroup;
             hb.hitGroupCooldownMs    = def.hitGroupCooldownMs;
             hb.applyAttachRotation   = def.applyAttachRotation;
@@ -361,6 +390,53 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             }
             hb.worldAABB   = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask  = owner ? hostileMask(owner->faction()) : 0u;
+        } else if (def.attach.type == AttachType::Ground) {
+            // Ground attach: plant OBBs at a caster-relative point snapped to the
+            // terrain, then leave them static (updateHitboxes skips non-Bone).
+            int oldH = inst.getBoneHandle(slot);
+            if (oldH >= 0) freeHitbox(oldH);
+
+            int hi = allocHitbox();
+            if (hi < 0) break;
+            inst.setBoneHandle(slot, hi);
+
+            if (!inst.castAnchor.valid) captureCastAnchor(inst, owner);
+
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.particleSourceIdx      = -1;
+            hb.localOBBs              = def.localOBBs;
+            hb.worldOBBs.resize(def.localOBBs.size());
+            hb.onHit                  = def.onHit;
+            hb.ownerObjectId          = inst.ownerObjectId;
+            hb.instanceIdx            = static_cast<i32t>(&inst - instancePool_.instances.data());
+            hb.slot                   = static_cast<u8t>(slot);
+            hb.defIdx                 = defIdx;
+            hb.hitGroup               = def.hitGroup;
+            hb.hitGroupCooldownMs     = def.hitGroupCooldownMs;
+            hb.applyAttachRotation    = def.applyAttachRotation;
+            hb.resolvedAttach.type    = AttachType::Ground;   // static (skipped by updateHitboxes)
+            hb.resolvedAttach.boneIdx = -1;
+            hb.resolvedAttach.pSystem = nullptr;
+
+            // Caster yaw rotates each OBB's horizontal offset; center.y becomes the
+            // height above the snapped surface (per-OBB, so grids conform to slopes).
+            const mu::Mat4x4 yawRot = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw });
+            const mu::NQuat  yawQuat(mu::quatRotMat(yawRot));
+            for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                mu::Vec3 wc = inst.castAnchor.pos
+                            + mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 0.f) * yawRot);
+                if (ctx.ground && *ctx.ground)
+                    wc.setComponent(1, ctx.ground->height(wc.x(), wc.z()) + hb.localOBBs[i].center.y());
+                hb.worldOBBs[i].center      = wc;
+                hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                hb.worldOBBs[i].orient      = hb.localOBBs[i].orient * yawQuat;
+                if (def.attach.groundAlign && ctx.ground && *ctx.ground)
+                    hb.worldOBBs[i].orient = hb.worldOBBs[i].orient
+                                           * alignQuatYToNormal(ctx.ground->normal(wc.x(), wc.z()));
+            }
+            hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;
         } else {
             // VFXParticle: create a ParticleHitboxSource
             int oldS = inst.getParticleHandle(slot);
@@ -416,6 +492,21 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         ParticleEffect* fx = ctx.vfxById[p.vfxId];
         if (!fx) break;
 
+        // Let the effect's own emitters interact with the terrain (ground-conform
+        // spawn, ground collision) wherever it ends up being played.
+        fx->setGroundSampler(ctx.ground);
+
+        // Skill-driven particle ground behaviour (packed in flags bits 3-6). Drives
+        // the effect's particles (fall-and-die, conform-to-slope) from the Lua, so
+        // the Unity-exported effect JSON needs no ground keys.
+        {
+            const u8t colOrd  = (p.flags & kPlayVFXParticleCollisionMask) >> kPlayVFXParticleCollisionShift;
+            const u8t confOrd = (p.flags & kPlayVFXParticleConformMask)   >> kPlayVFXParticleConformShift;
+            if (colOrd != 0 || confOrd != 0)
+                fx->setGroundBehavior(static_cast<ps::ParticleCollisionModule::Mode>(colOrd),
+                                      static_cast<ps::ShapeModule::GroundConform>(confOrd));
+        }
+
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
         mu::Vec3  worldPos{};
         mu::NQuat worldOrient{};
@@ -439,13 +530,55 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
                 }
             }
 
-            // localOffset is in attach-local space (right=X, up=Y, forward=Z).
-            // Vec4 w=1 transforms it as a point, naturally adding the translation.
+            // Pure-rotation basis from the attach transform. When yawOnly is set, strip
+            // pitch/roll so ground-plane effects (forward circles, fans) stay flat
+            // regardless of where the caster is looking.
+            mu::Mat4x4 baseRot;
+            if (p.flags & kPlayVFXFlagYawOnly) {
+                mu::Vec3 fwd = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * baseXform));
+                baseRot = mu::rotateYH(mu::Radian{ std::atan2(fwd.x(), fwd.z()) });
+            } else {
+                baseRot = mu::Mat4x4(mu::NQuat(mu::quatRotMat(baseXform)));
+            }
+
+            // Local orientation offset (yaw, pitch, roll degrees) -- same convention as OBB orient.
+            // Aims the effect relative to the caster (e.g. a sector pointing to the side).
+            mu::Mat4x4 eulerOff = mu::rotateRPYH(mu::Degree{ p.localEulerDeg.z() },   // roll
+                                                 mu::Degree{ p.localEulerDeg.y() },   // pitch
+                                                 mu::Degree{ p.localEulerDeg.x() });  // yaw
+            mu::Mat4x4 aim = eulerOff * baseRot;  // pure rotation: local euler then caster orientation
+
+            // localOffset is in the aimed frame (right=X, up=Y, forward=Z), added to the attach origin.
+            mu::Vec3 origin = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * baseXform);
             const mu::Vec3& off = p.localOffset;
-            worldPos    = mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 1.f) * baseXform);
-            worldOrient = mu::NQuat(mu::quatRotMat(baseXform));
+            worldPos    = origin + mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 0.f) * aim);
+            worldOrient = mu::NQuat(mu::quatRotMat(aim));
+
+            // Ground placement: drop the effect onto the terrain surface at its XZ
+            // (localOffset.y becomes the lift above ground) and optionally tilt to
+            // the surface normal. Replaces the legacy hardcoded ground-snap paths.
+            if ((p.flags & kPlayVFXFlagGroundSnap) && ctx.ground && *ctx.ground) {
+                worldPos.setComponent(1, ctx.ground->height(worldPos.x(), worldPos.z()) + off.y());
+                if (p.flags & kPlayVFXFlagGroundAlign) {
+                    aim = aim * mu::Mat4x4(alignQuatYToNormal(
+                        ctx.ground->normal(worldPos.x(), worldPos.z())));
+                    worldOrient = mu::NQuat(mu::quatRotMat(aim));
+                }
+            }
+
+            // advanceForwardLocal: explicit particle travel direction (4-arg play). Zero = derive from orient.
+            const mu::Vec3& adv = p.advanceForwardLocal;
+            if (adv.x() == 0.f && adv.y() == 0.f && adv.z() == 0.f) {
+                fx->play(worldPos, worldOrient);
+            } else {
+                mu::Vec3 worldAdvance = mu::normalize(
+                    mu::Vec3(mu::Vec4(adv.x(), adv.y(), adv.z(), 0.f) * aim));
+                fx->play(worldPos, aim, worldAdvance);
+            }
         }
-        fx->play(worldPos, worldOrient);
+        else {
+            fx->play(worldPos, worldOrient);  // no owner resolved: play at world origin
+        }
         break;
     }
 
@@ -806,10 +939,83 @@ Object* SkillSystem::lookupObject(const SkillDispatchContext& ctx, i32t id) cons
 // Debug: push all active hitbox OBBs to a DebugBVView (short TTL for live update)
 // ---------------------------------------------------------------------------
 
-void SkillSystem::renderDebugHitboxes(DebugBVView& bvView) const {
-    for (const AttachedHitbox& hb : hitboxPool_) {
+void SkillSystem::renderDebugHitboxes(DebugBVView& bvView, int selectedHitboxIdx) const {
+    static const mu::Vec4 kDefaultColor  { 0.f, 1.f, 0.f, 1.f };  // green
+    static const mu::Vec4 kSelectedColor { 1.f, 0.85f, 0.1f, 1.f }; // amber
+
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
         if (!hb.active) continue;
+        const mu::Vec4 color = (hi == selectedHitboxIdx) ? kSelectedColor : kDefaultColor;
         for (const OBB& obb : hb.worldOBBs)
-            bvView.push(obb, Milliseconds{ 32.f });
+            bvView.push(obb, Milliseconds{ 32.f }, BVPipeline::BVModel::Box, color);
     }
+}
+
+// ---------------------------------------------------------------------------
+// SkillSystem -- editor support
+// ---------------------------------------------------------------------------
+
+int SkillSystem::startSkillAsset(const SkillAsset* asset, i32t ownerObjectId,
+                                 SkillDispatchContext& ctx) {
+    if (!asset) return -1;
+
+    int idx = instancePool_.alloc(asset, ownerObjectId);
+    if (idx < 0) return -1;
+
+    // Fire t=0 events immediately (mirrors startSkill).
+    SkillInstance& inst = instancePool_.instances[idx];
+    captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
+    while (inst.nextEventIdx < (int)asset->timeline.size()) {
+        if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
+        dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
+    }
+    return idx;
+}
+
+void SkillSystem::collectActiveHitboxes(std::vector<ActiveHitboxRef>& out) const {
+    out.clear();
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
+        if (!hb.active || hb.resolvedAttach.type != AttachType::Bone) continue;
+        if (hb.worldOBBs.empty()) continue;
+        out.push_back(ActiveHitboxRef{
+            hi, hb.ownerObjectId, hb.slot, hb.defIdx, &hb.worldOBBs });
+    }
+}
+
+int SkillSystem::pickHitbox(mu::Vec3 rayOrigin, mu::Vec3 rayDir) const {
+    Ray   ray{ rayOrigin, mu::Vec3(mu::NVec3(rayDir)) };
+    int   best   = -1;
+    float bestT  = std::numeric_limits<float>::max();
+
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
+        if (!hb.active) continue;
+        for (const OBB& obb : hb.worldOBBs) {
+            RayHit rh = RaycastOBB(obb, ray);
+            if (rh.hit && rh.t >= 0.f && rh.t < bestT) {
+                bestT = rh.t;
+                best  = hi;
+            }
+        }
+    }
+    return best;
+}
+
+void SkillSystem::setHitboxLocalOBBs(int hitboxIdx, const std::vector<OBB>& localOBBs) {
+    if (hitboxIdx < 0 || hitboxIdx >= (int)hitboxPool_.size()) return;
+    AttachedHitbox& hb = hitboxPool_[hitboxIdx];
+    if (!hb.active) return;
+    hb.localOBBs = localOBBs;
+    hb.worldOBBs.resize(localOBBs.size());
+    // worldOBBs are rebuilt by the next updateHitboxes() pass.
+}
+
+void SkillSystem::setHitboxOnHit(int hitboxIdx, const OnHitDef& onHit) {
+    if (hitboxIdx < 0 || hitboxIdx >= (int)hitboxPool_.size()) return;
+    AttachedHitbox& hb = hitboxPool_[hitboxIdx];
+    if (!hb.active) return;
+    hb.onHit = onHit;
 }
