@@ -237,6 +237,12 @@ public:
 	Faction faction() const { return faction_; }
 	void setFaction(Faction f) { faction_ = f; }
 
+	// 차단벽(barrier) 모드: 서버가 전술 중 토글. 활성 시 클라가 로컬 플레이어를
+	// 이 객체 밖으로 position 기반 분리(resolveBarrierSeparation)로 밀어낸다.
+	// 몬스터 종류와 무관한 Object 레벨 일반 플래그.
+	void setBarrierActive(bool v) { barrierActive_ = v; }
+	bool isBarrierActive() const  { return barrierActive_; }
+
 	// 모델 상태(isDead_ 플래그)만 갱신한다.
 	// 사망/부활 애니메이션은 EvDeath/EvRespawn 이벤트가 EventBus를 통해 구동한다.
 	void setDead(bool dead) {
@@ -282,6 +288,7 @@ protected:
 	bool isDead_ = false;
 	i32t maxHp_{};
 	Faction faction_ = Faction::Neutral;
+	bool barrierActive_ = false;
 
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;

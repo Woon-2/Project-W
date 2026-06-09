@@ -105,9 +105,8 @@ private:
     bool         issueDivideAndConquer( Room& room, PlatoonLeader& leader,
                                         const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters );
     void         updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader );
-    bool         calcCaptureClusterCentroid( Room& room, mu::Vec3& outCentroid ) const;
-    bool         isCaptureClusterInsideCorridor( Room& room ) const;
     void         issueDivideEngage( Room& room, PlatoonLeader& leader );
+    void         clearDivideBarriers( Room& room );   // 차단벽 barrier 해제(클라에 off 통보). 비어있으면 no-op
     uint32       selectReplacementTarget( Room& room, const PlatoonLeader& leader, const std::vector<uint32>& playerIds ) const;
     int32        countLiveMembers( const std::vector<TacticalSquad*>& liveSquads ) const;
     int32        minMembersForEncircle( int32 playerCount ) const;
@@ -141,6 +140,8 @@ private:
     float            divideCorridorHalfLength_{ 0.f };
     Seconds          divideEngageTimer_{};
     std::vector<uint32> divideTargetPlayerIds_{};
+    std::vector<uint32> divideBarrierNpcIds_{};   // 차단선 NPC id (형성 완료 시 barrier 토글 / off 송신용)
+    bool                divideBarrierOn_{ false };  // barrier on을 실제로 broadcast했는지(off 중복·불필요 송신 방지)
     BossPersonalState bossPersonalState_{ BossPersonalState::EvaluateTarget };
     Seconds           bossPersonalTimer_{};
     Seconds           bossTargetEvalTimer_{};
@@ -161,10 +162,8 @@ private:
     static constexpr Seconds FORMATION_TIMEOUT{ 7.0f };       // 박스/포위/경계/후퇴 집결 타임아웃 폴백
     static constexpr Seconds DIVIDE_PREP_TIMEOUT{ 6.0f };     // 쐐기 준비+차단선 형성 타임아웃 폴백
     static constexpr Seconds DIVIDE_CHARGE_TIMEOUT{ 5.0f };   // 쐐기 돌진 완료 타임아웃 폴백
-    static constexpr float CAPTURE_LINE_SPACING_SCALE    = 0.65f;  // 상대 배율(separationRadius 기준) — 스케일 불변
     static constexpr float CAPTURE_CORRIDOR_CLEARANCE    = 2.5f;   // 인게임 스케일 (시뮬 6.0 × ~0.4)
-    static constexpr float CAPTURE_MIN_HALF_LENGTH       = 10.0f;  // 인게임 스케일 (시뮬 24.0 × ~0.4)
-    static constexpr float CAPTURE_ESCAPE_TOLERANCE      = 1.0f;   // 인게임 스케일 (시뮬 2.0 × ~0.4, 반올림)
+    static constexpr float CAPTURE_WALL_SPACING          = 1.2f;   // 차단선 NPC 중심 간격(m). 플레이어 XZ 반경(~0.4m)이 못 끼는 틈 없는 벽
     static constexpr float CAPTURE_CHARGE_STANDOFF       = 4.0f;   // 차단선 후방 끝에서 쐐기 정점을 더 뒤로 띄우는 여유
     static constexpr float BOX_FRONT_OFFSET              = 6.f;
     static constexpr float BOX_SQUAD_SPACING             = 15.f;

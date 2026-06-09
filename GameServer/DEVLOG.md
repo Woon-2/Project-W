@@ -770,3 +770,59 @@ NPCAI 시뮬레이터에서 각개격파 전술이 재설계되어 RoomServer로
 - 전술 매크로 거리 상수는 **인게임 스케일**(트루퍼 separationRadius≈3 / attackRange≈2.8) 기준으로 잡을 것
   (시뮬레이터 수치 직접 이식 금지).
 - 전술 NPC 사망 시 **물리 바디 unregister**(시체가 산 NPC 이동을 막지 않도록).
+
+---
+
+### 2026.06.09
+## [feat] 쐐기(각개격파) 전술 차단벽 실체화 — barrier 모드(서버 토글) + 클라 position-split 충돌
+
+**수정 파일:** `ServerEngine/protocol.hpp`, `RoomServer/PacketManager.*`, `RoomServer/MidBossTactics.cpp/.hpp`,
+`client/object.hpp`, `client/PacketManager.*`, `client/online/onlineGame.cpp/.hpp`
+
+**배경.** 쐐기 전술의 좌우 차단선(screen line)이 플레이어를 가두고 돌진하는 기믹인데, 인게임에서 플레이어가
+그냥 통과했다. 추적 결과 **플레이어↔몬스터 충돌이 아예 없었다** — 클라 `createGoblin`의 고블린 물리 등록이
+주석(처음부터 스텁)이고, 서버는 플레이어가 Kinematic(클라가 보낸 위치를 그대로 적용)이라 막지 못한다. 즉
+플레이어를 멈추는 로직이 어디에도 없었다. (종전엔 "군집 이탈 시 전술 취소 + fail-cooldown"이라는 논리적
+안전장치로 때우고 있었다.) 의도한 기믹은 *진짜 물리 벽* — 측면이 막히고, 탈출은 ① 벽 NPC 처치(구멍) 또는
+② 열린 앞·뒤(특히 돌진 진입로 쪽)로 우회만 가능.
+
+**방식 선택(A vs B).** (A) 고블린을 Kinematic 바디로 등록해 `ContactConstraint`로 막는 방식은 Dynamic↔
+Kinematic에서 100% 침투 해소 + Baumgarte/warmstart 속도 bias로 **튕김/진동**이 난다 — player-player가 물리
+솔버를 버리고 position-split(`resolvePlayerSeparation`)로 간 바로 그 이유다. 그래서 (B) **position 기반
+split** 채택: 안정성(임펄스 없음), 성능(플레이어×barrier XZ 실린더 테스트만), 깔끔함(고블린 바디 미등록 →
+서버 권위 위치 추종 그대로, 이중 물리 없음) 모두 우세. (고블린은 클라에서 Kinematic이라 등록해도 재시뮬되진
+않지만, 솔버 경로의 튕김을 피하려 position-split을 택함.)
+
+**구현.**
+- **barrier 모드(일반화).** `Object`(클라 베이스)에 `barrierActive_` 플래그 + 접근자 추가 → 고블린에
+  한정되지 않고 모든 몬스터 종류에 적용 가능.
+- **서버 토글.** 신규 패킷 `S_NpcBarrier{active, npcId 목록}`(`protocol.hpp`, `PacketManager::makeSNpcBarrierPacket`).
+  `MidBossTactics::issueDivideAndConquer`가 차단선 NPC id를 `divideBarrierNpcIds_`에 **보관만** 하고, barrier on은
+  **차단선 형성 완료(돌진 발동, Preparing→Charging 전환) 시점**에 broadcast(`divideBarrierOn_`). → 형성 중
+  이동하는 NPC가 대상 군집을 밀어 돌진 경로 밖으로 내보내는 걸 방지(barrier는 Charging 구간에만 활성). 
+  `clearDivideBarriers()`가 **돌진 관통 완료**(Charging→Engaging) 및 모든 종료 경로(`enterTacticFailCooldown`,
+  engage 완료)에 off broadcast(`divideBarrierOn_`일 때만). 비어있으면 no-op이라 타 전술 경로에서 안전.
+- **클라 분리.** `Game::resolveBarrierSeparation(dt)` — `resolvePlayerSeparation`과 동형이나 (1) faction 대신
+  barrier 플래그 게이팅, (2) barrier는 움직이지 않는 권위 객체라 절반이 아닌 **전체 침투**를 플레이어가 해소
+  (hard wall). 위치(`setCurrPos`)만 보정 → 임펄스 튕김 없음. 물리 step 직후 `resolvePlayerSeparation` 다음 호출.
+  **죽은 벽 NPC(hp≤0)는 건너뛰어 그 자리에 구멍**이 자동으로 뚫린다(기믹). `S_NpcBarrier` 수신은
+  `setNpcBarrier`가 `barrierObjects_`(Object* 목록) 갱신.
+  - **틈 봉합(점→선분 캡슐).** 전술 NPC는 서로 Dynamic 충돌(NPC-NPC)이라 체격(체반경 ~0.8m) 아래로 못 뭉쳐
+    실제 간격이 ~1.6m+편차다. 각 NPC를 독립 원으로 막으면 편차로 벌어진 틈(>2.0m)으로 샜다. → 살아있는
+    barrier를 **`kBarrierLinkDist(2.9m)` 내 모든 쌍을 선분(캡슐)으로 이어** 연속 벽으로 처리
+    (`closestPointOnSegmentXZ`)해 간격과 무관하게 봉합. (최근접 이웃 하나만 잇던 초기 버전은 직선에서 가장 넓은
+    틈을 구조적으로 건너뛰어 샜음 → 전체 쌍 연결로 교정.) 고립 barrier는 원으로 단독 차단. 누적 보정은 step
+    상한(`kMaxBarrierPushPerStep`)으로 클램프. `linkDist`는 죽은 NPC 양옆 간격(~3.2m)·좌우 라인(회랑 폭)보다
+    작아 구멍/앞·뒤 탈출구를 보존.
+- **이탈 취소 제거 + 틈 없는 벽(서버).** `updateDivideAndConquer` Preparing의 `isCaptureClusterInsideCorridor`
+  → 취소 블록 삭제(놓침 허용, 빈 회랑 관통). 회랑 길이를 덮으려 간격을 벌리던 `requiredSpacing` 로직(이탈의
+  원인) 삭제하고 차단선 간격을 `CAPTURE_WALL_SPACING=1.2m`로 고정 → position-split이라도 NPC 사이로 못 빠짐.
+  죽은 코드(`isCaptureClusterInsideCorridor`, `calcCaptureClusterCentroid`, 상수 `CAPTURE_LINE_SPACING_SCALE`/
+  `CAPTURE_MIN_HALF_LENGTH`/`CAPTURE_ESCAPE_TOLERANCE`) 제거.
+
+**범위/특성.** barrier는 전술 중 차단선 NPC에만 토글(평소 몬스터는 통과). 각 클라는 자기 플레이어만 분리하고
+막힌 위치를 `C_Move`로 송신 → 서버(Kinematic) 수용 → 타 클라 전파, desync 없음. 고블린 Dynamic 물리는 서버
+권위 그대로(클라는 위치만 추종, 이중 계산 없음).
+
+**튜닝 노트.** `kBarrierRadius`(0.6)·`CAPTURE_WALL_SPACING`(1.2)·`kMaxBarrierPushPerStep`(0.5)로 차단 강도/
+틈/순간이동을 조절. 현재값은 차단 보장 우선. 인게임(client) 검증 후 미세 조정.

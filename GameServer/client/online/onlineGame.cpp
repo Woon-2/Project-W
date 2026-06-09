@@ -41,6 +41,18 @@ static constexpr float kPlayerSeparationRadius = 0.4f;  // 플레이어 수평(X
 static constexpr float kMaxSeparationSpeed     = 4.f;   // 분리 보정 속도 상한 (m/s)
 static constexpr float kSeparationStiffness    = 1.0f;  // 0~1, 1=이번 step에 절반 전부 보정
 
+// ---------------------------------------------------------------------------
+// 차단벽(barrier) 분리 파라미터.
+//   - barrier는 움직이지 않는 서버 권위 객체 → 플레이어가 침투량 "전체"를 받는다(절반 아님).
+//   - 부드러운 4m/s cap이 아니라 전체 침투를 해소해야 고속 충돌에도 벽을 못 뚫는다.
+//     단, 패킷 지터/순간 큰 겹침에서 순간이동을 막기 위한 넉넉한 상한만 둔다.
+// ---------------------------------------------------------------------------
+static constexpr float kBarrierRadius          = 0.6f;  // 차단벽 NPC 수평(XZ) 반경 (m)
+static constexpr float kMaxBarrierPushPerStep  = 0.5f;  // step당 최대 보정 (m) — 순간이동 방지용 상한
+// 인접 barrier를 선분으로 잇는 최대 거리(m). NPC-NPC 충돌 바닥(~1.6m)+편차(최대 ~2.7m)를 덮어 틈을 봉합하되,
+// 죽은 NPC 양옆 간격(~3.2m)·좌우 라인(회랑 폭 ≫)은 안 이어 구멍/탈출구를 보존하는 사이값.
+static constexpr float kBarrierLinkDist        = 2.9f;
+
 static constexpr int     kRenderSkipLagFrames = 4;
 static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
@@ -2054,6 +2066,129 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 	}
 }
 
+// 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
+void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
+	for (uint16 id : npcIds) {
+		auto it = idGoblinMap_.find(id);
+		if (it == idGoblinMap_.end() || !it->second) continue;
+
+		Object* obj = it->second.get();
+		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
+
+		obj->setBarrierActive(active);
+		if (active) {
+			barrierObjects_.push_back(obj);
+		} else {
+			barrierObjects_.erase(
+				std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj),
+				barrierObjects_.end());
+		}
+	}
+}
+
+// 점 p에서 선분 [a,b]까지의 XZ 평면 최근접점(Y=0). 표준 사영 + [0,1] 클램프.
+static mu::Vec3 closestPointOnSegmentXZ(mu::Vec3 p, mu::Vec3 a, mu::Vec3 b) {
+	const float abx = b.x() - a.x();
+	const float abz = b.z() - a.z();
+	const float ab2 = abx * abx + abz * abz;
+	float t = 0.f;
+	if (ab2 > 1e-8f) {
+		t = ((p.x() - a.x()) * abx + (p.z() - a.z()) * abz) / ab2;
+		t = std::clamp(t, 0.f, 1.f);
+	}
+	return mu::Vec3(a.x() + abx * t, 0.f, a.z() + abz * t);
+}
+
+// 차단벽 분리: barrier NPC들을 인접끼리 선분(캡슐)으로 이어 "연속 벽"으로 처리하고, 그 안에 들어온
+// 로컬 플레이어를 전체 침투량만큼 밖으로 민다. 점(원) 방식과 달리 NPC 간격이 얼마든 틈이 봉합된다.
+//  - barrier는 움직이지 않는 서버 권위 객체 → 절반이 아닌 "전체" 침투를 플레이어가 해소(hard wall).
+//  - 위치(setCurrPos)만 보정 → 임펄스/속도 주입 없음 → 튕김 없음.
+//  - 죽은 벽 NPC(hp≤0)는 수집에서 제외 → 연결이 끊겨 그 구간에 구멍이 난다(탈출 기믹 유지).
+void Game::resolveBarrierSeparation(Seconds dt) {
+	if (!player_ || playerDead_) return;
+	if (barrierObjects_.empty()) return;
+
+	// 살아있는 barrier의 XZ 위치 수집.
+	std::vector<mu::Vec3> alive;
+	alive.reserve(barrierObjects_.size());
+	for (Object* b : barrierObjects_) {
+		if (b && b->hp() > 0) alive.push_back(b->pos());
+	}
+	if (alive.empty()) return;
+
+	const float sumR      = kPlayerSeparationRadius + kBarrierRadius;
+	const float sumR2     = sumR * sumR;
+	const float linkDist2 = kBarrierLinkDist * kBarrierLinkDist;
+
+	const mu::Vec3 myPos = player_->pos();
+	mu::Vec3 accumXZ{ 0.f, 0.f, 0.f };
+
+	const int n = static_cast<int>(alive.size());
+
+	// 플레이어를 (캡슐/원) 표면 밖으로 미는 보정을 누적하는 람다.
+	// cp = 벽 요소(선분/점) 위 최근접점, fallbackDir = 거의-겹침 시 밀 방향.
+	auto pushOut = [&](mu::Vec3 cp, float fbDirX, float fbDirZ) {
+		const float dx = myPos.x() - cp.x();
+		const float dz = myPos.z() - cp.z();
+		const float dist2 = dx * dx + dz * dz;
+		if (dist2 >= sumR2) return;  // 밖
+
+		float dist = std::sqrt(dist2);
+		float dirX, dirZ;
+		if (dist > 1e-4f) { dirX = dx / dist; dirZ = dz / dist; }
+		else              { dirX = fbDirX;    dirZ = fbDirZ; dist = 0.f; }
+
+		const float penetration = sumR - dist;
+		accumXZ = accumXZ + mu::Vec3(dirX * penetration, 0.f, dirZ * penetration);
+	};
+
+	for (int i = 0; i < n; ++i) {
+		const mu::Vec3& pi = alive[i];
+
+		// linkDist 내 모든 이웃과 선분 캡슐을 형성(최근접만 잇던 종전 방식은 가장 넓은 틈을 건너뛰었음).
+		// j>i로 각 쌍을 한 번만. 한 쌍이라도 이으면 isolated 아님.
+		bool linked = false;
+		for (int j = i + 1; j < n; ++j) {
+			const float ex = alive[j].x() - pi.x();
+			const float ez = alive[j].z() - pi.z();
+			const float d2 = ex * ex + ez * ez;
+			if (d2 >= linkDist2) continue;
+			linked = true;
+
+			// 거의-겹침 폴백: 선분 수직 방향.
+			float fbX = 1.f, fbZ = 0.f;
+			const float sl = std::sqrt(d2);
+			if (sl > 1e-4f) { fbX = -ez / sl; fbZ = ex / sl; }
+			pushOut(closestPointOnSegmentXZ(myPos, pi, alive[j]), fbX, fbZ);
+		}
+
+		// linkDist 내 이웃이 (양방향 모두) 없으면 고립 barrier → 원으로 단독 차단.
+		if (!linked) {
+			bool hasNeighbor = false;
+			for (int j = 0; j < n && !hasNeighbor; ++j) {
+				if (j == i) continue;
+				const float ex = alive[j].x() - pi.x();
+				const float ez = alive[j].z() - pi.z();
+				if (ex * ex + ez * ez < linkDist2) hasNeighbor = true;
+			}
+			if (!hasNeighbor) {
+				pushOut(mu::Vec3(pi.x(), 0.f, pi.z()), 1.f, 0.f);
+			}
+		}
+	}
+
+	// 누적 보정 크기를 상한으로 클램프(인접쌍 중복 합산·다중 선분으로 인한 과보정/순간이동 방지).
+	const float mag2 = accumXZ.len2();
+	if (mag2 > 1e-10f) {
+		const float mag = std::sqrt(mag2);
+		if (mag > kMaxBarrierPushPerStep) {
+			accumXZ = accumXZ * (kMaxBarrierPushPerStep / mag);
+		}
+		player_->setCurrPos(myPos + accumXZ);  // Y 불변
+		moveChange_ = true;
+	}
+}
+
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	auto player = idPlayerMap_[playerId];
 
@@ -2311,6 +2446,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		// 물리 적분 직후, 로컬 플레이어를 다른 플레이어와 reciprocal soft separation.
 		// (setCurrPos로 curr만 갱신 → 렌더 보간의 prev는 보존된다)
 		resolvePlayerSeparation(effectiveInterval);
+		// 전술 차단벽: barrier 활성 NPC 밖으로 로컬 플레이어를 전체 침투량만큼 밀어낸다.
+		resolveBarrierSeparation(effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}

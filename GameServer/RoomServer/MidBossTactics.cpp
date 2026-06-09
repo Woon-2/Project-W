@@ -6,6 +6,7 @@
 #include "TacticalSquad.hpp"
 #include "TacticalNpc.hpp"
 #include "object.hpp"
+#include "PacketManager.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -462,6 +463,8 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
 void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& leader ) {
     leader.removeDeadMembersFromSquads();
 
+    clearDivideBarriers( room );   // 쐐기 전술이 차단벽을 켜뒀다면 해제(타 전술 경로에선 no-op)
+
     tacticCooldown_ = TACTIC_FAIL_COOLDOWN_DURATION;
     enterPhase( LeaderPhase::Cooldown );
 
@@ -904,6 +907,7 @@ bool GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
     );
 
     divideCorridorHalfLength_ = -1.f;
+    std::vector<uint32> barrierIds;   // 차단선(벽) NPC id — 성공 시 클라에 barrier on 통보
     for ( int32 screenIdx = 0; screenIdx < 2; ++screenIdx ) {
         TacticalSquad* screenSquad = screenCandidates[ screenIdx ];
         if ( !screenSquad || screenSquad->isEmpty() ) {
@@ -920,12 +924,11 @@ bool GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
             separationRadius = screenSquad->getMemberCache().front()->getSeparationRadius();
         }
 
-        // 차단선이 회랑 최소 길이를 덮도록 간격을 확장
-        float spacingScale = CAPTURE_LINE_SPACING_SCALE;
-        if ( memberCount > 1 ) {
-            float requiredSpacing = (CAPTURE_MIN_HALF_LENGTH * 2.f) / static_cast<float>( memberCount - 1 );
-            spacingScale = std::max( spacingScale, requiredSpacing / separationRadius );
-        }
+        // 차단선을 "틈 없는 벽"으로: 인접 NPC 중심 간격을 플레이어가 못 끼는 수준으로 좁힌다.
+        // (플레이어 XZ 반경 ~0.4m → 지름 ~0.8m. 간격 CAPTURE_WALL_SPACING(1.2m)면 클라
+        //  ContactConstraint가 측면 통과를 막는다. 군집 이탈은 더 이상 전술을 취소하지 않으므로
+        //  회랑 길이를 늘리려 간격을 벌리지 않는다 — 간격을 벌리던 것이 종전 이탈의 원인이었다.)
+        float spacingScale = CAPTURE_WALL_SPACING / std::max( separationRadius, 0.01f );
         float spacing = std::max( separationRadius * spacingScale, 1.2f );
         float lineHalfLength = static_cast<float>( std::max( memberCount - 1, 0 ) ) * spacing * 0.5f;
         if ( divideCorridorHalfLength_ < 0.f || lineHalfLength < divideCorridorHalfLength_ ) {
@@ -943,6 +946,12 @@ bool GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
         screen.formationTargetPos = divideCorridorCenter_;
         screenSquad->receiveOrder( screen );
         divideTasks_.push_back( { screenSquad, DivideTaskType::Screen, chargeCluster.representativeId, chargeCluster.playerIds } );
+
+        for ( TacticalNpc* npc : screenSquad->getMemberCache() ) {
+            if ( npc && npc->hp() > 0 ) {
+                barrierIds.push_back( static_cast<uint32>( npc->getId() ) );
+            }
+        }
     }
 
     // 돌진 부대: 쐐기 준비만 하고 차단선 완성 전까지 release 대기.
@@ -966,7 +975,25 @@ bool GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
         screenCandidates[ i ]->receiveOrder( idle );
     }
 
-    return divideTasks_.size() == 3;
+    const bool success = ( divideTasks_.size() == 3 );
+    if ( success && !barrierIds.empty() ) {
+        // 차단선 NPC id를 보관만 한다. barrier 활성화는 형성이 끝나는 시점(돌진 발동)에 해야
+        // 형성 중 이동하는 NPC가 대상 군집을 밀어 돌진 경로 밖으로 내보내는 걸 막는다.
+        divideBarrierNpcIds_ = barrierIds;
+        divideBarrierOn_ = false;
+    }
+    return success;
+}
+
+void GoblinMidBossTactic::clearDivideBarriers( Room& room ) {
+    if ( divideBarrierNpcIds_.empty() ) {
+        return;
+    }
+    if ( divideBarrierOn_ ) {   // 실제로 켜진 경우에만 off 송신
+        room.broadcast( PacketManager::makeSNpcBarrierPacket( false, divideBarrierNpcIds_ ) );
+        divideBarrierOn_ = false;
+    }
+    divideBarrierNpcIds_.clear();
 }
 
 void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader ) {
@@ -1008,17 +1035,20 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
     }
 
     if ( divideStage_ == DivideStage::Preparing ) {
-        // 대상 군집이 회랑을 벗어나면 전술 취소
-        if ( !isCaptureClusterInsideCorridor( room ) ) {
-            chargeSquad->endActiveWedgeCharge( room );
-            enterTacticFailCooldown( room, leader );
-            return;
-        }
+        // 군집이 회랑을 벗어나도 전술을 취소하지 않는다. 측면 차단벽이 물리적으로 막고,
+        // 탈출(벽 NPC 처치로 구멍 내기 / 열린 앞·뒤로 우회)은 플레이어의 정당한 카운터플레이다.
+        // 빠져나갔다면 빈 회랑을 그대로 관통하며 돌진을 마친다(놓침 허용).
 
         // 쐐기 준비 완료 + 좌우 차단선 완성(또는 타임아웃) → 돌진 동시 발동
         if ( (chargeSquad->isWedgePrepared() && screenSquadsReady)
             || divideStageTimer_ >= DIVIDE_PREP_TIMEOUT ) {
             chargeSquad->releaseWedgeCharge();
+            // 차단선 형성 완료(또는 타임아웃) → 이제 barrier 활성화. 형성 중엔 미활성이라 군집을 안 밀고,
+            // 돌진이 시작되며 측면 벽이 단단해져 트랩이 닫힌다.
+            if ( !divideBarrierOn_ && !divideBarrierNpcIds_.empty() ) {
+                room.broadcast( PacketManager::makeSNpcBarrierPacket( true, divideBarrierNpcIds_ ) );
+                divideBarrierOn_ = true;
+            }
             divideStage_ = DivideStage::Charging;
             divideStageTimer_ = 0s;
         }
@@ -1032,6 +1062,7 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
         }
 
         chargeSquad->endActiveWedgeCharge( room );
+        clearDivideBarriers( room );   // 돌진 관통 완료 → 벽 역할 종료, 차단 해제
         issueDivideEngage( room, leader );
         divideStage_ = DivideStage::Engaging;
         divideStageTimer_ = 0s;
@@ -1041,41 +1072,10 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
 
     divideEngageTimer_ -= dt;
     if ( divideEngageTimer_ <= 0s ) {
+        clearDivideBarriers( room );   // 안전망(보통 돌진 완료 시 이미 해제됨)
         tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
         enterPhase( LeaderPhase::Cooldown );
     }
-}
-
-bool GoblinMidBossTactic::calcCaptureClusterCentroid( Room& room, mu::Vec3& outCentroid ) const {
-    mu::Vec3 sum{};
-    int32 count = 0;
-    for ( uint32 playerId : divideTargetPlayerIds_ ) {
-        GameSession* s = room.findLivingSessionByPlayerId( static_cast<int32>( playerId ) );
-        if ( !s ) {
-            continue;
-        }
-        sum = sum + s->player()->pos();
-        ++count;
-    }
-
-    if ( count <= 0 ) {
-        return false;
-    }
-    outCentroid = sum * (1.f / static_cast<float>( count ));
-    return true;
-}
-
-bool GoblinMidBossTactic::isCaptureClusterInsideCorridor( Room& room ) const {
-    mu::Vec3 clusterCenter{};
-    if ( !calcCaptureClusterCentroid( room, clusterCenter ) ) {
-        return false;
-    }
-
-    mu::Vec3 delta = clusterCenter - divideCorridorCenter_;
-    float lateral = std::fabs( dot( delta, divideCorridorRight_ ) );
-    float longitudinal = std::fabs( dot( delta, divideCorridorForward_ ) );
-    return lateral <= divideCorridorHalfWidth_ + CAPTURE_ESCAPE_TOLERANCE &&
-           longitudinal <= divideCorridorHalfLength_ + CAPTURE_ESCAPE_TOLERANCE;
 }
 
 void GoblinMidBossTactic::issueDivideEngage( Room& room, PlatoonLeader& leader ) {
