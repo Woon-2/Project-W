@@ -928,13 +928,158 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
 }
 
+TacticalNpc* Room::findTacticalNpcById(uint32_t id) const {
+	for (const auto& npc : tacticalNpcs_)
+		if (npc && npc->getId() == id)
+			return npc.get();
+	return nullptr;
+}
+
+void Room::pruneTacticalAttackReservations() {
+	for (auto it = tacticalAttackSlots_.begin(); it != tacticalAttackSlots_.end();) {
+		uint32_t playerId = it->first;
+		GameSession* player = findLivingSessionByPlayerId(static_cast<int32>(playerId));
+		auto& reserved = it->second;
+
+		for (auto rit = reserved.begin(); rit != reserved.end();) {
+			TacticalNpc* tnpc = findTacticalNpcById(*rit);
+			bool remove = !player || !tnpc || tnpc->hp() <= 0 ||
+				tnpc->getTargetId() != playerId;
+
+			if (!remove) {
+				TacticalNpcState state = tnpc->getState();
+				remove = state != TacticalNpcState::PressureWait &&
+					state != TacticalNpcState::AttackWindup &&
+					state != TacticalNpcState::AttackRecover &&
+					state != TacticalNpcState::Chase &&
+					state != TacticalNpcState::Flank;
+			}
+
+			if (remove)
+				rit = reserved.erase(rit);
+			else
+				++rit;
+		}
+
+		if (reserved.empty())
+			it = tacticalAttackSlots_.erase(it);
+		else
+			++it;
+	}
+}
+
+// 단순 선착순 대신, 플레이어와의 거리 + 접근 진척으로 5칸을 배분한다.
+// 교전 중(Windup/Recover) NPC는 항상 점유, 나머지는 가까운 순으로 채우고 먼 예약은 축출.
 bool Room::tryReserveTacticalAttackSlot(uint32_t targetId, uint32_t npcId) {
 	constexpr int MAX_ATTACKERS = 5;
-	auto& slots = tacticalAttackSlots_[targetId];
-	if (slots.count(npcId)) return true;
-	if (static_cast<int>(slots.size()) >= MAX_ATTACKERS) return false;
-	slots.insert(npcId);
-	return true;
+	const uint32_t playerId = targetId;
+	if (playerId == 0 || npcId == 0)
+		return false;
+
+	pruneTacticalAttackReservations();
+
+	GameSession* player = findLivingSessionByPlayerId(static_cast<int32>(playerId));
+	TacticalNpc* caller = findTacticalNpcById(npcId);
+	if (!player || !caller || caller->hp() <= 0 || caller->getTargetId() != playerId)
+		return false;
+
+	const mu::Vec3 playerPos = player->player()->pos();
+	auto& reserved = tacticalAttackSlots_[playerId];
+
+	// 1) 교전 중 NPC는 슬롯을 점유한 것으로 강제 포함(occupant).
+	std::unordered_set<uint32_t> occupied;
+	for (const auto& other : tacticalNpcs_) {
+		if (!other || other->hp() <= 0) continue;
+		if (other->getTargetId() != playerId) continue;
+		TacticalNpcState st = other->getState();
+		if (st == TacticalNpcState::AttackWindup || st == TacticalNpcState::AttackRecover)
+			occupied.insert(other->getId());
+	}
+	for (uint32_t occupiedId : occupied)
+		reserved.insert(occupiedId);
+
+	// 호출자가 이미 교전 중이면 즉시 점유 확정.
+	TacticalNpcState callerState = caller->getState();
+	if (callerState == TacticalNpcState::AttackWindup || callerState == TacticalNpcState::AttackRecover) {
+		reserved.insert(npcId);
+		return true;
+	}
+	if (!caller->isEligibleForAttackReservation(playerId, playerPos))
+		return false;
+
+	// 2) Chase/PressureWait/Flank 후보를 플레이어 거리순으로 수집.
+	struct ReservationCandidate { uint32_t id{ 0 }; float distSq{ 0.f }; };
+	std::vector<ReservationCandidate> candidates;
+	candidates.reserve(tacticalNpcs_.size());
+	std::unordered_set<uint32_t> candidateIds;
+
+	for (const auto& other : tacticalNpcs_) {
+		if (!other || other->hp() <= 0) continue;
+		if (other->getTargetId() != playerId) continue;
+		uint32_t oid = other->getId();
+		if (occupied.count(oid)) continue;
+		TacticalNpcState st = other->getState();
+		if (st != TacticalNpcState::Chase && st != TacticalNpcState::PressureWait && st != TacticalNpcState::Flank)
+			continue;
+		if (!other->isEligibleForAttackReservation(playerId, playerPos))
+			continue;
+		candidates.push_back({ oid, (other->pos() - playerPos).len2() });
+		candidateIds.insert(oid);
+	}
+
+	std::sort(candidates.begin(), candidates.end(),
+		[](const ReservationCandidate& a, const ReservationCandidate& b) {
+			if (a.distSq != b.distSq) return a.distSq < b.distSq;
+			return a.id < b.id;
+		});
+
+	// 3) occupant도 후보도 아닌(상태가 바뀐) 예약은 제거.
+	for (auto rit = reserved.begin(); rit != reserved.end();) {
+		if (!occupied.count(*rit) && !candidateIds.count(*rit))
+			rit = reserved.erase(rit);
+		else
+			++rit;
+	}
+
+	auto candidateForId = [&candidates](uint32_t id) -> const ReservationCandidate* {
+		for (const auto& c : candidates)
+			if (c.id == id) return &c;
+		return nullptr;
+	};
+	auto findWorstReserved = [&]() {
+		uint32_t worstId = 0;
+		float worstDistSq = -1.f;
+		for (uint32_t rid : reserved) {
+			if (occupied.count(rid)) continue;       // occupant은 축출 대상 아님
+			const ReservationCandidate* c = candidateForId(rid);
+			if (!c) continue;
+			if (c->distSq > worstDistSq || (c->distSq == worstDistSq && rid > worstId)) {
+				worstDistSq = c->distSq;
+				worstId = rid;
+			}
+		}
+		return std::pair<uint32_t, float>{ worstId, worstDistSq };
+	};
+
+	// 4) 정원 초과 시 가장 먼 예약자부터 축출.
+	while (reserved.size() > static_cast<size_t>(MAX_ATTACKERS)) {
+		auto [worstId, worstDist] = findWorstReserved();
+		(void)worstDist;
+		if (worstId == 0) break;
+		reserved.erase(worstId);
+	}
+
+	if (reserved.count(npcId))
+		return true;
+
+	// 5) 빈 슬롯을 가까운 후보부터 채움.
+	for (const auto& c : candidates) {
+		if (reserved.size() >= static_cast<size_t>(MAX_ATTACKERS)) break;
+		if (reserved.count(c.id)) continue;
+		reserved.insert(c.id);
+	}
+
+	return reserved.count(npcId) > 0;
 }
 
 void Room::releaseTacticalAttackSlot(uint32_t targetId, uint32_t npcId) {

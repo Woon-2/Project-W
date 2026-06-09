@@ -25,6 +25,7 @@ enum class PacketType : uint16 {
 	S_NpcMove,
 	S_NpcMoveBatch,
 	S_NpcSpawnBatch,
+	S_NpcBarrier,
 
 	C_Attack,
 	S_NpcAttack,
@@ -195,6 +196,24 @@ struct SNpcSpawnBatchPacket : public PacketHeader {
 	ObjectList getObjectList() {
 		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
 		return ObjectList(reinterpret_cast<ObjectInfo*>(dataStart), objCnt);
+	}
+};
+
+// 전술 차단벽(barrier) 토글: 지정한 NPC들을 클라에서 '플레이어를 막는 벽'으로
+// 설정/해제한다. 클라는 active NPC에 대해 position 기반 분리로 로컬 플레이어를 밀어낸다.
+struct SNpcBarrierInfo {
+	uint16 npcId;
+};
+
+struct SNpcBarrierPacket : public PacketHeader {
+	uint8  active;       // 1 = 벽 켜기, 0 = 끄기
+	uint16 dataOffset;
+	uint16 npcCount;
+
+	using NpcBarrierList = DataList<SNpcBarrierInfo>;
+	NpcBarrierList getList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return NpcBarrierList(reinterpret_cast<SNpcBarrierInfo*>(dataStart), npcCount);
 	}
 };
 

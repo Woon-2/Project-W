@@ -346,23 +346,56 @@ bool TacticalNpc::hasReservedAttackSlot() const {
     return reservedAttackTargetId_ != 0 && reservedAttackTargetId_ == targetId_;
 }
 
+bool MU_CALLCONV TacticalNpc::isEligibleForAttackReservation( uint32 targetId, mu::Vec3 targetPos ) const {
+    float dist = (pos() - targetPos).len();
+    if ( dist > TACTICAL_ATTACK_RESERVATION_MAX_DIST )
+        return false;
+
+    // 스테일로 막힌 타깃이 아니면 거리 조건만으로 자격 충족.
+    if ( blockedAttackReservationTargetId_ != targetId )
+        return true;
+
+    // 막힌 타깃이면 끊긴 시점보다 PROGRESS_DIST만큼 더 접근해야 재자격(진동 차단 핵심 게이트).
+    return dist <= blockedAttackReservationDist_ - TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST;
+}
+
+void TacticalNpc::resetAttackReservationLease() {
+    reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = 0.f;
+    blockedAttackReservationTargetId_ = 0;
+    blockedAttackReservationDist_ = 0.f;
+}
+
 void TacticalNpc::updateReservedAttackStaleTimer( Seconds dt, Room& room ) {
     if ( !hasReservedAttackSlot() ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         return;
     }
 
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         return;
     }
 
-    float distSq = (pos() - target->player()->pos()).len2();
-    if ( state_ == TacticalNpcState::AttackWindup || state_ == TacticalNpcState::AttackRecover || distSq <= attackRange_ * attackRange_ ) {
+    float dist = (pos() - target->player()->pos()).len();
+    // 교전 중이거나 사거리 내면 리스 유지(진척 거리 기준점 갱신).
+    if ( state_ == TacticalNpcState::AttackWindup || state_ == TacticalNpcState::AttackRecover || dist <= attackRange_ ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = dist;
         return;
     }
+
+    // 직전보다 PROGRESS_DIST 이상 접근했으면 진척으로 보고 타이머 리셋.
+    if ( reservedAttackProgressDist_ <= 0.f || dist <= reservedAttackProgressDist_ - TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST ) {
+        reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = dist;
+        return;
+    }
+
+    // 진척 없이 정체 → 스테일 타이머 누적.
     reservedAttackStaleTimer_ += dt;
 }
 
@@ -378,37 +411,59 @@ bool TacticalNpc::canEnterAttackSlot( Room& room ) {
             return false;
         }
 
-        float maxDistSq = TACTICAL_ATTACK_RESERVATION_MAX_DIST * TACTICAL_ATTACK_RESERVATION_MAX_DIST;
-
-        if ( (pos() - target->player()->pos()).len2() > maxDistSq 
-            || reservedAttackStaleTimer_ >= TACTICAL_ATTACK_RESERVATION_STALE_TIME 
-        ) {
+        float dist = (pos() - target->player()->pos()).len();
+        if ( dist > TACTICAL_ATTACK_RESERVATION_MAX_DIST ) {
             releaseAttackReservation( room );
+            return false;
+        }
+        if ( reservedAttackStaleTimer_ >= TACTICAL_ATTACK_RESERVATION_STALE_TIME ) {
+            releaseStaleAttackReservation( room, dist );
             return false;
         }
         return true;
     }
 
+    GameSession* target = resolveTarget( room );
+    if ( !target || !isEligibleForAttackReservation( targetId_, target->player()->pos() ) ) {
+        pressureReentering_ = false;
+        return false;
+    }
+
     if ( !room.tryReserveTacticalAttackSlot( targetId_, getId() ) ) {
         reservedAttackTargetId_ = 0;
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         pressureReentering_ = false;
         return false;
     }
 
     reservedAttackTargetId_ = targetId_;
     reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = (pos() - target->player()->pos()).len();
+    blockedAttackReservationTargetId_ = 0;
+    blockedAttackReservationDist_ = 0.f;
     return true;
 }
 
 void TacticalNpc::releaseAttackReservation( Room& room ) {
-    if ( reservedAttackTargetId_ == 0 ) {
-        return;
-    }
+    if ( reservedAttackTargetId_ != 0 )
+        room.releaseTacticalAttackSlot( reservedAttackTargetId_, getId() );
+    reservedAttackTargetId_ = 0;
+    resetAttackReservationLease();
+    pressureReentering_ = false;
+}
 
-    room.releaseTacticalAttackSlot( reservedAttackTargetId_, getId() );
+void TacticalNpc::releaseStaleAttackReservation( Room& room, float currentDist ) {
+    uint32 targetId = reservedAttackTargetId_;
+    if ( targetId != 0 )
+        room.releaseTacticalAttackSlot( targetId, getId() );
+
     reservedAttackTargetId_ = 0;
     reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = 0.f;
+    // 이 타깃은 PROGRESS_DIST만큼 더 접근하기 전까지 재예약 차단.
+    blockedAttackReservationTargetId_ = targetId;
+    blockedAttackReservationDist_ = currentDist;
     pressureReentering_ = false;
 }
 
@@ -608,12 +663,8 @@ void TacticalNpc::updateChase( Seconds dt, Room& room ) {
         return;
     }
 
-    mu::Vec3 chaseDir = norm3( targetPos - pos() );
-    nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
-    mu::Vec3 sepPerp = sep - chaseDir * mu::dot( sep, chaseDir );
-    mu::Vec3 moveDir = norm3( chaseDir + sepPerp * separationWeight_ );
+    mu::Vec3 moveDir = norm3( targetPos - pos() );
+    applyPeerSeparation( room, moveDir, separationRadius_ );   // peer 회피 + head-on 해소
 
     setFacingDir( *this, moveDir );
     setDesiredVel( mu::Vec3( moveDir.x() * moveSpeed_, 0.f, moveDir.z() * moveSpeed_ ) );
@@ -774,13 +825,8 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
         return;
     }
 
-    mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
-    nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
-    mu::Vec3 sepPerp = sep - slotDir * mu::dot( sep, slotDir );
-    mu::Vec3 moveDir = norm3( slotDir + sepPerp * separationWeight_ );
+    mu::Vec3 moveDir = norm3( assignedSlot_ - pos() );
+    applyPeerSeparation( room, moveDir, separationRadius_ );   // peer 회피 + head-on 해소
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
 
     setFacingDir( *this, moveDir );
@@ -903,6 +949,32 @@ void MU_CALLCONV TacticalNpc::applyBlockerAvoidance( Room& room, mu::Vec3& slotD
     slotDir = norm3( slotDir + sepPerp * separationWeight_ );
 }
 
+void MU_CALLCONV TacticalNpc::applyPeerSeparation( Room& room, mu::Vec3& moveDir, float radius ) {
+    if ( moveDir.len2() <= 0.01f ) {
+        return;
+    }
+
+    nearbyCache_.clear();
+    room.findNearbyNpcPositions( pos(), radius, getId(), nearbyCache_ );   // 이웃 전술 NPC(peer)
+    mu::Vec3 sep = calcSeparationForce( nearbyCache_, radius );
+    if ( sep.len2() < 1e-4f ) {
+        return;
+    }
+
+    mu::Vec3 sepPerp = sep - moveDir * mu::dot( sep, moveDir );   // 진행 방향에 수직 성분(기존 회피)
+    mu::Vec3 steer = moveDir + sepPerp * separationWeight_;
+
+    // 정면(head-on) 감지: 이웃이 진행방향 정면이면 sep가 moveDir 반대 → 수직 성분 소실 →
+    // 모든 NPC가 동일하게 '오른쪽'으로 비키는 bias를 줘 마주친 둘이 반대편으로 갈라지게 한다.
+    float forwardBlock = -mu::dot( norm3( sep ), moveDir );
+    if ( forwardBlock > HEADON_DOT_THRESHOLD ) {
+        mu::Vec3 right( moveDir.z(), 0.f, -moveDir.x() );   // 진행방향 기준 오른쪽(top-down)
+        steer = steer + right * (HEADON_BIAS * forwardBlock);
+    }
+
+    moveDir = norm3( steer );
+}
+
 void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( guardNearestPlayer_ ) {
@@ -931,6 +1003,9 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
             mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
             applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
+            if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
+                applyPeerSeparation( room, slotDir, separationRadius_ );
+            }
             float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
             if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
                 spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
@@ -961,6 +1036,9 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
     applyBlockerAvoidance( room, slotDir, distToSlot );   // 플레이어/보스 우회
+    if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
+        applyPeerSeparation( room, slotDir, separationRadius_ );
+    }
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
     if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
         spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );

@@ -119,6 +119,10 @@ public:
 	// ── Tactical AI ──────────────────────────────────────────────────────────
 	bool     tryReserveTacticalAttackSlot(uint32_t targetId, uint32_t npcId);
 	void     releaseTacticalAttackSlot(uint32_t targetId, uint32_t npcId);
+	// 죽었거나 더 이상 교전/압박 상태가 아닌 NPC의 예약을 슬롯 풀에서 정리.
+	void     pruneTacticalAttackReservations();
+	// id로 전술 NPC 조회(예약 재배치 시 후보 상태 확인용). 없으면 nullptr.
+	TacticalNpc* findTacticalNpcById(uint32_t id) const;
 	uint32_t beginWedgeCharge();
 	void     endWedgeCharge(uint32_t chargeId);
 	int32    tryApplyWedgeChargeHit(uint32_t chargeId, int32 playerId, float damage);

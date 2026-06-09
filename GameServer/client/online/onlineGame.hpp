@@ -77,6 +77,10 @@ public:
 
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
+	// 서버가 전술 차단벽(barrier)을 토글. active NPC들을 클라에서 '플레이어를 막는 벽'으로
+	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
+	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
+
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);
@@ -168,6 +172,12 @@ private:
 	// 전파된다(신규 패킷 없음). 매 물리 step마다 step() 직후 호출된다.
 	void resolvePlayerSeparation(Seconds dt);
 
+	// 차단벽(barrier) 분리 (클라 예측). barrier 활성 NPC와 수평으로 겹치면 로컬 플레이어를
+	// "전체" 침투량만큼 밖으로 밀어낸다(barrier는 움직이지 않는 서버 권위 객체 → 100%를 플레이어가
+	// 받음). 위치(setCurrPos)만 보정하므로 임펄스 튕김이 없다. step() 직후 resolvePlayerSeparation
+	// 다음에 호출된다.
+	void resolveBarrierSeparation(Seconds dt);
+
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
 	void captureCursor();
@@ -217,6 +227,9 @@ private:
 	TerrainChunkManager chunkManager_{};
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
+	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
+	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
+	std::vector<Object*> barrierObjects_{};
 
 	// Strongholds are server-authoritative structures; the client renders them as
 	// placeholder cubes and tracks HP/destroyed state from server packets. They are

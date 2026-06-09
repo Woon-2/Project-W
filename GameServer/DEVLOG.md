@@ -695,6 +695,69 @@ HoldSlot, 박스=`boxRefreshTimer_` 0.1s 갱신). HP 임계/BossSolo 등 비상 
 (`applyBlockerAvoidance`). 박스 밀집 패킹 보존 위해 peer NPC는 제외, 슬롯 근처는 비활성. 후퇴/박스/포위/
 경계가 모두 HoldSlot이라 일괄 적용. Chase(공격 접근)엔 미적용(타깃 회피 방지) — 정면 충돌은 (A)가 처리.
 
+### [15] 홉고블린 DivideAndConquer 재설계 — 쐐기 돌진 + 좌우 차단선 회랑(corridor)
+
+NPCAI 시뮬레이터에서 각개격파 전술이 재설계되어 RoomServer로 1:1 포팅. 기존: 차단 부대가 **다른**
+클러스터를 `GuardBoss`로 막고, 쐐기는 슬롯 도착 즉시 자동 돌진(차단선과 무연동). 신규: 한 부대가
+**쐐기를 준비만 하고 대기**, 나머지 2개 부대가 돌진 대상 군집의 **좌우 측면에 일렬 차단선**을 세워
+회랑을 형성 → 회랑 완성 시 쐐기를 **동시에 release**해 군집을 가두며 관통.
+
+**(A) TacticalSquad 쐐기 release 게이트:** `SquadOrder.waitForChargeRelease`로 준비된 쐐기를
+`wedgeChargeReleased_`까지 보류. 리더가 `releaseWedgeCharge()` 호출 시 돌진 발동. 신규
+`isWedgePrepared()`/`estimateWedgeHalfWidth()`(쐐기 최대폭=회랑 반폭 산출용).
+
+**(B) GoblinMidBossTactic 회랑 상태머신:** `DivideStage{ Preparing, Charging, Engaging }`.
+회랑 좌표계(`divideCorridorForward_/Right_/Center_/HalfWidth_/HalfLength_`)를 chargeSquad→chargeCluster
+방향으로 구성. Preparing 매 틱 `isCaptureClusterInsideCorridor()`로 대상 이탈 검사(이탈 시 fail-cooldown).
+차단선은 `FormationGuard`+`slotColumnCount=멤버수`로 강제 일렬. **GameServer 적응:** FormationGuard
+핸들러가 살아있는 플레이어 id를 요구(`findLivingSessionByPlayerId`)하므로 screen `targetId`는
+`leader.getId()`(시뮬레이터) 대신 **군집 대표 플레이어 id**로 지정.
+
+**(C) 레거시 제거:** 구 `SCREEN_*` 상수 5개, `DivideSquadTask.taskCompleted/engageIssued/engageProtectTimer`,
+`DIVIDE_ENGAGE_PROTECT_DURATION` 삭제(완료-플래그 루프 → DivideStage 상태머신으로 대체). `GuardBoss`는
+다른 phase에서 계속 사용하므로 유지.
+
+**(D) 거리 상수 인게임 스케일 적용:** 설계 규약("전술 매크로 거리 상수는 인게임 스케일, 시뮬 수치
+직접 이식 금지")에 따라 시뮬 절대 거리를 기존 GameServer 쐐기 비율(EXIT 14 = 시뮬 35의 ≈0.4x)에 맞춰
+축소. `WEDGE_PREP_APEX_DISTANCE`/`WEDGE_EXIT_DISTANCE`는 기존값(4/14) 유지, `CAPTURE_MIN_HALF_LENGTH`
+24→**10**, `CAPTURE_CORRIDOR_CLEARANCE` 6→**2.5**, `CAPTURE_ESCAPE_TOLERANCE` 2→**1**. 비율형 배율
+`CAPTURE_LINE_SPACING_SCALE`(=0.65)는 separationRadius 기준 상대값이라 불변. 인게임(client) 검증 후 미세
+조정 여지 있음.
+
+### [16] 쐐기 돌진 시작점을 차단선 밖(회랑 후방 입구)으로
+
+[15] 인게임 검증 결과 쐐기가 차단선 **안쪽**에서 돌진을 시작함. 원인: 준비 정점이 돌진 부대
+현재 위치 기준(`centroid + forward*WEDGE_PREP_APEX_DISTANCE`)이라, 부대가 보스/플레이어 근처에
+모여 있으면 회랑 내부에 잡힘.
+
+**수정:** `SquadOrder`에 `wedgeApexPos`/`hasWedgeApex` 추가. WedgeCharge 준비 시 `hasWedgeApex`면
+부대 위치 대신 명시 정점을 사용하고 전진축을 `정점→타겟`으로 재정렬. `issueDivideAndConquer`에서
+차단선 길이(`divideCorridorHalfLength_`) 확정 **후** 돌진 명령을 발행하도록 순서를 옮기고, 정점을
+`divideCorridorCenter_ - divideCorridorForward_*(divideCorridorHalfLength_ + CAPTURE_CHARGE_STANDOFF=4)`로
+지정 → 쐐기가 회랑 후방 입구 밖에서 준비해 차단선 사이를 관통. 후방 입구는 돌진 부대 쪽(forward=부대→
+플레이어)이라 부대가 자연스럽게 정렬됨.
+
+### [17] 전술 NPC 정면 충돌(head-on) 교착 해소 — peer 스티어링 + 도착 게이트 보강
+
+증상: NPC끼리 정면으로 마주쳐 막히면 박스 대형 형성이 늦어 전술 발동이 지연되고, 전술 중에도
+슬롯/돌진 도착이 막혀 종료가 지연. 원인 3가지: (1) `updateHoldSlot`에 peer 회피 스티어링 부재
+(플레이어/보스만 회피), (2) Chase/Flank 분리력이 진행방향 수직 성분만이라 정확한 정면(180°)에서
+수직 성분≈0 → 대칭 교착, (3) 도착 게이트(`areMembersAtSlots`/`allMembersArrived`/
+`areChargeMembersComplete`)가 전원 100% 요구 → 끼인 1명이 전체 단계 stall.
+
+**수정 (A) head-on 해소 스티어링:** `TacticalNpc::applyPeerSeparation()` 신설(이웃 전술 NPC 분리력 +
+정면 감지 시 일관된 'veer-right' 측면 bias 주입 → 마주친 둘이 반대편으로 갈라져 통과, 차선 통행 규칙).
+`updateHoldSlot`(en route, 슬롯 근처는 비활성해 밀집 패킹 보존)·`updateChase`·`updateFlank`에 적용.
+상수 `HEADON_DOT_THRESHOLD=0.6`, `HEADON_BIAS=1.0`.
+
+**수정 (B) 임계비율 도착:** `areMembersAtSlots`/`areChargeMembersComplete`를 전원 → 살아있는 멤버 중
+`SLOT_ARRIVE_FRACTION=0.85` 이상 도착/완료로 완화.
+
+**수정 (C) 단계 타임아웃 폴백:** `GoblinMidBossTactic`에 `phaseElapsed_`(단계 누적)·`divideStageTimer_`
+추가. `formationReady()=allMembersArrived || phaseElapsed_>=FORMATION_TIMEOUT(7s)`로 박스/포위/경계/후퇴
+게이트 교체. DivideAndConquer Preparing/Charging에 `DIVIDE_PREP_TIMEOUT(6s)`/`DIVIDE_CHARGE_TIMEOUT(5s)`
+폴백 → stall 시에도 전술 진행·종료 보장(정상 흐름엔 무영향).
+
 ### 설계 규약 메모
 - **전술 trooper는 플레이어/보스와 물리 충돌하지 않음**(CollisionLayer). 경로 차단·대형 jam 방지용.
   되돌리려면 Room.cpp의 카테고리/마스크 태그만 제거(물리 코어는 기본값이라 무해)([14]).
@@ -707,3 +770,120 @@ HoldSlot, 박스=`boxRefreshTimer_` 0.1s 갱신). HP 임계/BossSolo 등 비상 
 - 전술 매크로 거리 상수는 **인게임 스케일**(트루퍼 separationRadius≈3 / attackRange≈2.8) 기준으로 잡을 것
   (시뮬레이터 수치 직접 이식 금지).
 - 전술 NPC 사망 시 **물리 바디 unregister**(시체가 산 NPC 이동을 막지 않도록).
+
+---
+
+### 2026.06.09
+## [feat] 쐐기(각개격파) 전술 차단벽 실체화 — barrier 모드(서버 토글) + 클라 position-split 충돌
+
+**수정 파일:** `ServerEngine/protocol.hpp`, `RoomServer/PacketManager.*`, `RoomServer/MidBossTactics.cpp/.hpp`,
+`client/object.hpp`, `client/PacketManager.*`, `client/online/onlineGame.cpp/.hpp`
+
+**배경.** 쐐기 전술의 좌우 차단선(screen line)이 플레이어를 가두고 돌진하는 기믹인데, 인게임에서 플레이어가
+그냥 통과했다. 추적 결과 **플레이어↔몬스터 충돌이 아예 없었다** — 클라 `createGoblin`의 고블린 물리 등록이
+주석(처음부터 스텁)이고, 서버는 플레이어가 Kinematic(클라가 보낸 위치를 그대로 적용)이라 막지 못한다. 즉
+플레이어를 멈추는 로직이 어디에도 없었다. (종전엔 "군집 이탈 시 전술 취소 + fail-cooldown"이라는 논리적
+안전장치로 때우고 있었다.) 의도한 기믹은 *진짜 물리 벽* — 측면이 막히고, 탈출은 ① 벽 NPC 처치(구멍) 또는
+② 열린 앞·뒤(특히 돌진 진입로 쪽)로 우회만 가능.
+
+**방식 선택(A vs B).** (A) 고블린을 Kinematic 바디로 등록해 `ContactConstraint`로 막는 방식은 Dynamic↔
+Kinematic에서 100% 침투 해소 + Baumgarte/warmstart 속도 bias로 **튕김/진동**이 난다 — player-player가 물리
+솔버를 버리고 position-split(`resolvePlayerSeparation`)로 간 바로 그 이유다. 그래서 (B) **position 기반
+split** 채택: 안정성(임펄스 없음), 성능(플레이어×barrier XZ 실린더 테스트만), 깔끔함(고블린 바디 미등록 →
+서버 권위 위치 추종 그대로, 이중 물리 없음) 모두 우세. (고블린은 클라에서 Kinematic이라 등록해도 재시뮬되진
+않지만, 솔버 경로의 튕김을 피하려 position-split을 택함.)
+
+**구현.**
+- **barrier 모드(일반화).** `Object`(클라 베이스)에 `barrierActive_` 플래그 + 접근자 추가 → 고블린에
+  한정되지 않고 모든 몬스터 종류에 적용 가능.
+- **서버 토글.** 신규 패킷 `S_NpcBarrier{active, npcId 목록}`(`protocol.hpp`, `PacketManager::makeSNpcBarrierPacket`).
+  `MidBossTactics::issueDivideAndConquer`가 차단선 NPC id를 `divideBarrierNpcIds_`에 **보관만** 하고, barrier on은
+  **차단선 형성 완료(돌진 발동, Preparing→Charging 전환) 시점**에 broadcast(`divideBarrierOn_`). → 형성 중
+  이동하는 NPC가 대상 군집을 밀어 돌진 경로 밖으로 내보내는 걸 방지(barrier는 Charging 구간에만 활성). 
+  `clearDivideBarriers()`가 **돌진 관통 완료**(Charging→Engaging) 및 모든 종료 경로(`enterTacticFailCooldown`,
+  engage 완료)에 off broadcast(`divideBarrierOn_`일 때만). 비어있으면 no-op이라 타 전술 경로에서 안전.
+- **클라 분리.** `Game::resolveBarrierSeparation(dt)` — `resolvePlayerSeparation`과 동형이나 (1) faction 대신
+  barrier 플래그 게이팅, (2) barrier는 움직이지 않는 권위 객체라 절반이 아닌 **전체 침투**를 플레이어가 해소
+  (hard wall). 위치(`setCurrPos`)만 보정 → 임펄스 튕김 없음. 물리 step 직후 `resolvePlayerSeparation` 다음 호출.
+  **죽은 벽 NPC(hp≤0)는 건너뛰어 그 자리에 구멍**이 자동으로 뚫린다(기믹). `S_NpcBarrier` 수신은
+  `setNpcBarrier`가 `barrierObjects_`(Object* 목록) 갱신.
+  - **틈 봉합(점→선분 캡슐).** 전술 NPC는 서로 Dynamic 충돌(NPC-NPC)이라 체격(체반경 ~0.8m) 아래로 못 뭉쳐
+    실제 간격이 ~1.6m+편차다. 각 NPC를 독립 원으로 막으면 편차로 벌어진 틈(>2.0m)으로 샜다. → 살아있는
+    barrier를 **`kBarrierLinkDist(2.9m)` 내 모든 쌍을 선분(캡슐)으로 이어** 연속 벽으로 처리
+    (`closestPointOnSegmentXZ`)해 간격과 무관하게 봉합. (최근접 이웃 하나만 잇던 초기 버전은 직선에서 가장 넓은
+    틈을 구조적으로 건너뛰어 샜음 → 전체 쌍 연결로 교정.) 고립 barrier는 원으로 단독 차단. 누적 보정은 step
+    상한(`kMaxBarrierPushPerStep`)으로 클램프. `linkDist`는 죽은 NPC 양옆 간격(~3.2m)·좌우 라인(회랑 폭)보다
+    작아 구멍/앞·뒤 탈출구를 보존.
+- **이탈 취소 제거 + 틈 없는 벽(서버).** `updateDivideAndConquer` Preparing의 `isCaptureClusterInsideCorridor`
+  → 취소 블록 삭제(놓침 허용, 빈 회랑 관통). 회랑 길이를 덮으려 간격을 벌리던 `requiredSpacing` 로직(이탈의
+  원인) 삭제하고 차단선 간격을 `CAPTURE_WALL_SPACING=1.2m`로 고정 → position-split이라도 NPC 사이로 못 빠짐.
+  죽은 코드(`isCaptureClusterInsideCorridor`, `calcCaptureClusterCentroid`, 상수 `CAPTURE_LINE_SPACING_SCALE`/
+  `CAPTURE_MIN_HALF_LENGTH`/`CAPTURE_ESCAPE_TOLERANCE`) 제거.
+
+**범위/특성.** barrier는 전술 중 차단선 NPC에만 토글(평소 몬스터는 통과). 각 클라는 자기 플레이어만 분리하고
+막힌 위치를 `C_Move`로 송신 → 서버(Kinematic) 수용 → 타 클라 전파, desync 없음. 고블린 Dynamic 물리는 서버
+권위 그대로(클라는 위치만 추종, 이중 계산 없음).
+
+**튜닝 노트.** `kBarrierRadius`(0.6)·`CAPTURE_WALL_SPACING`(1.2)·`kMaxBarrierPushPerStep`(0.5)로 차단 강도/
+틈/순간이동을 조절. 현재값은 차단 보장 우선. 인게임(client) 검증 후 미세 조정.
+
+---
+
+### 2026.06.10
+## [mod] 전술 흐름 단순화 — 경계(Vigilance) 단계 제거, 박스 → 쐐기/포위 직행
+
+**수정 파일:** `RoomServer/MidBossTactics.cpp/.hpp`
+
+**배경.** 전술 사이클이 `후퇴 → 박스 → 경계(Vigilance) → (쐐기/포위)`였는데, 인게임에서 박스 대형은 명확히
+보이지만 **경계 대형(GuardBoss 산개)은 NPC가 뭘 하는지 시각적으로 모호**했다. 또 경계는 박스 종료 시 한 클러스터
+판단을 한 번 더 반복할 뿐이고, 쐐기(`DivideAndConquer`) 단계가 진입 시 스스로 클러스터를 재검사(≤1이면
+포위/실패 폴백)하는 자기완결 구조라 경계가 한 일에 의존하지 않는다 → 불필요한 중간 단계.
+
+**변경.** 박스 종료 분기(`BoxAdvance` 완성+1s 유지 후)에서 클러스터 ≥2일 때 `Vigilance` 대신 곧장
+`DivideAndConquer`로 진입. 흐름: **후퇴 → 박스 → 1개면 포위(Encircle) / 2개↑면 쐐기**. Vigilance 죽은 코드
+전부 제거(열거값 `LeaderPhase::Vigilance`, 상수 `VIGILANCE_GUARD_RADIUS`, 단계 전환 판단 블록, `GuardBoss`
+명령 발행 블록).
+
+**부자연스럽지 않은 근거.** (1) 박스 대형은 이미 `FORMATION_HOLD_DURATION`(1s) 유지하며 그 시점에 클러스터를
+새로 판단 → 박스 자체가 "관찰/평가 포즈" 역할(모호했던 경계 링보다 읽기 쉬움). (2) 포위/쐐기 재판단은 쐐기
+명령 발행 블록의 클러스터 재검사로 **그대로 보존**(2단 판단 유지). 차이는 플레이어가 다시 뭉칠 시간 창이
+경계 형성 시간만큼 짧아지는 것뿐 — 기존 "놓침 허용"과 일관.
+
+---
+
+## [feat] 전술 NPC 공격권 예약·squad 교전 배정 안정화 (NPCAI 시뮬 포팅)
+
+**수정 파일:** `RoomServer/Room.cpp/.hpp`, `RoomServer/TacticalNpc.cpp/.hpp`,
+`RoomServer/TacticalSquad.hpp`, `RoomServer/MidBossTactics.cpp/.hpp`,
+신규 `RoomServer/docs/tacticalReservationAndEngage.md`. 상세 설계는 그 문서 참조.
+
+**배경.** NPCAI 시뮬에서 검증된 전술 AI 4종을 포팅. 기존 RoomServer는 (1) 공격권 예약이
+단순 선착순(`size>=5→거부`)이라 먼 NPC가 슬롯 선점, (2) squad 교전 타깃을 매 틱 거리로
+재계산해 타깃이 흔들리고 동일 engage가 중복 발행, (3) 예약 끊긴 NPC가 즉시 재예약을 시도해
+chase↔PressureWait 진동이 발생.
+
+**변경 (4종).**
+- **공격권 예약 — 거리+접근 진척 기반.** `Room::tryReserveTacticalAttackSlot` 재작성:
+  교전 중(Windup/Recover) NPC는 occupant로 점유 보장, Chase/PressureWait/Flank 후보를
+  거리순 정렬, 정원(5) 초과 시 최원거리 예약자 축출, 빈 슬롯을 가까운 후보부터 채움.
+  `pruneTacticalAttackReservations`·`findTacticalNpcById` 추가. `TacticalNpc`에
+  `isEligibleForAttackReservation`(거리 + blocked 진척 게이트), 진척 기반 lease 갱신
+  (`reservedAttackProgressDist_`), 스테일로 끊긴 타깃은 `blockedAttackReservation*`로
+  표시해 일정 거리 더 접근 전까지 재예약 차단.
+- **chase↔PressureWait 진동 제거.** 위 진척 게이트(`PROGRESS_DIST=0.4`)로 끊긴 NPC가
+  곧바로 되붙지 못하게 해 떨림 해소. 기존 타이머 스태거·표시 마스킹(`getDisplayState`)과 결합.
+- **squad 타깃 균형 재배정.** `GoblinMidBossTactic::issueStableEngage(reset)` —
+  배정 수→거리→id 순으로 플레이어 배정, `engageTargetBySquad_` 영속 맵으로 생존 중 고정.
+  `enterPhase()`가 전술 대형/솔로 phase 진입 시 캐시를 비워 전술 종료 후 깨끗이 재배정.
+  기존 `assignSquadsToPlayers`(매 틱 거리 재계산) 제거. **모든 일반 Engage 발행부**
+  (evaluateTactics 폴백·enterTacticFailCooldown·update의 Encircle 완성/Box→Engage 전환·
+  issueDivideEngage)를 이 함수로 일원화.
+- **동일 engage 중복 방지.** `TacticalSquad::getEngageTargetId()` 추가 →
+  `issueStableEngage`가 타깃이 바뀔 때만 `receiveOrder` 발행.
+
+**스케일.** 시뮬이 2D 가독성용으로 키운 `RESERVATION_MAX_DIST`(18)·`PRESSURE_EXTRA_RADIUS`(9)는
+미적용, 인게임값 8.0/4.0 유지. 신규 `TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST=0.4`만 추가.
+
+**비고.** 커밋의 `consumePendingCommand` EngageTarget→PressureWait 라우팅은 미적용(진척
+게이트로 동일 효과). `issueDivideEngage`의 `selectReplacementTarget` 단일 추격은 균형 배정으로
+대체됨 → 쐐기 통과 후 추격 동작은 인게임(client) 검증 필요. 빌드 Debug/Release x64 OK.
