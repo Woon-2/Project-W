@@ -187,75 +187,6 @@ void MidBossTacticBase::issueIdleAll( PlatoonLeader& leader ) const {
     }
 }
 
-void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLeader& leader,
-                                               const std::vector<TacticalSquad*>& liveSquads, std::vector<uint32_t>& outTargetIds ) const
-{
-    const auto& players = room.getLivingPlayers();
-    int32 numSquads = static_cast<int32>(liveSquads.size());
-    int32 numPlayers = static_cast<int32>(players.size());
-
-    if ( numPlayers <= 1 ) {
-        return;
-    }
-
-    int32 maxPerPlayer = (numSquads + numPlayers - 1) / numPlayers;
-
-    struct DistEntry { 
-        float dist; 
-        int32 squadIdx; 
-        int32 playerIdx;
-    };
-
-    std::vector<DistEntry> entries;
-    entries.reserve( numSquads * numPlayers );
-
-    for ( int32 si = 0; si < numSquads; ++si ) {
-        mu::Vec3 centroid{};
-        int32 cnt{};
-
-        for ( TacticalNpc* npc : liveSquads[ si ]->getMemberCache() ) {
-            if ( npc && npc->hp() > 0 ) {
-                centroid = centroid + npc->pos();
-                ++cnt;
-            }
-        }
-
-        if ( cnt > 0 ) {
-            centroid = centroid * (1.f / static_cast<float>(cnt));
-        }
-        else {
-            centroid = leader.pos();
-        }
-
-        for ( int32 pi = 0; pi < numPlayers; ++pi ) {
-            float dSq = ( centroid - players[ pi ]->player()->pos() ).len2();
-            entries.push_back( { dSq, si, pi } );
-        }
-    }
-
-    std::sort( entries.begin(), entries.end(),
-        []( const DistEntry& a, const DistEntry& b ) { 
-            return a.dist < b.dist;
-        }
-    );
-
-    std::vector<bool>  squadDone( numSquads, false );
-    std::vector<int32> playerCount( numPlayers, 0 );
-
-    for ( const auto& e : entries ) {
-        if ( squadDone[ e.squadIdx ] ) {
-            continue;
-        }
-        if ( playerCount[ e.playerIdx ] >= maxPerPlayer ) {
-            continue;
-        }
-
-        outTargetIds[ e.squadIdx ] = static_cast<uint32_t>(players[ e.playerIdx ]->id());
-        squadDone[ e.squadIdx ] = true;
-        ++playerCount[ e.playerIdx ];
-    }
-}
-
 /*-----------------------------
       GoblinMidBossTactic
 -----------------------------*/
@@ -310,21 +241,8 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         }
 
         if ( phaseOrderIssued_ && formationReady( leader ) ) {
-            GameSession* encircleTarget = selectPrimaryTarget( room, leader );
-
-            if ( encircleTarget ) {
-                for ( auto* sq : squads ) {
-                    if ( sq->isEmpty() ) {
-                        continue;
-                    }
-
-                    auto ord = SquadOrder{
-                        .type = SquadOrderType::Engage,
-                        .targetId = static_cast<uint32>(encircleTarget->id())
-					};
-                    sq->receiveOrder( ord );
-                }
-            }
+            // 포위 완성 → squad별 균형 재배정으로 일반 교전 전환(전면 재배정).
+            issueStableEngage( room, collectLiveSquads( leader ), /*resetAssignments=*/true );
 
             tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
             enterPhase( LeaderPhase::Cooldown );
@@ -357,18 +275,8 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         if ( formationReady( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
             if ( !tacticsUnlocked_ ) {
                 enterPhase( LeaderPhase::Engage );
-
-                for ( auto* sq : squads ) {
-                    if ( sq->isEmpty() ) {
-                        continue;
-                    }
-
-                    auto ord = SquadOrder{
-                        .type = SquadOrderType::Engage,
-                        .targetId = primaryTargetId_
-                    };
-                    sq->receiveOrder( ord );
-                }
+                // 박스 대형 완성 → squad별 균형 재배정으로 일반 교전 전환(전면 재배정).
+                issueStableEngage( room, collectLiveSquads( leader ), /*resetAssignments=*/true );
             }
             else {
                 auto clusters = buildPlayerClusters( room, leader );
@@ -445,6 +353,15 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
     if ( next != LeaderPhase::Cooldown ) {
         tacticTimer_ = 0s;
     }
+    // 전술 대형/솔로 phase 진입 시 squad 교전 배정 캐시를 비워, 전술 종료 후 새 일반 교전이
+    // 깨끗한 균형 재배정으로 시작되게 한다(GameServer에는 Vigilance 단계 없음).
+    if ( next == LeaderPhase::BoxAdvance ||
+         next == LeaderPhase::TacticalRetreat ||
+         next == LeaderPhase::Encircle ||
+         next == LeaderPhase::DivideAndConquer ||
+         next == LeaderPhase::BossSolo ) {
+        engageTargetBySquad_.clear();
+    }
 }
 
 void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& leader ) {
@@ -467,16 +384,8 @@ void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& le
         return;
     }
 
-    std::vector<uint32> targets( liveSquads.size(), static_cast<uint32>(primary->id()) );
-    assignSquadsToPlayers( room, leader, liveSquads, targets );
-
-    for ( int32 i = 0; i < liveSquads.size(); ++i ) {
-        auto ord = SquadOrder{
-            .type = SquadOrderType::Engage,
-            .targetId = targets[ i ]
-		};
-        liveSquads[ i ]->receiveOrder( ord );
-    }
+    // 전술 실패/종료 시 전면 재배정(reset=true): squad별 플레이어 타깃을 균형 재분배.
+    issueStableEngage( room, liveSquads, /*resetAssignments=*/true );
 }
 
 void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
@@ -671,15 +580,99 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         return;
     }
 
-    std::vector<uint32_t> targets( numSquads, primaryId );
-    assignSquadsToPlayers( room, leader, liveSquads, targets );
+    // 정상 교전 틱: 생존 중 타깃 고정(reset=false), 사망 시에만 재배정 + 중복 engage 억제.
+    issueStableEngage( room, liveSquads, /*resetAssignments=*/false );
+}
 
-    for ( int32 i = 0; i < numSquads; ++i ) {
-        auto ord = SquadOrder{
-            .type = SquadOrderType::Engage,
-			.targetId = targets[ i ]
-		};
-        liveSquads[ i ]->receiveOrder( ord );
+bool GoblinMidBossTactic::isLivingPlayerTarget( const Room& room, uint32 playerId ) const {
+    return playerId != 0 && room.findLivingSessionByPlayerId( static_cast<int32>(playerId) ) != nullptr;
+}
+
+void GoblinMidBossTactic::issueStableEngage( Room& room,
+    const std::vector<TacticalSquad*>& liveSquads, bool resetAssignments ) {
+    if ( resetAssignments )
+        engageTargetBySquad_.clear();
+
+    // 죽은 squad나 죽은 타깃에 묶인 배정 정리.
+    for ( auto it = engageTargetBySquad_.begin(); it != engageTargetBySquad_.end(); ) {
+        bool squadAlive = false;
+        for ( TacticalSquad* squad : liveSquads ) {
+            if ( squad && squad->getSquadId() == it->first ) { squadAlive = true; break; }
+        }
+        if ( !squadAlive || !isLivingPlayerTarget( room, it->second ) )
+            it = engageTargetBySquad_.erase( it );
+        else
+            ++it;
+    }
+
+    // 비-reset이면 squad의 현재 Engage 타깃을 맵에 흡수해 고정(sticky) 유지.
+    if ( !resetAssignments ) {
+        for ( TacticalSquad* squad : liveSquads ) {
+            if ( !squad || squad->isEmpty() ) continue;
+            int32 squadId = squad->getSquadId();
+            if ( engageTargetBySquad_.find( squadId ) != engageTargetBySquad_.end() )
+                continue;
+            uint32 currentTargetId = squad->getEngageTargetId();
+            if ( isLivingPlayerTarget( room, currentTargetId ) )
+                engageTargetBySquad_[ squadId ] = currentTargetId;
+        }
+    }
+
+    const auto& players = room.getLivingPlayers();
+    if ( players.empty() )
+        return;
+
+    // 플레이어별 현재 배정 수 집계(균형 배정의 1순위 기준).
+    std::unordered_map<uint32, int32> assignmentCounts;
+    for ( GameSession* p : players )
+        assignmentCounts[ static_cast<uint32>(p->id()) ] = 0;
+    for ( const auto& [squadId, targetId] : engageTargetBySquad_ ) {
+        auto cit = assignmentCounts.find( targetId );
+        if ( cit != assignmentCounts.end() )
+            ++cit->second;
+    }
+
+    for ( TacticalSquad* squad : liveSquads ) {
+        if ( !squad || squad->isEmpty() ) continue;
+
+        int32 squadId = squad->getSquadId();
+        auto assignedIt = engageTargetBySquad_.find( squadId );
+        if ( assignedIt == engageTargetBySquad_.end() ) {
+            // 미배정 squad: 배정 수 최소 → 거리 → id 순으로 플레이어 선택.
+            GameSession* best = nullptr;
+            int32 bestCount = 0;
+            float bestDistSq = 0.f;
+            mu::Vec3 squadCenter = squad->calcCentroid();
+
+            for ( GameSession* p : players ) {
+                uint32 pid = static_cast<uint32>(p->id());
+                int32 count = assignmentCounts[ pid ];
+                float distSq = (squadCenter - p->player()->pos()).len2();
+                if ( !best ||
+                     count < bestCount ||
+                     (count == bestCount &&
+                      (distSq < bestDistSq ||
+                       (distSq == bestDistSq && pid < static_cast<uint32>(best->id())))) ) {
+                    best = p;
+                    bestCount = count;
+                    bestDistSq = distSq;
+                }
+            }
+
+            if ( !best ) continue;
+            uint32 bestId = static_cast<uint32>(best->id());
+            assignedIt = engageTargetBySquad_.emplace( squadId, bestId ).first;
+            ++assignmentCounts[ bestId ];
+        }
+
+        // 이미 같은 타깃을 교전 중이면 명령을 재발행하지 않는다(동일 engage 중복 방지).
+        if ( squad->getEngageTargetId() == assignedIt->second )
+            continue;
+
+        SquadOrder order;
+        order.type = SquadOrderType::Engage;
+        order.targetId = assignedIt->second;
+        squad->receiveOrder( order );
     }
 }
 
@@ -1038,21 +1031,8 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
 }
 
 void GoblinMidBossTactic::issueDivideEngage( Room& room, PlatoonLeader& leader ) {
-    uint32 targetId = selectReplacementTarget( room, leader, divideTargetPlayerIds_ );
-    if ( targetId == 0 ) {
-        GameSession* primary = selectPrimaryTarget( room, leader );
-        targetId = primary ? static_cast<uint32>( primary->id() ) : 0;
-    }
-
-    for ( TacticalSquad* squad : leader.getSquads() ) {
-        if ( !squad || squad->isEmpty() ) {
-            continue;
-        }
-        SquadOrder order{};
-        order.type = (targetId != 0) ? SquadOrderType::Engage : SquadOrderType::Idle;
-        order.targetId = targetId;
-        squad->receiveOrder( order );
-    }
+    // 쐐기/각개격파 종료 → squad별 균형 재배정으로 일반 교전 전환(전면 재배정).
+    issueStableEngage( room, collectLiveSquads( leader ), /*resetAssignments=*/true );
 }
 
 bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader ) {

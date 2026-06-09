@@ -346,23 +346,56 @@ bool TacticalNpc::hasReservedAttackSlot() const {
     return reservedAttackTargetId_ != 0 && reservedAttackTargetId_ == targetId_;
 }
 
+bool MU_CALLCONV TacticalNpc::isEligibleForAttackReservation( uint32 targetId, mu::Vec3 targetPos ) const {
+    float dist = (pos() - targetPos).len();
+    if ( dist > TACTICAL_ATTACK_RESERVATION_MAX_DIST )
+        return false;
+
+    // 스테일로 막힌 타깃이 아니면 거리 조건만으로 자격 충족.
+    if ( blockedAttackReservationTargetId_ != targetId )
+        return true;
+
+    // 막힌 타깃이면 끊긴 시점보다 PROGRESS_DIST만큼 더 접근해야 재자격(진동 차단 핵심 게이트).
+    return dist <= blockedAttackReservationDist_ - TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST;
+}
+
+void TacticalNpc::resetAttackReservationLease() {
+    reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = 0.f;
+    blockedAttackReservationTargetId_ = 0;
+    blockedAttackReservationDist_ = 0.f;
+}
+
 void TacticalNpc::updateReservedAttackStaleTimer( Seconds dt, Room& room ) {
     if ( !hasReservedAttackSlot() ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         return;
     }
 
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         return;
     }
 
-    float distSq = (pos() - target->player()->pos()).len2();
-    if ( state_ == TacticalNpcState::AttackWindup || state_ == TacticalNpcState::AttackRecover || distSq <= attackRange_ * attackRange_ ) {
+    float dist = (pos() - target->player()->pos()).len();
+    // 교전 중이거나 사거리 내면 리스 유지(진척 거리 기준점 갱신).
+    if ( state_ == TacticalNpcState::AttackWindup || state_ == TacticalNpcState::AttackRecover || dist <= attackRange_ ) {
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = dist;
         return;
     }
+
+    // 직전보다 PROGRESS_DIST 이상 접근했으면 진척으로 보고 타이머 리셋.
+    if ( reservedAttackProgressDist_ <= 0.f || dist <= reservedAttackProgressDist_ - TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST ) {
+        reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = dist;
+        return;
+    }
+
+    // 진척 없이 정체 → 스테일 타이머 누적.
     reservedAttackStaleTimer_ += dt;
 }
 
@@ -378,37 +411,59 @@ bool TacticalNpc::canEnterAttackSlot( Room& room ) {
             return false;
         }
 
-        float maxDistSq = TACTICAL_ATTACK_RESERVATION_MAX_DIST * TACTICAL_ATTACK_RESERVATION_MAX_DIST;
-
-        if ( (pos() - target->player()->pos()).len2() > maxDistSq 
-            || reservedAttackStaleTimer_ >= TACTICAL_ATTACK_RESERVATION_STALE_TIME 
-        ) {
+        float dist = (pos() - target->player()->pos()).len();
+        if ( dist > TACTICAL_ATTACK_RESERVATION_MAX_DIST ) {
             releaseAttackReservation( room );
+            return false;
+        }
+        if ( reservedAttackStaleTimer_ >= TACTICAL_ATTACK_RESERVATION_STALE_TIME ) {
+            releaseStaleAttackReservation( room, dist );
             return false;
         }
         return true;
     }
 
+    GameSession* target = resolveTarget( room );
+    if ( !target || !isEligibleForAttackReservation( targetId_, target->player()->pos() ) ) {
+        pressureReentering_ = false;
+        return false;
+    }
+
     if ( !room.tryReserveTacticalAttackSlot( targetId_, getId() ) ) {
         reservedAttackTargetId_ = 0;
         reservedAttackStaleTimer_ = 0s;
+        reservedAttackProgressDist_ = 0.f;
         pressureReentering_ = false;
         return false;
     }
 
     reservedAttackTargetId_ = targetId_;
     reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = (pos() - target->player()->pos()).len();
+    blockedAttackReservationTargetId_ = 0;
+    blockedAttackReservationDist_ = 0.f;
     return true;
 }
 
 void TacticalNpc::releaseAttackReservation( Room& room ) {
-    if ( reservedAttackTargetId_ == 0 ) {
-        return;
-    }
+    if ( reservedAttackTargetId_ != 0 )
+        room.releaseTacticalAttackSlot( reservedAttackTargetId_, getId() );
+    reservedAttackTargetId_ = 0;
+    resetAttackReservationLease();
+    pressureReentering_ = false;
+}
 
-    room.releaseTacticalAttackSlot( reservedAttackTargetId_, getId() );
+void TacticalNpc::releaseStaleAttackReservation( Room& room, float currentDist ) {
+    uint32 targetId = reservedAttackTargetId_;
+    if ( targetId != 0 )
+        room.releaseTacticalAttackSlot( targetId, getId() );
+
     reservedAttackTargetId_ = 0;
     reservedAttackStaleTimer_ = 0s;
+    reservedAttackProgressDist_ = 0.f;
+    // 이 타깃은 PROGRESS_DIST만큼 더 접근하기 전까지 재예약 차단.
+    blockedAttackReservationTargetId_ = targetId;
+    blockedAttackReservationDist_ = currentDist;
     pressureReentering_ = false;
 }
 

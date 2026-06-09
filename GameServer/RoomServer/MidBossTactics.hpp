@@ -5,6 +5,7 @@
 #include "mathUtil.hpp"
 #include <cstdint>
 #include <vector>
+#include <unordered_map>
 
 class TacticalSquad;
 class TacticalNpc;
@@ -36,8 +37,6 @@ protected:
     mu::Vec3 MU_CALLCONV calcAveragePlayerFacing( const Room& room, mu::Vec3 fallbackDir ) const;
     GameSession* MU_CALLCONV selectNearestPlayer( Room& room, mu::Vec3 from ) const;
     uint32       MU_CALLCONV selectNearestPlayerId( Room& room, mu::Vec3 from ) const;
-    void assignSquadsToPlayers( const Room& room, const PlatoonLeader& leader,
-                                const std::vector<TacticalSquad*>& liveSquads, std::vector<uint32>& outTargetIds ) const;
     void issueEngageAll( PlatoonLeader& leader, uint32 targetId ) const;
     void issueIdleAll( PlatoonLeader& leader ) const;
 };
@@ -105,6 +104,10 @@ private:
                                         const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters );
     void         updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader );
     void         issueDivideEngage( Room& room, PlatoonLeader& leader );
+    // squad별 Engage 타깃을 균형(배정 수)→거리→id 순으로 배정하되, 생존 중에는 고정(sticky)하고
+    // 타깃이 바뀔 때만 명령을 발행해 중복 engage를 막는다. resetAssignments=true면 전면 재배정.
+    void         issueStableEngage( Room& room, const std::vector<TacticalSquad*>& liveSquads, bool resetAssignments );
+    bool         isLivingPlayerTarget( const Room& room, uint32 playerId ) const;
     void         clearDivideBarriers( Room& room );   // 차단벽 barrier 해제(클라에 off 통보). 비어있으면 no-op
     uint32       selectReplacementTarget( Room& room, const PlatoonLeader& leader, const std::vector<uint32>& playerIds ) const;
     int32        countLiveMembers( const std::vector<TacticalSquad*>& liveSquads ) const;
@@ -129,6 +132,8 @@ private:
     mu::Vec3         boxAdvanceTargetPos_{};
     mu::Vec3         retreatTargetPos_{};
     uint32           primaryTargetId_{ 0 };
+    // squadId → 고정된 Engage 타깃 플레이어 id. 생존 중 유지, 사망/전술종료 시 재배정.
+    std::unordered_map<int32, uint32> engageTargetBySquad_{};
     int32            encircleIssuedLiveMembers_{ 0 };
     std::vector<DivideSquadTask> divideTasks_{};
     DivideStage      divideStage_{ DivideStage::Preparing };

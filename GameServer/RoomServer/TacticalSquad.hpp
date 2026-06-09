@@ -81,6 +81,10 @@ public:
     const std::vector<uint32>& getMembers() const { return memberIds_; }
     const std::vector<TacticalNpc*>& getMemberCache() const { return memberCache_; }
     bool isEmpty() const { return memberIds_.empty(); }
+    // 현재 Engage 명령의 타깃 플레이어 id(Engage 상태가 아니면 0). 동일 타깃 재명령 중복 방지용.
+    uint32 getEngageTargetId() const {
+        return currentOrder_.type == SquadOrderType::Engage ? currentOrder_.targetId : 0;
+    }
 
     void     pushConfusedToMembers( Room& room );
     void     removeDeadMembers();

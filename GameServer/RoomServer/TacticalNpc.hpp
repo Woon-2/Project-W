@@ -108,6 +108,9 @@ public:
     mu::Vec3          getSpawnPos()          const { return spawnPos_; }
     mu::Vec3          getAssignedSlot()      const { return assignedSlot_; }
     float             getAttackRange()       const { return attackRange_; }
+    // 공격 슬롯 예약 자격: 타깃과의 거리 + (스테일로 막힌 경우) 접근 진척 기반.
+    // Room::tryReserveTacticalAttackSlot에서 후보를 거를 때 호출하므로 public.
+    bool MU_CALLCONV isEligibleForAttackReservation( uint32 targetId, mu::Vec3 targetPos ) const;
     float             getAttackDamage()      const { return attackDamage_; }
     float             getSeparationRadius()  const { return separationRadius_; }
     TacticalNpcConfig getConfig()            const;
@@ -142,6 +145,9 @@ protected:
     void        updateReservedAttackStaleTimer( Seconds dt, Room& room );
     bool        canEnterAttackSlot( Room& room );
     void        releaseAttackReservation( Room& room );
+    void        resetAttackReservationLease();
+    // 예약이 STALE_TIME 동안 진척 없이 끊길 때: 슬롯 반납 + 해당 타깃을 blocked로 표시.
+    void        releaseStaleAttackReservation( Room& room, float currentDist );
     void        resetPressureWaitTarget();
     void        refreshPressureWaitScatterOffsets();
     mu::Vec3    computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 targetFacing ) const;
@@ -195,6 +201,11 @@ protected:
     bool  pressureReentering_{ false };
     uint32 reservedAttackTargetId_{ 0 };
     Seconds reservedAttackStaleTimer_{};
+    // 직전 틱까지의 타깃 접근 거리(진척 추적용). 일정량 접근하면 예약 리스를 갱신한다.
+    float reservedAttackProgressDist_{ 0.f };
+    // 스테일로 예약이 끊긴 타깃 — 이 타깃에는 PROGRESS_DIST만큼 더 접근해야 재예약 자격이 생긴다.
+    uint32 blockedAttackReservationTargetId_{ 0 };
+    float blockedAttackReservationDist_{ 0.f };
 
     std::vector<mu::Vec3>                  nearbyCache_;
     std::vector<TacticalNpcUpdateResult::HitInfo> frameHits_;
@@ -214,6 +225,9 @@ protected:
     static constexpr int   MAX_TACTICAL_ATTACKERS_PER_TARGET          = 5;
     static constexpr float TACTICAL_ATTACK_RESERVATION_MAX_DIST       = 8.0f;
     static constexpr Seconds TACTICAL_ATTACK_RESERVATION_STALE_TIME{ 3.0f };
+    // 예약 갱신/재진입에 필요한 최소 접근량(히스테리시스). attackRange_(2.8) 대비 작게 둬
+    // chase↔pressure 진동을 막는다. 시뮬레이터(NPCAI)의 거리+접근진척 예약 방식 포팅값.
+    static constexpr float TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST  = 0.4f;
     static constexpr float TACTICAL_PRESSURE_EXTRA_RADIUS             = 4.0f;
     static constexpr float TACTICAL_PRESSURE_SEPARATION_MULT          = 2.2f;
     static constexpr float TACTICAL_PRESSURE_SEPARATION_RADIUS_MULT   = 1.35f;

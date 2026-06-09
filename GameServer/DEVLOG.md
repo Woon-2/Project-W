@@ -848,3 +848,42 @@ split** 채택: 안정성(임펄스 없음), 성능(플레이어×barrier XZ 실
 새로 판단 → 박스 자체가 "관찰/평가 포즈" 역할(모호했던 경계 링보다 읽기 쉬움). (2) 포위/쐐기 재판단은 쐐기
 명령 발행 블록의 클러스터 재검사로 **그대로 보존**(2단 판단 유지). 차이는 플레이어가 다시 뭉칠 시간 창이
 경계 형성 시간만큼 짧아지는 것뿐 — 기존 "놓침 허용"과 일관.
+
+---
+
+## [feat] 전술 NPC 공격권 예약·squad 교전 배정 안정화 (NPCAI 시뮬 포팅)
+
+**수정 파일:** `RoomServer/Room.cpp/.hpp`, `RoomServer/TacticalNpc.cpp/.hpp`,
+`RoomServer/TacticalSquad.hpp`, `RoomServer/MidBossTactics.cpp/.hpp`,
+신규 `RoomServer/docs/tacticalReservationAndEngage.md`. 상세 설계는 그 문서 참조.
+
+**배경.** NPCAI 시뮬에서 검증된 전술 AI 4종을 포팅. 기존 RoomServer는 (1) 공격권 예약이
+단순 선착순(`size>=5→거부`)이라 먼 NPC가 슬롯 선점, (2) squad 교전 타깃을 매 틱 거리로
+재계산해 타깃이 흔들리고 동일 engage가 중복 발행, (3) 예약 끊긴 NPC가 즉시 재예약을 시도해
+chase↔PressureWait 진동이 발생.
+
+**변경 (4종).**
+- **공격권 예약 — 거리+접근 진척 기반.** `Room::tryReserveTacticalAttackSlot` 재작성:
+  교전 중(Windup/Recover) NPC는 occupant로 점유 보장, Chase/PressureWait/Flank 후보를
+  거리순 정렬, 정원(5) 초과 시 최원거리 예약자 축출, 빈 슬롯을 가까운 후보부터 채움.
+  `pruneTacticalAttackReservations`·`findTacticalNpcById` 추가. `TacticalNpc`에
+  `isEligibleForAttackReservation`(거리 + blocked 진척 게이트), 진척 기반 lease 갱신
+  (`reservedAttackProgressDist_`), 스테일로 끊긴 타깃은 `blockedAttackReservation*`로
+  표시해 일정 거리 더 접근 전까지 재예약 차단.
+- **chase↔PressureWait 진동 제거.** 위 진척 게이트(`PROGRESS_DIST=0.4`)로 끊긴 NPC가
+  곧바로 되붙지 못하게 해 떨림 해소. 기존 타이머 스태거·표시 마스킹(`getDisplayState`)과 결합.
+- **squad 타깃 균형 재배정.** `GoblinMidBossTactic::issueStableEngage(reset)` —
+  배정 수→거리→id 순으로 플레이어 배정, `engageTargetBySquad_` 영속 맵으로 생존 중 고정.
+  `enterPhase()`가 전술 대형/솔로 phase 진입 시 캐시를 비워 전술 종료 후 깨끗이 재배정.
+  기존 `assignSquadsToPlayers`(매 틱 거리 재계산) 제거. **모든 일반 Engage 발행부**
+  (evaluateTactics 폴백·enterTacticFailCooldown·update의 Encircle 완성/Box→Engage 전환·
+  issueDivideEngage)를 이 함수로 일원화.
+- **동일 engage 중복 방지.** `TacticalSquad::getEngageTargetId()` 추가 →
+  `issueStableEngage`가 타깃이 바뀔 때만 `receiveOrder` 발행.
+
+**스케일.** 시뮬이 2D 가독성용으로 키운 `RESERVATION_MAX_DIST`(18)·`PRESSURE_EXTRA_RADIUS`(9)는
+미적용, 인게임값 8.0/4.0 유지. 신규 `TACTICAL_ATTACK_RESERVATION_PROGRESS_DIST=0.4`만 추가.
+
+**비고.** 커밋의 `consumePendingCommand` EngageTarget→PressureWait 라우팅은 미적용(진척
+게이트로 동일 효과). `issueDivideEngage`의 `selectReplacementTarget` 단일 추격은 균형 배정으로
+대체됨 → 쐐기 통과 후 추격 동작은 인게임(client) 검증 필요. 빌드 Debug/Release x64 OK.
