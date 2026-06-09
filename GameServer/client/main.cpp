@@ -16,6 +16,51 @@ bool gClose = false;
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+// 윈도우 스타일(생성 시와 동일해야 AdjustWindowRect 결과가 맞다).
+inline constexpr DWORD kWndStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+
+// 런타임 디스플레이 모드 변경: 창모드/전체화면(borderless)을 전환하며 윈도우 스타일·크기와
+// 전역 RECT(gWndRect/gClientRect)를 갱신한다. 결과 클라이언트 크기를 out*에 돌려준다.
+// GFX::resize 호출 전에 불러야 한다(뷰포트/깊이버퍼가 gClientRect를 읽기 때문). 메인 스레드 전용.
+//
+// 전체화면은 exclusive(SetFullscreenState)가 아니라 borderless(WS_POPUP + 모니터 전체 덮기)다.
+// flip-model 스왑체인과 잘 맞고 alt-tab/모드전환 문제가 없으며, GFX::resize를 그대로 재사용한다.
+void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outClientW, int* outClientH) {
+	if (fullscreen) {
+		// 현재 윈도우가 걸쳐 있는 모니터의 전체 영역을 덮는다.
+		HMONITOR mon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO mi{ sizeof(MONITORINFO) };
+		GetMonitorInfo(mon, &mi);
+		const int w = mi.rcMonitor.right - mi.rcMonitor.left;
+		const int h = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+		SetWindowLongPtr(ghWnd, GWL_STYLE, static_cast<LONG_PTR>(WS_POPUP | WS_VISIBLE));
+		SetWindowPos(ghWnd, HWND_TOP,
+			mi.rcMonitor.left, mi.rcMonitor.top, w, h,
+			SWP_FRAMECHANGED | SWP_NOACTIVATE
+		);
+
+		gClientRect = RECT{ 0, 0, w, h };
+		gWndRect    = RECT{ 0, 0, w, h };
+		if (outClientW) *outClientW = w;
+		if (outClientH) *outClientH = h;
+	} else {
+		SetWindowLongPtr(ghWnd, GWL_STYLE, static_cast<LONG_PTR>(kWndStyle | WS_VISIBLE));
+
+		gClientRect = RECT{ 0, 0, windowedW, windowedH };
+		RECT wr{ 0, 0, windowedW, windowedH };
+		AdjustWindowRect(&wr, kWndStyle, false);
+		gWndRect = wr;
+
+		SetWindowPos(ghWnd, nullptr, 0, 0,
+			wr.right - wr.left, wr.bottom - wr.top,
+			SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
+		);
+		if (outClientW) *outClientW = windowedW;
+		if (outClientH) *outClientH = windowedH;
+	}
+}
+
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
 	SocketUtils::init( );

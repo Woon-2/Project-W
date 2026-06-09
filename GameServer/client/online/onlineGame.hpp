@@ -141,6 +141,13 @@ private:
 	// 로비 버튼 액션을 lobbyUI_에 연결하는 콜백 묶음을 만든다.
 	LobbyUI::Callbacks makeLobbyCallbacks();
 
+	// 설정창에서 바뀐 디스플레이 설정(해상도/전체화면)을 프레임 안전 지점에서 실제 적용한다.
+	// update() 진입부에서 1프레임 지연 호출 — 버튼 콜백 안에서 위젯을 재빌드하면
+	// UIManager의 입력 포인터가 dangling되므로 반드시 콜백 밖에서 적용한다.
+	void applyPendingDisplaySettings();
+	// 창모드/전체화면 전환 + 윈도우/스왑체인/GBuffer/HiZ 재생성 + UIManager 재설정 + 로비/설정 UI 재빌드.
+	void applyDisplaySettings();
+
 	// 로비 mock 액션 (script.js 프로토타입 이식).
 	void lobbyCreateRoom();
 	void lobbyJoinRoom(const std::string& code);
@@ -263,6 +270,9 @@ private:
 	GameSettings         settings_{};
 	LobbyUI              lobbyUI_{};
 	UI::SettingsPanel    settingsPanel_{};
+	// 현재 화면에 적용된 디스플레이 설정. settings_와 다르면 applyPendingDisplaySettings가 적용.
+	int                  appliedResolutionIndex_ = 0;
+	bool                 appliedFullscreen_      = false;  // GameSettings::fullscreen 기본값과 일치
 
 	// Debug effect-preview dropdown. ArrowRain / RedEnergyExplosion were removed:
 	// their ground placement is now data-driven (skill PlayVFX groundSnap +

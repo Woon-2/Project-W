@@ -31,6 +31,11 @@ public:
     // True when an interactive element is visible (game should release cursor).
     bool needsCursor() const;
 
+    // Clears cached hover/press/focus pointers. Call before destroying/rebuilding
+    // the widget tree (e.g. on a resolution change) so these raw pointers cannot
+    // dangle into freed widgets on the next input event.
+    void resetInteractionState();
+
     // Debug overlay: draws colored bounding boxes for all visible elements.
     // Call requestDebugResources(gfx) once after loadAssets() before using.
     void requestDebugResources(GFX& gfx);

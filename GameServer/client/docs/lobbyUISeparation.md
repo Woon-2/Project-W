@@ -38,7 +38,20 @@ UI를 **전용 컴포넌트 클래스**로 추출하되 2D UI 레이어만 분�
 - **커서**: 설정창 열림/닫힘 **전이**를 추적(`settingsOpenPrev_`). 열리면 `releaseCursor()+showCursor()`로 커서를 풀어 UI 클릭 가능, 닫히면 `cursorCaptureEnabled_`/`cursorShowEnabled_` 플래그 기준으로 게임플레이 커서 모드를 복원. 전이 기반이라 ESC·"닫기" 버튼 어느 경로로 닫혀도 일관되게 복원된다.
 - **포커스 복귀 가드**: `WM_SETFOCUS`에서 설정창이 열려 있으면 게임플레이 커서 캡처/숨김을 복원하지 않는다(Alt-Tab 복귀 시 UI 클릭 유지).
 
-남은 후속: `settingsAllyDamageVisible_`/`monsterDamageOpacity_`/`resolutionIndex`/`fullscreen` 값의 실제 게임플레이·렌더 반영(현재는 `GameSettings`에 저장만 되고 소비처 없음).
+## 디스플레이 설정 런타임 변경 (해상도 + 전체화면, 구현 완료)
+
+설정창의 해상도(`GameSettings::resolutionIndex`: 0=1024×768 기본, 1=1280×720, 2=1920×1080)와 화면 모드(`GameSettings::fullscreen`)를 바꾸면 즉시 실제 적용된다. 기본값은 **창모드**(`fullscreen=false`)라 해상도 컨트롤이 처음부터 활성. 해상도 컨트롤은 기존 설계대로 **창모드일 때만 활성**(전체화면이면 모니터 해상도를 쓰므로 비활성).
+
+**전체화면 방식**: exclusive(`SetFullscreenState`)가 아니라 **borderless**(`WS_POPUP` + 모니터 전체 덮기)다. flip-model 스왑체인과 잘 맞고 alt-tab/모드전환 문제가 없으며, `GFX::resize`를 그대로 재사용한다(스왑체인은 계속 windowed).
+
+흐름:
+1. **지연 적용(필수)**: 설정 버튼 콜백 안에서 위젯 트리를 재빌드하면 `UIManager`의 `hovered/pressed/focused` 포인터가 dangling된다. 그래서 콜백에서는 `GameSettings`만 갱신하고, `Game::update()` 진입부의 `applyPendingDisplaySettings()`가 `resolutionIndex`/`fullscreen` 변화를 감지해 **프레임 안전 지점**(UI update/render 이전)에서 `applyDisplaySettings()`를 호출한다.
+2. `applyDisplaySettings()` 순서: ① `uiManager_.resetInteractionState()`(입력 포인터 무효화) → ② `applyDisplayMode(fullscreen, windowedW, windowedH, &cw, &ch)`(main.cpp: 창모드↔borderless 윈도우 스타일/크기 전환 + 전역 `gWndRect`/`gClientRect` 갱신, 결과 클라이언트 크기 반환) → ③ `gfx_.resize(cw,ch)` → ④ `uiManager_.setScreenSize` + 로비/설정 UI 재빌드 → ⑤ `refreshLobbyUI()` + `settingsPanel_.open()`(변경 중이던 설정창 유지). 전체화면이면 클라이언트 크기 = 현재 모니터 해상도(`MonitorFromWindow`+`GetMonitorInfo`).
+3. **`GFX::resize(w,h)`**: 모든 `FrameFence` 대기(GPU idle, 소멸자와 동일 패턴) → 백버퍼/깊이/GBuffer/HiZ 해제 + 디스크립터 풀 슬롯 반납(`eraseGBuffer`/`eraseHiZMaps`, 풀은 `freeIndices_` 자유리스트로 재사용) → `ResizeBuffers` → 백버퍼/깊이/GBuffer/HiZ 재생성. 뷰포트·시저는 매 프레임 `gClientRect`에서 계산되어 자동 추종. 포트레이트 RT는 셀 고정 크기라 건드리지 않는다.
+   - **버그픽스**: `eraseHiZMaps`는 원래 dead-code였고 `mip별 UAV`를 `mips.idxUav.idxResource`(마지막 mip만 보관) 1개만 반납해, 리사이즈마다 `(mipLevelCnt-1)×roomCnt`개 UAV 슬롯이 누수→두 번째 리사이즈에서 `uavPool` 고갈(`DescriptorPool::alloc` 빈 free-list `front()` 크래시)됐다. `HiZMapData::uavPoolIndices`에 mip별 슬롯을 모두 기록해 `eraseHiZMaps`가 전부 반납하도록 수정.
+4. **UI 재빌드**: 로비/설정 UI는 빌드 시점 픽셀값으로 구성되므로 재빌드가 필요. `LobbyUI::build`/`SettingsPanel::build`를 멱등화(기존 root `removeChild` 후 재구성). HUD/데미지 넘버는 앵커·월드 좌표 기반(`worldToScreen`이 매 프레임 `gClientRect`를 읽음)이라 `setScreenSize`만으로 추종 → 재빌드 불필요.
+
+남은 후속: `allyDamageVisible`/`monsterDamageOpacity` 값의 게임플레이·렌더 반영.
 
 ## 메모
 

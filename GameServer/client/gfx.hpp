@@ -135,6 +135,12 @@ public:
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain();
 
+	// 런타임 해상도 변경: GPU를 idle 시킨 뒤 스왑체인 백버퍼/깊이버퍼/GBuffer/HiZ맵을
+	// 새 해상도(width×height)로 재생성한다. 뷰포트/시저는 매 프레임 gClientRect에서
+	// 계산되므로 호출 전에 gClientRect가 갱신되어 있어야 한다(applyClientResolution 참고).
+	// 메인(렌더) 스레드에서, render()와 같은 프레임의 update 단계에서 호출해야 한다.
+	void resize(u32t width, u32t height);
+
 	// 스레드 풀을 설정한다.
 	// GFX는 스레드 풀이 설정되어있을 경우 멀티스레드로 동작한다.
 	void setThreadPool(ThreadPool* threadPool) { threadPool_ = threadPool; }

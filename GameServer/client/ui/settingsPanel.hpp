@@ -17,7 +17,7 @@ class Label;
 // Persistent, gameplay-facing settings edited through SettingsPanel. Owned by the
 // game so the lobby, the in-game HUD and gameplay systems all read the same values.
 struct GameSettings {
-    bool fullscreen           = true;
+    bool fullscreen           = false;  // default windowed -> resolution control is enabled from the start
     bool allyDamageVisible    = true;
     int  resolutionIndex      = 0;    // 0 = native, 1 = 1280x720, 2 = 1920x1080
     int  monsterDamageOpacity = 100;  // percent, [0..100]

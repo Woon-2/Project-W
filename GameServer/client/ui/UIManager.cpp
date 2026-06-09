@@ -157,6 +157,14 @@ bool UIManager::needsCursor() const {
     return hoveredElement_ != nullptr || pressedElement_ != nullptr;
 }
 
+void UIManager::resetInteractionState() {
+    // Drop raw pointers without firing leave/blur callbacks: the referenced
+    // widgets may be about to be destroyed (tree rebuild).
+    hoveredElement_ = nullptr;
+    pressedElement_ = nullptr;
+    focusedElement_ = nullptr;
+}
+
 UIElement* UIManager::hitTest(float x, float y) {
     std::vector<UIElement*> interactives;
     collectInteractive(&root_, interactives);

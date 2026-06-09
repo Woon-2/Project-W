@@ -20,6 +20,14 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
                           const Texture* buttonTex, GameSettings& settings) {
     settings_ = &settings;
 
+    // Idempotent: on a rebuild (e.g. resolution change) drop the previous subtree.
+    // open_ resets to false; the caller re-opens if the panel should stay visible.
+    if (root_) {
+        uiManager.root()->removeChild(root_);
+        root_ = nullptr;
+        open_ = false;
+    }
+
     const float screenW = uiManager.screenWidth();
     const float screenH = uiManager.screenHeight();
 

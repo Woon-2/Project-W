@@ -823,6 +823,20 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
 }
 
+void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool ) {
+	for (auto& gb : gBufferData) {
+		// 색상 RT 4개: RTV + SRV 반납
+		for (auto* colorTex : { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 }) {
+			freeRTV(*colorTex, rtvPool);
+			freeSRV(*colorTex, srvTexPool);
+		}
+		// 깊이 버퍼: DSV + SRV 반납
+		freeDSV(gb.depth, dsvPool);
+		freeSRV(gb.depth, srvTexPool);
+	}
+	gBufferData.clear();
+}
+
 }	// namespace GBuffer
 
 namespace Portrait {
@@ -1007,12 +1021,16 @@ void addHiZMaps( ID3D12Device* device, u32t width, u32t height,
 		mapData.srvHandle = srvTexPool.gpuHandle(mapData.mips.idxSrv.idxResource);
 
 		mapData.uavHandles.reserve(mapData.mipLevelCnt);
+		mapData.uavPoolIndices.reserve(mapData.mipLevelCnt);
 		for (auto i = 0u; i < mapData.mipLevelCnt; ++i) {
 			createUAV( device, mapData.mips, D3D12_UNORDERED_ACCESS_VIEW_DESC{
 				.Format = formatF,
 				.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
 				.Texture2D = D3D12_TEX2D_UAV{ .MipSlice = i },
 			}, uavPool );
+			// createUAV는 mips.idxUav.idxResource에 이번 mip의 풀 슬롯을 기록한다(매번 덮어씀).
+			// 해제 시 전부 반납하려면 mip마다 인덱스를 따로 보관해야 한다.
+			mapData.uavPoolIndices.push_back( mapData.mips.idxUav.idxResource );
 			mapData.uavHandles.push_back( uavPool.gpuHandle(mapData.mips.idxUav.idxResource) );
 		}
 	}
@@ -1025,7 +1043,11 @@ void eraseHiZMaps( DescriptorPool& srvTexPool,
 		dsvPool.free(mapData.srcTex.idxDsv);
 
 		srvTexPool.free(mapData.mips.idxSrv.idxResource);
-		uavPool.free(mapData.mips.idxUav.idxResource);
+
+		// mip별 uav 슬롯을 전부 반납한다(idxUav.idxResource는 마지막 mip만 보관).
+		for (int uavIdx : mapData.uavPoolIndices) {
+			uavPool.free(uavIdx);
+		}
 	}
 
 	hiZMaps.clear();

@@ -162,6 +162,11 @@ void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 호출 전에 transitionToWrite()로 리소스 상태를 쓰기 상태로 만들어야 한다.
 void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
+// 모든 방의 GBuffer 리소스를 해제하고 RTV/DSV/SRV 풀 슬롯을 반납한 뒤 gBufferData를 비운다.
+// 해상도가 바뀔 경우 eraseGBuffer 호출 후 변경된 해상도로 addGBuffer를 다시 호출해야 한다.
+// (호출 전 GPU가 이 리소스들을 더 이상 사용하지 않도록 idle 상태여야 한다.)
+void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool );
+
 }	// namespace GBuffer
 
 // 로비 대기실 슬롯 캐릭터를 그리는 오프스크린 포트레이트 렌더 타깃.
@@ -216,6 +221,9 @@ struct HiZMapData {
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;	// srcTex dsv
 	D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;	// mips srv
 	std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> uavHandles;	// mips uav (per-mip uav)
+	// mip별 uav가 차지한 uavPool 슬롯 인덱스. eraseHiZMaps에서 전부 반납해야 한다
+	// (mips.idxUav.idxResource는 마지막 mip 인덱스만 보관하므로 그것만으로는 누수됨).
+	std::vector<int> uavPoolIndices;
 };
 
 extern std::vector<HiZMapData> hiZMaps;

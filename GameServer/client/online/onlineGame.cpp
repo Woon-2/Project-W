@@ -12,6 +12,9 @@
 
 extern HWND ghWnd;
 extern RECT gClientRect;
+// main.cpp: 창모드/전체화면(borderless)을 전환하며 윈도우·전역 RECT를 갱신하고
+// 결과 클라이언트 크기를 out*에 돌려준다(런타임 디스플레이 모드 변경).
+extern void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outClientW, int* outClientH);
 
 namespace Online {
 
@@ -2304,6 +2307,9 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// 설정창에서 바뀐 디스플레이 설정(해상도/전체화면)을 씬 갱신/렌더 이전(프레임 안전 지점)에 적용한다.
+	applyPendingDisplaySettings();
+
 	switch (scene_) {
 	case Scene::Lobby:  LobbyScene(deltaTime);  break;
 	case Scene::InGame: InGameScene(deltaTime); break;
@@ -3125,6 +3131,49 @@ LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	cb.onOpenSettings = [this]() { settingsPanel_.open(); };
 	cb.onQuit         = []() { PostQuitMessage(0); };
 	return cb;
+}
+
+void Game::applyPendingDisplaySettings() {
+	if (settings_.resolutionIndex == appliedResolutionIndex_
+		&& settings_.fullscreen == appliedFullscreen_) {
+		return;
+	}
+
+	applyDisplaySettings();
+
+	appliedResolutionIndex_ = settings_.resolutionIndex;
+	appliedFullscreen_      = settings_.fullscreen;
+}
+
+void Game::applyDisplaySettings() {
+	// 창모드 목표 해상도. 인덱스 0 = 기본(1024×768). 전체화면이면 모니터 해상도를 쓰므로 무시된다.
+	int windowedW = 1024, windowedH = 768;
+	switch (settings_.resolutionIndex) {
+	case 1:  windowedW = 1280; windowedH = 720;  break;
+	case 2:  windowedW = 1920; windowedH = 1080; break;
+	default: windowedW = 1024; windowedH = 768;  break;
+	}
+
+	// 1. UIManager 입력 포인터 무효화 — 곧 위젯 트리를 재빌드하므로 dangling 방지.
+	uiManager_.resetInteractionState();
+
+	// 2. 창모드/전체화면(borderless) 전환 + 윈도우/전역 RECT 갱신. 결과 클라이언트 크기를 받는다.
+	//    (gClientRect는 GFX 뷰포트/깊이버퍼가 읽는다.)
+	int clientW = windowedW, clientH = windowedH;
+	applyDisplayMode(settings_.fullscreen, windowedW, windowedH, &clientW, &clientH);
+
+	// 3. 스왑체인 백버퍼/깊이/GBuffer/HiZ 재생성 (GPU idle 후).
+	gfx_.resize(static_cast<u32t>(clientW), static_cast<u32t>(clientH));
+
+	// 4. UI 화면 크기 갱신 + 픽셀 기반 UI(로비/설정창) 재빌드.
+	//    (HUD/데미지 넘버는 앵커·월드 좌표 기반이라 setScreenSize + 매 프레임 worldToScreen로 추종.)
+	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
+	lobbyUI_.build(uiManager_, makeLobbyCallbacks());
+	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(), lobbyUI_.secondaryButtonTexture(), settings_);
+
+	// 5. 로비 위젯 상태 복원 + 설정창 다시 열기(사용자가 설정창에서 변경 중이므로 유지).
+	refreshLobbyUI();
+	settingsPanel_.open();
 }
 
 void Game::LobbyScene(Milliseconds deltaTime) {

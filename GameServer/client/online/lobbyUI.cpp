@@ -71,6 +71,13 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 
     auto* root = uiManager.root();
 
+    // Idempotent: on a rebuild (e.g. resolution change) drop the previous widget
+    // subtree first. All member pointers below are reassigned during this build.
+    if (lobbyRoot_) {
+        root->removeChild(lobbyRoot_);
+        lobbyRoot_ = nullptr;
+    }
+
     const float screenW = uiManager.screenWidth();
     const float screenH = uiManager.screenHeight();
     const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
