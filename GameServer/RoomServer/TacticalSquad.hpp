@@ -1,4 +1,4 @@
-#ifndef tactical_squad_hpp
+﻿#ifndef tactical_squad_hpp
 #define tactical_squad_hpp
 
 #include "TacticalNpc.hpp"

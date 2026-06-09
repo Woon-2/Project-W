@@ -1,4 +1,4 @@
-#ifndef midboss_tactic_hpp
+﻿#ifndef midboss_tactic_hpp
 #define midboss_tactic_hpp
 
 #include "IMidBossTactic.hpp"
