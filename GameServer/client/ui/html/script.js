@@ -47,6 +47,10 @@ const dom = {
   leaveRoomButton: document.getElementById("leaveRoomButton"),
   addDummyButton: document.getElementById("addDummyButton"),
   removeDummyButton: document.getElementById("removeDummyButton"),
+  settingsModal: document.getElementById("settingsModal"),
+  closeSettingsButton: document.getElementById("closeSettingsButton"),
+  cancelSettingsButton: document.getElementById("cancelSettingsButton"),
+  saveSettingsButton: document.getElementById("saveSettingsButton"),
   toast: document.getElementById("toast"),
   transitionOverlay: document.getElementById("transitionOverlay")
 };
@@ -317,6 +321,21 @@ function clonePlayers(players) {
   return players.map((player) => ({ ...player }));
 }
 
+function openSettingsModal() {
+  dom.settingsModal.classList.remove("is-hidden");
+  dom.closeSettingsButton.focus();
+}
+
+function closeSettingsModal() {
+  dom.settingsModal.classList.add("is-hidden");
+  dom.settingsButton.focus();
+}
+
+function saveSettings() {
+  closeSettingsModal();
+  showToast("설정이 저장되었습니다");
+}
+
 function showToast(message, type = "normal") {
   window.clearTimeout(state.toastTimer);
   dom.toast.textContent = message;
@@ -366,7 +385,25 @@ dom.joinRoomForm.addEventListener("submit", (event) => {
 dom.roomCodeInput.addEventListener("input", () => {
   dom.roomCodeInput.value = sanitizeRoomCode(dom.roomCodeInput.value);
 });
-dom.settingsButton.addEventListener("click", () => showToast("설정 화면 준비 중"));
+dom.settingsButton.addEventListener("click", openSettingsModal);
+dom.closeSettingsButton.addEventListener("click", closeSettingsModal);
+dom.cancelSettingsButton.addEventListener("click", closeSettingsModal);
+dom.saveSettingsButton.addEventListener("click", saveSettings);
+dom.settingsModal.addEventListener("keydown", (event) => {
+  event.stopPropagation();
+});
+document.addEventListener("keydown", (event) => {
+  if (dom.settingsModal.classList.contains("is-hidden")) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (event.key === "Escape") {
+    closeSettingsModal();
+  }
+}, true);
 dom.quitButton.addEventListener("click", () => showToast("타이틀로 돌아갑니다"));
 dom.copyCodeButton.addEventListener("click", copyRoomCode);
 dom.leaveRoomButton.addEventListener("click", C_LeaveRoom);

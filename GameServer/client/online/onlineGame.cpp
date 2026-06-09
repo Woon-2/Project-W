@@ -3345,10 +3345,37 @@ void Game::buildLobbyUI() {
 	mainMenuMsgLabel_ = makeLabel(mainPanel, L"", 34.f, 348.f, 18.f, mainPanelW - 68.f, 30.f,
 		{ 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
+	settingsPanelBg_ = static_cast<UI::Button*>(mainMenuRoot_->addChild(std::make_unique<UI::Button>()));
+	settingsPanelBg_->name = "settingsPanelBackground";
+	settingsPanelBg_->anchor = UI::Anchors::TopLeft;
+	settingsPanelBg_->pivot = UI::Pivots::TopLeft;
+	settingsPanelBg_->offsetX = UI::DimValue::px(0.f);
+	settingsPanelBg_->offsetY = UI::DimValue::px(0.f);
+	settingsPanelBg_->width = UI::DimValue::pct(100.f);
+	settingsPanelBg_->height = UI::DimValue::pct(100.f);
+	settingsPanelBg_->interactive = false;
+	settingsPanelBg_->bgColor = { 0.08f, 0.13f, 0.17f, 0.34f };
+	settingsPanelBg_->zOrder = 18;
+	settingsPanelBg_->visible = false;
+	if (lobbyPanelTex_.res) {
+		settingsPanelBg_->texNormal = &lobbyPanelTex_;
+		settingsPanelBg_->sliceUvBorderX = 0.30f;
+		settingsPanelBg_->sliceUvBorderY = 0.30f;
+		settingsPanelBg_->sliceCornerX = 40.f;
+		settingsPanelBg_->sliceCornerY = 40.f;
+		settingsPanelBg_->texTint = { 1.f, 1.f, 1.f, 0.90f };
+		settingsPanelBg_->texTintHovered = settingsPanelBg_->texTint;
+		settingsPanelBg_->texTintPressed = settingsPanelBg_->texTint;
+	}
+
 	const float quietW = (mainPanelW - 80.f) * 0.5f;
 	styleSecondary(makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
-		[]() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; }, ink));
+		[this]() {
+			if (settingsPanelBg_) {
+				settingsPanelBg_->visible = !settingsPanelBg_->visible;
+			}
+		}, ink));
 	styleSecondary(makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
 		[]() { PostQuitMessage(0); }, ink));
@@ -3661,6 +3688,7 @@ void Game::refreshLobbyUI() {
 
 	if (mainMenuRoot_)    mainMenuRoot_->visible    = inMain;
 	if (waitingRoomRoot_) waitingRoomRoot_->visible = !inMain;
+	if (settingsPanelBg_ && !inMain) settingsPanelBg_->visible = false;
 
 	if (inMain) {
 		return;

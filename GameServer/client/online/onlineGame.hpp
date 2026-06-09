@@ -396,6 +396,7 @@ private:
 	UI::Image*     lobbyLogoImage_  = nullptr;
 	UI::UIElement* mainMenuRoot_    = nullptr;
 	UI::UIElement* waitingRoomRoot_ = nullptr;
+	UI::Button*    settingsPanelBg_ = nullptr;
 	UI::TextInput* roomCodeInput_   = nullptr;
 	UI::Label*     mainMenuMsgLabel_= nullptr;
 	UI::Label*     roomCodeLabel_   = nullptr;

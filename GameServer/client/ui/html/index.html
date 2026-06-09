@@ -70,12 +70,62 @@
     </section>
   </main>
 
+  <div id="settingsModal" class="settings-screen is-hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <aside class="settings-sidebar">
+      <h2 id="settingsTitle">SETTINGS</h2>
+      <nav class="settings-tabs" aria-label="설정 분류">
+        <button class="settings-tab is-active" type="button">그래픽</button>
+        <button class="settings-tab" type="button">사운드</button>
+        <button class="settings-tab" type="button">게임 설정</button>
+        <button class="settings-tab" type="button">키 설정</button>
+      </nav>
+      <div class="settings-links">
+        <button class="settings-tab" type="button">버그 신고하기</button>
+        <button class="settings-tab" type="button">EULA</button>
+      </div>
+    </aside>
+
+    <section class="settings-content">
+      <p class="settings-warning">◇ 권장 사양을 충족하지 못한 경우 창 모드에서 저해상도 플레이를 권장합니다</p>
+      <h3>그래픽</h3>
+
+      <div class="settings-rows">
+        <div class="setting-row"><span>프리셋</span><strong>사용자 지정</strong></div>
+        <div class="setting-row"><span>화면</span><strong>테두리 없음</strong></div>
+        <div class="setting-row is-disabled"><span>해상도</span><strong>2560x1440</strong></div>
+        <div class="setting-row"><span>최대 FPS</span><strong>120</strong></div>
+        <div class="setting-row setting-toggle"><span>수직동기화</span><strong><b>OFF</b><b>ON</b></strong></div>
+        <div class="setting-row setting-toggle is-on"><span>모션 블러</span><strong><b>OFF</b><b>ON</b></strong></div>
+        <div class="setting-row is-disabled"><span>안티앨리어싱</span><strong>TSR</strong></div>
+        <div class="setting-row"><span>표현 거리</span><strong>최고</strong></div>
+        <div class="setting-row"><span>풀 표현</span><strong>최고</strong></div>
+        <div class="setting-row"><span>건축물 표현 거리</span><strong>MAX</strong></div>
+        <div class="setting-row"><span>그림자</span><strong>최고</strong></div>
+        <div class="setting-row"><span>효과 품질</span><strong>높음</strong></div>
+        <div class="setting-row"><span>텍스처 품질</span><strong>최고</strong></div>
+      </div>
+
+      <h3>업스케일링</h3>
+      <div class="settings-rows">
+        <div class="setting-row"><span>DLSS</span><strong>성능 중시</strong></div>
+        <div class="setting-row"><span>NVIDIA Reflex 저지연</span><strong>켜기</strong></div>
+      </div>
+
+      <div class="settings-footer">
+        <span>F 기본값으로 복원</span>
+        <button id="saveSettingsButton" class="settings-action" type="button">저장</button>
+        <button id="closeSettingsButton" class="settings-action" type="button">Esc 돌아가기</button>
+        <button id="cancelSettingsButton" class="is-hidden" type="button">취소</button>
+      </div>
+    </section>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="transitionOverlay" class="transition-overlay is-hidden" aria-live="assertive">
     <div class="loader"></div>
     <p>RoomServer로 접속 중...</p>
   </div>
 
-  <script src="script.js?v=squad-models"></script>
+  <script src="script.js?v=settings-modal"></script>
 </body>
 </html>
