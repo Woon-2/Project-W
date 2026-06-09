@@ -16,7 +16,9 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(150, "PlayVFX", {
     vfxId  = 6,
-    offset = Vec3(0.0, 0.0, 2.5)
+    offset = Vec3(0.0, 0.0, 0.5),
+    orient = {-90, 0, 0},
+    groundLock = true
 })
 
 local onHit = OnHit({
@@ -26,13 +28,14 @@ local onHit = OnHit({
     impulseDir      = Vec3(0.0, 0.7, 0.5)
 })
 
-skill:addEvent(250, "SpawnHitbox", {
+skill:addEvent(120, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, -0.8, 3.0, 1.4, 1.2, 2.5, 0, 0, 0) },
-    attach              = BoneAttach("spine_02"),
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.8, 2.4, 0.8, 0, 0, 0) },
+    attach              = VFXParticleAttach(6, 0),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 600,
+    useParticleSize     = true,
     onHit               = onHit
 })
 

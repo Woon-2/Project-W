@@ -124,16 +124,39 @@ return skill   -- 반드시 skill 테이블을 반환
 | `ModifyStat` | `hpDelta`, `speedMultiplier`, `durationMs` |
 
 > **참고:** `SpawnProjectile`, `SendGameplayEvent`는 타입만 존재하고 페이로드 파싱은 미구현(스텁)이다.
-> 현재 "투사체"는 별도 이동 오브젝트가 아니라 **전방으로 길쭉한 히트박스 + 전진 VFX**로 표현한다(아래 4-2).
+> 현재 "투사체"는 별도 이동 오브젝트가 아니라 **날아가는 파티클 + 그 파티클에 부착한 히트박스**로 표현한다
+> (§3.4 파티클 부착, 레시피 4-2).
 
 ### 3.3 히트박스 형상에 대한 핵심 원칙
 
-히트 판정 형상은 **OBB(박스)뿐**이다. 원형/부채꼴은 두 가지로 표현한다:
+히트 판정 형상은 **OBB(박스)뿐**이다. 박스 하나로 안 되는 형상(원형·부채꼴·이동 투사체)은 두 가지로 표현한다:
 
-- **(A) 박스 근사** — 큰 박스 하나, 또는 여러 박스를 부채꼴로 배열. 간단하고 비용 저렴. 대부분 충분.
-- **(B) 파티클 정합** — `VFXParticleAttach`로 이펙트의 파티클마다 박스를 붙인다. 이펙트의 shape가
-  원형/콘이면 히트박스가 자연히 그 형상을 따른다. `useParticleSize=true`면 파티클 크기에 맞춰 박스가 커진다.
-  시각과 판정이 정확히 일치하지만 파티클 수만큼 박스가 생기므로 비용에 유의.
+- **(A) 박스 근사** — 큰 박스 하나, 또는 여러 박스를 배열. 간단하고 비용 저렴. 정적 범위에 적합.
+- **(B) 파티클 부착(`VFXParticleAttach`)** — 이펙트의 파티클마다 박스를 붙여 **파티클을 따라다니게** 한다.
+  파티클이 움직이면(투사체) 박스도 같이 날아가고, 파티클이 원형/콘으로 퍼지면 박스도 그 형상을 이룬다.
+  **이 프로젝트의 화살 등 투사체는 파티클로 구현**되어 있으므로 투사체 판정의 1순위 방법이다(§3.4).
+
+### 3.4 파티클 부착 히트박스 (VFXParticleAttach) — 상세
+
+`attach = VFXParticleAttach(vfxId, systemIdx)`로 SpawnHitbox를 만들면, 런타임이 매 프레임 다음을 수행한다:
+
+1. `vfxId` 이펙트의 `systemIdx`번째 서브 파티클 시스템을 찾는다(`ParticleEffect::system(systemIdx)`).
+2. 그 시스템의 **활성 파티클 수만큼 히트박스를 생성**한다(핸들 재사용으로 증감). 파티클이 새로 방출되면
+   박스가 늘고, 소멸하면 준다.
+3. 각 박스의 월드 위치 = **`파티클 위치 + (회전된) 템플릿 OBB center`**. 즉 `localOBBs`는 **파티클 로컬 공간**
+   기준이고, 보통 `center = 0`인 작은 박스 하나를 템플릿으로 둔다.
+4. `useParticleSize = true`면 박스 반치수가 **파티클의 현재 시각 크기**(sizeBegin→sizeEnd 보간)에 비례해 커진다.
+5. `applyAttachRotation`(파티클 부착 시 회전 추종):
+   - `true`  — 박스가 파티클의 회전(spin, baseRotation)을 따라감. 길쭉한 투사체 박스에 적합.
+   - `false` — 위치만 추종, 회전 고정.
+
+**전제 조건 / 주의:**
+- 해당 `vfxId`가 **PlayVFX로 재생되어 파티클이 살아 있어야** 박스가 생긴다. 보통 PlayVFX → (약간 뒤) SpawnHitbox 순.
+- `systemIdx`는 이펙트 안의 **서브 시스템 인덱스**다. 이펙트가 본체/트레일/스파크 등 여러 시스템으로
+  구성된 경우, **투사체 본체에 해당하는 시스템**을 골라야 한다(트레일에 붙이면 판정이 꼬리에 생긴다).
+- 비용은 **활성 파티클 1개당 박스 1개**다. 투사체는 본체 파티클 수를 적게(이상적으로 1~소수) 유지하라.
+  원형/콘 AoE를 파티클 정합으로 만들면 파티클 수가 그대로 박스 수가 되므로 방출량에 유의.
+- SpawnHitbox로 소스를 만들고 DestroyHitbox(같은 `slot`)로 정리한다. 정리 전까지 박스는 파티클을 계속 추종한다.
 
 ---
 
@@ -177,11 +200,11 @@ return skill
 
 ---
 
-### 4-2. 화살 발사 (직선 투사체)
+### 4-2. 화살 발사 (날아가는 투사체)
 
-**개념:** 전방으로 길쭉한 박스를 깔아 일직선 관통을 판정하고, VFX는 앞으로 전진시킨다.
-(별도 이동 오브젝트는 아직 없음 — §3.2 SpawnProjectile 스텁 참고)
-**구성:** 전방으로 긴 OBB(`hz` 큼, `cz`를 전방으로). VFX는 `advance`로 진행 방향을 줘 날아가는 느낌. (`arrow.lua` 참고)
+**개념:** 화살은 **앞으로 날아가는 파티클**이다. 그 파티클에 작은 박스를 붙이면(§3.4) 박스가 화살을 따라
+이동하며 적중 지점에서 판정된다 — 정지된 긴 박스 근사보다 정확하고 자연스럽다.
+**구성:** PlayVFX로 화살 파티클을 `advance` 방향으로 발사 → 같은 `vfxId`에 `VFXParticleAttach`로 박스 부착.
 
 ```lua
 local skill = Skill()
@@ -189,19 +212,33 @@ skill.name = "Arrow"; skill.totalDurationMs = 600
 
 skill:addVFX(10, "effects/arrow.json")
 skill:addEvent(0,   "PlayAnimation", { clipName = "Player_Attack", blendTime = 0.1 })
--- 화살 VFX를 전방으로 진행시킴
+-- 화살 파티클을 전방으로 발사 (advance = 진행 방향)
 skill:addEvent(120, "PlayVFX", { vfxId = 10, offset = Vec3(0,1,0.8), advance = Vec3(0,0,1) })
 
 local onHit = OnHit{ damage = 35, impulseStrength = 500, impulseDir = Vec3(0,0.1,1) }
--- 전방으로 긴 박스(길이 5m = hz 2.5, 중심 z 2.5)
-skill:addEvent(140, "SpawnHitbox", { slot=0, localOBBs={ OBB(0,-0.2,2.5, 0.4,0.4,2.5, 0,0,0) },
-    attach=BoneAttach("spine_02"), applyAttachRotation=true, hitGroup=0, hitGroupCooldownMs=600, onHit=onHit })
-skill:addEvent(400, "DestroyHitbox", { slot=0 })
+
+-- 화살 본체 파티클 시스템(systemIdx=0)에 박스 부착 → 박스가 화살을 따라 날아감.
+-- 템플릿 OBB는 파티클 로컬 기준의 작은 박스(center=0). applyAttachRotation으로 화살 방향 추종.
+skill:addEvent(130, "SpawnHitbox", {
+    slot                = 0,
+    localOBBs           = { OBB(0,0,0, 0.25,0.25,0.6, 0,0,0) },
+    attach              = VFXParticleAttach(10, 0),
+    applyAttachRotation = true,
+    useParticleSize     = false,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 0,     -- 화살 하나가 적당 1회 피격
+    onHit               = onHit
+})
+skill:addEvent(550, "DestroyHitbox", { slot = 0 })
 return skill
 ```
 
-**튜닝 팁:** 관통 사거리는 `hz`(반길이)와 `cz`(전방 오프셋)로 조절. 단일 적만 맞히려면 `hitGroupCooldownMs=0`.
-VFX가 캐릭터 자세를 따라 기울지 않게 하려면 PlayVFX에 `groundLock=true` 또는 `orient`로 보정.
+**튜닝 팁:**
+- 박스가 화살 본체가 아니라 트레일/스파크를 따라간다면 `systemIdx`를 본체 시스템 번호로 바꾼다(§3.4).
+- SpawnHitbox는 PlayVFX **직후**(여기선 130ms)에 둬야 발사 직후부터 판정이 따라붙는다.
+- 다수 화살 동시 발사(volley)는 파티클이 여러 개 방출되는 이펙트면 자동으로 박스도 여러 개 생긴다.
+- **간단 대안(정적 근사):** 이동 추종이 필요 없고 즉발 직선 판정이면, `BoneAttach("spine_02")` +
+  전방으로 긴 박스(`OBB(0,-0.2,2.5, 0.4,0.4,2.5)`)로도 충분하다. 비용이 가장 싸다.
 
 ---
 
@@ -230,7 +267,7 @@ skill:addEvent(160, "SpawnHitbox", { slot=0, localOBBs={
     attach=BoneAttach("spine_02"), applyAttachRotation=true, hitGroup=0, hitGroupCooldownMs=0, onHit=onHit })
 skill:addEvent(300, "DestroyHitbox", { slot=0 })
 
--- (B) 정합을 원하면 위 SpawnHitbox 대신:
+-- (B) 콘 파티클 정합(§3.4): 위 SpawnHitbox 대신 파티클마다 박스를 붙여 부채꼴에 정확히 맞춤
 -- skill:addEvent(160, "SpawnHitbox", { slot=0, localOBBs={ OBB(0,0,0, 0.3,0.3,0.3) },
 --     attach = VFXParticleAttach(8, 0), useParticleSize = true, hitGroup=0, onHit = onHit })
 return skill
@@ -265,7 +302,8 @@ skill:addEvent(400, "DestroyHitbox", { slot=0 })
 return skill
 ```
 
-**튜닝 팁:** 박스 근사는 모서리가 실제 원보다 약간 더 멀리 맞는다. 정확한 원형이 필요하면 (B) 파티클 정합 사용.
+**튜닝 팁:** 박스 근사는 모서리가 실제 원보다 약간 더 멀리 맞는다. 정확한 원형이 필요하면 (B) 파티클 정합(§3.4) 사용 —
+원형으로 방출되는 파티클마다 박스가 붙어 링/디스크 형상에 맞는다.
 넉백을 "바깥 방향"으로 주려면 단일 `impulseDir`로는 부족하므로, 방향별 박스(섹터)로 나눠 각기 다른 `impulseDir`을 준다.
 
 ---
@@ -308,5 +346,7 @@ return skill
 - [ ] 전방 배치가 시전 방향을 따라야 하면 `applyAttachRotation=true`(히트박스) / PlayVFX는 기본 추종.
 - [ ] 바닥 평면 고정이 필요하면 PlayVFX `groundLock=true`, 히트박스는 `applyAttachRotation=false`.
 - [ ] 원형/부채꼴 **크기**는 lua가 아니라 `effects/*.json`의 shape(`radius`/`angle`/`arc`)에서 조정.
+- [ ] `VFXParticleAttach`(투사체·정합)는 ① 같은 `vfxId`가 PlayVFX로 먼저 재생되고 ② `systemIdx`가
+      투사체 본체 시스템을 가리키는가. 파티클이 없으면 박스도 생기지 않는다(§3.4).
 - **튜닝 도구:** standalone 스킬 에디터에서 박스를 시각적으로 잡고 euler/offset을 round-trip 편집할 수 있다
   (Space 재생, LMB 박스 선택, ↑/↓/←/→ 넛지, P diff 덤프). 자세한 키맵은 `CODE_INDEX.md` 스킬 에디터 절 참조.

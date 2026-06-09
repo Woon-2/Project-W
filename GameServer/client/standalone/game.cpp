@@ -2799,31 +2799,34 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	// 파티클
+	// 환경 파티클(불꽃/연기/먼지)은 실시간(deltaTime)으로 유지해 씬을 살아 있게 둔다.
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
-	swordSlash1Effect_.update( deltaTime );
-	swordSlash7Effect_.update( deltaTime );
-	swordSlashComboEffect_.update( deltaTime );
-	slashWaveEffect_.update( deltaTime );
-	spikesAttackEffect_.update( deltaTime );
-	piercingEffect_.update( deltaTime );
-	piercingMultiEffect_.update( deltaTime );
-	piercingSlashEffect_.update( deltaTime );
-	piercingCircleSlashEffect_.update( deltaTime );
-	crystalsFrontAttackEffect_.update( deltaTime );
-	aoESlashGreenEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
-	redEnergyExplosionEffect_.update( deltaTime );
-	crystalsCrossFadeEffect_.update( deltaTime );
-	arrowEffect_.update( deltaTime );
-	arrowVolleyMuzzleEffect_.update( deltaTime );
-	arrowVolleyEffect_.update( deltaTime );
-	arrowRainMuzzleEffect_.update( deltaTime );
-	arrowRainEffect_.update( deltaTime );
-	energyExplosionArrowEffect_.update( deltaTime );
-	tornadoShotEffect_.update( deltaTime );
-	tornadoMuzzleEffect_.update( deltaTime );
-	tornadoHitEffect_.update( deltaTime );
+	// 스킬 VFX 이펙트는 시뮬레이션 계열이므로 simDt(에디터 timeScale 적용)로 구동한다.
+	// 일시정지 시 함께 멈춰야 VFXParticleAttach 히트박스가 파티클을 따라 계속 움직이지 않는다.
+	swordSlash1Effect_.update( simDt );
+	swordSlash7Effect_.update( simDt );
+	swordSlashComboEffect_.update( simDt );
+	slashWaveEffect_.update( simDt );
+	spikesAttackEffect_.update( simDt );
+	piercingEffect_.update( simDt );
+	piercingMultiEffect_.update( simDt );
+	piercingSlashEffect_.update( simDt );
+	piercingCircleSlashEffect_.update( simDt );
+	crystalsFrontAttackEffect_.update( simDt );
+	aoESlashGreenEffect_.update( simDt );
+	redEnergyExplosionEffect_.update( simDt );
+	crystalsCrossFadeEffect_.update( simDt );
+	arrowEffect_.update( simDt );
+	arrowVolleyMuzzleEffect_.update( simDt );
+	arrowVolleyEffect_.update( simDt );
+	arrowRainMuzzleEffect_.update( simDt );
+	arrowRainEffect_.update( simDt );
+	energyExplosionArrowEffect_.update( simDt );
+	tornadoShotEffect_.update( simDt );
+	tornadoMuzzleEffect_.update( simDt );
+	tornadoHitEffect_.update( simDt );
 
 	// Advance tornado shot origin forward each frame
 	if ( tornadoShotActive_ ) {

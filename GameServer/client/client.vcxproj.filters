@@ -719,12 +719,6 @@
     <ClInclude Include="..\common\zoneDef.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="piercingMaterial.hpp">
-      <Filter>게임%28공용%29\스크립트 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="piercingSlashMaterial.hpp">
-      <Filter>게임%28공용%29\스크립트 파일</Filter>
-    </ClInclude>
     <ClInclude Include="piercingMeshPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -732,6 +726,12 @@
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\markerDef.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingMaterial.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="piercingSlashMaterial.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

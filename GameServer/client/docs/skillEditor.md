@@ -31,7 +31,12 @@
   매 프레임 worldOBB를 localOBB+본 변환으로 재계산한다. nudge가 활성 히트박스의 localOBB를
   `setHitboxLocalOBBs`로 덮으면 timeScale=0에서도 즉시 반영된다.
 - **slow-mo/pause**: `Game::update`에서 `simDt = realDt * editor.timeScale()`을 물리/스킬/
-  애니메이션에만 적용. 입력·카메라·UI는 realDt(반응성 유지). timeScale 0 = pause.
+  애니메이션에 적용. 입력·카메라·UI는 realDt(반응성 유지). timeScale 0 = pause.
+  - **스킬 VFX 파티클도 simDt로 구동**(설계 결정): 스킬 이펙트(`*Effect_.update()`)를 realDt로
+    돌리면 pause 중에도 파티클이 계속 시뮬레이션돼, `VFXParticleAttach` 히트박스가 파티클을
+    따라 움직이다 소멸한다(BoneAttach 히트박스는 simDt에 묶여 정상 정지). 따라서 스킬 이펙트는
+    simDt로 업데이트해 pause 시 함께 멈춘다. `dt=0`이면 `ParticleSystem::update`가 방출/이동/수명
+    모두 0으로 깔끔히 정지. 환경 파티클(`flame/smoke/dustParticleSystem_`)은 씬 생동감을 위해 realDt 유지.
 - **회전 round-trip**: lua `OBB(...)`의 euler(yaw/pitch/roll)는 quaternion으로만 저장돼
   역추출이 모호하므로, 컴파일러가 `SkillHitboxDef::localOBBEulerDeg`에 authoring euler를
   함께 보관(클라이언트 한정, 런타임 무해). 에디터는 이를 읽어 절대 euler를 편집·덤프한다.
@@ -104,6 +109,8 @@ VFX 바인딩은 경로 문자열이 아니라 **vfxId → `StandAlone::Game::sk
 각 lua는 PlayAnimation(`Player_Attack`) + PlayVFX(해당 vfxId) + 단일 SpawnHitbox/DestroyHitbox +
 OnHit(damage/impulse)로 구성된 **시작값**일 뿐이며, 타이밍·히트박스·VFX offset은 에디터로
 다듬어 `P` 덤프 가이드대로 lua에 반영하는 것을 전제로 한다. 신규 lua는 ASCII/영어 주석만 사용.
+
+> 스킬 lua 작성법(이벤트별 파라미터, 유형별 레시피, VFXParticleAttach 등)은 `skillCreationGuide.md` 참조.
 
 ## 범위 / 후속
 

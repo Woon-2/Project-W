@@ -4,9 +4,11 @@
 
 서버 스킬 시스템은 클라이언트의 스킬 시스템과 구조가 동일하되, 렌더링·VFX·파티클 관련 요소가 모두 제거된 권위 서버(authoritative server) 버전이다. 히트 판정과 데미지 계산은 오직 서버에서만 수행되며, 결과를 클라이언트에 브로드캐스트한다.
 
-**공유 파일 (클라이언트와 동일):**
-- `client/skill/skillTypes.hpp` — SkillAsset, SkillHitboxDef, OnHitDef, TimelineEvent
+**공유 파일 (클라이언트와 미러):**
+- `client/skill/skillTypes.hpp` ↔ `RoomServer/skill/skillTypes.hpp` — SkillAsset, SkillHitboxDef, OnHitDef, TimelineEvent (서버는 별도 사본을 두고 구조를 동일하게 유지)
 - `resources/skills/*.lua` — 스킬 정의 소스
+
+> **PlayVFX 페이로드 미러 주의:** 클라이언트가 `PlayVFX`에 배치·방향 인자(`localEulerDeg`/`advanceForwardLocal`/`flags` yawOnly)를 추가하면(payload 32→56 bytes), 서버 `skillTypes.hpp`도 동일하게 미러해 union 크기·레이아웃을 맞춘다. 단 서버는 PlayVFX를 컴파일·디스패치하지 않으므로(no-op) 이 필드들은 **레이아웃 일치 목적의 미사용 필드**다.
 
 **서버 전용 파일:**
 - `RoomServer/skill/skillSystem.hpp/.cpp` — 서버 런타임 스킬 실행 엔진
@@ -22,6 +24,7 @@
 | `ResolvedAttach::pSystem` | `ParticleSystem*` 사용 | 항상 `nullptr` |
 | `SkillDispatchContext::vfxById / camera / pTimer` | 사용 | 없음 |
 | `processHitResults()` VFX 재생 | 재생 | no-op |
+| `PlayVFX` 이벤트 (컴파일/디스패치) | 파싱·재생 | **컴파일·디스패치 모두 no-op** |
 | `checkHitboxCollisions()` 대상 필터 | `isDead()` | `canReceiveDamage() && hp() > 0` |
 | `HitResult::damageCoeff` | 없음 | BVH 리프 노드에서 읽음 |
 | 데미지 적용 | `EvSkillHit` → 로컬 | `EvSkillHit` → HP 갱신 + `S_SkillHit` 브로드캐스트 |

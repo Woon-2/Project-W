@@ -4,6 +4,8 @@
 
 스킬 시스템은 타임라인 기반 이벤트 방식으로 동작한다. 스킬 정의는 Lua 스크립트로 작성하고 `SkillCompiler`가 C++ 데이터(`SkillAsset`)로 컴파일한다. 런타임에는 컴파일된 에셋만 참조하며 Lua 의존성이 없다.
 
+> **스킬 작성 가이드(Lua API + 유형별 레시피)는 `skillCreationGuide.md` 참조.** 이 문서는 시스템 구조를, 가이드는 작성법을 다룬다.
+
 **공유 파일:**
 - `client/skill/skillTypes.hpp` — 불변 에셋 구조체 (SkillAsset, SkillHitboxDef, OnHitDef, TimelineEvent)
 - `client/skill/skillCompiler.hpp/.cpp` — Lua → SkillAsset 변환
