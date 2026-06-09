@@ -288,6 +288,15 @@
     <ClCompile Include="ui\widgets\Image.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\widgets\KillCountWidget.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\digitAtlas.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="damageNumberSystem.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\widgets\Label.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -612,6 +621,15 @@
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\widgets\Image.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\KillCountWidget.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\digitAtlas.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="damageNumberSystem.hpp">
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\widgets\Label.hpp">

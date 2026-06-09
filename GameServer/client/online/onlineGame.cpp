@@ -239,6 +239,22 @@ void Game::setupStage() {
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
 
+	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
+	// be loading (filled in-place later) — DigitAtlas skips drawing until ready.
+	killCountWidget_ = static_cast<UI::KillCountWidget*>(
+		uiManager_.root()->addChild(std::make_unique<UI::KillCountWidget>())
+	);
+	killCountWidget_->name    = "killCountWidget";
+	killCountWidget_->anchor  = UI::Anchors::BottomRight;
+	killCountWidget_->pivot   = UI::Pivots::BottomRight;
+	killCountWidget_->offsetX = UI::DimValue::px(-200.f);  // 2nd-from-right slot (rightmost reserved for skill UI)
+	killCountWidget_->offsetY = UI::DimValue::px(-28.f);   // slightly above the bottom edge
+	killCountWidget_->width   = UI::DimValue::px(160.f);
+	killCountWidget_->height  = UI::DimValue::px(48.f);
+	killCountWidget_->setTextures(assetManager_.digitAtlasTex(), assetManager_.killIconTex());
+
+	damageNumberSystem_.init(assetManager_.digitAtlasTex());
+
 	effectDropdown_ = static_cast<UI::Dropdown*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Dropdown>())
 	);
@@ -2379,6 +2395,28 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			Object* obj = resolveObject(routeId);
 			if (!obj) continue;
 
+			// Combat feedback (game thread, no locking): compute damage from the
+			// pre-receive HP since the EvHit/EvDeath handler below mutates hp/dead.
+			if (pEv->type == EventType::Hit || pEv->type == EventType::Death) {
+				const int prevHp = obj->hp();
+				const int dmg = (pEv->type == EventType::Hit)
+					? prevHp - static_cast<const EvHit*>(pEv)->hp
+					: prevHp;   // Death: remaining HP is the killing-blow damage
+				if (dmg > 0) {
+					const DamageKind kind = (player_ && player_->getId() == routeId)
+						? DamageKind::PlayerHit : DamageKind::EnemyHit;
+					const mu::Vec3 anchor = obj->renderState().pos
+						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
+					damageNumberSystem_.spawn(anchor, dmg, kind, static_cast<uint16>(routeId));
+				}
+				// Kill count: a goblin death not already counted (guards duplicate EvDeath).
+				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()
+					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end())
+				{
+					killCountWidget_->addKill();
+				}
+			}
+
 			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
 
 			// 로컬 플레이어 사망 시 게임 레벨 플래그를 세운다. (standalone game.cpp의 playerDead_ 처리와 대응)
@@ -2386,6 +2424,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				playerDead_ = true;
 		}
 	}
+
+	// Advance floating damage numbers (game thread; KillCountWidget ticks via uiManager_.update).
+	damageNumberSystem_.update(std::chrono::duration<float>(deltaTime).count());
 
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		moveStateSendAcc_ = 0s;
@@ -2799,6 +2840,10 @@ void Game::renderInGame() {
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
+
+	// Floating damage numbers: drawn just before the HUD so they share the UI pass
+	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
+	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight());
 
 	uiManager_.render(gfx_);
 

@@ -30,6 +30,12 @@
 - [X] Deferred Shading 구현
 - [ ] 청크 구현 및 리소스 멀티스레드 동적 로딩 구현 (Seamless Openworld가 가능하도록)
 - [ ] Image Based Lighting 구현
+- [X] 전투 피드백 UI: 데미지 숫자(월드앵커 + 균일 크기, sprite atlas) + Kill Count HUD(streak/마일스톤)
+  - DigitAtlas / DamageNumberSystem / KillCountWidget, 설계: `client/docs/combatFeedbackUI.md`
+  - [ ] 연출 값 플레이 테스트 튜닝 후 최종값 문서 반영
+  - [ ] 크리티컬 색/연출 (서버 crit 플래그 추가 후)
+  - [ ] streak `xN` 표기용 `x` 글리프(아틀라스 12칸 확장)
+  - [ ] standalone 모드 미러링
 
 
 

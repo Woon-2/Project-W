@@ -24,6 +24,8 @@ public:
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
+	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
+	const Texture* killIconTex()   const { return &killIconTex_; }
 	const Texture* flameTex() const { return &flameTex_; }
 	const Texture* smokeTex() const { return &smokeTex_; }
 	const Mesh*    meshSlash3()            const { return &meshSlash3_; }
@@ -89,6 +91,8 @@ private:
 	Skybox skyboxMaterial_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
+	Texture digitAtlasTex_{};
+	Texture killIconTex_{};
 	Texture flameTex_{};
 	Texture smokeTex_{};
 	Mesh    meshSlash3_{};

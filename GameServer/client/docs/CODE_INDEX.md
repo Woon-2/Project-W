@@ -870,6 +870,19 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::Dropdown` | `Dropdown.hpp/cpp` | 파란 헤더 버튼 + 확장 리스트; `setup(items)` 후 `onSelectionChanged` 콜백 (`std::function<void(int)>`) |
 | `UI::TextInput` | `TextInput.hpp/cpp` | 한 줄 텍스트 입력; 포커스 시 `WM_CHAR` 수신, 내부 child `Label`로 표시 + `|` 캐럿; `uppercase`/`alnumOnly`/`maxLength`/`placeholder`, `onChange`/`onSubmit` 콜백. (`UIManager`가 `WM_CHAR`→`onChar`, 클릭 시 `onFocus`/`onBlur` 라우팅) |
 
+### 전투 피드백 UI (Damage Number / Kill Count)
+
+설계 문서: `client/docs/combatFeedbackUI.md`
+
+| 항목 | 파일 | 설명 |
+|------|------|------|
+| `DigitAtlas::emitNumber()` | `ui/digitAtlas.hpp/cpp` | 0~9 10칸 sprite atlas(`resources/UI/damage_digits.dds`)로 정수를 자릿수별 `UIPipeline::DrawEvent`로 emit. `uvScaleBias=(0.1,1,d*0.1,0)`로 셀 선택, `colorMul` 틴트. 상태 없는 공유 헬퍼 |
+| `DamageNumberSystem` | `damageNumberSystem.hpp/cpp` | 월드앵커 + 균일 화면 크기 떠오르는 데미지 숫자 풀(`kMaxActive=256`). `spawn`(동일 대상 `mergeWindow` 내 누적 병합), `update(dtSec)`, `render`(`worldToScreen`→`emitNumber`, easeOutCubic 떠오름 + 팝/페이드). 게임 스레드 단독, 락 없음 |
+| `DamageNumberTuning` | `damageNumberSystem.hpp` | 연출 v1 사양 상수 묶음(lifetime/pop/floatUp/fade/scale/bigHitThreshold 등) |
+| `UI::KillCountWidget` | `ui/widgets/KillCountWidget.hpp/cpp` | 상단 HUD: 스컬 아이콘(`icon_kill.dds`) + 누적 킬. 킬 팝, streak 표시, 마일스톤(10/25/50/100) 금색 플래시. `addKill()`은 게임 스레드에서 호출 |
+| `KillCountTuning` | `ui/widgets/KillCountWidget.hpp` | Kill Count 연출 상수 묶음 |
+| onlineGame 통합 | `online/onlineGame.cpp` | UI 셋업: `killCountWidget_` add + `damageNumberSystem_.init()`. 이벤트 디스패치 루프: `receive` 직전 `prevHp` 캡처 → `dmg` 계산 → `spawn`, 고블린 `EvDeath` 시 `addKill()`. `InGameScene`: `damageNumberSystem_.update()`. `renderInGame`: `uiManager_.render` 직전 `damageNumberSystem_.render()` |
+
 ### 사용 패턴 (game.cpp 통합 예시)
 
 ```cpp
