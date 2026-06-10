@@ -145,6 +145,7 @@ struct SkillAsset {
     u32t         id            = 0;
     bool         interruptible = true;
     Milliseconds totalDuration { 0.f };
+    Milliseconds cooldown      { 0.f };  // reuse cooldown; server-authoritative gate
 
     std::vector<TimelineEvent>  timeline;
     std::vector<SkillHitboxDef> hitboxDefs;

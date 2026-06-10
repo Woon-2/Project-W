@@ -7,6 +7,7 @@
 local skill = Skill()
 skill.name             = "Spikes"
 skill.totalDurationMs  = 800
+skill.cooldownMs       = 1300
 skill.interruptible    = true
 
 skill:addVFX(5, "effects/spikes.json")

@@ -5,6 +5,7 @@
 local skill = Skill()
 skill.name             = "CrystalsFrontAttack"
 skill.totalDurationMs  = 800
+skill.cooldownMs       = 1300
 skill.interruptible    = true
 
 skill:addVFX(6, "effects/crystals_front_attack.json")

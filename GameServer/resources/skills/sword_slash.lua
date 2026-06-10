@@ -4,6 +4,7 @@
 local skill = Skill()
 skill.name             = "SwordSlash"
 skill.totalDurationMs  = 400
+skill.cooldownMs       = 900
 skill.interruptible    = true
 
 skill:addVFX(0, "effects/blood_hit.json")

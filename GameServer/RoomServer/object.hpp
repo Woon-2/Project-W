@@ -5,6 +5,7 @@
 #include "terrain.hpp"
 #include "serverAnimation.hpp"
 #include <vector>
+#include <unordered_map>
 
 class GameSession;
 
@@ -165,6 +166,20 @@ class Player : public Object {
 public:
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
+
+	// Server-authoritative skill cooldown gate. Timestamps are wall-clock ms
+	// (same clock as Room::skillStart's serverNow). A skill is usable when its
+	// stored "ready at" time has passed (or was never set).
+	bool skillOffCooldown(uint32 skillId, uint64 nowMs) const {
+		auto it = skillReadyAtMs_.find(skillId);
+		return it == skillReadyAtMs_.end() || nowMs >= it->second;
+	}
+	void markSkillUsed(uint32 skillId, uint64 readyAtMs) {
+		skillReadyAtMs_[skillId] = readyAtMs;
+	}
+
+private:
+	std::unordered_map<uint32, uint64> skillReadyAtMs_;
 };
 
 class Cube : public Object {

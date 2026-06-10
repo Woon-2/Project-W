@@ -208,6 +208,9 @@ private:
 	GroundSampler        groundSampler_{};  // bound to chunkManager_; referenced by skillCtx_.ground
 	std::vector<Object*>          skillObjectById_{};
 	std::vector<ParticleEffect*>  skillVfxById_{};
+	// Local cooldown prediction (skillAssetId -> wall-clock ms when usable again).
+	// Mirrors the server-authoritative gate so requests are rarely dropped.
+	std::unordered_map<uint32, uint64> skillReadyAtMs_{};
 
 	PhysicsWorld physicsWorld_{};
 	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기

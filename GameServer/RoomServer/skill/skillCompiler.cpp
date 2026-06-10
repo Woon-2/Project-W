@@ -1,5 +1,6 @@
 ﻿#include "rspch.hpp"
 #include "skillCompiler.hpp"
+#include <algorithm>
 
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
@@ -103,6 +104,9 @@ SkillAsset ServerSkillCompiler::tableToAsset(const sol::table& tbl) {
     asset.name          = tbl.get_or<std::string>("name", "UnnamedSkill");
     asset.totalDuration = Milliseconds{ static_cast<float>(tbl.get_or("totalDurationMs", 0)) };
     asset.interruptible = tbl.get_or("interruptible", true);
+    // Reuse cooldown (ms). Default = totalDuration so an omitted cooldown still prevents spam.
+    asset.cooldown = Milliseconds{ static_cast<float>(
+        tbl.get_or("cooldownMs", static_cast<double>(asset.totalDuration.count()))) };
 
     sol::optional<sol::table> vfxList = tbl["vfxNames"];
     if (vfxList) {
@@ -231,13 +235,25 @@ std::vector<SkillAsset> ServerSkillCompiler::compileAll(const std::filesystem::p
         }
     }
 
+    // Collect .lua paths and sort by filename so the asset id (i+1) is deterministic
+    // and identical to the client's ordering, regardless of filesystem iteration order.
+    // This is required because C_SkillStart carries skillAssetId; client/server must agree.
+    std::vector<std::filesystem::path> luaFiles;
     for (const auto& entry : std::filesystem::directory_iterator(skillDir)) {
         if (entry.path().extension() != ".lua") continue;
+        luaFiles.push_back(entry.path());
+    }
+    std::sort(luaFiles.begin(), luaFiles.end(),
+              [](const std::filesystem::path& a, const std::filesystem::path& b) {
+                  return a.filename().string() < b.filename().string();
+              });
+
+    for (const auto& path : luaFiles) {
         try {
-            sol::protected_function_result result = lua_.safe_script_file(entry.path().string());
+            sol::protected_function_result result = lua_.safe_script_file(path.string());
             if (!result.valid()) {
                 sol::error err = result;
-                std::cerr << "[ServerSkillCompiler] Error in " << entry.path() << ": " << err.what() << "\n";
+                std::cerr << "[ServerSkillCompiler] Error in " << path << ": " << err.what() << "\n";
                 continue;
             }
             if (!result.get<sol::object>().is<sol::table>()) continue;

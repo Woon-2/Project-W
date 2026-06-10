@@ -5,6 +5,7 @@
 local skill = Skill()
 skill.name             = "PiercingMulti"
 skill.totalDurationMs  = 1100
+skill.cooldownMs       = 1600
 skill.interruptible    = true
 
 skill:addVFX(18, "effects/piercing_multi.json")
