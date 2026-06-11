@@ -252,11 +252,13 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
-			auto appendInfo = [&](const Object& o) {
+			auto appendInfo = [&](const TacticalNpc& o) {
 				spawnInfos.push_back(ObjectInfo{
 					.type           = ObjectType::Goblin,
 					.objectId       = static_cast<uint16>(o.getId()),
 					.materialSetIdx = 0,
+					.hp             = o.hp(),
+					.maxHp          = o.maxHp(),
 					.pos            = o.pos().getXmf(),
 					.orient         = o.orient().getXmf(),
 					.scale          = o.scale().getXmf(),
@@ -573,6 +575,8 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Goblin,
 			.objectId = static_cast<uint16>(npc->getId()),
 			.materialSetIdx = 0,
+			.hp = npc->hp(),
+			.maxHp = npc->maxHp(),
 			.pos = npc->pos().getXmf(),
 			.orient = npc->orient().getXmf(),
 			.scale = npc->scale().getXmf(),
@@ -583,6 +587,8 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Goblin,
 			.objectId = static_cast<uint16>(platoonLeader_->getId()),
 			.materialSetIdx = 0,
+			.hp = platoonLeader_->hp(),
+			.maxHp = platoonLeader_->maxHp(),
 			.pos = platoonLeader_->pos().getXmf(),
 			.orient = platoonLeader_->orient().getXmf(),
 			.scale = platoonLeader_->scale().getXmf(),

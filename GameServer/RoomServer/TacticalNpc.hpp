@@ -112,6 +112,7 @@ public:
     // Room::tryReserveTacticalAttackSlot에서 후보를 거를 때 호출하므로 public.
     bool MU_CALLCONV isEligibleForAttackReservation( uint32 targetId, mu::Vec3 targetPos ) const;
     float             getAttackDamage()      const { return attackDamage_; }
+    int32             maxHp()                const { return static_cast<int32>(maxHp_); }
     float             getSeparationRadius()  const { return separationRadius_; }
     TacticalNpcConfig getConfig()            const;
     bool              isAtSlot()             const;

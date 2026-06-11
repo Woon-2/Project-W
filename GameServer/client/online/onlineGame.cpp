@@ -2797,7 +2797,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 		const float dtSec = std::chrono::duration<float>(deltaTime).count();
 		for (auto& [id, entry] : goblinHpBars_) {
-			if (!entry.goblin || entry.goblin->hp() <= 0) {
+			if (!entry.goblin || entry.goblin->hp() <= 0 || entry.goblin->maxHp() <= 0) {
 				entry.hpBar->visible = false;
 				entry.hpBarVisibleSeconds = 0.f;
 				continue;
