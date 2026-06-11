@@ -5,8 +5,6 @@ VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LobbyServer", "LobbyServer\LobbyServer.vcxproj", "{09CA0266-B329-4B14-8514-8D1F29AC96AD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DummyClient", "DummyClient\DummyClient.vcxproj", "{ED363C64-ED3E-485F-81DA-CD09683AF696}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RoomServer", "RoomServer\RoomServer.vcxproj", "{C3776294-8706-4041-8C95-B0A7716D05A2}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ServerEngine", "ServerEngine\ServerEngine.vcxproj", "{D3509D12-8E8D-482C-932B-A849E04CD6CF}"
@@ -29,14 +27,6 @@ Global
 		{09CA0266-B329-4B14-8514-8D1F29AC96AD}.Release|x64.Build.0 = Release|x64
 		{09CA0266-B329-4B14-8514-8D1F29AC96AD}.Release|x86.ActiveCfg = Release|Win32
 		{09CA0266-B329-4B14-8514-8D1F29AC96AD}.Release|x86.Build.0 = Release|Win32
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Debug|x64.ActiveCfg = Debug|x64
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Debug|x64.Build.0 = Debug|x64
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Debug|x86.ActiveCfg = Debug|Win32
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Debug|x86.Build.0 = Debug|Win32
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Release|x64.ActiveCfg = Release|x64
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Release|x64.Build.0 = Release|x64
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Release|x86.ActiveCfg = Release|Win32
-		{ED363C64-ED3E-485F-81DA-CD09683AF696}.Release|x86.Build.0 = Release|Win32
 		{C3776294-8706-4041-8C95-B0A7716D05A2}.Debug|x64.ActiveCfg = Debug|x64
 		{C3776294-8706-4041-8C95-B0A7716D05A2}.Debug|x64.Build.0 = Debug|x64
 		{C3776294-8706-4041-8C95-B0A7716D05A2}.Debug|x86.ActiveCfg = Debug|Win32
