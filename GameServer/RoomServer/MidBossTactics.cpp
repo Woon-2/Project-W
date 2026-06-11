@@ -331,7 +331,31 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         }
         else {
             leader.setDesiredVel( mu::Vec3{} );   // 도착 → 정지(leaderAtRetreat 안정화)
+            // 집결 대기 중 등 돌리지 않게 플레이어 군집 중심을 바라봄 (XZ만 사용)
+            mu::Vec3 toPlayers = calcPlayerCentroid( room, leader.pos() ) - leader.pos();
+            leader.setFacing( mu::Vec3( toPlayers.x(), 0.f, toPlayers.z() ) );
         }
+        return;
+    }
+
+    // 전술 발동 후 기동(박스 전진/포위/쐐기) 중에는 보스가 전투에 개입하지 않고
+    // 후방에서 지휘만 한다. Cooldown 진입(전술 종료) 후 개인 전투 재개.
+    const bool tacticManeuverActive = tacticsUnlocked_ &&
+        ( leaderPhase_ == LeaderPhase::BoxAdvance ||
+          leaderPhase_ == LeaderPhase::Encircle ||
+          leaderPhase_ == LeaderPhase::DivideAndConquer );
+    if ( tacticManeuverActive ) {
+        leader.setDesiredVel( mu::Vec3{} );
+        // 지휘 연출: 플레이어 군집 중심을 바라봄 (XZ만 사용)
+        mu::Vec3 toPlayers = calcPlayerCentroid( room, leader.pos() ) - leader.pos();
+        leader.setFacing( mu::Vec3( toPlayers.x(), 0.f, toPlayers.z() ) );
+        if ( leader.getState() != TacticalNpcState::Idle ) {
+            leader.setTacticalTarget( 0 );
+            leader.transitionTacticalState( TacticalNpcState::Idle );
+        }
+        // 전투 재개 시 묵은 windup/recover 상태로 이어지지 않게 초기화
+        bossPersonalState_ = BossPersonalState::EvaluateTarget;
+        bossPersonalTargetId_ = 0;
         return;
     }
 
