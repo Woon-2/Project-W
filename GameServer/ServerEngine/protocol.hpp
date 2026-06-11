@@ -243,12 +243,14 @@ struct SNpcRespawnPacket : public PacketHeader {
 struct CSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint64 clientMs;
+	uint32 skillSeed;   // caster-generated per-cast seed (deterministic particle hitboxes)
 };
 
 struct SSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint16 ownerId;
 	uint16 elapsedMs;
+	uint32 skillSeed;   // relayed caster seed; remote clients reproduce identical VFX params
 };
 
 struct SSkillHitPacket : public PacketHeader {

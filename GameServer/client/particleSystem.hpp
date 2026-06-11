@@ -3,6 +3,7 @@
 
 #include "particleModules.hpp"
 #include "groundSampler.hpp"
+#include "particleGameplay.hpp"
 
 #include <array>
 #include <cstdint>
@@ -119,6 +120,29 @@ public:
     // GroundSampler must outlive this system. nullptr disables ground awareness.
     void setGroundSampler(const GroundSampler* g) { ground_ = g; }
 
+    // --- Deterministic gameplay mode (see common/particleGameplay.hpp) ------
+    // When a gameplay config AND a seed are set, gameplay-relevant spawn
+    // parameters (origin, direction, speed, lifetime, size, rotation) come
+    // from pg::sampleSpawn with counter-based RNG keys, so the server can
+    // reproduce them exactly. Visual-only draws keep using the legacy rng_.
+    void setGameplayConfig(const pg::GameplayConfig& cfg) {
+        gameplayCfg_    = cfg;
+        hasGameplayCfg_ = true;
+    }
+    // Called per cast (before play()); also resets the spawn counters.
+    void setDeterministicSeed(std::uint32_t seed) {
+        detSeed_      = seed;
+        detSeedSet_   = true;
+        detRateIndex_ = 0;
+        detEmitIndex_ = 0;
+        detLoopIndex_ = 0;
+        detSysTime_   = 0.f;
+    }
+    bool deterministic() const { return hasGameplayCfg_ && detSeedSet_; }
+    const pg::GameplayConfig* gameplayConfig() const {
+        return hasGameplayCfg_ ? &gameplayCfg_ : nullptr;
+    }
+
 private:
     struct ShapeSample { mu::Vec3 origin; mu::Vec3 dir; };
 
@@ -126,6 +150,8 @@ private:
     float        sampleArcAngle();
     void         spawnParticle();
     void         emitScheduledBursts(float prevTime, float currTime);
+    void         emitScheduledBurstsDet(float prevTime, float currTime);
+    void         emitRateDet();
     ShapeSample  sampleCircle();
     ShapeSample  sampleCone();
     mu::Vec3     sampleShapeOrigin();
@@ -153,6 +179,21 @@ private:
     float     inheritedSize_    = 1.f;
     int       shapeEmitIndex_   = 0;
     int       shapeEmitCount_   = 1;
+
+    // Deterministic gameplay mode state. The spawn identity (stream/id) is
+    // set immediately before each spawnParticle() call by the det emission
+    // paths; emitAt (sub-emitter inherit) spawns always use the legacy path.
+    pg::GameplayConfig gameplayCfg_;
+    bool          hasGameplayCfg_ = false;
+    std::uint32_t detSeed_        = 0;
+    bool          detSeedSet_     = false;
+    std::uint32_t detRateIndex_   = 0;    // rate stream: monotonic particle index
+    std::uint32_t detEmitIndex_   = 0;    // play-emit stream: manual emit counter
+    int           detLoopIndex_   = 0;    // looping systems: loop iteration
+    float         detSysTime_     = 0.f;  // monotonic scaled time after startDelay
+    std::uint32_t detSpawnStream_ = 0;
+    std::uint32_t detSpawnId_     = 0;
+    bool          detSpawnPending_ = false;
 };
 
 #endif  // __particleSystem_HPP

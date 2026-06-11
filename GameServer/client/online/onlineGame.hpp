@@ -86,7 +86,7 @@ public:
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
-	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
@@ -111,7 +111,12 @@ private:
 	void sendMovePacket();
 	void sendMouseMovePacket();
 	void sendAttackPacket();
-	void sendSkillStartPacket(uint32 skillAssetId);
+	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
+
+	// Starts a skill locally (prediction visuals) with a fresh per-cast seed
+	// and notifies the server via C_SkillStart. No-op if the asset is missing
+	// or the player already has an active skill.
+	void castSkillByName(std::string_view name);
 
 	void processInput(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);

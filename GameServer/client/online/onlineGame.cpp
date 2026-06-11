@@ -800,6 +800,8 @@ void Game::setParticle()
 				.inheritSize     = true,
 			} };
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+			// Gameplay config for the hitbox-bound system 0 comes from the
+			// skill lua (addVFX systems table) via bindVfxGameplayConfigs().
 		}
 
 		// child: crystal pillars (StretchedBillboard in Unity)
@@ -1741,6 +1743,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		SkillCompiler compiler;
 		const Skeleton* pSkeleton = player_->model() ? &player_->model()->skeleton : nullptr;
 		auto assets = compiler.compileAll("../resources/skills", pSkeleton);
+		// VFXParticle 히트박스용 게임플레이 설정(effect JSON + lua 오버라이드) 빌드.
+		buildVfxGameplayConfigs(assets, "../resources");
 		skillSystem_.registerAssets(std::move(assets));
 
 		skillObjectById_.assign(256, nullptr);
@@ -1753,8 +1757,28 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 			skillObjectById_[sid] = goblin.get();
 		}
 
-		skillVfxById_.assign(2, nullptr);
-		skillVfxById_[1] = &swordSlash1Effect_;   // effects/sword_slash_1.json
+		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
+		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
+		// same skill .lua PlayVFX events resolve identically in online mode.
+		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
+		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
+		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
+		skillVfxById_[4]  = &swordSlash7Effect_;          // Slash7
+		skillVfxById_[5]  = &spikesAttackEffect_;         // Spikes
+		skillVfxById_[6]  = &crystalsFrontAttackEffect_;  // CrystalsFrontAttack
+		skillVfxById_[7]  = &aoESlashGreenEffect_;        // AoESlashGreen
+		skillVfxById_[8]  = &redEnergyExplosionEffect_;   // RedEnergyExplosion
+		skillVfxById_[9]  = &crystalsCrossFadeEffect_;    // CrystalsCrossFade
+		skillVfxById_[10] = &arrowEffect_;                // Arrow
+		skillVfxById_[11] = &arrowVolleyEffect_;          // ArrowVolley
+		skillVfxById_[12] = &arrowRainEffect_;            // ArrowRain
+		skillVfxById_[13] = &energyExplosionArrowEffect_; // EnergyExplosionArrow
+		skillVfxById_[14] = &tornadoShotEffect_;          // TornadoShot
+		skillVfxById_[15] = &piercingEffect_;             // Piercing
+		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
+		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
+		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
 
 		skillCtx_.objectById          = skillObjectById_.data();
 		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
@@ -1772,6 +1796,11 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 			return chunkManager_.empty() ? mu::Vec3{ 0.f, 1.f, 0.f } : chunkManager_.normalAtWorld(x, z);
 		};
 		skillCtx_.ground = &groundSampler_;
+
+		// 이펙트는 이 시점에 이미 전부 구성되어 있다: 스킬 lua의 addVFX systems
+		// 구성으로 빌드된 게임플레이 설정을 각 시스템에 주입 (결정론 모드 활성).
+		skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
+		                                    static_cast<int>(skillVfxById_.size()));
 	}
 }
 
@@ -2394,13 +2423,15 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
+	// skillSeed is the caster-generated seed relayed by the server, so this
+	// client renders the identical particle layout the server judges hits on.
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
-	                        Milliseconds{ static_cast<float>(elapsedMs) });
+	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
 
 void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
@@ -3805,12 +3836,24 @@ void Game::sendAttackPacket() {
 	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 
-void Game::sendSkillStartPacket(uint32 skillAssetId) {
+void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 	uint64 clientMs = static_cast<uint64>(
 		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::high_resolution_clock::now().time_since_epoch()
 		).count()));
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs));
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+}
+
+void Game::castSkillByName(std::string_view name) {
+	const SkillAsset* asset = skillSystem_.findAsset(name);
+	if (!asset) return;
+	if (skillSystem_.hasActiveSkill(player_->getId())) return;
+
+	// Per-cast deterministic seed: used locally AND sent to the server
+	// (C_SkillStart) so server hitboxes / remote visuals match exactly.
+	const uint32 skillSeed = std::random_device{}();
+	skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_, skillSeed);
+	sendSkillStartPacket(asset->id, skillSeed);
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -3943,17 +3986,41 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
-	// Q key: start skill
-	if (!playerDead_
-		&& !uiManager_.needsCursor()
-		&& (keyboardStateCurr_['Q'] & 0x80)
-		&& !(keyboardStatePrev_['Q'] & 0x80))
-	{
-		const SkillAsset* asset = skillSystem_.findAsset("SwordSlash");
-		if (asset && !skillSystem_.hasActiveSkill(player_->getId())) {
-			skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_);
-			sendSkillStartPacket(asset->id);
+	// 임시 스킬 키바인딩 (16종): 1~0 = 슬롯 1~10, Shift+1~6 = 슬롯 11~16.
+	// Q는 기존 SwordSlash 단축키로 유지. 정식 스킬 슬롯 UI가 생기면 대체한다.
+	// 순서는 editor/characterSkillMap.hpp의 Player 스킬 순서에서
+	// 미완성 스킬(AoESlashGreen, TornadoShot)을 뺀 것이다.
+	if (!playerDead_ && !uiManager_.needsCursor()) {
+		static constexpr std::array<std::string_view, 16> kTempSkillKeymap = {
+			"SwordSlash",           // 1
+			"SlashWave",            // 2
+			"SlashCombo",           // 3
+			"Slash7",               // 4
+			"Spikes",               // 5
+			"CrystalsFrontAttack",  // 6
+			"RedEnergyExplosion",   // 7
+			"CrystalsCrossFade",    // 8
+			"Arrow",                // 9
+			"ArrowVolley",          // 0
+			"ArrowRain",            // Shift+1
+			"EnergyExplosionArrow", // Shift+2
+			"Piercing",             // Shift+3
+			"PiercingSlash",        // Shift+4
+			"PiercingCircleSlash",  // Shift+5
+			"PiercingMulti",        // Shift+6
+		};
+		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		for (int i = 0; i < 10; ++i) {
+			const int vk = (i == 9) ? '0' : ('1' + i);
+			if (!(keyboardStateCurr_[vk] & 0x80) || (keyboardStatePrev_[vk] & 0x80))
+				continue;
+			const std::size_t slot = shiftHeld ? static_cast<std::size_t>(i) + 10
+			                                   : static_cast<std::size_t>(i);
+			if (slot < kTempSkillKeymap.size())
+				castSkillByName(kTempSkillKeymap[slot]);
 		}
+		if ((keyboardStateCurr_['Q'] & 0x80) && !(keyboardStatePrev_['Q'] & 0x80))
+			castSkillByName("SwordSlash");
 	}
 
 	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생

@@ -84,6 +84,7 @@ int SkillInstancePool::alloc(const SkillAsset* asset, i32t ownerObjectId) {
     inst.nextEventIdx  = 0;
     inst.active        = true;
     inst.interrupted   = false;
+    inst.seed          = 0;
     inst.resetSlots();
 
     activeList.push_back(idx);
@@ -201,13 +202,14 @@ const SkillAsset* SkillSystem::findAsset(u32t id) const {
 // ---------------------------------------------------------------------------
 
 int SkillSystem::startSkill(std::string_view assetName, i32t ownerObjectId,
-                            SkillDispatchContext& ctx) {
+                            SkillDispatchContext& ctx, u32t seed) {
     const SkillAsset* asset = findAsset(assetName);
     if (!asset) return -1;
-    return startSkill(asset->id, ownerObjectId, ctx);
+    return startSkill(asset->id, ownerObjectId, ctx, seed);
 }
 
-int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx) {
+int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                            u32t seed) {
     const SkillAsset* asset = nullptr;
     for (const SkillAsset& a : assetRegistry_)
         if (a.id == assetId) { asset = &a; break; }
@@ -218,6 +220,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     // Fire t=0 events immediately
     SkillInstance& inst = instancePool_.instances[idx];
+    inst.seed = seed;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
@@ -228,7 +231,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                            Milliseconds initialElapsed) {
+                            Milliseconds initialElapsed, u32t seed) {
     const SkillAsset* asset = nullptr;
     for (const SkillAsset& a : assetRegistry_)
         if (a.id == assetId) { asset = &a; break; }
@@ -239,6 +242,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
+    inst.seed    = seed;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     // Fire all events that fall at or before initialElapsed
@@ -252,6 +256,23 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
         terminateInstance(inst, ctx);
 
     return idx;
+}
+
+void SkillSystem::bindVfxGameplayConfigs(ParticleEffect* const* vfxById, int vfxByIdSize) {
+    for (const SkillAsset& asset : assetRegistry_) {
+        for (int vfxId = 0; vfxId < static_cast<int>(asset.vfxDefs.size()); ++vfxId) {
+            if (vfxId >= vfxByIdSize || !vfxById[vfxId]) continue;
+            ParticleEffect* fx = vfxById[vfxId];
+
+            const SkillAsset::VfxDef& vdef = asset.vfxDefs[vfxId];
+            const int count = std::min(static_cast<int>(vdef.systems.size()),
+                                       fx->systemCount());
+            for (int si = 0; si < count; ++si) {
+                if (vdef.systems[si].gameplayCfg)
+                    fx->system(si).setGameplayConfig(*vdef.systems[si].gameplayCfg);
+            }
+        }
+    }
 }
 
 void SkillSystem::interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx) {
@@ -515,6 +536,11 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         if (!ctx.vfxById || p.vfxId >= static_cast<u8t>(ctx.vfxByIdSize)) break;
         ParticleEffect* fx = ctx.vfxById[p.vfxId];
         if (!fx) break;
+
+        // Per-cast deterministic seed: the server derives the identical
+        // per-system seeds (mixSeed(mixSeed(inst.seed, vfxId), systemIdx))
+        // for its VFXParticle hitbox sampler. Must precede play().
+        fx->setDeterministicSeed(pg::mixSeed(inst.seed, p.vfxId));
 
         // Let the effect's own emitters interact with the terrain (ground-conform
         // spawn, ground collision) wherever it ends up being played.

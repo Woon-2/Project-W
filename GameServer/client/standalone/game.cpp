@@ -752,6 +752,9 @@ void Game::setupStage() {
 		const Skeleton* pSkeleton = (player_ && player_->model())
 		    ? &player_->model()->skeleton : nullptr;
 		auto skillAssets = compiler.compileAll("../resources/skills", pSkeleton);
+		// VFXParticle 히트박스용 게임플레이 설정(effect JSON + lua 오버라이드) 빌드.
+		// 이펙트 구성 완료 후 bindVfxGameplayConfigs()로 각 시스템에 주입된다.
+		buildVfxGameplayConfigs(skillAssets, "../resources");
 		skillSystem_.registerAssets(std::move(skillAssets));
 
 		skillObjectById_.assign(2, nullptr);
@@ -1272,6 +1275,8 @@ void Game::setParticle()
 				.inheritSize     = true,
 			} };
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+			// Gameplay config for the hitbox-bound system 0 comes from the
+			// skill lua (addVFX systems table) via bindVfxGameplayConfigs().
 		}
 
 		// child: crystal pillars (StretchedBillboard in Unity)
@@ -2204,6 +2209,10 @@ void Game::setParticle()
 		}
 	}
 
+	// 모든 이펙트 구성 완료 후: 스킬 lua의 addVFX systems 구성으로 빌드된
+	// 게임플레이 설정을 각 ParticleEffect 시스템에 주입 (결정론 모드 활성).
+	skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
+	                                    static_cast<int>(skillVfxById_.size()));
 }
 
 // Helper: configure a monster body as Dynamic with shared character properties.

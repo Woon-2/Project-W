@@ -7,7 +7,31 @@ skill.name             = "EnergyExplosionArrow"
 skill.totalDurationMs  = 3400
 skill.interruptible    = true
 
-skill:addVFX(13, "effects/energy_explosion_arrow.json")
+-- systems[]: code-built composition (game.cpp). Sub-emitter chain:
+-- Charge(0, root) -Death-> Arrow(1) -Death-> Hit(2). All params constant, so
+-- the server's analytic chain lands exactly where the client explosion plays.
+skill:addVFX(13, "effects/energy_explosion_arrow.json", {
+    systems = {
+        {   -- 0: Charge (root; PlayMode Emit)
+            mode = "Emit", looping = false,
+            lifetime = 1.6, speed = 0.0, startSize = 8.0,
+            shapeType = "Point", maxParticles = 16,
+        },
+        {   -- 1: Arrow (chained: Charge death)
+            parent = 0, parentEvent = "Death", looping = false,
+            lifetime = 0.6, speed = 40.0, startSize = 0.3,
+            shapeType = "Point", direction = Vec3(0.0, 0.0, 1.0),
+            maxParticles = 32,
+            bursts = { { time = 0.0, count = 1, cycleCount = 1 } },
+        },
+        {   -- 2: Hit explosion (chained: Arrow death) -- hitbox target
+            parent = 1, parentEvent = "Death", looping = false,
+            lifetime = 1.6, speed = 0.0, startSize = 10.0,
+            shapeType = "Point", maxParticles = 16,
+            bursts = { { time = 0.0, count = 1, cycleCount = 1 } },
+        },
+    }
+})
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",

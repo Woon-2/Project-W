@@ -301,6 +301,86 @@ void ParticleSystem::emitScheduledBursts(float prevTime, float currTime) {
     }
 }
 
+// Deterministic-mode burst scheduler. Window logic mirrors the legacy
+// emitScheduledBursts; probability/count rolls and per-particle draws use
+// counter-keyed RNG so the server reproduces them (pg::evaluateParticles).
+void ParticleSystem::emitScheduledBurstsDet(float prevTime, float currTime) {
+    const pg::GameplayConfig& g = gameplayCfg_;
+    if (!g.emissionEnabled || g.bursts.empty())
+        return;
+
+    if (burstNextCycle_.size() != g.bursts.size())
+        burstNextCycle_.assign(g.bursts.size(), 0);
+
+    for (std::size_t i = 0; i < g.bursts.size(); ++i) {
+        const pg::Burst& burst = g.bursts[i];
+        int& nextCycle = burstNextCycle_[i];
+
+        while (nextCycle < burst.cycleCount) {
+            const float dueTime = burst.time + burst.repeatInterval * nextCycle;
+            if (dueTime < prevTime) {
+                ++nextCycle;
+                continue;
+            }
+            if (dueTime >= currTime)
+                break;
+
+            const std::uint32_t key = pg::burstKey(detLoopIndex_,
+                                                   static_cast<int>(i), nextCycle);
+            pg::DetRng meta{ detSeed_, pg::kStreamBurstMeta, key, 0 };
+            if (meta.next01() <= burst.probability) {
+                const int lo = std::min(burst.countMin, burst.countMax);
+                const int hi = std::max(burst.countMin, burst.countMax);
+                const int count = (lo >= hi)
+                    ? lo
+                    : lo + static_cast<int>(std::floor(meta.next01()
+                            * static_cast<float>(hi - lo + 1)));
+
+                const int savedIndex = shapeEmitIndex_;
+                const int savedCount = shapeEmitCount_;
+                shapeEmitCount_ = std::max(1, count);
+                for (int p = 0; p < count; ++p) {
+                    shapeEmitIndex_  = p;
+                    detSpawnStream_  = pg::kStreamBurstSpawn;
+                    detSpawnId_      = pg::burstParticleId(key, p);
+                    detSpawnPending_ = true;
+                    spawnParticle();
+                }
+                detSpawnPending_ = false;
+                shapeEmitIndex_ = savedIndex;
+                shapeEmitCount_ = savedCount;
+            }
+            ++nextCycle;
+        }
+    }
+}
+
+// Deterministic-mode rate emission: the k-th particle exists once the
+// cumulative target floor(rate * t) passes k, independent of frame splits.
+void ParticleSystem::emitRateDet() {
+    const pg::GameplayConfig& g = gameplayCfg_;
+    if (!g.emissionEnabled || g.emitRate <= 0.f)
+        return;
+
+    const bool  bounded    = (!g.looping && g.duration > 0.f);
+    const float emitWindow = bounded ? std::min(detSysTime_, g.duration) : detSysTime_;
+    const int   total      = static_cast<int>(std::floor(g.emitRate * emitWindow));
+
+    const int savedIndex = shapeEmitIndex_;
+    const int savedCount = shapeEmitCount_;
+    shapeEmitCount_ = 1;
+    shapeEmitIndex_ = 0;
+    while (static_cast<int>(detRateIndex_) < total) {
+        detSpawnStream_  = pg::kStreamRate;
+        detSpawnId_      = detRateIndex_++;
+        detSpawnPending_ = true;
+        spawnParticle();
+    }
+    detSpawnPending_ = false;
+    shapeEmitIndex_ = savedIndex;
+    shapeEmitCount_ = savedCount;
+}
+
 void ParticleSystem::stopContinuous() {
     continuousNew_ = false;
 }
@@ -309,7 +389,43 @@ void ParticleSystem::update(Seconds dt) {
     const float scaledDtf = dt.count() * config_.main.simulationSpeed;
 
     // Start Delay -> Emission -> Duration / Looping
-    if (continuousNew_) {
+    if (continuousNew_ && deterministic()) {
+        // Deterministic mode: schedule and draws are driven by the gameplay
+        // config (shared with the server) and counter-keyed RNG, so spawn
+        // counts and parameters are frame-partition independent.
+        const pg::GameplayConfig& g = gameplayCfg_;
+        if (delayRemaining_ > 0.f) {
+            delayRemaining_ -= scaledDtf;
+        } else {
+            const float prevTime = systemTime_;
+            float       nextTime = systemTime_ + scaledDtf;
+            detSysTime_ += scaledDtf;
+
+            emitRateDet();
+
+            if (g.duration > 0.f) {
+                if (nextTime >= g.duration) {
+                    emitScheduledBurstsDet(prevTime, g.duration);
+                    if (g.looping) {
+                        nextTime -= g.duration;
+                        burstNextCycle_.assign(g.bursts.size(), 0);
+                        ++detLoopIndex_;
+                        emitScheduledBurstsDet(0.f, nextTime);
+                        systemTime_ = nextTime;
+                    } else {
+                        continuousNew_ = false;
+                        systemTime_    = 0.f;
+                    }
+                } else {
+                    emitScheduledBurstsDet(prevTime, nextTime);
+                    systemTime_ = nextTime;
+                }
+            } else {
+                emitScheduledBurstsDet(prevTime, nextTime);
+                systemTime_ = nextTime;
+            }
+        }
+    } else if (continuousNew_) {
         if (delayRemaining_ > 0.f) {
             delayRemaining_ -= scaledDtf;
         } else {
@@ -525,8 +641,16 @@ void ParticleSystem::emit(int count) {
     shapeEmitCount_ = std::max(1, count);
     for (int i = 0; i < count; ++i) {
         shapeEmitIndex_ = i;
+        if (deterministic() && !inheritEmit_) {
+            // Manual emission (ParticleEffect::play PlayMode::Emit) uses the
+            // play-emit stream; the server mirrors id 0 for the play() call.
+            detSpawnStream_  = pg::kStreamPlayEmit;
+            detSpawnId_      = detEmitIndex_++;
+            detSpawnPending_ = true;
+        }
         spawnParticle();
     }
+    detSpawnPending_ = false;
     shapeEmitIndex_ = savedIndex;
     shapeEmitCount_ = savedCount;
 }
@@ -535,8 +659,14 @@ void ParticleSystem::startContinuous() {
     continuousNew_  = true;
     emitAccumNew_   = 0.f;
     systemTime_     = 0.f;
-    delayRemaining_ = config_.main.startDelay;
-    burstNextCycle_.assign(config_.emission.bursts.size(), 0);
+    delayRemaining_ = deterministic() ? gameplayCfg_.startDelay
+                                      : config_.main.startDelay;
+    burstNextCycle_.assign(deterministic() ? gameplayCfg_.bursts.size()
+                                           : config_.emission.bursts.size(), 0);
+    detRateIndex_ = 0;
+    detEmitIndex_ = 0;
+    detLoopIndex_ = 0;
+    detSysTime_   = 0.f;
 }
 
 void ParticleSystem::startContinuous(const ps::ParticleSystemConfig& config) {
@@ -728,8 +858,23 @@ void ParticleSystem::spawnParticle() {
     }
     Particle& p = *pSlot;
 
+    // Deterministic gameplay mode: spawn parameters that affect hitboxes come
+    // from the shared sampler (counter-keyed RNG; see particleGameplay.hpp).
+    // Visual-only draws below keep consuming the legacy rng_.
+    const bool det = deterministic() && detSpawnPending_ && !inheritEmit_;
+    pg::SpawnParams sp;
+    if (det) {
+        pg::DetRng detRng{ detSeed_, detSpawnStream_, detSpawnId_, 0 };
+        sp = pg::sampleSpawn(gameplayCfg_, config_.shape.position,
+                             config_.shape.orientation, detRng,
+                             shapeEmitIndex_, shapeEmitCount_);
+    }
+
     mu::Vec3 origin, dir;
-    if (config_.shape.enabled && config_.shape.type == ps::ShapeModule::Type::Circle) {
+    if (det) {
+        origin = sp.origin;
+        dir    = sp.dir;
+    } else if (config_.shape.enabled && config_.shape.type == ps::ShapeModule::Type::Circle) {
         const auto s = sampleCircle();
         origin = s.origin;
         dir    = s.dir;
@@ -750,14 +895,16 @@ void ParticleSystem::spawnParticle() {
         origin.setComponent(1, ground_->height(origin.x(), origin.z()) + config_.shape.groundOffset);
     }
 
-    const float    speed  = randomFloat(config_.main.speedMin, config_.main.speedMax);
+    const float    speed  = det ? sp.speed
+                                : randomFloat(config_.main.speedMin, config_.main.speedMax);
 
     p.pos             = origin;
     p.vel             = dir * speed;
     p.emitterPosition = config_.shape.position;
     p.emitterRotation = buildShapeRotation(config_.shape);
     p.emitterTransformRotation = config_.shape.orientation;
-    p.lifetime    = randomFloat(config_.main.lifetimeMin, config_.main.lifetimeMax);
+    p.lifetime    = det ? sp.lifetime
+                        : randomFloat(config_.main.lifetimeMin, config_.main.lifetimeMax);
     p.maxLifetime = p.lifetime;
     p.velocityRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.orbitalRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
@@ -766,16 +913,22 @@ void ParticleSystem::spawnParticle() {
     p.startColor  = config_.main.startColor;
     p.drag        = config_.velocityOverLifetime.enabled ? config_.velocityOverLifetime.drag : 0.f;
     p.gravity     = config_.main.gravity *
-                    randomFloat(config_.main.gravityModifierMin, config_.main.gravityModifierMax);
-    p.rotation    = randomFloat(config_.main.startRotationMin, config_.main.startRotationMax);
+                    (det ? sp.gravityModifier
+                         : randomFloat(config_.main.gravityModifierMin,
+                                       config_.main.gravityModifierMax));
+    p.rotation    = det ? sp.rotationZ
+                        : randomFloat(config_.main.startRotationMin, config_.main.startRotationMax);
 
     if (config_.colorOverLifetime.enabled)
         p.colorOverLifetime = config_.colorOverLifetime.gradient;
     else
         p.colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
 
-    const float scalarSizeMult = randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
-    const mu::Vec3 sizeMult3D = config_.main.startSize3DEnabled
+    const float scalarSizeMult = det ? sp.sizeScalar
+                                     : randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
+    const mu::Vec3 sizeMult3D = det
+                              ? sp.size3D
+                              : config_.main.startSize3DEnabled
                               ? mu::Vec3{
                                   randomFloat(config_.main.startSize3DMin.x(), config_.main.startSize3DMax.x()),
                                   randomFloat(config_.main.startSize3DMin.y(), config_.main.startSize3DMax.y()),
@@ -796,23 +949,28 @@ void ParticleSystem::spawnParticle() {
         p.sizeBegin3D = p.sizeEnd3D = sizeMult3D;
     }
 
-    p.angularVelocity = config_.rotationOverLifetime.enabled
-                        ? (config_.rotationOverLifetime.separateAxes
-                            ? randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.z(),
-                                          config_.rotationOverLifetime.angularVelocityMax3D.z())
-                            : randomFloat(config_.rotationOverLifetime.angularVelocityMin,
-                                          config_.rotationOverLifetime.angularVelocityMax))
-                        : 0.f;
-    if (config_.rotationOverLifetime.enabled && config_.rotationOverLifetime.separateAxes) {
-        p.angularVelocity3D = {
-            randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.x(),
-                        config_.rotationOverLifetime.angularVelocityMax3D.x()),
-            randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.y(),
-                        config_.rotationOverLifetime.angularVelocityMax3D.y()),
-            p.angularVelocity
-        };
+    if (det) {
+        p.angularVelocity   = sp.angularVelocityZ;
+        p.angularVelocity3D = sp.angularVelocity3D;
     } else {
-        p.angularVelocity3D = { 0.f, 0.f, p.angularVelocity };
+        p.angularVelocity = config_.rotationOverLifetime.enabled
+                            ? (config_.rotationOverLifetime.separateAxes
+                                ? randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.z(),
+                                              config_.rotationOverLifetime.angularVelocityMax3D.z())
+                                : randomFloat(config_.rotationOverLifetime.angularVelocityMin,
+                                              config_.rotationOverLifetime.angularVelocityMax))
+                            : 0.f;
+        if (config_.rotationOverLifetime.enabled && config_.rotationOverLifetime.separateAxes) {
+            p.angularVelocity3D = {
+                randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.x(),
+                            config_.rotationOverLifetime.angularVelocityMax3D.x()),
+                randomFloat(config_.rotationOverLifetime.angularVelocityMin3D.y(),
+                            config_.rotationOverLifetime.angularVelocityMax3D.y()),
+                p.angularVelocity
+            };
+        } else {
+            p.angularVelocity3D = { 0.f, 0.f, p.angularVelocity };
+        }
     }
     p.angularAngle    = 0.f;
     p.angularAngle3D  = { 0.f, 0.f, 0.f };
@@ -820,12 +978,14 @@ void ParticleSystem::spawnParticle() {
     p.baseRotation    = config_.main.startRotation3D;
     p.billboardRotation3D = mu::Mat4x4{};
     p.transformScale  = config_.main.transformScale;
-    if (config_.main.startRotation3DEnabled) {
-        const mu::Vec3 startRotation = {
-            randomFloat(config_.main.startRotation3DMin.x(), config_.main.startRotation3DMax.x()),
-            randomFloat(config_.main.startRotation3DMin.y(), config_.main.startRotation3DMax.y()),
-            randomFloat(config_.main.startRotation3DMin.z(), config_.main.startRotation3DMax.z())
-        };
+    if (det ? sp.rotation3DEnabled : config_.main.startRotation3DEnabled) {
+        const mu::Vec3 startRotation = det
+            ? sp.rotation3D
+            : mu::Vec3{
+                randomFloat(config_.main.startRotation3DMin.x(), config_.main.startRotation3DMax.x()),
+                randomFloat(config_.main.startRotation3DMin.y(), config_.main.startRotation3DMax.y()),
+                randomFloat(config_.main.startRotation3DMin.z(), config_.main.startRotation3DMax.z())
+            };
         const mu::Mat4x4 startRotationMatrix = buildEulerRotation(startRotation);
         p.baseRotation = startRotationMatrix * p.baseRotation;
         p.billboardRotation3D = startRotationMatrix;

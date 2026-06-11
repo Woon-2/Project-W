@@ -1,5 +1,4 @@
-﻿#include "pch.hpp"
-#include "simpleJson.hpp"
+﻿#include "simpleJson.hpp"
 
 #include <charconv>
 

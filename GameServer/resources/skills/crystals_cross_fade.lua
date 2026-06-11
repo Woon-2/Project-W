@@ -7,7 +7,15 @@ skill.name             = "CrystalsCrossFade"
 skill.totalDurationMs  = 1400
 skill.interruptible    = true
 
-skill:addVFX(9, "effects/crystals_cross_fade.json")
+-- systems[]: ParticleEffect composition (index = addSystem order in game.cpp).
+-- Crystals(1) is a Birth-chained sub-emitter of the trigger system(0): each
+-- trigger particle replays the Crystals JSON bursts from its spawn position.
+skill:addVFX(9, "effects/Crystals crossfade 2_ParticleSystems.json", {
+    systems = {
+        { name = "Crystals crossfade 2",          mode = "Continuous", looping = false },
+        { name = "Crystals crossfade 2/Crystals", parent = 0, parentEvent = "Birth" },
+    }
+})
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",

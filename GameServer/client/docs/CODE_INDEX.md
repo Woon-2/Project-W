@@ -208,8 +208,17 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파 |
 | `Faction` enum / `hostileMask()` | `object.hpp` | 피아 식별: Neutral/Players/Monsters; 히트박스 targetMask = hostileMask(owner.faction) |
 | `Object::faction()`/`setFaction()` | `object.hpp` | 진영 접근자(생성 지점에서 setFaction 호출) |
+| `SkillInstance::seed` / `startSkill(..., seed)` | `skillSystem.hpp/.cpp` | per-cast 결정론 시드 (C/S_SkillStart로 공유); PlayVFX에서 `fx->setDeterministicSeed(mixSeed(seed, vfxId))` |
+| `SkillAsset::VfxDef/VfxSystemDef` | `skillTypes.hpp` | `addVFX(id, path, { systems = ... })` 구성 — 서버 결정론 히트박스용 (`docs/particleHitboxDeterminism.md`) |
+| `SkillCompiler::compileAll` lua 정렬 | `skillCompiler.cpp` | 파일명 정렬 후 순차 id 부여 — 서버 컴파일러와 id 일치 보장 (C_SkillStart가 숫자 id 전송) |
+| `buildVfxGameplayConfigs` | `skillCompiler.{hpp,cpp}` | addVFX systems(JSON+오버라이드) → `VfxSystemDef::gameplayCfg` 1회 빌드 (서버 미러: RoomServer AssetManager에서 호출) |
+| `parseVfxSystemOverrides` / `pg::VfxSystemOverrides` | `skillCompiler.cpp` / `../common/particleGameplay.hpp` | lua systems 엔트리의 게임플레이 오버라이드 (speed/lifetime/shape/bursts/volLinear 등) |
+| `SkillSystem::bindVfxGameplayConfigs` | `skillSystem.cpp` | 프리빌드 설정을 ParticleEffect 시스템에 주입 (이펙트 구성 완료 후 1회 호출) |
+| `Online::Game::castSkillByName` / 임시 키맵 | `online/onlineGame.cpp` `processInput` | 1~0 + Shift+1~6 = 16종 스킬, Q=SwordSlash. seed 생성+startSkill+C_SkillStart |
+| `Online::Game::skillVfxById_[1..18]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
+> VFXParticle 히트박스의 클라/서버 결정론 동기화: `docs/particleHitboxDeterminism.md`.
 
 ---
 
@@ -580,10 +589,12 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 파일 | 설명 |
 |------|------|
 | `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `SubEmittersModule`, `TrailModule`, `ParticleSystemConfig` |
-| `particleSystem.hpp` | `ParticleSystem`, `Particle` (`trail` ring buffer 포함, kMaxTrailSegments=32), `TrailPoint`, `SubEmitterEvent` |
-| `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
+| `particleSystem.hpp` | `ParticleSystem`, `Particle` (`trail` ring buffer 포함, kMaxTrailSegments=32), `TrailPoint`, `SubEmitterEvent`. 결정론 모드 API: `setGameplayConfig()`, `setDeterministicSeed()`, `deterministic()` |
+| `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()`, det 모드: `emitScheduledBurstsDet()`, `emitRateDet()` |
 | `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous`. `SubEmitterBinding`, `PendingSubEmitterBurst` |
-| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()`, `setDeterministicSeed()` |
+| `../common/particleGameplay.hpp` | `pg::` 결정론 코어 (클라/서버 공유): `DetRng`(SplitMix64 카운터 PRNG), `GameplayConfig`, `sampleSpawn()`, `evaluateParticles()`(서버 해석적 평가), `importGameplayConfig()`. 설계: `docs/particleHitboxDeterminism.md` |
+| `../common/simpleJson.{hpp,cpp}` | (client/에서 이동) flat-vector DOM JSON 파서 — 클라 임포터 + 서버 게임플레이 설정 로드 공용 |
 
 **ParticleSystem API (`particleSystem.hpp`):**
 

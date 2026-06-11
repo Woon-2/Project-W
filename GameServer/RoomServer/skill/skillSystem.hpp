@@ -13,6 +13,9 @@
 #include "skillTypes.hpp"
 #include "../event.hpp"
 #include "../object.hpp"
+#include "particleGameplay.hpp"
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <functional>
@@ -52,12 +55,13 @@ struct AttachedHitbox {
 
 // ---------------------------------------------------------------------------
 // VFX particle hitbox source
-// Structurally mirrors client. pSystem is always null on server,
-// so updateParticleHitboxSources() is effectively a no-op.
+// Structurally mirrors client. Instead of reading a live ParticleSystem, the
+// server evaluates the deterministic gameplay sampler (pg::evaluateParticles)
+// with the per-cast seed shared over C_SkillStart, so hitboxes land exactly
+// where the casting client renders its particles.
 // ---------------------------------------------------------------------------
 
 struct ParticleHitboxSource {
-    // pSystem always null on server (no ParticleSystem)
     std::vector<OBB> templateOBBs;
     OnHitDef         onHit;
     u32t             targetMask            = 0;   // faction bits this source's hitboxes may damage
@@ -70,6 +74,16 @@ struct ParticleHitboxSource {
     bool             useParticleSize       = false;
     bool             applyRotation         = true;
     std::vector<int> hitboxHandles;
+
+    // Deterministic sampler binding (set at SpawnHitbox dispatch).
+    // gameplayCfg/vdef point into the shared asset registry (boot-built,
+    // immutable, program lifetime). The resolver built per frame from vdef
+    // lets the sampler follow sub-emitter chains (chainParent) recursively.
+    const pg::GameplayConfig*     gameplayCfg = nullptr;  // target system's cfg (gate)
+    const SkillAsset::VfxDef*     vdef        = nullptr;
+    std::uint32_t                 effectSeed  = 0;  // mixSeed(inst.seed, vfxId)
+    u8t                           systemIdx   = 0;
+    u8t                           vfxId       = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -83,6 +97,9 @@ struct SkillInstance {
     i32t              nextEventIdx  = 0;
     bool              active        = false;
     bool              interrupted   = false;
+
+    // Per-cast deterministic seed received via C_SkillStart (mirrors client).
+    u32t              seed          = 0;
 
     // World anchor captured at skill start (caster position + yaw). Used by
     // AttachType::Ground hitboxes to place planted, terrain-snapped OBBs.
@@ -109,6 +126,36 @@ struct SkillInstance {
     // slot -> particleSources_ index (VFXParticle attach); -1 = empty
     std::vector<int> particleSourceBySlot;
 
+    // PlayVFX anchors: world transform + timeline start time per vfxId.
+    // Consumed by the deterministic particle hitbox sampler. startTime uses
+    // the timeline event time (not dispatch time) so elapsedMs fast-forward
+    // stays consistent with the casting client's local playback.
+    struct VfxAnchor {
+        mu::Vec3          pos    = { 0.f, 0.f, 0.f };
+        mu::Mat4x4        orient = mu::Mat4x4{};
+        Milliseconds      startTime { 0.f };
+        pg::GroundConform conformOverride = pg::GroundConform::None;
+        u8t               vfxId  = 0;
+        bool              valid  = false;
+    };
+    std::vector<VfxAnchor> vfxAnchors;
+
+    const VfxAnchor* findVfxAnchor(u8t vfxId) const {
+        for (const VfxAnchor& a : vfxAnchors)
+            if (a.valid && a.vfxId == vfxId) return &a;
+        return nullptr;
+    }
+    void setVfxAnchor(u8t vfxId, const mu::Vec3& pos, const mu::Mat4x4& orient,
+                      Milliseconds startTime, pg::GroundConform conform) {
+        for (VfxAnchor& a : vfxAnchors) {
+            if (a.vfxId == vfxId) {
+                a = VfxAnchor{ pos, orient, startTime, conform, vfxId, true };
+                return;
+            }
+        }
+        vfxAnchors.push_back(VfxAnchor{ pos, orient, startTime, conform, vfxId, true });
+    }
+
     struct HitGroupState {
         std::unordered_map<i32t, Milliseconds> lastHitByTarget;
     };
@@ -131,6 +178,7 @@ struct SkillInstance {
     void resetSlots() {
         boneHitboxBySlot.clear();
         particleSourceBySlot.clear();
+        vfxAnchors.clear();
         for (auto& a : groundAnchors) a.valid = false;
         // Keep hitGroups entries (and their bucket capacity) for reuse; just
         // empty the per-target records. Avoids per-cast unordered_map churn.
@@ -213,9 +261,12 @@ public:
     const SkillAsset* findAsset(std::string_view name) const;
     const SkillAsset* findAsset(u32t id) const;
 
-    int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx);
+    // `seed` is the caster-generated per-cast seed (C_SkillStart::skillSeed);
+    // it drives the deterministic VFXParticle hitbox sampler.
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                   Milliseconds initialElapsed);
+                   u32t seed = 0);
+    int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                   Milliseconds initialElapsed, u32t seed = 0);
 
     void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);
     void update(Milliseconds dt, SkillDispatchContext& ctx);
@@ -253,6 +304,12 @@ private:
     std::vector<int>                  hitboxFreeList_;
     std::vector<ParticleHitboxSource> particleSources_;
     std::vector<int>                  particleSourceFreeList_;
+
+    // Deterministic particle hitbox support. Gameplay configs live in the
+    // shared asset registry (built once at boot); only evaluation scratch
+    // state is per-room.
+    static constexpr int kMaxGameplayParticles = 1024;
+    std::vector<pg::ParticleState> particleScratch_;
 
     // Reused per-frame scratch buffers (cleared, not freed).
     SkillBroadPhase                          skillBroadPhase_;

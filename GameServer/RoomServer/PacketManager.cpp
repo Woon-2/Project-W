@@ -76,8 +76,9 @@ void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer,
 	auto pkt = reinterpret_cast<CSkillStartPacket*>(buffer);
 	uint32 skillAssetId = pkt->skillAssetId;
 	uint64 clientMs     = pkt->clientMs;
-	session->room()->doAsync( [session, skillAssetId, clientMs]() {
-		session->room()->skillStart( session->id(), skillAssetId, clientMs );
+	uint32 skillSeed    = pkt->skillSeed;
+	session->room()->doAsync( [session, skillAssetId, clientMs, skillSeed]() {
+		session->room()->skillStart( session->id(), skillAssetId, clientMs, skillSeed );
 	} );
 }
 
@@ -297,7 +298,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32
 }
 
 
-std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs) {
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -305,6 +306,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->skillAssetId = skillAssetId;
 	pkt->ownerId      = ownerId;
 	pkt->elapsedMs    = elapsedMs;
+	pkt->skillSeed    = skillSeed;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
 

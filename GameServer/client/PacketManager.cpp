@@ -245,7 +245,7 @@ void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs );
+	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed );
 }
 
 void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
@@ -305,13 +305,14 @@ void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs) {
+std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<CSkillStartPacket>();
 	pkt->skillAssetId = skillAssetId;
 	pkt->clientMs     = clientMs;
+	pkt->skillSeed    = skillSeed;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_SkillStart;

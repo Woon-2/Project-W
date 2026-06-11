@@ -15,6 +15,9 @@
 //   OnHitDef          -- what to do when hitbox collides
 
 #include "../collision.hpp"
+#include "particleGameplay.hpp"
+
+#include <memory>
 
 // ---------------------------------------------------------------------------
 // Attach type (used by both hitbox definitions and PlayVFX events)
@@ -195,6 +198,30 @@ struct SkillAsset {
 
     // VFX asset paths indexed by vfxId (used in PlayVFX and OnHitDef::hitVfxId).
     std::vector<std::string> vfxNames;
+
+    // Optional per-VFX composition from addVFX(id, path, { systems = ... }).
+    // Lets the server (and the client deterministic mode) rebuild the
+    // gameplay-relevant particle systems of an effect for deterministic
+    // VFXParticle hitboxes. Indexed by vfxId; entries without composition
+    // info have an empty path.
+    struct VfxSystemDef {
+        std::string name;          // relativePath inside the effect JSON ("" = code-built)
+        u8t         playMode = 0;  // 0 = Emit, 1 = Continuous
+        // Sub-emitter chain (lua: parent = N, parentEvent = "Birth"|"Death").
+        // chainParent >= 0: spawns derive from that system's particle events
+        // (mirrors bindSubEmitter); requires constant gameplay params.
+        int         chainParent  = -1;
+        bool        chainOnBirth = false;
+        pg::VfxSystemOverrides overrides;  // mirrors client-side code cfg tweaks
+        // Built once after compile (buildVfxGameplayConfigs): JSON import (if
+        // name set) + overrides. nullptr = no gameplay config for this system.
+        std::shared_ptr<const pg::GameplayConfig> gameplayCfg;
+    };
+    struct VfxDef {
+        std::string path;                       // e.g. "effects/Foo_ParticleSystems.json"
+        std::vector<VfxSystemDef> systems;      // index == ParticleEffect system index
+    };
+    std::vector<VfxDef> vfxDefs;
 };
 
 #endif  // __skill_skillTypes_HPP
