@@ -123,6 +123,12 @@ Game::~Game() {
 	// 작업이 GFX 리소스를 계속 만지면 GPU 큐가 깨질 수 있으므로, 먼저 워커를 모두 멈춘다.
 	assetLoadAbort_.store(true, std::memory_order_relaxed);
 	threadPool_.stop();
+
+	// 멤버 소멸 전에 GPU를 드레인한다. gfx_보다 뒤에 선언된 멤버(지형 청크, 파티클,
+	// UI 텍스처 등)는 ~GFX의 펜스 대기보다 먼저 파괴되므로, 드레인 없이는 GPU가
+	// 실행 중인 명령이 참조하는 리소스를 해제하게 된다. 이 디바이스 폴트가 TDR을
+	// 일으켜 같은 GPU의 다른 클라이언트까지 디바이스 제거(DEVICE_HUNG)로 먹통이 됐다.
+	gfx_.drainGpu();
 }
 
 void Game::setupStageVisual() {
@@ -404,6 +410,9 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
 	auto* root = uiManager_.root();
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
+		// Live widget destruction frees GPU resources (the party Label's
+		// TextImage); drain so in-flight frames can't reference freed memory.
+		gfx_.drainGpu();
 		if (it->second.hpBar) {
 			root->removeChild(it->second.hpBar);
 		}
@@ -2291,6 +2300,13 @@ void Game::removePlayer( i32t playerId ) {
 	if (itPlayer == otherPlayers_.end()) {
 		return;
 	}
+
+	// 아래 해체는 게임 도중 GPU 참조 객체를 즉시 파괴한다 — 특히 파티 HUD의
+	// Label은 전용 TextImage(ID3D12 텍스처)를 소유하는데, D3D12는 Release 즉시
+	// 메모리를 회수하므로 in-flight 프레임이 그 텍스처를 참조하고 있으면 디바이스
+	// 폴트 → TDR로 같은 GPU의 모든 클라이언트가 멈춘다(DEVICE_HUNG). 퇴장은 드문
+	// 이벤트이므로 파괴 전에 GPU를 드레인한다(수 프레임 대기).
+	gfx_.drainGpu();
 
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
 	physicsWorld_.unregisterBody(&(*itPlayer)->body());

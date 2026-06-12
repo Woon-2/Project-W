@@ -23,6 +23,10 @@ void GFX::setMaxRenderObjectId(u32t maxId) {
 
 // GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 GFX::~GFX() {
+	drainGpu();
+}
+
+void GFX::drainGpu() {
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		waitOnFence("FrameFence"s + std::to_string(i));
 	}

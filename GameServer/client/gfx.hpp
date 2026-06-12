@@ -116,6 +116,12 @@ public:
 	// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 	~GFX();
 
+	// 제출된 모든 GPU 작업(프레임 + 로드)이 끝날 때까지 블로킹 대기한다.
+	// Game 소멸자 본문에서 멤버 소멸 전에 호출해야 한다: gfx_보다 뒤에 선언된
+	// 멤버(지형/파티클/UI 텍스처 등)는 ~GFX의 드레인보다 먼저 파괴되므로,
+	// GPU가 아직 참조 중인 리소스를 해제해 디바이스 행(TDR)을 유발할 수 있다.
+	void drainGpu();
+
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
 
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.

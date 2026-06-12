@@ -666,6 +666,11 @@ Game::~Game() {
 	if (goblin_ && goblin_->ragdoll().isBuilt())
 		goblin_->ragdoll().destroy(physicsWorld_);
 	threadPool_.stop();
+
+	// Drain the GPU before member destruction: members declared after gfx_ are
+	// destroyed before ~GFX's fence waits, so without this the process releases
+	// resources still referenced by in-flight GPU commands (device fault → TDR).
+	gfx_.drainGpu();
 }
 
 
