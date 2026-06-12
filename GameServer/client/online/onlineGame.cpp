@@ -2387,7 +2387,7 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
-void Game::applyHit( uint16 targetId, int32 newHp ) {
+void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(고블린/거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
@@ -2398,7 +2398,7 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 	// 디스패치 루프(InGameScene)에서 대상 객체의 eventBus로 분배되며, 데미지 넘버도 그곳에서 생성된다.
 	// 거점도 이제 Stronghold::EventBus를 가지므로 고블린/플레이어와 동일 경로를 탄다.
 	if ( newHp <= 0 )
-		holdEvent( eventList_, EvDeath( targetId ) );
+		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
 		holdEvent( eventList_, EvHit( targetId, newHp ) );
 }
@@ -2441,7 +2441,7 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
-	applyHit(targetId, newHp);
+	applyHit(targetId, newHp, attackerId);
 
 	// Spawn impact VFX at the target's position.
 	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
@@ -2647,9 +2647,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
 					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
 				}
-				// Kill count: a goblin death not already counted (guards duplicate EvDeath).
+				// Kill count is personal: only the local player's killing blow increments this HUD.
 				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()
-					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end())
+					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end()
+					&& player_ && static_cast<const EvDeath*>(pEv)->killerId == player_->getId())
 				{
 					killCountWidget_->addKill();
 				}

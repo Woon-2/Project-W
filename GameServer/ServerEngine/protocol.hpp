@@ -88,7 +88,7 @@ private:
 
 // Authoritative default player HP, shared by client and server so enter-time
 // HP sync agrees on the same value.
-constexpr int32 kPlayerMaxHp = 1'000'000;
+constexpr int32 kPlayerMaxHp = 500;
 
 #pragma pack(push, 1)
 
@@ -230,6 +230,7 @@ struct SPlayerAttackPacket : public PacketHeader {
 };
 
 struct SHitPacket : public PacketHeader {
+	uint16 attackerId;
 	uint16 targetId;
 	int32  newHp;
 };

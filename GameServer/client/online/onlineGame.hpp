@@ -82,7 +82,7 @@ public:
 
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
-	void applyHit(uint16 targetId, int32 newHp);
+	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );

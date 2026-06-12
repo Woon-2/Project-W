@@ -102,8 +102,10 @@ struct EvBlood : BasicEvent {
 struct EvDeath : BasicEvent { 
 	EvDeath() : BasicEvent{EventType::Death} {}
 	EvDeath(i32t playerId) : BasicEvent{EventType::Death}, victimId{playerId} {}
+	EvDeath(i32t playerId, i32t killerId) : BasicEvent{EventType::Death}, victimId{playerId}, killerId{killerId} {}
 
 	i32t victimId{-1};
+	i32t killerId{-1};
 };
 struct EvAttack : BasicEvent {
 	EvAttack() : BasicEvent{EventType::Attack} {}

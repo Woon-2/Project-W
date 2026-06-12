@@ -282,11 +282,12 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerAttackPacket( uint16 attac
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32 newHp) {
+std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 attackerId, uint16 targetId, int32 newHp) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SHitPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<SHitPacket>();
+	pkt->attackerId = attackerId;
 	pkt->targetId = targetId;
 	pkt->newHp    = newHp;
 

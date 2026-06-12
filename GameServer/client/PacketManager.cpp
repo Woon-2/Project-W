@@ -235,7 +235,7 @@ void PacketManager::handleSPlayerAttackPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSHitPacket(byte* buffer, int32 len) {
 	auto sHitPkt = reinterpret_cast<SHitPacket*>(buffer);
-	INet::ClientApp::onlineGame()->applyHit( sHitPkt->targetId, sHitPkt->newHp);
+	INet::ClientApp::onlineGame()->applyHit( sHitPkt->targetId, sHitPkt->newHp, sHitPkt->attackerId);
 }
 
 void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {

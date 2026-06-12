@@ -356,7 +356,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 
 		if (result.hit) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
-			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), result.hit->targetId, result.hit->newHp));
 		}
 	}
 
@@ -826,7 +826,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 			int32 newHp = std::max(goblin.hp() - kDamage, 0);
 			goblin.setHp(newHp);
 
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(goblin.getId()), newHp));
 		}
 	}
 
@@ -838,7 +838,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		if (collides(hitbox, aabb).hit) {
 			int32 newHp = std::max(o->hp() - kDamage, 0);
 			o->setHp(newHp);
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(o->getId()), newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(o->getId()), newHp));
 		}
 	};
 	for (auto& npc : tacticalNpcs_) tryMeleeTactical(npc.get());
@@ -898,7 +898,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (!result.hits.empty())
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
 		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(platoonLeader_->getId()), hit.targetId, hit.newHp));
 	}
 
 	for (auto& squad : tacticalSquads_) {
@@ -926,7 +926,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (!result.hits.empty())
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc->getId())));
 		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(npc->getId()), hit.targetId, hit.newHp));
 	}
 
 	if (!moveInfos.empty())
