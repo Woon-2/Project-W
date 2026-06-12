@@ -83,6 +83,15 @@ static constexpr float   kPlayerHpHeartSize         = 60.f;
 static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 하트 크기 대비 % (해상도 무관, 부모 비율로 스케일)
 static constexpr float   kPlayerHpHeartBarOverlap   = 12.f;
 static constexpr float   kPlayerHpBarHeight         = 18.f;
+static constexpr float   kPlayerNameLabelHeight     = 22.f;
+static constexpr float   kPartyHpStartYOffset       = 165.f;
+static constexpr float   kPartyHpRowHeight          = 56.f;
+static constexpr float   kPartyHpHeartSize          = 48.f;
+static constexpr float   kPartyWeaponIconScale      = 50.f;
+static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
+static constexpr float   kPartyHpBarWidth           = 230.f;
+static constexpr float   kPartyHpBarHeight          = 14.f;
+static constexpr float   kPartyHpNameHeight         = 20.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -110,10 +119,10 @@ Game::Game() {
 }
 
 Game::~Game() {
-	// 소멸자 본문은 모든 멤버 소멸(threadPool_ 워커 join 포함)보다 먼저 실행된다.
-	// 백그라운드 파티클 JSON 파싱이 진행 중이면 즉시 중단을 요청해, 로딩 워커가
-	// 남은 파일을 끝까지 파싱하지 않고 빠르게 빠져나오도록 한다.
+	// 소멸자 본문은 gfx_ 같은 멤버 소멸보다 먼저 실행된다. 종료 중 백그라운드 로딩/지형
+	// 작업이 GFX 리소스를 계속 만지면 GPU 큐가 깨질 수 있으므로, 먼저 워커를 모두 멈춘다.
 	assetLoadAbort_.store(true, std::memory_order_relaxed);
+	threadPool_.stop();
 }
 
 void Game::setupStageVisual() {
@@ -267,7 +276,7 @@ void Game::setupStage() {
 	playerWeaponIcon_->pivot   = UI::Pivots::Center;
 	playerWeaponIcon_->width   = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->height  = UI::DimValue::pct(kPlayerWeaponIconScale);
-	playerWeaponIcon_->texture = assetManager_.heavyArrow();
+	playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(PlayerWeaponType::Katana);
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -295,6 +304,20 @@ void Game::setupStage() {
 	playerHpText_->setFontSize(14.0f);
 	playerHpText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	playerHpText_->setText(L"100 / 100");
+
+	playerNameText_ = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	playerNameText_->name    = "playerNameText";
+	playerNameText_->anchor  = UI::Anchors::TopLeft;
+	playerNameText_->pivot   = UI::Pivots::TopLeft;
+	playerNameText_->width   = UI::DimValue::px(240.f);
+	playerNameText_->height  = UI::DimValue::px(kPlayerNameLabelHeight);
+	playerNameText_->zOrder  = playerHpBar_->zOrder + 2;
+	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
+	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
+	playerNameText_->setFontSize(18.0f);
+	playerNameText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
@@ -348,6 +371,184 @@ void Game::updatePlayerHpHudLayout() {
 	if (playerHpText_) {
 		playerHpText_->offsetX = playerHpBar_->offsetX;
 		playerHpText_->offsetY = playerHpBar_->offsetY;
+	}
+	if (playerNameText_) {
+		playerNameText_->offsetX = playerHpBar_->offsetX;
+		playerNameText_->offsetY = UI::DimValue::px(
+			uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY - kPlayerNameLabelHeight * 0.65f)
+		);
+	}
+	updatePartyHpHudLayout();
+}
+
+void Game::registerInGamePartyPlayer(uint16 playerId) {
+	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
+		inGamePartyPlayerIds_.push_back(playerId);
+	}
+}
+
+void Game::unregisterInGamePartyPlayer(uint16 playerId) {
+	std::erase(inGamePartyPlayerIds_, playerId);
+}
+
+std::wstring Game::partyDisplayName(uint16 playerId) const {
+	for (std::size_t i = 0; i < inGamePartyPlayerIds_.size(); ++i) {
+		if (inGamePartyPlayerIds_[i] == playerId) {
+			return L"player" + std::to_wstring(i + 1);
+		}
+	}
+
+	return L"player";
+}
+
+void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
+	auto* root = uiManager_.root();
+	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
+		if (it->second.hpBar) {
+			root->removeChild(it->second.hpBar);
+		}
+		if (it->second.partyRoot) {
+			root->removeChild(it->second.partyRoot);
+		}
+		otherPlayerHpBars_.erase(it);
+	}
+
+	auto* worldBar = static_cast<UI::ProgressBar*>(
+		root->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	worldBar->anchor    = UI::Anchors::TopLeft;
+	worldBar->pivot     = UI::Pivots::TopLeft;
+	worldBar->width     = UI::DimValue::px(80.f);
+	worldBar->height    = UI::DimValue::px(8.f);
+	worldBar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
+	worldBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	worldBar->visible   = false;
+
+	auto* partyRoot = root->addChild(std::make_unique<UI::UIElement>());
+	partyRoot->name    = "partyPlayerHud";
+	partyRoot->anchor  = UI::Anchors::TopLeft;
+	partyRoot->pivot   = UI::Pivots::TopLeft;
+	partyRoot->width   = UI::DimValue::px(kPartyHpHeartSize + kPartyHpBarWidth);
+	partyRoot->height  = UI::DimValue::px(kPartyHpRowHeight);
+	partyRoot->zOrder  = 2;
+
+	auto* partyHeart = static_cast<UI::Image*>(
+		partyRoot->addChild(std::make_unique<UI::Image>())
+	);
+	partyHeart->name    = "partyHpHeart";
+	partyHeart->anchor  = UI::Anchors::TopLeft;
+	partyHeart->pivot   = UI::Pivots::TopLeft;
+	partyHeart->width   = UI::DimValue::px(kPartyHpHeartSize);
+	partyHeart->height  = UI::DimValue::px(kPartyHpHeartSize);
+	partyHeart->texture = assetManager_.playerHpHeart();
+	partyHeart->zOrder  = 0;
+
+	auto* partyWeaponIcon = static_cast<UI::Image*>(
+		partyHeart->addChild(std::make_unique<UI::Image>())
+	);
+	partyWeaponIcon->name    = "partyWeaponIcon";
+	partyWeaponIcon->anchor  = UI::Anchors::Center;
+	partyWeaponIcon->pivot   = UI::Pivots::Center;
+	partyWeaponIcon->width   = UI::DimValue::pct(kPartyWeaponIconScale);
+	partyWeaponIcon->height  = UI::DimValue::pct(kPartyWeaponIconScale);
+	partyWeaponIcon->texture = assetManager_.playerWeaponIcon(weaponType);
+
+	auto* partyName = static_cast<UI::Label*>(
+		partyRoot->addChild(std::make_unique<UI::Label>())
+	);
+	partyName->name    = "partyName";
+	partyName->anchor  = UI::Anchors::TopLeft;
+	partyName->pivot   = UI::Pivots::TopLeft;
+	partyName->offsetX = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyName->offsetY = UI::DimValue::px(0.f);
+	partyName->width   = UI::DimValue::px(kPartyHpBarWidth);
+	partyName->height  = UI::DimValue::px(kPartyHpNameHeight);
+	partyName->zOrder  = 2;
+	partyName->setTextHAlign(UI::TextHAlign::Leading);
+	partyName->setTextVAlign(UI::TextVAlign::Center);
+	partyName->setFontSize(16.0f);
+	partyName->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	partyName->setText(partyDisplayName(playerId));
+
+	auto* partyBar = static_cast<UI::ProgressBar*>(
+		partyRoot->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	partyBar->name      = "partyHpBar";
+	partyBar->anchor    = UI::Anchors::TopLeft;
+	partyBar->pivot     = UI::Pivots::TopLeft;
+	partyBar->offsetX   = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyBar->offsetY   = UI::DimValue::px(kPartyHpNameHeight);
+	partyBar->width     = UI::DimValue::px(kPartyHpBarWidth);
+	partyBar->height    = UI::DimValue::px(kPartyHpBarHeight);
+	partyBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	partyBar->fillColor = { 1.0f, 0.0f, 0.0f, 1.0f };
+	partyBar->zOrder    = 1;
+	partyBar->setProgress(1.f);
+
+	otherPlayerHpBars_[playerId] = {
+		player,
+		worldBar,
+		weaponType,
+		partyRoot,
+		partyHeart,
+		partyWeaponIcon,
+		partyName,
+		partyBar
+	};
+	updatePartyHpHudLayout();
+}
+
+void Game::updatePartyHpHudLayout() {
+	int visibleRow = 0;
+	const uint16 localPlayerId = player_ ? static_cast<uint16>(player_->getId()) : 0;
+	for (uint16 playerId : inGamePartyPlayerIds_) {
+		if (playerId == localPlayerId) {
+			continue;
+		}
+
+		auto it = otherPlayerHpBars_.find(playerId);
+		if (it == otherPlayerHpBars_.end()) {
+			continue;
+		}
+
+		auto& entry = it->second;
+		if (!entry.partyRoot) {
+			continue;
+		}
+
+		const float rowY = kPlayerHpUiY + kPartyHpStartYOffset + kPartyHpRowHeight * visibleRow;
+		entry.partyRoot->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+		entry.partyRoot->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(rowY));
+		entry.partyRoot->visible = true;
+
+		if (entry.partyNameLabel) {
+			entry.partyNameLabel->setText(partyDisplayName(playerId));
+		}
+
+		++visibleRow;
+	}
+
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		const bool listed = std::ranges::find(inGamePartyPlayerIds_, static_cast<uint16>(id)) != inGamePartyPlayerIds_.end()
+			&& id != localPlayerId;
+		if (!listed && entry.partyRoot) {
+			entry.partyRoot->visible = false;
+		}
+	}
+}
+
+void Game::updatePartyHpHudValues() {
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		if (!entry.partyRoot || !entry.partyHpBar || !entry.player) {
+			continue;
+		}
+
+		const int maxHp = std::max(1, entry.player->maxHp());
+		const int hp = std::max(0, entry.player->hp());
+		entry.partyHpBar->setProgress(static_cast<float>(hp) / static_cast<float>(maxHp));
+		if (entry.partyWeaponIcon) {
+			entry.partyWeaponIcon->texture = assetManager_.playerWeaponIcon(entry.weaponType);
+		}
 	}
 }
 
@@ -1700,6 +1901,14 @@ void Game::setParticle()
 	}
 }
 
+void Game::prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds) {
+	inGamePartyPlayerIds_.clear();
+	for (uint16 id : existingPlayerIds) {
+		registerInGamePartyPlayer(id);
+	}
+	registerInGamePartyPlayer(myPlayerId);
+}
+
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_ = std::make_shared<Player>();
 
@@ -1712,6 +1921,9 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
+	if (playerWeaponIcon_) {
+		playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(playerInfo.weaponType);
+	}
 
 	player_->body().setMotionType(MotionType::Dynamic);
 	player_->body().setMass(80.f);
@@ -1735,6 +1947,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
+	registerInGamePartyPlayer(playerInfo.playerId);
 
 	setParticle();
 
@@ -1846,19 +2059,8 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	{
-		auto* bar = static_cast<UI::ProgressBar*>(
-			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
-		);
-		bar->anchor    = UI::Anchors::TopLeft;
-		bar->pivot     = UI::Pivots::TopLeft;
-		bar->width     = UI::DimValue::px(80.f);
-		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
-		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-		bar->visible   = false;
-		otherPlayerHpBars_[otherPlayerInfo.objectId] = { otherPlayer.get(), bar };
-	}
+	registerInGamePartyPlayer(otherPlayerInfo.objectId);
+	createOtherPlayerHud(otherPlayerInfo.objectId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
@@ -1902,19 +2104,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	{
-		auto* bar = static_cast<UI::ProgressBar*>(
-			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
-		);
-		bar->anchor    = UI::Anchors::TopLeft;
-		bar->pivot     = UI::Pivots::TopLeft;
-		bar->width     = UI::DimValue::px(80.f);
-		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
-		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-		bar->visible   = false;
-		otherPlayerHpBars_[otherPlayerInfo.playerId] = { otherPlayer.get(), bar };
-	}
+	registerInGamePartyPlayer(otherPlayerInfo.playerId);
+	createOtherPlayerHud(otherPlayerInfo.playerId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
@@ -2113,9 +2304,13 @@ void Game::removePlayer( i32t playerId ) {
 
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
+		if (it->second.partyRoot) {
+			uiManager_.root()->removeChild(it->second.partyRoot);
+		}
 		otherPlayerHpBars_.erase(it);
 	}
 
+	unregisterInGamePartyPlayer(static_cast<uint16>(playerId));
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
 }
@@ -2800,7 +2995,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				swprintf_s(hpText, L"%d / %d", playerHp, playerMaxHp);
 				playerHpText_->setText(hpText);
 			}
+			if (playerNameText_) {
+				playerNameText_->setText(partyDisplayName(static_cast<uint16>(player_->getId())));
+			}
 		}
+		updatePartyHpHudValues();
 
 		for (auto& [id, entry] : otherPlayerHpBars_) {
 			if (!entry.player || entry.player->hp() <= 0) {
@@ -2822,7 +3021,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.player->hp()) /
-					static_cast<float>(entry.player->maxHp())
+					static_cast<float>(std::max(1, entry.player->maxHp()))
 				);
 			}
 		}
@@ -3661,6 +3860,7 @@ void Game::lobbyLeaveRoom() {
 	clearLobbyCharacters();
 
 	refreshLobbyUI();
+	applyCursorPolicy();
 }
 
 void Game::lobbyStartGame() {
@@ -3686,6 +3886,7 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
+	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
 }
 
@@ -3708,6 +3909,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
+	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
@@ -4172,13 +4374,18 @@ void Game::applyCursorPolicy() {
 		return;
 	}
 
-	// 전체화면/창모드와 관계없이 게임 창 안으로 커서를 묶는다.
-	// 단, 로비와 설정창에서는 포인터를 보여 UI를 클릭할 수 있게 한다.
+	// 로비 메인 메뉴와 설정창에서는 포인터를 자유롭게 둔다.
+	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
+		|| settingsPanel_.isOpen();
 	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
-	cursorCaptureEnabled_ = true;
+	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
 
-	captureCursor();
+	if (releaseCursorNow) {
+		releaseCursor();
+	} else {
+		captureCursor();
+	}
 	if (showCursorNow) {
 		showCursor();
 	} else {

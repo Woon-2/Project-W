@@ -63,6 +63,13 @@ enum class ObjectType : uint16 {
 	Stronghold,
 };
 
+enum class PlayerWeaponType : uint8 {
+	Katana,
+	SpearHook,
+	CrystalWand,
+	HeavyArrow,
+};
+
 struct PacketHeader {
 	uint16 size;
 	PacketType type;
@@ -99,6 +106,7 @@ struct CEnterPacket : public PacketHeader {
 struct PlayerInfo {
 	uint16 playerId;
 	uint16 materialSetIdx;
+	PlayerWeaponType weaponType;
 	int32 hp;
 	int32 maxHp;
 	DirectX::XMFLOAT3 pos;
@@ -111,6 +119,7 @@ struct ObjectInfo {
 	ObjectType type;
 	uint16 objectId;
 	uint16 materialSetIdx;
+	PlayerWeaponType weaponType;
 	int32 hp;
 	int32 maxHp;
 	DirectX::XMFLOAT3 pos;

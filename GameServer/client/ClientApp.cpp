@@ -30,6 +30,20 @@ void ClientApp::setup(GameType type, Timer* pTimer) {
 	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(game_.get()));
 }
 
+void ClientApp::release() {
+	if (serverSession_) {
+		serverSession_->close();
+	}
+	if (retiredSession_) {
+		retiredSession_->close();
+	}
+
+	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, 0);
+	game_.reset();
+	serverSession_.reset();
+	retiredSession_.reset();
+}
+
 void ClientApp::update(Milliseconds deltaTime) {
 	game_->update(deltaTime);
 }

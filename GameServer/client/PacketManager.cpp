@@ -110,11 +110,18 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 	auto enterPacket = reinterpret_cast<SEnterPacket*>(buffer);
 	auto playerInfo = enterPacket->myInfo;
+	auto objList = enterPacket->getObjectList();
 
 	auto game = INet::ClientApp::onlineGame();
+	std::vector<uint16> existingPlayerIds;
+	existingPlayerIds.reserve(static_cast<std::size_t>(objList.count()));
+	for (int32 i = 0; i < objList.count(); ++i) {
+		if (objList[i].type == ObjectType::Player) {
+			existingPlayerIds.push_back(objList[i].objectId);
+		}
+	}
+	game->prepareInGamePartyRoster(playerInfo.playerId, existingPlayerIds);
 	game->setupPlayer(playerInfo);
-
-	auto objList = enterPacket->getObjectList();
 	
 	for (int32 i = 0; i < objList.count(); ++i) {
 		const auto& objInfo = objList[i];

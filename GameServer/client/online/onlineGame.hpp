@@ -62,6 +62,7 @@ public:
 	// 대기실 3D 배경과 인게임이 공유하며, stageVisualReady_로 중복 init을 막는다.
 	void setupStageVisual();
 
+	void prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds);
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void setParticle();
 	void setupGround(const ObjectInfo& groundInfo);
@@ -112,6 +113,12 @@ private:
 	void sendMouseMovePacket();
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
+	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
+	void updatePartyHpHudLayout();
+	void updatePartyHpHudValues();
+	void registerInGamePartyPlayer(uint16 playerId);
+	void unregisterInGamePartyPlayer(uint16 playerId);
+	std::wstring partyDisplayName(uint16 playerId) const;
 
 	// Starts a skill locally (prediction visuals) with a fresh per-cast seed
 	// and notifies the server via C_SkillStart. No-op if the asset is missing
@@ -282,6 +289,7 @@ private:
 	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
+	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
@@ -334,8 +342,15 @@ private:
 	struct OtherPlayerHpEntry {
 		Player*          player;       // non-owning; lifetime owned by shared_ptr in otherPlayers_
 		UI::ProgressBar* hpBar;        // owned by uiManager_
+		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
+		UI::UIElement*   partyRoot = nullptr;       // owned by uiManager_
+		UI::Image*       partyHeart = nullptr;      // owned by partyRoot
+		UI::Image*       partyWeaponIcon = nullptr; // owned by partyHeart
+		UI::Label*       partyNameLabel = nullptr;  // owned by partyRoot
+		UI::ProgressBar* partyHpBar = nullptr;      // owned by partyRoot
 	};
 	std::unordered_map<i32t, OtherPlayerHpEntry> otherPlayerHpBars_{};
+	std::vector<uint16> inGamePartyPlayerIds_{};
 
 	struct GoblinHpEntry {
 		Goblin*          goblin;               // non-owning; lifetime owned by shared_ptr in goblins_

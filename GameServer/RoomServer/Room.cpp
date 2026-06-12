@@ -499,6 +499,7 @@ void Room::enter(GameSession* session) {
 	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
+	player->setWeaponType(PlayerWeaponType::Katana);
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -514,6 +515,7 @@ void Room::enter(GameSession* session) {
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
 		.materialSetIdx = 0,
+		.weaponType = player->weaponType(),
 		.hp = kPlayerMaxHp,
 		.maxHp = kPlayerMaxHp,
 		.pos = player->pos().getXmf(),
@@ -530,6 +532,7 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Player,
 			.objectId = static_cast<uint16>(session->id()),
 			.materialSetIdx = 0,
+			.weaponType = session->player()->weaponType(),
 			.hp = session->player()->hp(),
 			.maxHp = kPlayerMaxHp,
 			.pos = session->player()->pos().getXmf(),

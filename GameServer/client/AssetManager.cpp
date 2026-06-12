@@ -24,6 +24,21 @@ ps::MatSwordSlash makeDefaultSwordSlashMaterial() {
 
 }  // namespace
 
+const Texture* AssetManager::playerWeaponIcon(PlayerWeaponType weaponType) const {
+	switch (weaponType) {
+	case PlayerWeaponType::Katana:
+		return &katana_;
+	case PlayerWeaponType::SpearHook:
+		return &spearHook_;
+	case PlayerWeaponType::CrystalWand:
+		return &crystalWand_;
+	case PlayerWeaponType::HeavyArrow:
+		return &heavyArrow_;
+	default:
+		return &katana_;
+	}
+}
+
 void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	// Full load = Phase 1 (lobby visual) then Phase 2 (remaining in-game).
 	loadLobbyVisualAssets(gfx, configs);
@@ -112,6 +127,33 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.name            = "PlayerHpHeart",
 		.texturePath     = "../resources/UI/hearts.dds",
 		.pDest           = &playerHpHeart_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "katana",
+		.texturePath     = "../resources/UI/katana.dds",
+		.pDest           = &katana_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "spear-hook",
+		.texturePath     = "../resources/UI/spear-hook.dds",
+		.pDest           = &spearHook_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "crystal-wand",
+		.texturePath     = "../resources/UI/crystal-wand.dds",
+		.pDest           = &crystalWand_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

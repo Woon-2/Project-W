@@ -665,6 +665,7 @@ Game::Game() {
 Game::~Game() {
 	if (goblin_ && goblin_->ragdoll().isBuilt())
 		goblin_->ragdoll().destroy(physicsWorld_);
+	threadPool_.stop();
 }
 
 
