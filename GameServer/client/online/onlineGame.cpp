@@ -390,18 +390,24 @@ void Game::updatePlayerHpHudLayout() {
 void Game::registerInGamePartyPlayer(uint16 playerId) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
+		// Freeze the name at registration: index-based names would shift on every
+		// leave, and my own label (refreshed per frame) would diverge from the
+		// stale labels other clients keep showing for me. Join order is identical
+		// on every client (server fills the S_Enter objList from sessions_ in
+		// enter order, later joins append via S_Enter_Other), so the numbering
+		// stays cross-client consistent.
+		inGamePartyNameById_[playerId] = L"player" + std::to_wstring(++inGamePartyNameSeq_);
 	}
 }
 
 void Game::unregisterInGamePartyPlayer(uint16 playerId) {
 	std::erase(inGamePartyPlayerIds_, playerId);
+	inGamePartyNameById_.erase(playerId);
 }
 
 std::wstring Game::partyDisplayName(uint16 playerId) const {
-	for (std::size_t i = 0; i < inGamePartyPlayerIds_.size(); ++i) {
-		if (inGamePartyPlayerIds_[i] == playerId) {
-			return L"player" + std::to_wstring(i + 1);
-		}
+	if (auto it = inGamePartyNameById_.find(playerId); it != inGamePartyNameById_.end()) {
+		return it->second;
 	}
 
 	return L"player";
@@ -1912,6 +1918,8 @@ void Game::setParticle()
 
 void Game::prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds) {
 	inGamePartyPlayerIds_.clear();
+	inGamePartyNameById_.clear();
+	inGamePartyNameSeq_ = 0;
 	for (uint16 id : existingPlayerIds) {
 		registerInGamePartyPlayer(id);
 	}
@@ -2314,6 +2322,10 @@ void Game::removePlayer( i32t playerId ) {
 	// Stop any skills this player owns and drop the skill-system reference before
 	// the Object is destroyed, so checkHitboxCollisions never dereferences a
 	// dangling pointer through skillObjectById_.
+	// This runs inside the frame-start APC where skillCtx_ still holds last
+	// frame's pointers; an earlier packet in the same batch may have reallocated
+	// skillObjectById_, so re-sync before dispatching into the skill system.
+	refreshSkillCtx();
 	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
 	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
 		skillObjectById_[playerId] = nullptr;
@@ -2329,6 +2341,9 @@ void Game::removePlayer( i32t playerId ) {
 	unregisterInGamePartyPlayer(static_cast<uint16>(playerId));
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
+
+	// Re-pack the remaining party HUD rows so the removed row leaves no gap.
+	updatePartyHpHudLayout();
 }
 
 // 플레이어 간 reciprocal soft separation (클라 예측).
@@ -2514,7 +2529,10 @@ void Game::resolveBarrierSeparation(Seconds dt) {
 }
 
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
-	auto player = idPlayerMap_[playerId];
+	// find(): operator[] would insert a null entry for an unknown id, and code
+	// that find()s the map and dereferences without a null check would crash.
+	auto playerIt = idPlayerMap_.find(playerId);
+	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(player != nullptr,
 		"[Game Error] Game::movePlayer: 이동하려는 플레이어가 존재하지 않습니다.\n",
@@ -2538,7 +2556,8 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 }
 
 void Game::rotatePlayer(uint16 playerId, float yawRad) {
-	auto player = idPlayerMap_[playerId];
+	auto playerIt = idPlayerMap_.find(playerId);
+	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(player != nullptr,
 		"[Game Error] Game::rotatePlayer: 회전하려는 플레이어가 존재하지 않습니다.\n",
@@ -2558,7 +2577,8 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 }
 
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
-	auto goblin = idGoblinMap_[npcId];
+	auto goblinIt = idGoblinMap_.find(npcId);
+	auto goblin = goblinIt != idGoblinMap_.end() ? goblinIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(goblin != nullptr,
 		"[Game Error] Game::moveGoblin: 이동하려는 고블린이 존재하지 않습니다.\n",
@@ -2580,7 +2600,8 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
-	auto npc = idGoblinMap_[ npcId ];
+	auto npcIt = idGoblinMap_.find( npcId );
+	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
 
 	DISPLAY_ERROR_STR( npc != nullptr,
 		"[Game Error] Game::onNpcAttack: 공격하는 NPC가 존재하지 않습니다.\n",
@@ -2615,7 +2636,8 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
-	auto npc = idGoblinMap_[ npcId ];
+	auto npcIt = idGoblinMap_.find( npcId );
+	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
 
 	DISPLAY_ERROR_STR( npc != nullptr,
 		"[Game Error] Game::onNpcRespawn: 리스폰하는 NPC가 존재하지 않습니다.\n",
@@ -2641,6 +2663,9 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
 	// skillSeed is the caster-generated seed relayed by the server, so this
 	// client renders the identical particle layout the server judges hits on.
+	// APC-time call: re-sync skillCtx_ in case skillObjectById_ was resized by an
+	// earlier packet in this batch.
+	refreshSkillCtx();
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
@@ -2714,6 +2739,16 @@ void Game::render() {
 	}
 }
 
+// Re-syncs the per-frame skill dispatch pointers. Called every frame from
+// InGameScene, and again by packet handlers that reach the skill system from
+// the frame-start APC (where the last refresh may predate a container resize).
+void Game::refreshSkillCtx() {
+	skillCtx_.evList         = &eventList_;
+	skillCtx_.pTimer         = pTimer_;
+	skillCtx_.objectById     = skillObjectById_.data();
+	skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
+}
+
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
 
@@ -2722,10 +2757,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	}
 
 	// Skill dispatch context: refresh per-frame pointers.
-	skillCtx_.evList         = &eventList_;
-	skillCtx_.pTimer         = pTimer_;
-	skillCtx_.objectById     = skillObjectById_.data();
-	skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
+	refreshSkillCtx();
 
 	// 이전 프레임 속도 저장
 	prevVelocity_ = currVelocity_;

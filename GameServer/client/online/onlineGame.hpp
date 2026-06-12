@@ -119,6 +119,7 @@ private:
 	void registerInGamePartyPlayer(uint16 playerId);
 	void unregisterInGamePartyPlayer(uint16 playerId);
 	std::wstring partyDisplayName(uint16 playerId) const;
+	void refreshSkillCtx();
 
 	// Starts a skill locally (prediction visuals) with a fresh per-cast seed
 	// and notifies the server via C_SkillStart. No-op if the asset is missing
@@ -351,6 +352,10 @@ private:
 	};
 	std::unordered_map<i32t, OtherPlayerHpEntry> otherPlayerHpBars_{};
 	std::vector<uint16> inGamePartyPlayerIds_{};
+	// Stable display names ("playerN"), frozen at registration; a member leaving
+	// must never renumber the remaining members (see registerInGamePartyPlayer).
+	std::unordered_map<uint16, std::wstring> inGamePartyNameById_{};
+	uint32 inGamePartyNameSeq_ = 0;
 
 	struct GoblinHpEntry {
 		Goblin*          goblin;               // non-owning; lifetime owned by shared_ptr in goblins_
