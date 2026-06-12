@@ -1,4 +1,4 @@
-#include "sepch.hpp"
+﻿#include "sepch.hpp"
 #include "SendBuffer.hpp"
 
 /*------------------
@@ -33,8 +33,8 @@ std::shared_ptr<SendBuffer> SendBufferManager::open( uint32 size ) {
 }
 
 void SendBufferManager::push( SendBufferChunk* chunk ) {
-	// After release(), recycling into the static queue is unsafe (queue may be
-	// mid-destruction during process exit) - free the chunk for real instead.
+	// release() 이후엔 정적 큐 재활용이 위험하다(프로세스 종료 중 큐가 파괴되는 중일 수 있음).
+	// 재enqueue 대신 청크를 실제로 해제한다.
 	if (shuttingDown_.load(std::memory_order_relaxed)) {
 		odelete(chunk);
 		return;
@@ -56,11 +56,11 @@ std::shared_ptr<SendBufferChunk> SendBufferManager::pop() {
 void SendBufferManager::release() {
 	shuttingDown_.store(true, std::memory_order_relaxed);
 
-	// Drop the calling thread's TLS chunk first; its deleter now frees via odelete.
+	// 호출 스레드(메인)의 TLS 청크부터 비운다. deleter가 odelete로 실제 해제한다.
 	LSendBufferChunk.reset();
 
-	// Drain chunks recycled by exited threads. Each reset() triggers the deleter,
-	// which frees the chunk instead of re-enqueueing (shuttingDown_ is set).
+	// 종료된 스레드들이 반납해 둔 청크를 drain한다. 각 reset()이 deleter를 타며,
+	// shuttingDown_이 켜져 있으므로 재enqueue 대신 실제 해제된다.
 	std::shared_ptr<SendBufferChunk> chunk;
 	while (sendBufferChunks_.try_dequeue(chunk)) {
 		chunk.reset();
