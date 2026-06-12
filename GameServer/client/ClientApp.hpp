@@ -21,7 +21,7 @@ enum class GameType {
 */
 class ClientApp {
 public:
-	static void init(){ serverSession_ = std::make_unique<ServerSession>(::serverIp, lobbyServerPort);	}
+	static void init();
 	static bool connectToServer() { return serverSession_->connect(); }
 	// S_GameStart 핸드오프: 로비 세션을 은퇴시키고 RoomServer로 새 세션을 맺는다.
 	static void reconnectToRoomServer(const std::string& ip, uint16 port);

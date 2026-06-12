@@ -2622,10 +2622,10 @@ void GFX::render() {
 	++frameIdx_;
 }
 
-void GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
+bool GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
 	FontHandle* pFont = pFontObjHandle ? static_cast<FontHandle*>( pFontObjHandle ) : &tahomaFont_;
-	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, pFont, wchString, dwLen, color );
+	return font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, pFont, wchString, dwLen, color );
 }
 
 FontHandle GFX::createFont( float fontSize )
@@ -2644,13 +2644,17 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	ID3D12Resource* pUploadBuffer = srcImage->textureUpload.res.Get();
 
 	D3D12_RESOURCE_DESC Desc = pDestTexResource->GetDesc();
+	// 크기 불일치/Map 실패는 이 업데이트만 건너뛴다(텍스처는 이전 내용 유지).
+	// 종료시키면 std::exit의 정적 소멸 순서 문제로 2차 크래시가 난다.
 	if ( srcWidth > Desc.Width )
 	{
-		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 너비가 대상 텍스처의 너비보다 큽니다.", true );
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 너비가 대상 텍스처의 너비보다 큽니다.", false );
+		return;
 	}
 	if ( srcHeight > Desc.Height )
 	{
-		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 높이가 대상 텍스처의 높이보다 큽니다.", true );
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 높이가 대상 텍스처의 높이보다 큽니다.", false );
+		return;
 	}
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprint;
 	UINT	Rows = 0;
@@ -2662,7 +2666,12 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	BYTE* pMappedPtr = nullptr;
 	CD3DX12_RANGE readRange( 0, 0 );
 
-	DISPLAY_ERROR_DX_HR( pUploadBuffer->Map( 0, &readRange, reinterpret_cast<void**>(&pMappedPtr) ), true );
+	HRESULT hrMap = pUploadBuffer->Map( 0, &readRange, reinterpret_cast<void**>(&pMappedPtr) );
+	DISPLAY_ERROR_DX_HR( hrMap, false );
+	if ( FAILED( hrMap ) || !pMappedPtr )
+	{
+		return;
+	}
 
 	const BYTE* pSrc = srcImage->pData.data();
 

@@ -374,7 +374,9 @@ public:
 	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth → None
 	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 8u; }
 
-	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
+	// Returns false when text rendering fails (e.g. device loss); callers keep
+	// their text dirty and retry on a later frame.
+	bool WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);

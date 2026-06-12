@@ -3965,7 +3965,13 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+		// Input-read failures are survivable: log and drop the event. Exiting here
+		// killed every client in turn when sibling windows on the same PC closed
+		// (focus churn delivers broken/synthesized WM_INPUT to the next window).
+		DISPLAY_ERROR_GLE(rawInputResult != -1, false);
+		if (rawInputResult == static_cast<UINT>(-1)) {
+			return 0;
+		}
 
 		if (rawInputSize > sRawInputBuffer.size()) {
 			sRawInputBuffer.resize(rawInputSize);
@@ -3975,16 +3981,18 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, false);
+		if (rawInputResult != rawInputSize) {
+			return 0;
+		}
 
 		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
 		if (ri->header.dwType == RIM_TYPEMOUSE) {
-			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
-			DISPLAY_ERROR_STR(!(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
-				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
-				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
-				true
-			);
+			// Absolute moves (input synthesized during focus churn, RDP, tablets)
+			// are not camera input; drop the event instead of exiting the process.
+			if (ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
+				return 0;
+			}
 
 			// 마우스 이동량 기록
 			mouseDeltaX_ += ri->data.mouse.lLastX;
