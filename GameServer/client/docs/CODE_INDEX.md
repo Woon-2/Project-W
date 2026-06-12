@@ -402,6 +402,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::loadRequestedAssets()` | `gfx.hpp` | 요청된 리소스(모델/텍스처/메시 등) 로드. ThreadPool 워커에서 백그라운드 호출 가능 |
 | `GFX::loadAssets()` | `gfx.hpp` | initSharedResources + loadRequestedAssets 편의 래퍼 |
 | `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
+| `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
 
@@ -900,7 +901,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |------|------|------|
 | `UI::Build::addSolid/addLabel/addButton/applyRect` | `ui/uiBuild.hpp` | 위젯 빌더 inline 자유함수(공용). `addChild + applyRect + 캡션 라벨` 보일러플레이트 래핑. LobbyUI/SettingsPanel 공유 |
 | `Online::LobbyUI` | `online/lobbyUI.hpp/cpp` | 로비 2D UI 레이어: 메인메뉴 + 스쿼드 스테이지(대기실) + 로딩 오버레이 + 로비 텍스처 소유. 위젯은 `uiManager_` 트리 소유(비소유 포인터). `loadTextures(gfx)` / `build(uiManager, Callbacks)` / `refresh(ViewState)` / `updateLoading(dt, visible, progress01)`. 버튼 액션은 `Callbacks`(create/join/leave/start/copy/openSettings/quit)로 Game에 라우팅. 접근자: `slotBay(i)`(포트레이트 합성), `setRootVisible/setLoadingVisible/setFlatBackgroundVisible/setMainMenuMessage/clearRoomCodeInput/hideAllSlotBays`, `panelTexture()/secondaryButtonTexture()` |
-| `GameSettings` | `ui/settingsPanel.hpp` | 게임플레이용 영속 설정 값 구조체(fullscreen/allyDamageVisible/resolutionIndex/monsterDamageOpacity). `Game`이 소유(`settings_`), 로비·인게임·게임플레이가 공유 |
+| `GameSettings` | `ui/settingsPanel.hpp` | 게임플레이용 영속 설정 값 구조체(fullscreen/vsync/allyDamageVisible/resolutionIndex/monsterDamageOpacity). `Game`이 소유(`settings_`), 로비·인게임·게임플레이가 공유. vsync 기본 ON — 한 GPU 다중 클라가 vsync 없이 Present하면 DWM이 굶어 TDR 유발(`GFX::setVsync`, `Game::render`에서 매 프레임 반영) |
 | `UI::SettingsPanel` | `ui/settingsPanel.hpp/cpp` | 씬 비종속 설정창. `uiManager_.root()` 직속(zOrder 50)에 빌드, `open()/close()/toggle()/isOpen()`로 토글 → 로비/인게임(ESC) 공용. `build(uiManager, panelTex, buttonTex, GameSettings&)`, `refreshPreview()`. 값 편집은 `GameSettings&`로 write-through |
 | `Game` 통합 | `online/onlineGame.cpp` | `enterLobby`: `lobbyUI_.loadTextures/build` + `settingsPanel_.build`. `refreshLobbyUI()`는 씬/세션 상태로 `LobbyUI::ViewState` 스냅샷을 만들어 `lobbyUI_.refresh()`에 위임(+메인메뉴 이탈 시 `settingsPanel_.close()`). `makeLobbyCallbacks()`가 버튼 액션을 `lobbyCreateRoom` 등에 연결. `LobbyScene`/`renderWaitingRoom`/`enterInGame`/`lobbyLeaveRoom`은 컴포넌트 메서드 호출 |
 | 인게임 ESC 토글 + 입력 차단 | `online/onlineGame.cpp` (`processInput`/`receiveWndMsg`) | `processInput`에서 `VK_ESCAPE` 엣지→`settingsPanel_.toggle()`. 열려 있으면 `processInputGame`/Enter·Space 토글 skip + 마우스 델타 클리어(early return)로 인게임 입력 차단. 열림/닫힘 전이(`settingsOpenPrev_`)에 따라 커서 해제·표시↔게임플레이 모드(`cursorCaptureEnabled_`/`cursorShowEnabled_`) 복원. `WM_SETFOCUS`는 설정창 열림 시 커서 복원 생략 |
@@ -918,6 +919,17 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::KillCountWidget` | `ui/widgets/KillCountWidget.hpp/cpp` | 상단 HUD: 스컬 아이콘(`icon_kill.dds`) + 누적 킬. 킬 팝, streak 표시, 마일스톤(10/25/50/100) 금색 플래시. `addKill()`은 게임 스레드에서 호출 |
 | `KillCountTuning` | `ui/widgets/KillCountWidget.hpp` | Kill Count 연출 상수 묶음 |
 | onlineGame 통합 | `online/onlineGame.cpp` | UI 셋업: `killCountWidget_` add + `damageNumberSystem_.init()`. 이벤트 디스패치 루프: `receive` 직전 `prevHp` 캡처 → `dmg` 계산 → `spawn`, 고블린 `EvDeath` 시 `addKill()`. `InGameScene`: `damageNumberSystem_.update()`. `renderInGame`: `uiManager_.render` 직전 `damageNumberSystem_.render()` |
+
+### 파티원 HP HUD (인게임)
+
+디버깅 노트(멀티클라 연쇄 종료/TDR): `client/docs/gpuDeviceStability.md`
+
+| 항목 | 파일 | 설명 |
+|------|------|------|
+| `Game::createOtherPlayerHud()` | `online/onlineGame.cpp` | 원격 플레이어 1명분 HUD 생성: 월드 HP바(worldBar) + 좌측 파티 행(partyRoot: 하트/무기 아이콘/이름/HP바). `otherPlayerHpBars_[id]`에 등록, 재호출 시 기존 위젯 제거 후 재생성(멱등) |
+| `Game::updatePartyHpHudLayout()` | `online/onlineGame.cpp` | 로스터(`inGamePartyPlayerIds_`) 순서로 파티 행 재배치 + 이름 라벨 갱신. 해상도 변경(`updatePlayerHpHudLayout`)·HUD 생성·`removePlayer`에서 호출(퇴장 시 빈 줄 제거) |
+| `Game::register/unregisterInGamePartyPlayer()`, `partyDisplayName()` | `online/onlineGame.cpp` | 파티 로스터 + **등록 시점 고정 이름**(`inGamePartyNameById_`, "playerN"). 인덱스 기반 이름은 퇴장 시 번호가 밀려 클라 간 표시가 어긋나므로 등록 시 1회 부여 후 불변. `prepareInGamePartyRoster`(S_Enter)가 이름 시퀀스를 리셋 |
+| `Game::refreshSkillCtx()` | `online/onlineGame.cpp` | `skillCtx_`의 프레임 단위 포인터(evList/pTimer/objectById) 재동기화. `InGameScene` 매 프레임 + APC(프레임 시작 `SleepEx`)에서 스킬 시스템에 진입하는 패킷 핸들러(`removePlayer`/`onSkillStart`)가 호출 — 같은 배치에서 `skillObjectById_` resize 시 stale 포인터 방지 |
 
 ### 사용 패턴 (game.cpp 통합 예시)
 
