@@ -2613,7 +2613,7 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, presentCmdLists), false );
 
 	
-	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
+	DISPLAY_ERROR_DX_VOID( swapChain_->Present(vsyncEnabled_ ? 1u : 0u, 0), false );
 
 	
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]

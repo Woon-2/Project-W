@@ -2733,6 +2733,7 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	gfx_.setVsync(settings_.vsync);
 	switch (scene_) {
 	case Scene::Lobby:  renderLobby();  break;
 	case Scene::InGame: renderInGame(); break;

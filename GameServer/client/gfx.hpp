@@ -122,6 +122,10 @@ public:
 	// GPU가 아직 참조 중인 리소스를 해제해 디바이스 행(TDR)을 유발할 수 있다.
 	void drainGpu();
 
+	// Present의 vsync 여부(기본 on). 한 GPU에서 여러 클라이언트가 vsync 없이
+	// 풀스피드로 Present하면 DWM까지 굶겨 TDR(디바이스 제거)을 유발할 수 있다.
+	void setVsync(bool enabled) { vsyncEnabled_ = enabled; }
+
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
 
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
@@ -595,6 +599,7 @@ private:
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
 	bool hiZCullEnabled_      = true;
+	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
 	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
 };

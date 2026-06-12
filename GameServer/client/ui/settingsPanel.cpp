@@ -159,6 +159,13 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         controlW - 144.f, rowH, settingsInk, TextHAlign::Center, 3);
     addSolid(scrim, "settingsResolutionLine",
         controlX + 78.f, rowY + rowH - 9.f, controlW - 156.f, 2.f, settingsLine, 2);
+    rowY += rowH + rowGap;
+    makeSettingRow(L"수직 동기화", rowY);
+    makeToggleButtons(controlX + 24.f, rowY, controlW - 48.f, rowH,
+        L"OFF", L"ON",
+        [this]() { settings_->vsync = false; refreshPreview(); },
+        [this]() { settings_->vsync = true;  refreshPreview(); },
+        &vsyncOffButton_, &vsyncOnButton_);
 
     groupY = rowY + rowH + groupGap;
     makeGroupTitle(L"전투 표시", groupY);
@@ -258,6 +265,8 @@ void SettingsPanel::refreshPreview() {
 
     paintButton(windowedButton_,   !settings_->fullscreen);
     paintButton(fullscreenButton_,  settings_->fullscreen);
+    paintButton(vsyncOffButton_, !settings_->vsync);
+    paintButton(vsyncOnButton_,   settings_->vsync);
     paintButton(allyDamageOffButton_, !settings_->allyDamageVisible);
     paintButton(allyDamageOnButton_,   settings_->allyDamageVisible);
 
