@@ -142,7 +142,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
 				gClose = true;
-				INet::ClientApp::release();
+				INet::ClientApp::release();			// 게임·세션 파괴(워커 스레드 join 포함)
+				SendBufferManager::release();		// TLS 청크 해제 + 정적 큐 drain (정적 소멸 UB 방지)
 				MemoryManager::release();
 				SocketUtils::release();
 				return static_cast<int>( msg.wParam );

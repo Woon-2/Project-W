@@ -887,3 +887,88 @@ chase↔PressureWait 진동이 발생.
 **비고.** 커밋의 `consumePendingCommand` EngageTarget→PressureWait 라우팅은 미적용(진척
 게이트로 동일 효과). `issueDivideEngage`의 `selectReplacementTarget` 단일 추격은 균형 배정으로
 대체됨 → 쐐기 통과 후 추격 동작은 인게임(client) 검증 필요. 빌드 Debug/Release x64 OK.
+
+---
+
+### 2026.06.12
+## [fix] client 종료 크래시 수정 — SendBuffer 재활용 deleter의 종료 규칙 부재
+
+**수정 파일:** `ServerEngine/SendBuffer.hpp/cpp`, `ServerEngine/MemoryManager.cpp`,
+`client/ClientApp.hpp`, `client/main.cpp`, 신규 `client/docs/shutdownSequence.md`
+
+**증상:** client 종료 시 `main.cpp`의 `return static_cast<int>(msg.wParam);` 줄에서 크래시.
+
+### [1] 왜 "return 줄"에서 터진 것처럼 보였나
+
+`return`이 실행되면 WinMain은 끝나지만 **프로그램은 아직 안 끝났다**. 그 뒤에 C++ 런타임이 뒷정리를 한다:
+
+```
+return 실행
+ └→ WinMain 종료 (사용자 코드의 마지막 줄)
+     └→ CRT가 자동 뒷정리 시작
+         1) thread_local 변수들 소멸
+         2) 전역/static 변수들 소멸   ← 실제 사고 지점
+```
+
+이 뒷정리 코드에는 소스 라인이 없으니, 디버거는 "마지막으로 지나간 내 코드 줄" =
+`return static_cast<int>(msg.wParam);`을 가리킨다. 즉 **그 줄이 범인이 아니라, 그 줄 직후에
+자동으로 도는 소멸자들이 범인**이다.
+
+### [2] 실제 사고: "재활용함에 버리는 규칙"이 재활용함 자체를 부술 때
+
+SendBuffer 시스템의 설계:
+
+- 패킷을 보낼 때 8KB짜리 `SendBufferChunk`를 쓴다.
+- 다 쓴 청크는 **버리지 않고 전역 재활용 큐(`sendBufferChunks_`)에 반납**한다. 이 반납이
+  shared_ptr의 deleter로 구현되어 있다. 즉 *"이 청크의 마지막 참조가 사라지면 → 큐에 다시
+  넣어라"*가 청크의 소멸 규칙이다.
+
+평상시엔 완벽한 재활용 구조인데, **프로그램 종료 때** 문제가 된다:
+
+1. 전역 재활용 큐도 static 변수라서 CRT가 자동으로 소멸시킨다.
+2. 큐가 소멸하려면 안에 들어있는 청크들(shared_ptr)을 먼저 파괴해야 한다.
+3. 그런데 청크의 소멸 규칙이 뭐였나? **"큐에 다시 넣어라"**.
+4. 결과: **지금 부수고 있는 큐에 다시 enqueue를 시도** — 반쯤 해체된 자료구조에 쓰기를 하는
+   거라 미정의 동작(UB)이다. 힙 상태에 따라 크래시가 나거나, 운 좋으면 조용히 넘어간다.
+
+비유하면: "다 쓴 책은 반드시 책장에 꽂아라"는 규칙만 있는 도서관에서, 폐관하며 책장을
+철거하는데 철거 중 나온 책들을 규칙대로 **철거 중인 그 책장에** 다시 꽂으려는 상황이다.
+종료용 규칙("폐관 중엔 그냥 버려라")이 없었던 것.
+
+여기에 메인 스레드의 `thread_local LSendBufferChunk`(현재 쓰던 청크를 가리키는 포인터)도 같은
+시점에 소멸하면서 같은 큐에 반납을 시도하니, 종료 시점에 이 경로를 밟을 기회가 두 군데였다.
+
+### [3] 왜 Online 모드에서만, 종료할 때만?
+
+- 청크는 **패킷을 보낼 때만** 할당된다. StandAlone 모드는 송신이 없으니 큐도 TLS 포인터도
+  비어 있어 무사 통과.
+- 평상시엔 큐가 멀쩡히 살아 있으니 반납이 항상 성공. 오직 "큐 자신이 죽는 순간"인 프로그램
+  종료 때만 규칙이 자기모순이 된다.
+
+### [4] 동반 결함 두 가지 (같은 '종료 순서' 계열)
+
+- `MemoryManager::release()`가 메모리 풀들을 `delete`한 뒤, 풀을 가리키는 조회 테이블
+  (`poolTable_`)을 그대로 둠 → 그 이후에 해제 요청이 하나라도 오면 **이미 죽은 풀**을 건드림.
+- `retiredSession_`(은퇴한 로비 세션)을 종료 시 정리하지 않음 → static 소멸 때 `WSACleanup()`
+  **이후에** 소켓을 닫는 등 순서가 꼬일 여지.
+
+### [5] 수정이 한 일
+
+종료 직전에 `SendBufferManager::release()`를 호출해서 **규칙 자체를 바꾼다**: "지금부터
+(shutdown) 반납 = 재활용함에 넣기가 아니라 진짜 해제". 그리고 TLS 포인터와 큐를 그 자리에서
+비운다. 결과적으로 `return` 이후 CRT가 뒷정리할 때는 큐도 비어 있고 반납할 청크도 없어서,
+자동 소멸이 건드릴 폭탄이 사라진다.
+
+- `ServerEngine/SendBuffer`: `SendBufferManager::release()` 신설 — `shuttingDown_` 설정 후
+  push deleter는 재enqueue 대신 `odelete`로 실제 해제, TLS 청크 해제 + 정적 큐 drain.
+- `ServerEngine/MemoryManager`: release() 시 `poolTable_.fill(nullptr)` + `ASSERT_CRASH` 가드.
+- `client/ClientApp`: `release()`에서 `retiredSession_`도 정리.
+- `client/main.cpp` WM_QUIT 종료 순서 확정:
+  `ClientApp::release()` → `SendBufferManager::release()` → `MemoryManager::release()` → `SocketUtils::release()`.
+
+요약 — **"영원히 재활용만 하는 객체"와 "프로그램 종료"가 만나면, 재활용함이 먼저 철거되는
+순간이 반드시 오는데 그때의 행동이 정의돼 있지 않았다**는 게 원인이다.
+
+**검증:** 4개 프로젝트 Release x64 빌드 OK. 실제 client로 로비 접속·로딩 중 종료(3/5/8초) 포함
+자동 검증 전부 exit 0, 재현 테스트 약 5회 크래시 미발생. 서버 3종은 동일한 잠재 문제 보유 —
+정상 종료 경로 도입 시 같은 순서 적용 필요(후속 과제).

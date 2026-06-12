@@ -98,11 +98,17 @@ class SendBufferManager {
 public:
     static std::shared_ptr<SendBuffer> open( uint32 size );
 
+	// 종료 시 호출(메인 스레드 전용, 워커 스레드 join 이후·MemoryManager::release() 이전).
+	// 호출 시점부터 push deleter는 정적 큐에 재enqueue하지 않고 청크를 실제 해제한다.
+	// 호출하지 않으면 프로세스 종료 시 TLS·정적 큐 소멸자가 파괴 중인 큐에 재진입해 UB가 발생한다.
+	static void release();
+
 private:
     static void push( SendBufferChunk* chunk );
     static std::shared_ptr<SendBufferChunk> pop();
 
 	static ccqueue< std::shared_ptr<SendBufferChunk> > sendBufferChunks_;
+	static std::atomic<bool> shuttingDown_;
 };
 
 #endif // send_buffer_hpp
