@@ -216,6 +216,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `SkillSystem::bindVfxGameplayConfigs` | `skillSystem.cpp` | 프리빌드 설정을 ParticleEffect 시스템에 주입 (이펙트 구성 완료 후 1회 호출) |
 | `Online::Game::castSkillByName` / 임시 키맵 | `online/onlineGame.cpp` `processInput` | 1~0 + Shift+1~6 = 16종 스킬, Q=SwordSlash. seed 생성+startSkill+C_SkillStart |
 | `Online::Game::skillVfxById_[1..18]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
+| `Online::Game::sendSkillStartPacket(assetId, seed)` | `online/onlineGame.cpp` | `C_SkillStart{assetId, clientMs, skillSeed}` 송신 (clientMs=ClientApp::clientMs) |
+| `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
+| `Online::Game::onSkillHit(attackerId, targetId, newHp, assetId, targetVelocity)` | `online/onlineGame.cpp` | `S_SkillHit` 수신: 킬 시 `setRagdollInitVelocity(targetVelocity)` → `applyHit`(EvHit/EvDeath) → 타깃 위치에 hit VFX |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 > VFXParticle 히트박스의 클라/서버 결정론 동기화: `docs/particleHitboxDeterminism.md`.

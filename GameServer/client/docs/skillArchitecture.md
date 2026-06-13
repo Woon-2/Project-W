@@ -115,10 +115,16 @@ skillCtx_.camera     = &camera_;
 
 ## Online 모드
 
+> 멀티플레이 스킬 동기화 전반(키바인딩, 결정론 파티클 히트박스, 디스패치 컨텍스트 수명)은
+> 본 절과 함께 `particleHitboxDeterminism.md`(VFXParticle 결정론 계약)를 함께 본다.
+
 ### 로컬 플레이어 스킬
 
-1. Q 키 → `skillSystem_.startSkill(assetId, playerId, ctx)` 로컬 실행
-2. `C_SkillStart { skillAssetId, clientMs }` 서버 전송
+1. 스킬 키 → `castSkillByName(name)`:
+   - `findAsset(name)` + `hasActiveSkill(playerId)` 게이트 (한 번에 1스킬)
+   - **per-cast 시드 생성**: `skillSeed = std::random_device{}()`
+   - `skillSystem_.startSkill(assetId, playerId, ctx, skillSeed)` 로컬 실행
+   - `sendSkillStartPacket(assetId, skillSeed)` → `C_SkillStart { skillAssetId, clientMs, skillSeed }`
 
 **`SkillDispatchContext` 구성 (Online):**
 ```cpp
@@ -127,6 +133,7 @@ skillCtx_.evList     = &eventList_;
 skillCtx_.objectById = skillObjectById_.data();
 skillCtx_.vfxById    = skillVfxById_.data();
 skillCtx_.camera     = &camera_;
+skillCtx_.ground     = &groundSampler_;  // 지면 연계 프리미티브
 ```
 
 `clientPredictionOnly = true`이므로 `processHitResults()`에서:
@@ -134,29 +141,54 @@ skillCtx_.camera     = &camera_;
 - VFX 재생 ← 클라이언트가 직접 처리 (반응성 유지)
 - 충격량 적용 ← 클라이언트가 직접 처리 (반응성 유지)
 
+**시드를 캐스터가 생성하는 이유:** 서버는 `broadcastExcept`로 캐스터에게 `S_SkillStart`를
+되돌려주지 않으므로 캐스터는 즉시 로컬 재생한다. 서버 생성 시드는 RTT 후에야 도달해 첫
+VFX(≈150ms)에 못 맞는다. 캐스터가 시드를 만들어 패킷에 실으면 서버·원격이 같은 시드로
+동일 파티클 레이아웃을 재현한다. 상세 근거·정밀도 한계: `particleHitboxDeterminism.md` §4·§5.
+
+### `refreshSkillCtx()` — APC 재동기화 (중요)
+
+`skillObjectById_`는 원격 플레이어 입퇴장 시 `resize`될 수 있다. 패킷 핸들러는 프레임 시작
+`SleepEx(1, true)`의 alertable APC에서 메인 스레드로 실행되는데, 이 시점 `skillCtx_`의
+포인터는 직전 프레임 값이라 컨테이너 리사이즈로 **dangling**일 수 있다.
+
+`refreshSkillCtx()`가 `evList/pTimer/objectById/objectByIdSize`를 재바인딩한다. 호출 지점:
+- 매 프레임 `InGameScene` 진입 시 1회
+- **스킬 시스템에 진입하는 모든 패킷 핸들러 직전**(`onSkillStart`, `removePlayer`/`interruptAll` 등)
+
+> 누락 시 APC 배치 내 앞선 패킷이 리사이즈를 유발하면 stale `data()` 역참조 → 크래시.
+
 ### 원격 플레이어 스킬 수신 (`S_SkillStart`)
 
 ```cpp
-void Game::onSkillStart(uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs) {
-    // 원격 플레이어 공격 애니메이션 트리거 (EventBus 일원화: EvAttack를 eventList_에 post)
-    holdEvent(eventList_, EvAttack(ownerId));
-    // 비주얼 전용으로 스킬 시작 (clientPredictionOnly=true)
-    skillSystem_.startSkill(assetId, ownerId, ctx, Milliseconds{elapsedMs});
+void Game::onSkillStart(uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed) {
+    holdEvent(eventList_, EvAttack(ownerId));   // 원격 공격 애니메이션 (EventBus 일원화)
+    refreshSkillCtx();                          // APC 재동기화 (위 참조)
+    // 비주얼 전용 스킬 시작 (clientPredictionOnly=true). skillSeed로 캐스터와 동일 파티클 재현
+    skillSystem_.startSkill(skillAssetId, ownerId, ctx, Milliseconds{elapsedMs}, skillSeed);
 }
 ```
 
-`elapsedMs`로 서버 기준 경과 시간을 보상해 원격 클라이언트의 히트박스 타이밍을 맞춘다.
+- `elapsedMs`: 서버 기준 경과 시간 보상(lag compensation) → 원격 히트박스 타이밍 정합.
+- `skillSeed`: 캐스터 생성·서버 중계 시드 → VFXParticle 결정론 히트박스가 캐스터 비주얼과 일치.
 
 ### 피격 결과 수신 (`S_SkillHit`)
 
 ```cpp
-void Game::onSkillHit(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId) {
-    applyHit(targetId, newHp);           // 서버 권위 HP 적용
-    // 피격 VFX 재생 (asset의 hitVfxId 참조)
+void Game::onSkillHit(uint16 attackerId, uint16 targetId, int32 newHp,
+                      uint32 skillAssetId, XMFLOAT3 targetVelocity) {
+    if (newHp <= 0)  // 킬 시 래그돌 초기 속도 저장 (applyHit 이전)
+        goblin->setRagdollInitVelocity(targetVelocity);
+    applyHit(targetId, newHp, attackerId);   // 서버 권위 HP/이벤트
+    // 피격 VFX 재생 (asset->hitboxDefs[0].onHit.hitVfxId 참조, 타깃 위치에 play)
 }
 ```
 
-HP 변경은 서버 값을 그대로 반영한다. 로컬 클라이언트가 VFX·충격량을 미리 적용했더라도 서버 HP가 최종값이다.
+- HP 변경은 서버 값을 그대로 반영한다(로컬이 VFX·충격량을 미리 적용했어도 서버 HP가 최종값).
+- `applyHit`은 `newHp>0`이면 `EvHit`, `newHp<=0`이면 `EvDeath`를 post → EventBus 핸들러가
+  HP·isDead·래그돌·피격/사망 애니메이션 소유. 인라인은 거점·HP바 가시성만.
+- `targetVelocity`: 서버가 impulse 적용 **직후** 읽은 타깃 선속도 → 항상 킬링 블로우 포함.
+  래그돌 활성화 시 모든 뼈 초기 속도로 사용.
 
 ---
 
@@ -170,35 +202,47 @@ HP 변경은 서버 값을 그대로 반영한다. 로컬 클라이언트가 VFX
 | VFX 재생 | 로컬 스킬 시스템 | 로컬 스킬 시스템 (clientPrediction) |
 | 충격량 적용 | 로컬 스킬 시스템 | 로컬 스킬 시스템 (clientPrediction) |
 | 원격 플레이어 스킬 표시 | 해당 없음 | `S_SkillStart` 수신 후 clientPrediction 실행 |
-| HP 갱신 | `EvSkillHit` 즉시 | `S_SkillHit` 수신 시 |
+| HP 갱신 | `EvSkillHit` 즉시 | `S_SkillHit` 수신 시 (EvHit/EvDeath) |
+| per-cast 시드 | 미사용 | **캐스터 생성 → 패킷 중계 → 결정론 파티클 히트박스** |
 | 네트워크 패킷 | 없음 | `C_SkillStart` 송신 / `S_SkillStart`, `S_SkillHit` 수신 |
 
 ---
+
+## 패킷 구조 (`ServerEngine/protocol.hpp`)
+
+```cpp
+CSkillStartPacket { uint32 skillAssetId; uint64 clientMs; uint32 skillSeed; }
+SSkillStartPacket { uint32 skillAssetId; uint16 ownerId; uint16 elapsedMs; uint32 skillSeed; }
+SSkillHitPacket   { uint16 attackerId; uint16 targetId; int32 newHp;
+                    uint32 skillAssetId; XMFLOAT3 targetVelocity; }
+```
 
 ## 패킷 흐름 (Online)
 
 ```
 [로컬 클라이언트]                 [서버]                  [다른 클라이언트]
- Q 누름
- ├─ startSkill(local, prediction) ─────────────────────────────────────────
- └─ C_SkillStart{assetId, clientMs} ──→ Room::skillStart()
+ 스킬 키
+ ├─ seed = random_device()
+ ├─ startSkill(local, ctx, seed)  ─────────────────────────────────────────
+ └─ C_SkillStart{assetId, clientMs, seed} ──→ Room::skillStart()
                                           ├─ elapsedMs = now - clientMs
-                                          ├─ startSkill(assetId, ownerId,  )
-                                          │    ctx, elapsedMs)  ← 서버 실행
-                                          └─ broadcastExcept(sender,       )
-                                               S_SkillStart{assetId,       )
-                                                 ownerId, elapsedMs}  ─────→ onSkillStart()
-                                                                              startSkill(prediction)
+                                          ├─ startSkill(assetId, ownerId,
+                                          │    ctx, elapsedMs, seed)  ← 서버 실행
+                                          └─ broadcastExcept(sender,
+                                               S_SkillStart{assetId, ownerId,
+                                                 elapsedMs, seed})  ───────→ onSkillStart()
+                                                                              startSkill(pred, seed)
 
  (매 서버 프레임)
                                         updateSkillSystem()
-                                          checkHitboxCollisions()
+                                          checkHitboxCollisions()  ← seed로 결정론 파티클 히트박스
                                           EvSkillHit 발행
                                           newHp = tgt->hp() - damage
-                                          broadcast(S_SkillHit{attackerId,
-                                            targetId, newHp, assetId})
- onSkillHit(newHp)                    ←─────────────────── onSkillHit(newHp)
- applyHit(targetId, newHp)                                  applyHit(targetId, newHp)
+                                          velocity = tgt->onHitImpulse(...) 직후 선속도
+                                          broadcast(S_SkillHit{attackerId, targetId,
+                                            newHp, assetId, targetVelocity})
+ onSkillHit(...)                      ←─────────────────────────── onSkillHit(...)
+ applyHit + 래그돌속도                                              applyHit + 래그돌속도
 ```
 
 ---
