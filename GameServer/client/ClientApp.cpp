@@ -3,7 +3,24 @@
 #include "standalone/game.hpp"
 #include "online/onlineGame.hpp"
 
+extern bool gClose;
+
 namespace INet {
+
+void ClientApp::init() {
+	serverSession_ = std::make_unique<ServerSession>(::serverIp, lobbyServerPort);
+
+	// std::exit() 경로 보호. 에러 매크로 등이 프레임 도중 std::exit를 부르면 정적
+	// 소멸자들이 임의 순서로 돌면서, ~ServerSession이 보유한 SendBuffer를 이미
+	// 파괴된 SendBufferManager 풀(다른 TU의 정적 객체)에 반납하다 AV가 났다.
+	// WinMain(런타임)에서 등록한 atexit 핸들러는 pre-main에 등록된 모든 정적
+	// 소멸자보다 먼저 실행되므로, 풀이 살아있는 동안 세션을 정리할 수 있다.
+	// 정상 종료 경로에서는 release()가 이미 호출된 뒤라 no-op이다(멱등).
+	std::atexit([]() {
+		gClose = true;
+		release();
+	});
+}
 
 void ClientApp::setup(GameType type, Timer* pTimer) {
 	if (GameType::StandAlone == type) {
@@ -28,6 +45,20 @@ void ClientApp::setup(GameType type, Timer* pTimer) {
 	}
 
 	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(game_.get()));
+}
+
+void ClientApp::release() {
+	if (serverSession_) {
+		serverSession_->close();
+	}
+	if (retiredSession_) {
+		retiredSession_->close();
+	}
+
+	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, 0);
+	game_.reset();
+	serverSession_.reset();
+	retiredSession_.reset();
 }
 
 void ClientApp::update(Milliseconds deltaTime) {

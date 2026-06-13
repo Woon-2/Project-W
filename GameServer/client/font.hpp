@@ -31,13 +31,15 @@ public:
 
 	void init( ID3D12Device* device, ID3D12CommandQueue* cmdQ, UINT width, UINT height, HWND hwnd );
 	FontHandle CreateFontObject( const WCHAR* fontFamilyName, float fontSize );
-	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
+	// Returns false when D2D/DWrite rendering fails (e.g. device loss); the
+	// caller should keep its text dirty and retry later instead of exiting.
+	bool WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
 	void measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH );
 
 private:
 	void createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ );
 	void createDWrite( ID3D12Device* device, UINT texWidth, UINT texHeight, float dpi );
-	void CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color );
+	bool CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color );
 
 	ComPtr<ID2D1Device2> pD2DDevice_ = nullptr;
 	ComPtr<ID2D1DeviceContext2> pD2DDeviceContext_ = nullptr;

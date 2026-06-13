@@ -7,7 +7,24 @@ skill.name             = "ArrowVolley"
 skill.totalDurationMs  = 700
 skill.interruptible    = true
 
-skill:addVFX(11, "effects/arrow_volley.json")
+-- systems[1..9] = arrow meshes fanned by yaw (code-built; no JSON source).
+-- Mirrors client game.cpp: spread 56 deg, 9 arrows, lifetime 0.45, speed 38.
+-- System index 9 (10th) is the shared ArrowHit sub-emitter child (no entry).
+local volleyCount  = 9
+local volleySpread = 56.0
+local volleySystems = {}
+for i = 1, volleyCount do
+    local yaw = -volleySpread * 0.5 + volleySpread / (volleyCount - 1) * (i - 1)
+    volleySystems[i] = {
+        mode = "Emit", looping = false,
+        lifetime = 0.45, speed = 38.0, startSize = 0.3,
+        shapeType = "Point", direction = Vec3(0.0, 0.0, 1.0),
+        shapeEuler = Vec3(0.0, yaw, 0.0),
+        meshEuler  = Vec3(0.0, yaw, 0.0),
+        maxParticles = 32,
+    }
+end
+skill:addVFX(11, "effects/arrow_volley.json", { systems = volleySystems })
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",
@@ -26,7 +43,9 @@ local onHit = OnHit({
     impulseDir      = Vec3(0.0, 0.1, 1.0)
 })
 
-local count = 10
+-- NOTE: was 10, but the effect has 9 arrow systems (kArrowVolleyCount); the
+-- 10th slot attached the shared ArrowHit child system by accident.
+local count = 9
 
 for i = 0, count - 1 do
     skill:addEvent(130, "SpawnHitbox", {

@@ -12,7 +12,9 @@
 1. skillCtx_ 갱신          — evList/pTimer 포인터 갱신 (per-frame context 준비)
 2. processInput(dt)        — 키보드/마우스 입력 처리
                              LButton → combatSystem_.onPlayerAttack()
-                             Q 키   → skillSystem_.startSkill() + C_SkillStart 전송 (online만)
+                             스킬 키 → castSkillByName() = startSkill(seed) + C_SkillStart 전송 (online만)
+                             임시 키맵: 1~0 = 스킬 1~10, Shift+1~6 = 스킬 11~16, Q = SwordSlash
+                             (순서 = characterSkillMap Player 목록 - AoESlashGreen/TornadoShot 제외)
 3. debugBVView_.update(dt) — TTL 감소 + 조건부 소멸
 4. combatSystem_.update()  — 몬스터 AI 공격 판정 (플레이어 생존 시만)
 5. skillSystem_.update()   — 스킬 타임라인 진행 + 히트박스 갱신 + 충돌 판정 + EvSkillHit 발행

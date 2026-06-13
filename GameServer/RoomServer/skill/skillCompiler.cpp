@@ -1,10 +1,119 @@
 ﻿#include "rspch.hpp"
 #include "skillCompiler.hpp"
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <unordered_map>
 
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
     if (s == "Ground")      return AttachType::Ground;
     return AttachType::Bone;
+}
+
+// Ordinals match ps::ParticleCollisionModule::Mode (None,GroundStop,GroundKill,GroundBounce).
+static u8t parseParticleCollisionMode(std::string_view s) {
+    if (s == "GroundStop")   return 1;
+    if (s == "GroundKill")   return 2;
+    if (s == "GroundBounce") return 3;
+    return 0;
+}
+
+// Ordinals match ps::ShapeModule::GroundConform (None,SnapY,SnapAndAlign).
+static u8t parseParticleConformMode(std::string_view s) {
+    if (s == "SnapY")        return 1;
+    if (s == "SnapAndAlign") return 2;
+    return 0;
+}
+
+static pg::ShapeType parseShapeTypeName(std::string_view s) {
+    if (s == "Edge")       return pg::ShapeType::Edge;
+    if (s == "Cone")       return pg::ShapeType::Cone;
+    if (s == "Sphere")     return pg::ShapeType::Sphere;
+    if (s == "Hemisphere") return pg::ShapeType::Hemisphere;
+    if (s == "Box")        return pg::ShapeType::Box;
+    if (s == "Circle")     return pg::ShapeType::Circle;
+    return pg::ShapeType::Point;
+}
+
+// Parses the optional gameplay overrides of one addVFX `systems` entry.
+// SYNC: mirrors client/skill/skillCompiler.cpp (and the override list in
+// pg::VfxSystemOverrides / pg::applyOverrides).
+static void parseVfxSystemOverrides(const sol::table& t, pg::VfxSystemOverrides& o) {
+    auto boolOf = [&](const char* key, bool& has, bool& out) {
+        sol::optional<bool> v = t[key];
+        if (v) { has = true; out = *v; }
+    };
+    auto floatOf = [&](const char* key, bool& has, float& out) {
+        sol::optional<float> v = t[key];
+        if (v) { has = true; out = *v; }
+    };
+    auto intOf = [&](const char* key, bool& has, int& out) {
+        sol::optional<int> v = t[key];
+        if (v) { has = true; out = *v; }
+    };
+    auto vec3Of = [&](const char* key, bool& has, mu::Vec3& out) {
+        sol::optional<sol::table> v = t[key];
+        if (!v) return;
+        has = true;
+        out = { v->get_or(1, 0.f), v->get_or(2, 0.f), v->get_or(3, 0.f) };
+    };
+    // number = constant; {min, max} table = range
+    auto rangeOf = [&](const char* key, bool& has, float& lo, float& hi) {
+        sol::optional<sol::object> v = t[key];
+        if (!v) return;
+        if (v->is<sol::table>()) {
+            sol::table r = v->as<sol::table>();
+            lo = r.get_or(1, 0.f);
+            hi = r.get_or(2, lo);
+        } else if (v->is<float>()) {
+            lo = hi = v->as<float>();
+        } else {
+            return;
+        }
+        has = true;
+    };
+
+    boolOf("looping",        o.hasLooping,      o.looping);
+    floatOf("duration",      o.hasDuration,     o.duration);
+    rangeOf("speed",         o.hasSpeed,        o.speedMin,     o.speedMax);
+    rangeOf("lifetime",      o.hasLifetime,     o.lifetimeMin,  o.lifetimeMax);
+    rangeOf("startSize",     o.hasStartSize,    o.startSizeMin, o.startSizeMax);
+    intOf("maxParticles",    o.hasMaxParticles, o.maxParticles);
+    vec3Of("shapePosition",  o.hasShapePosition, o.shapePosition);
+    vec3Of("shapeEuler",     o.hasShapeEulerDeg, o.shapeEulerDeg);
+    vec3Of("meshEuler",      o.hasMeshEulerDeg,  o.meshEulerDeg);
+    vec3Of("direction",      o.hasDirection,     o.direction);
+    vec3Of("boxSize",        o.hasBoxSize,       o.boxSize);
+    vec3Of("volLinear",      o.hasVolLinear,     o.volLinear);
+    floatOf("coneRadius",    o.hasConeRadius,      o.coneRadius);
+    floatOf("coneAngle",     o.hasConeAngleDeg,    o.coneAngleDeg);
+    floatOf("radiusThickness", o.hasRadiusThickness, o.radiusThickness);
+    floatOf("emitRate",      o.hasEmitRate,        o.emitRate);
+
+    sol::optional<std::string> shapeType = t["shapeType"];
+    if (shapeType) {
+        o.hasShapeType = true;
+        o.shapeType    = parseShapeTypeName(*shapeType);
+    }
+
+    sol::optional<sol::table> bursts = t["bursts"];
+    if (bursts) {
+        o.hasBursts = true;
+        for (std::size_t bi = 1; bi <= bursts->size(); ++bi) {
+            sol::optional<sol::table> b = (*bursts)[bi];
+            if (!b) continue;
+            pg::Burst burst{};
+            burst.time           = b->get_or("time", 0.f);
+            burst.cycleCount     = b->get_or("cycleCount", 1);
+            burst.repeatInterval = b->get_or("interval", 0.01f);
+            burst.probability    = b->get_or("probability", 1.f);
+            const int count      = b->get_or("count", 1);
+            burst.countMin = count;
+            burst.countMax = count;
+            o.bursts.push_back(burst);
+        }
+    }
 }
 
 static SkillEventType parseEventType(std::string_view s) {
@@ -111,6 +220,42 @@ SkillAsset ServerSkillCompiler::tableToAsset(const sol::table& tbl) {
         });
     }
 
+    // VFX composition registry (addVFX 3rd arg). Keyed by vfxId + 1.
+    sol::optional<sol::table> vfxDefList = tbl["vfxDefs"];
+    if (vfxDefList) {
+        vfxDefList->for_each([&](sol::object key, sol::object val) {
+            if (!key.is<int>() || !val.is<sol::table>()) return;
+            const int vfxId = key.as<int>() - 1;
+            if (vfxId < 0 || vfxId > 255) return;
+            sol::table defTbl = val.as<sol::table>();
+
+            if (static_cast<int>(asset.vfxDefs.size()) <= vfxId)
+                asset.vfxDefs.resize(static_cast<std::size_t>(vfxId) + 1);
+            SkillAsset::VfxDef& def = asset.vfxDefs[static_cast<std::size_t>(vfxId)];
+            def.path = defTbl.get_or<std::string>("path", "");
+
+            sol::optional<sol::table> systems = defTbl["systems"];
+            if (!systems) return;
+            // Ordered iteration: index == ParticleEffect::addSystem order.
+            for (std::size_t si = 1; si <= systems->size(); ++si) {
+                sol::optional<sol::table> sysTbl = (*systems)[si];
+                if (!sysTbl) continue;
+                SkillAsset::VfxSystemDef sys{};
+                sys.name = sysTbl->get_or<std::string>("name", "");
+                const std::string mode = sysTbl->get_or<std::string>("mode", "Emit");
+                sys.playMode = (mode == "Continuous") ? 1 : 0;
+                sol::optional<int> parent = (*sysTbl)["parent"];
+                if (parent) {
+                    sys.chainParent  = *parent;
+                    sys.chainOnBirth = sysTbl->get_or<std::string>("parentEvent", "Death")
+                                       == "Birth";
+                }
+                parseVfxSystemOverrides(*sysTbl, sys.overrides);
+                def.systems.push_back(std::move(sys));
+            }
+        });
+    }
+
     sol::optional<sol::table> events = tbl["events"];
     if (events) {
         events->for_each([&](sol::object, sol::object val) {
@@ -170,9 +315,67 @@ SkillAsset ServerSkillCompiler::tableToAsset(const sol::table& tbl) {
                 }
                 break;
             }
+            case SkillEventType::PlayVFX: {
+                // Parsed on the server since 2026-06-11: the deterministic
+                // VFXParticle hitbox sampler needs the effect anchor
+                // (vfxId, offset, orient, ground flags, conform override).
+                // Mirrors the client compiler exactly.
+                auto& p = ev.payload.playVFX;
+                p.vfxId = static_cast<u8t>(evTbl.get_or("vfxId", 0));
+
+                sol::optional<sol::table> attach = evTbl["attach"];
+                if (attach) {
+                    std::string typeStr2 = (*attach).get_or<std::string>("type", "Bone");
+                    p.attachType = static_cast<u8t>(parseAttachType(typeStr2));
+                    std::string tgtName = (*attach).get_or<std::string>("name", "");
+                    std::strncpy(p.attachTargetName, tgtName.c_str(), sizeof(p.attachTargetName) - 1);
+                    p.attachTargetName[sizeof(p.attachTargetName) - 1] = '\0';
+                    p.attachVfxId = static_cast<u8t>((*attach).get_or("vfxId", 0));
+                }
+
+                sol::optional<sol::table> offset = evTbl["offset"];
+                if (offset) {
+                    p.localOffset = mu::Vec3( (*offset).get_or(1, 0.f),
+                            (*offset).get_or(2, 0.f),
+                            (*offset).get_or(3, 0.f)
+                    );
+                }
+
+                sol::optional<sol::table> vfxOrient = evTbl["orient"];
+                if (vfxOrient) {
+                    p.localEulerDeg = mu::Vec3( (*vfxOrient).get_or(1, 0.f),
+                            (*vfxOrient).get_or(2, 0.f),
+                            (*vfxOrient).get_or(3, 0.f)
+                    );
+                }
+
+                sol::optional<sol::table> advance = evTbl["advance"];
+                if (advance) {
+                    p.advanceForwardLocal = mu::Vec3( (*advance).get_or(1, 0.f),
+                            (*advance).get_or(2, 0.f),
+                            (*advance).get_or(3, 0.f)
+                    );
+                }
+
+                if (evTbl.get_or("groundLock", false))
+                    p.flags |= kPlayVFXFlagYawOnly;
+                if (evTbl.get_or("groundSnap", false))
+                    p.flags |= kPlayVFXFlagGroundSnap;
+                if (evTbl.get_or("groundAlign", false))
+                    p.flags |= kPlayVFXFlagGroundAlign;
+
+                {
+                    const u8t col = parseParticleCollisionMode(
+                        evTbl.get_or<std::string>("particleCollision", ""));
+                    p.flags |= (col << kPlayVFXParticleCollisionShift) & kPlayVFXParticleCollisionMask;
+                    const u8t conf = parseParticleConformMode(
+                        evTbl.get_or<std::string>("particleConform", ""));
+                    p.flags |= (conf << kPlayVFXParticleConformShift) & kPlayVFXParticleConformMask;
+                }
+                break;
+            }
             case SkillEventType::CameraShake:
             case SkillEventType::ModifyStat:
-            case SkillEventType::PlayVFX:
             default:
                 break;
             }
@@ -197,6 +400,7 @@ void ServerSkillCompiler::registerAPI() {
         sol::table tbl = lua.create_table();
         tbl["events"]   = lua.create_table();
         tbl["vfxNames"] = lua.create_table();
+        tbl["vfxDefs"]  = lua.create_table();
         tbl.set_function("addEvent", [](sol::table self, int timeMs, std::string type,
                                         sol::table params) {
             sol::state_view sv{ self.lua_state() };
@@ -206,8 +410,17 @@ void ServerSkillCompiler::registerAPI() {
             params.for_each([&](sol::object key, sol::object val) { ev[key] = val; });
             self["events"].get<sol::table>().add(ev);
         });
-        tbl.set_function("addVFX", [](sol::table self, int idx, std::string path) {
+        tbl.set_function("addVFX", [](sol::table self, int idx, std::string path,
+                                      sol::optional<sol::table> opts) {
             self["vfxNames"].get<sol::table>()[idx + 1] = path;
+            sol::state_view sv{ self.lua_state() };
+            sol::table def = sv.create_table();
+            def["path"] = path;
+            if (opts) {
+                sol::optional<sol::table> systems = (*opts)["systems"];
+                if (systems) def["systems"] = *systems;
+            }
+            self["vfxDefs"].get<sol::table>()[idx + 1] = def;
         });
         return tbl;
     });
@@ -231,13 +444,25 @@ std::vector<SkillAsset> ServerSkillCompiler::compileAll(const std::filesystem::p
         }
     }
 
+    // Collect then SORT by filename: sequential asset IDs ride on this order
+    // and must match the client compiler (C_SkillStart sends the numeric id).
+    // directory_iterator order is filesystem-dependent, so never rely on it.
+    std::vector<std::filesystem::path> luaFiles;
     for (const auto& entry : std::filesystem::directory_iterator(skillDir)) {
         if (entry.path().extension() != ".lua") continue;
+        luaFiles.push_back(entry.path());
+    }
+    std::sort(luaFiles.begin(), luaFiles.end(),
+              [](const std::filesystem::path& a, const std::filesystem::path& b) {
+                  return a.filename().string() < b.filename().string();
+              });
+
+    for (const auto& luaPath : luaFiles) {
         try {
-            sol::protected_function_result result = lua_.safe_script_file(entry.path().string());
+            sol::protected_function_result result = lua_.safe_script_file(luaPath.string());
             if (!result.valid()) {
                 sol::error err = result;
-                std::cerr << "[ServerSkillCompiler] Error in " << entry.path() << ": " << err.what() << "\n";
+                std::cerr << "[ServerSkillCompiler] Error in " << luaPath << ": " << err.what() << "\n";
                 continue;
             }
             if (!result.get<sol::object>().is<sol::table>()) continue;
@@ -253,4 +478,51 @@ std::vector<SkillAsset> ServerSkillCompiler::compileAll(const std::filesystem::p
         assets[i].id = i + 1;
 
     return assets;
+}
+
+// SYNC: mirrors client/skill/skillCompiler.cpp buildVfxGameplayConfigs.
+void buildVfxGameplayConfigs(std::vector<SkillAsset>& assets,
+                             const std::filesystem::path& resourceRoot) {
+    // path -> parsed effect DOM (nullptr = load failed; negative-cached)
+    std::unordered_map<std::string, std::unique_ptr<json::Value>> domCache;
+
+    for (SkillAsset& asset : assets) {
+        for (SkillAsset::VfxDef& vdef : asset.vfxDefs) {
+            for (SkillAsset::VfxSystemDef& sys : vdef.systems) {
+                // Entries without a JSON source nor overrides are placeholders
+                // (index alignment only) and get no gameplay config.
+                if (sys.name.empty() && !sys.overrides.any())
+                    continue;
+
+                auto cfg = std::make_shared<pg::GameplayConfig>();
+                if (!sys.name.empty()) {
+                    auto it = domCache.find(vdef.path);
+                    if (it == domCache.end()) {
+                        auto dom = std::make_unique<json::Value>();
+                        std::string err;
+                        if (!pg::loadEffectJson(resourceRoot / vdef.path, *dom, &err)) {
+                            std::cerr << "[ServerSkillCompiler] " << err << "\n";
+                            dom.reset();
+                        }
+                        it = domCache.emplace(vdef.path, std::move(dom)).first;
+                    }
+                    if (!it->second)
+                        continue;
+                    std::string err;
+                    if (!pg::importGameplayConfig(*it->second, sys.name, *cfg, &err)) {
+                        std::cerr << "[ServerSkillCompiler] " << asset.name << ": " << err << "\n";
+                        continue;
+                    }
+                }
+                pg::applyOverrides(*cfg, sys.overrides);
+                if (const std::string unsupported = cfg->unsupportedSummary();
+                    !unsupported.empty()) {
+                    std::cerr << "[ServerSkillCompiler] " << asset.name << " vfx system '"
+                              << sys.name << "' has unsupported gameplay features: "
+                              << unsupported << "\n";
+                }
+                sys.gameplayCfg = std::move(cfg);
+            }
+        }
+    }
 }

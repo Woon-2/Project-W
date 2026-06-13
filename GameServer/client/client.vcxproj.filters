@@ -339,7 +339,7 @@
     <ClCompile Include="swordSlashMaterial.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="simpleJson.cpp">
+    <ClCompile Include="..\common\simpleJson.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="twoSidesPipeline.cpp">
@@ -710,7 +710,10 @@
     <ClInclude Include="swordSlashMaterial.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="simpleJson.hpp">
+    <ClInclude Include="..\common\simpleJson.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\particleGameplay.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="twoSidesPipeline.hpp">

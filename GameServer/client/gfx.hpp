@@ -116,6 +116,16 @@ public:
 	// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 	~GFX();
 
+	// 제출된 모든 GPU 작업(프레임 + 로드)이 끝날 때까지 블로킹 대기한다.
+	// Game 소멸자 본문에서 멤버 소멸 전에 호출해야 한다: gfx_보다 뒤에 선언된
+	// 멤버(지형/파티클/UI 텍스처 등)는 ~GFX의 드레인보다 먼저 파괴되므로,
+	// GPU가 아직 참조 중인 리소스를 해제해 디바이스 행(TDR)을 유발할 수 있다.
+	void drainGpu();
+
+	// Present의 vsync 여부(기본 on). 한 GPU에서 여러 클라이언트가 vsync 없이
+	// 풀스피드로 Present하면 DWM까지 굶겨 TDR(디바이스 제거)을 유발할 수 있다.
+	void setVsync(bool enabled) { vsyncEnabled_ = enabled; }
+
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
 
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
@@ -374,7 +384,9 @@ public:
 	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth → None
 	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 8u; }
 
-	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
+	// Returns false when text rendering fails (e.g. device loss); callers keep
+	// their text dirty and retry on a later frame.
+	bool WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
@@ -587,6 +599,7 @@ private:
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
 	bool hiZCullEnabled_      = true;
+	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
 	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
 };

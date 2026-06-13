@@ -76,8 +76,9 @@ void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer,
 	auto pkt = reinterpret_cast<CSkillStartPacket*>(buffer);
 	uint32 skillAssetId = pkt->skillAssetId;
 	uint64 clientMs     = pkt->clientMs;
-	session->room()->doAsync( [session, skillAssetId, clientMs]() {
-		session->room()->skillStart( session->id(), skillAssetId, clientMs );
+	uint32 skillSeed    = pkt->skillSeed;
+	session->room()->doAsync( [session, skillAssetId, clientMs, skillSeed]() {
+		session->room()->skillStart( session->id(), skillAssetId, clientMs, skillSeed );
 	} );
 }
 
@@ -95,6 +96,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& pl
 		infos[i].type = objInfos[i].type;
 		infos[i].objectId = objInfos[i].objectId;
 		infos[i].materialSetIdx = objInfos[i].materialSetIdx;
+		infos[i].weaponType = objInfos[i].weaponType;
 		infos[i].hp = objInfos[i].hp;
 		infos[i].maxHp = objInfos[i].maxHp;
 		infos[i].pos = objInfos[i].pos;
@@ -281,11 +283,12 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerAttackPacket( uint16 attac
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32 newHp) {
+std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 attackerId, uint16 targetId, int32 newHp) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SHitPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<SHitPacket>();
+	pkt->attackerId = attackerId;
 	pkt->targetId = targetId;
 	pkt->newHp    = newHp;
 
@@ -297,7 +300,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32
 }
 
 
-std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs) {
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -305,6 +308,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->skillAssetId = skillAssetId;
 	pkt->ownerId      = ownerId;
 	pkt->elapsedMs    = elapsedMs;
+	pkt->skillSeed    = skillSeed;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
 

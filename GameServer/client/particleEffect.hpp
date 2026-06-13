@@ -70,6 +70,12 @@ public:
     void setGroundBehavior(ps::ParticleCollisionModule::Mode collision,
                            ps::ShapeModule::GroundConform     conform);
 
+    // Per-cast deterministic seed (set by the skill system before play()).
+    // Forwarded to each non-sub-emitter system as mixSeed(seed, systemIndex);
+    // systems without a gameplay config ignore it. The server derives the
+    // same per-system seeds (see RoomServer SkillSystem particle sources).
+    void setDeterministicSeed(std::uint32_t seed);
+
     // Calls stopContinuous() on all sub-systems.
     void stop();
 

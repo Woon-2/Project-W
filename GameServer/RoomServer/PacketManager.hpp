@@ -27,11 +27,11 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcBarrierPacket(bool active, const std::vector<uint32>& npcIds);
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);
 	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
-	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 targetId, int32 newHp);
+	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 attackerId, uint16 targetId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos);
 	static std::shared_ptr<SendBuffer> makeSStrongholdStatePacket(uint16 strongholdId, int32 hp, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSZoneStatePacket(uint16 zoneId, uint8 state);
-	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs);
+	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity);
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 };

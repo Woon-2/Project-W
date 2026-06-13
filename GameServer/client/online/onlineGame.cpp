@@ -83,6 +83,15 @@ static constexpr float   kPlayerHpHeartSize         = 60.f;
 static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 하트 크기 대비 % (해상도 무관, 부모 비율로 스케일)
 static constexpr float   kPlayerHpHeartBarOverlap   = 12.f;
 static constexpr float   kPlayerHpBarHeight         = 18.f;
+static constexpr float   kPlayerNameLabelHeight     = 22.f;
+static constexpr float   kPartyHpStartYOffset       = 165.f;
+static constexpr float   kPartyHpRowHeight          = 56.f;
+static constexpr float   kPartyHpHeartSize          = 48.f;
+static constexpr float   kPartyWeaponIconScale      = 50.f;
+static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
+static constexpr float   kPartyHpBarWidth           = 230.f;
+static constexpr float   kPartyHpBarHeight          = 14.f;
+static constexpr float   kPartyHpNameHeight         = 20.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -110,10 +119,16 @@ Game::Game() {
 }
 
 Game::~Game() {
-	// 소멸자 본문은 모든 멤버 소멸(threadPool_ 워커 join 포함)보다 먼저 실행된다.
-	// 백그라운드 파티클 JSON 파싱이 진행 중이면 즉시 중단을 요청해, 로딩 워커가
-	// 남은 파일을 끝까지 파싱하지 않고 빠르게 빠져나오도록 한다.
+	// 소멸자 본문은 gfx_ 같은 멤버 소멸보다 먼저 실행된다. 종료 중 백그라운드 로딩/지형
+	// 작업이 GFX 리소스를 계속 만지면 GPU 큐가 깨질 수 있으므로, 먼저 워커를 모두 멈춘다.
 	assetLoadAbort_.store(true, std::memory_order_relaxed);
+	threadPool_.stop();
+
+	// 멤버 소멸 전에 GPU를 드레인한다. gfx_보다 뒤에 선언된 멤버(지형 청크, 파티클,
+	// UI 텍스처 등)는 ~GFX의 펜스 대기보다 먼저 파괴되므로, 드레인 없이는 GPU가
+	// 실행 중인 명령이 참조하는 리소스를 해제하게 된다. 이 디바이스 폴트가 TDR을
+	// 일으켜 같은 GPU의 다른 클라이언트까지 디바이스 제거(DEVICE_HUNG)로 먹통이 됐다.
+	gfx_.drainGpu();
 }
 
 void Game::setupStageVisual() {
@@ -267,7 +282,7 @@ void Game::setupStage() {
 	playerWeaponIcon_->pivot   = UI::Pivots::Center;
 	playerWeaponIcon_->width   = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->height  = UI::DimValue::pct(kPlayerWeaponIconScale);
-	playerWeaponIcon_->texture = assetManager_.heavyArrow();
+	playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(PlayerWeaponType::Katana);
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -295,6 +310,20 @@ void Game::setupStage() {
 	playerHpText_->setFontSize(14.0f);
 	playerHpText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	playerHpText_->setText(L"100 / 100");
+
+	playerNameText_ = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	playerNameText_->name    = "playerNameText";
+	playerNameText_->anchor  = UI::Anchors::TopLeft;
+	playerNameText_->pivot   = UI::Pivots::TopLeft;
+	playerNameText_->width   = UI::DimValue::px(240.f);
+	playerNameText_->height  = UI::DimValue::px(kPlayerNameLabelHeight);
+	playerNameText_->zOrder  = playerHpBar_->zOrder + 2;
+	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
+	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
+	playerNameText_->setFontSize(18.0f);
+	playerNameText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
@@ -348,6 +377,193 @@ void Game::updatePlayerHpHudLayout() {
 	if (playerHpText_) {
 		playerHpText_->offsetX = playerHpBar_->offsetX;
 		playerHpText_->offsetY = playerHpBar_->offsetY;
+	}
+	if (playerNameText_) {
+		playerNameText_->offsetX = playerHpBar_->offsetX;
+		playerNameText_->offsetY = UI::DimValue::px(
+			uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY - kPlayerNameLabelHeight * 0.65f)
+		);
+	}
+	updatePartyHpHudLayout();
+}
+
+void Game::registerInGamePartyPlayer(uint16 playerId) {
+	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
+		inGamePartyPlayerIds_.push_back(playerId);
+		// Freeze the name at registration: index-based names would shift on every
+		// leave, and my own label (refreshed per frame) would diverge from the
+		// stale labels other clients keep showing for me. Join order is identical
+		// on every client (server fills the S_Enter objList from sessions_ in
+		// enter order, later joins append via S_Enter_Other), so the numbering
+		// stays cross-client consistent.
+		inGamePartyNameById_[playerId] = L"player" + std::to_wstring(++inGamePartyNameSeq_);
+	}
+}
+
+void Game::unregisterInGamePartyPlayer(uint16 playerId) {
+	std::erase(inGamePartyPlayerIds_, playerId);
+	inGamePartyNameById_.erase(playerId);
+}
+
+std::wstring Game::partyDisplayName(uint16 playerId) const {
+	if (auto it = inGamePartyNameById_.find(playerId); it != inGamePartyNameById_.end()) {
+		return it->second;
+	}
+
+	return L"player";
+}
+
+void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
+	auto* root = uiManager_.root();
+	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
+		// Live widget destruction frees GPU resources (the party Label's
+		// TextImage); drain so in-flight frames can't reference freed memory.
+		gfx_.drainGpu();
+		if (it->second.hpBar) {
+			root->removeChild(it->second.hpBar);
+		}
+		if (it->second.partyRoot) {
+			root->removeChild(it->second.partyRoot);
+		}
+		otherPlayerHpBars_.erase(it);
+	}
+
+	auto* worldBar = static_cast<UI::ProgressBar*>(
+		root->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	worldBar->anchor    = UI::Anchors::TopLeft;
+	worldBar->pivot     = UI::Pivots::TopLeft;
+	worldBar->width     = UI::DimValue::px(80.f);
+	worldBar->height    = UI::DimValue::px(8.f);
+	worldBar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
+	worldBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	worldBar->visible   = false;
+
+	auto* partyRoot = root->addChild(std::make_unique<UI::UIElement>());
+	partyRoot->name    = "partyPlayerHud";
+	partyRoot->anchor  = UI::Anchors::TopLeft;
+	partyRoot->pivot   = UI::Pivots::TopLeft;
+	partyRoot->width   = UI::DimValue::px(kPartyHpHeartSize + kPartyHpBarWidth);
+	partyRoot->height  = UI::DimValue::px(kPartyHpRowHeight);
+	partyRoot->zOrder  = 2;
+
+	auto* partyHeart = static_cast<UI::Image*>(
+		partyRoot->addChild(std::make_unique<UI::Image>())
+	);
+	partyHeart->name    = "partyHpHeart";
+	partyHeart->anchor  = UI::Anchors::TopLeft;
+	partyHeart->pivot   = UI::Pivots::TopLeft;
+	partyHeart->width   = UI::DimValue::px(kPartyHpHeartSize);
+	partyHeart->height  = UI::DimValue::px(kPartyHpHeartSize);
+	partyHeart->texture = assetManager_.playerHpHeart();
+	partyHeart->zOrder  = 0;
+
+	auto* partyWeaponIcon = static_cast<UI::Image*>(
+		partyHeart->addChild(std::make_unique<UI::Image>())
+	);
+	partyWeaponIcon->name    = "partyWeaponIcon";
+	partyWeaponIcon->anchor  = UI::Anchors::Center;
+	partyWeaponIcon->pivot   = UI::Pivots::Center;
+	partyWeaponIcon->width   = UI::DimValue::pct(kPartyWeaponIconScale);
+	partyWeaponIcon->height  = UI::DimValue::pct(kPartyWeaponIconScale);
+	partyWeaponIcon->texture = assetManager_.playerWeaponIcon(weaponType);
+
+	auto* partyName = static_cast<UI::Label*>(
+		partyRoot->addChild(std::make_unique<UI::Label>())
+	);
+	partyName->name    = "partyName";
+	partyName->anchor  = UI::Anchors::TopLeft;
+	partyName->pivot   = UI::Pivots::TopLeft;
+	partyName->offsetX = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyName->offsetY = UI::DimValue::px(0.f);
+	partyName->width   = UI::DimValue::px(kPartyHpBarWidth);
+	partyName->height  = UI::DimValue::px(kPartyHpNameHeight);
+	partyName->zOrder  = 2;
+	partyName->setTextHAlign(UI::TextHAlign::Leading);
+	partyName->setTextVAlign(UI::TextVAlign::Center);
+	partyName->setFontSize(16.0f);
+	partyName->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	partyName->setText(partyDisplayName(playerId));
+
+	auto* partyBar = static_cast<UI::ProgressBar*>(
+		partyRoot->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	partyBar->name      = "partyHpBar";
+	partyBar->anchor    = UI::Anchors::TopLeft;
+	partyBar->pivot     = UI::Pivots::TopLeft;
+	partyBar->offsetX   = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyBar->offsetY   = UI::DimValue::px(kPartyHpNameHeight);
+	partyBar->width     = UI::DimValue::px(kPartyHpBarWidth);
+	partyBar->height    = UI::DimValue::px(kPartyHpBarHeight);
+	partyBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	partyBar->fillColor = { 1.0f, 0.0f, 0.0f, 1.0f };
+	partyBar->zOrder    = 1;
+	partyBar->setProgress(1.f);
+
+	otherPlayerHpBars_[playerId] = {
+		player,
+		worldBar,
+		weaponType,
+		partyRoot,
+		partyHeart,
+		partyWeaponIcon,
+		partyName,
+		partyBar
+	};
+	updatePartyHpHudLayout();
+}
+
+void Game::updatePartyHpHudLayout() {
+	int visibleRow = 0;
+	const uint16 localPlayerId = player_ ? static_cast<uint16>(player_->getId()) : 0;
+	for (uint16 playerId : inGamePartyPlayerIds_) {
+		if (playerId == localPlayerId) {
+			continue;
+		}
+
+		auto it = otherPlayerHpBars_.find(playerId);
+		if (it == otherPlayerHpBars_.end()) {
+			continue;
+		}
+
+		auto& entry = it->second;
+		if (!entry.partyRoot) {
+			continue;
+		}
+
+		const float rowY = kPlayerHpUiY + kPartyHpStartYOffset + kPartyHpRowHeight * visibleRow;
+		entry.partyRoot->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+		entry.partyRoot->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(rowY));
+		entry.partyRoot->visible = true;
+
+		if (entry.partyNameLabel) {
+			entry.partyNameLabel->setText(partyDisplayName(playerId));
+		}
+
+		++visibleRow;
+	}
+
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		const bool listed = std::ranges::find(inGamePartyPlayerIds_, static_cast<uint16>(id)) != inGamePartyPlayerIds_.end()
+			&& id != localPlayerId;
+		if (!listed && entry.partyRoot) {
+			entry.partyRoot->visible = false;
+		}
+	}
+}
+
+void Game::updatePartyHpHudValues() {
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		if (!entry.partyRoot || !entry.partyHpBar || !entry.player) {
+			continue;
+		}
+
+		const int maxHp = std::max(1, entry.player->maxHp());
+		const int hp = std::max(0, entry.player->hp());
+		entry.partyHpBar->setProgress(static_cast<float>(hp) / static_cast<float>(maxHp));
+		if (entry.partyWeaponIcon) {
+			entry.partyWeaponIcon->texture = assetManager_.playerWeaponIcon(entry.weaponType);
+		}
 	}
 }
 
@@ -800,6 +1016,8 @@ void Game::setParticle()
 				.inheritSize     = true,
 			} };
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+			// Gameplay config for the hitbox-bound system 0 comes from the
+			// skill lua (addVFX systems table) via bindVfxGameplayConfigs().
 		}
 
 		// child: crystal pillars (StretchedBillboard in Unity)
@@ -1698,6 +1916,16 @@ void Game::setParticle()
 	}
 }
 
+void Game::prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds) {
+	inGamePartyPlayerIds_.clear();
+	inGamePartyNameById_.clear();
+	inGamePartyNameSeq_ = 0;
+	for (uint16 id : existingPlayerIds) {
+		registerInGamePartyPlayer(id);
+	}
+	registerInGamePartyPlayer(myPlayerId);
+}
+
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_ = std::make_shared<Player>();
 
@@ -1710,6 +1938,9 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
+	if (playerWeaponIcon_) {
+		playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(playerInfo.weaponType);
+	}
 
 	player_->body().setMotionType(MotionType::Dynamic);
 	player_->body().setMass(80.f);
@@ -1733,6 +1964,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
+	registerInGamePartyPlayer(playerInfo.playerId);
 
 	setParticle();
 
@@ -1741,6 +1973,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		SkillCompiler compiler;
 		const Skeleton* pSkeleton = player_->model() ? &player_->model()->skeleton : nullptr;
 		auto assets = compiler.compileAll("../resources/skills", pSkeleton);
+		// VFXParticle 히트박스용 게임플레이 설정(effect JSON + lua 오버라이드) 빌드.
+		buildVfxGameplayConfigs(assets, "../resources");
 		skillSystem_.registerAssets(std::move(assets));
 
 		skillObjectById_.assign(256, nullptr);
@@ -1753,8 +1987,28 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 			skillObjectById_[sid] = goblin.get();
 		}
 
-		skillVfxById_.assign(2, nullptr);
-		skillVfxById_[1] = &swordSlash1Effect_;   // effects/sword_slash_1.json
+		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
+		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
+		// same skill .lua PlayVFX events resolve identically in online mode.
+		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
+		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
+		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
+		skillVfxById_[4]  = &swordSlash7Effect_;          // Slash7
+		skillVfxById_[5]  = &spikesAttackEffect_;         // Spikes
+		skillVfxById_[6]  = &crystalsFrontAttackEffect_;  // CrystalsFrontAttack
+		skillVfxById_[7]  = &aoESlashGreenEffect_;        // AoESlashGreen
+		skillVfxById_[8]  = &redEnergyExplosionEffect_;   // RedEnergyExplosion
+		skillVfxById_[9]  = &crystalsCrossFadeEffect_;    // CrystalsCrossFade
+		skillVfxById_[10] = &arrowEffect_;                // Arrow
+		skillVfxById_[11] = &arrowVolleyEffect_;          // ArrowVolley
+		skillVfxById_[12] = &arrowRainEffect_;            // ArrowRain
+		skillVfxById_[13] = &energyExplosionArrowEffect_; // EnergyExplosionArrow
+		skillVfxById_[14] = &tornadoShotEffect_;          // TornadoShot
+		skillVfxById_[15] = &piercingEffect_;             // Piercing
+		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
+		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
+		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
 
 		skillCtx_.objectById          = skillObjectById_.data();
 		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
@@ -1772,6 +2026,11 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 			return chunkManager_.empty() ? mu::Vec3{ 0.f, 1.f, 0.f } : chunkManager_.normalAtWorld(x, z);
 		};
 		skillCtx_.ground = &groundSampler_;
+
+		// 이펙트는 이 시점에 이미 전부 구성되어 있다: 스킬 lua의 addVFX systems
+		// 구성으로 빌드된 게임플레이 설정을 각 시스템에 주입 (결정론 모드 활성).
+		skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
+		                                    static_cast<int>(skillVfxById_.size()));
 	}
 }
 
@@ -1817,19 +2076,8 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	{
-		auto* bar = static_cast<UI::ProgressBar*>(
-			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
-		);
-		bar->anchor    = UI::Anchors::TopLeft;
-		bar->pivot     = UI::Pivots::TopLeft;
-		bar->width     = UI::DimValue::px(80.f);
-		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
-		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-		bar->visible   = false;
-		otherPlayerHpBars_[otherPlayerInfo.objectId] = { otherPlayer.get(), bar };
-	}
+	registerInGamePartyPlayer(otherPlayerInfo.objectId);
+	createOtherPlayerHud(otherPlayerInfo.objectId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
@@ -1873,19 +2121,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	{
-		auto* bar = static_cast<UI::ProgressBar*>(
-			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
-		);
-		bar->anchor    = UI::Anchors::TopLeft;
-		bar->pivot     = UI::Pivots::TopLeft;
-		bar->width     = UI::DimValue::px(80.f);
-		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
-		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-		bar->visible   = false;
-		otherPlayerHpBars_[otherPlayerInfo.playerId] = { otherPlayer.get(), bar };
-	}
+	registerInGamePartyPlayer(otherPlayerInfo.playerId);
+	createOtherPlayerHud(otherPlayerInfo.playerId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
@@ -2072,23 +2309,41 @@ void Game::removePlayer( i32t playerId ) {
 		return;
 	}
 
+	// 아래 해체는 게임 도중 GPU 참조 객체를 즉시 파괴한다 — 특히 파티 HUD의
+	// Label은 전용 TextImage(ID3D12 텍스처)를 소유하는데, D3D12는 Release 즉시
+	// 메모리를 회수하므로 in-flight 프레임이 그 텍스처를 참조하고 있으면 디바이스
+	// 폴트 → TDR로 같은 GPU의 모든 클라이언트가 멈춘다(DEVICE_HUNG). 퇴장은 드문
+	// 이벤트이므로 파괴 전에 GPU를 드레인한다(수 프레임 대기).
+	gfx_.drainGpu();
+
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
 	physicsWorld_.unregisterBody(&(*itPlayer)->body());
 
 	// Stop any skills this player owns and drop the skill-system reference before
 	// the Object is destroyed, so checkHitboxCollisions never dereferences a
 	// dangling pointer through skillObjectById_.
+	// This runs inside the frame-start APC where skillCtx_ still holds last
+	// frame's pointers; an earlier packet in the same batch may have reallocated
+	// skillObjectById_, so re-sync before dispatching into the skill system.
+	refreshSkillCtx();
 	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
 	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
 		skillObjectById_[playerId] = nullptr;
 
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
+		if (it->second.partyRoot) {
+			uiManager_.root()->removeChild(it->second.partyRoot);
+		}
 		otherPlayerHpBars_.erase(it);
 	}
 
+	unregisterInGamePartyPlayer(static_cast<uint16>(playerId));
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
+
+	// Re-pack the remaining party HUD rows so the removed row leaves no gap.
+	updatePartyHpHudLayout();
 }
 
 // 플레이어 간 reciprocal soft separation (클라 예측).
@@ -2274,7 +2529,10 @@ void Game::resolveBarrierSeparation(Seconds dt) {
 }
 
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
-	auto player = idPlayerMap_[playerId];
+	// find(): operator[] would insert a null entry for an unknown id, and code
+	// that find()s the map and dereferences without a null check would crash.
+	auto playerIt = idPlayerMap_.find(playerId);
+	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(player != nullptr,
 		"[Game Error] Game::movePlayer: 이동하려는 플레이어가 존재하지 않습니다.\n",
@@ -2298,7 +2556,8 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 }
 
 void Game::rotatePlayer(uint16 playerId, float yawRad) {
-	auto player = idPlayerMap_[playerId];
+	auto playerIt = idPlayerMap_.find(playerId);
+	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(player != nullptr,
 		"[Game Error] Game::rotatePlayer: 회전하려는 플레이어가 존재하지 않습니다.\n",
@@ -2318,7 +2577,8 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 }
 
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
-	auto goblin = idGoblinMap_[npcId];
+	auto goblinIt = idGoblinMap_.find(npcId);
+	auto goblin = goblinIt != idGoblinMap_.end() ? goblinIt->second : nullptr;
 
 	DISPLAY_ERROR_STR(goblin != nullptr,
 		"[Game Error] Game::moveGoblin: 이동하려는 고블린이 존재하지 않습니다.\n",
@@ -2340,7 +2600,8 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
-	auto npc = idGoblinMap_[ npcId ];
+	auto npcIt = idGoblinMap_.find( npcId );
+	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
 
 	DISPLAY_ERROR_STR( npc != nullptr,
 		"[Game Error] Game::onNpcAttack: 공격하는 NPC가 존재하지 않습니다.\n",
@@ -2358,7 +2619,7 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
-void Game::applyHit( uint16 targetId, int32 newHp ) {
+void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(고블린/거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
@@ -2369,13 +2630,14 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 	// 디스패치 루프(InGameScene)에서 대상 객체의 eventBus로 분배되며, 데미지 넘버도 그곳에서 생성된다.
 	// 거점도 이제 Stronghold::EventBus를 가지므로 고블린/플레이어와 동일 경로를 탄다.
 	if ( newHp <= 0 )
-		holdEvent( eventList_, EvDeath( targetId ) );
+		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
 		holdEvent( eventList_, EvHit( targetId, newHp ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
-	auto npc = idGoblinMap_[ npcId ];
+	auto npcIt = idGoblinMap_.find( npcId );
+	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
 
 	DISPLAY_ERROR_STR( npc != nullptr,
 		"[Game Error] Game::onNpcRespawn: 리스폰하는 NPC가 존재하지 않습니다.\n",
@@ -2394,13 +2656,18 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
+	// skillSeed is the caster-generated seed relayed by the server, so this
+	// client renders the identical particle layout the server judges hits on.
+	// APC-time call: re-sync skillCtx_ in case skillObjectById_ was resized by an
+	// earlier packet in this batch.
+	refreshSkillCtx();
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
-	                        Milliseconds{ static_cast<float>(elapsedMs) });
+	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
 
 void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
@@ -2410,7 +2677,7 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
-	applyHit(targetId, newHp);
+	applyHit(targetId, newHp, attackerId);
 
 	// Spawn impact VFX at the target's position.
 	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
@@ -2466,10 +2733,21 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	gfx_.setVsync(settings_.vsync);
 	switch (scene_) {
 	case Scene::Lobby:  renderLobby();  break;
 	case Scene::InGame: renderInGame(); break;
 	}
+}
+
+// Re-syncs the per-frame skill dispatch pointers. Called every frame from
+// InGameScene, and again by packet handlers that reach the skill system from
+// the frame-start APC (where the last refresh may predate a container resize).
+void Game::refreshSkillCtx() {
+	skillCtx_.evList         = &eventList_;
+	skillCtx_.pTimer         = pTimer_;
+	skillCtx_.objectById     = skillObjectById_.data();
+	skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
 }
 
 void Game::InGameScene(Milliseconds deltaTime) {
@@ -2480,10 +2758,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	}
 
 	// Skill dispatch context: refresh per-frame pointers.
-	skillCtx_.evList         = &eventList_;
-	skillCtx_.pTimer         = pTimer_;
-	skillCtx_.objectById     = skillObjectById_.data();
-	skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
+	refreshSkillCtx();
 
 	// 이전 프레임 속도 저장
 	prevVelocity_ = currVelocity_;
@@ -2616,9 +2891,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
 					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
 				}
-				// Kill count: a goblin death not already counted (guards duplicate EvDeath).
+				// Kill count is personal: only the local player's killing blow increments this HUD.
 				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()
-					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end())
+					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end()
+					&& player_ && static_cast<const EvDeath*>(pEv)->killerId == player_->getId())
 				{
 					killCountWidget_->addKill();
 				}
@@ -2768,7 +3044,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				swprintf_s(hpText, L"%d / %d", playerHp, playerMaxHp);
 				playerHpText_->setText(hpText);
 			}
+			if (playerNameText_) {
+				playerNameText_->setText(partyDisplayName(static_cast<uint16>(player_->getId())));
+			}
 		}
+		updatePartyHpHudValues();
 
 		for (auto& [id, entry] : otherPlayerHpBars_) {
 			if (!entry.player || entry.player->hp() <= 0) {
@@ -2790,7 +3070,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.player->hp()) /
-					static_cast<float>(entry.player->maxHp())
+					static_cast<float>(std::max(1, entry.player->maxHp()))
 				);
 			}
 		}
@@ -3629,6 +3909,7 @@ void Game::lobbyLeaveRoom() {
 	clearLobbyCharacters();
 
 	refreshLobbyUI();
+	applyCursorPolicy();
 }
 
 void Game::lobbyStartGame() {
@@ -3654,6 +3935,7 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
+	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
 }
 
@@ -3676,6 +3958,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
+	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
@@ -3731,7 +4014,13 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+		// Input-read failures are survivable: log and drop the event. Exiting here
+		// killed every client in turn when sibling windows on the same PC closed
+		// (focus churn delivers broken/synthesized WM_INPUT to the next window).
+		DISPLAY_ERROR_GLE(rawInputResult != -1, false);
+		if (rawInputResult == static_cast<UINT>(-1)) {
+			return 0;
+		}
 
 		if (rawInputSize > sRawInputBuffer.size()) {
 			sRawInputBuffer.resize(rawInputSize);
@@ -3741,16 +4030,18 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, false);
+		if (rawInputResult != rawInputSize) {
+			return 0;
+		}
 
 		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
 		if (ri->header.dwType == RIM_TYPEMOUSE) {
-			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
-			DISPLAY_ERROR_STR(!(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
-				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
-				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
-				true
-			);
+			// Absolute moves (input synthesized during focus churn, RDP, tablets)
+			// are not camera input; drop the event instead of exiting the process.
+			if (ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
+				return 0;
+			}
 
 			// 마우스 이동량 기록
 			mouseDeltaX_ += ri->data.mouse.lLastX;
@@ -3805,12 +4096,24 @@ void Game::sendAttackPacket() {
 	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 
-void Game::sendSkillStartPacket(uint32 skillAssetId) {
+void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 	uint64 clientMs = static_cast<uint64>(
 		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::high_resolution_clock::now().time_since_epoch()
 		).count()));
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs));
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+}
+
+void Game::castSkillByName(std::string_view name) {
+	const SkillAsset* asset = skillSystem_.findAsset(name);
+	if (!asset) return;
+	if (skillSystem_.hasActiveSkill(player_->getId())) return;
+
+	// Per-cast deterministic seed: used locally AND sent to the server
+	// (C_SkillStart) so server hitboxes / remote visuals match exactly.
+	const uint32 skillSeed = std::random_device{}();
+	skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_, skillSeed);
+	sendSkillStartPacket(asset->id, skillSeed);
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -3943,17 +4246,41 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
-	// Q key: start skill
-	if (!playerDead_
-		&& !uiManager_.needsCursor()
-		&& (keyboardStateCurr_['Q'] & 0x80)
-		&& !(keyboardStatePrev_['Q'] & 0x80))
-	{
-		const SkillAsset* asset = skillSystem_.findAsset("SwordSlash");
-		if (asset && !skillSystem_.hasActiveSkill(player_->getId())) {
-			skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_);
-			sendSkillStartPacket(asset->id);
+	// 임시 스킬 키바인딩 (16종): 1~0 = 슬롯 1~10, Shift+1~6 = 슬롯 11~16.
+	// Q는 기존 SwordSlash 단축키로 유지. 정식 스킬 슬롯 UI가 생기면 대체한다.
+	// 순서는 editor/characterSkillMap.hpp의 Player 스킬 순서에서
+	// 미완성 스킬(AoESlashGreen, TornadoShot)을 뺀 것이다.
+	if (!playerDead_ && !uiManager_.needsCursor()) {
+		static constexpr std::array<std::string_view, 16> kTempSkillKeymap = {
+			"SwordSlash",           // 1
+			"SlashWave",            // 2
+			"SlashCombo",           // 3
+			"Slash7",               // 4
+			"Spikes",               // 5
+			"CrystalsFrontAttack",  // 6
+			"RedEnergyExplosion",   // 7
+			"CrystalsCrossFade",    // 8
+			"Arrow",                // 9
+			"ArrowVolley",          // 0
+			"ArrowRain",            // Shift+1
+			"EnergyExplosionArrow", // Shift+2
+			"Piercing",             // Shift+3
+			"PiercingSlash",        // Shift+4
+			"PiercingCircleSlash",  // Shift+5
+			"PiercingMulti",        // Shift+6
+		};
+		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		for (int i = 0; i < 10; ++i) {
+			const int vk = (i == 9) ? '0' : ('1' + i);
+			if (!(keyboardStateCurr_[vk] & 0x80) || (keyboardStatePrev_[vk] & 0x80))
+				continue;
+			const std::size_t slot = shiftHeld ? static_cast<std::size_t>(i) + 10
+			                                   : static_cast<std::size_t>(i);
+			if (slot < kTempSkillKeymap.size())
+				castSkillByName(kTempSkillKeymap[slot]);
 		}
+		if ((keyboardStateCurr_['Q'] & 0x80) && !(keyboardStatePrev_['Q'] & 0x80))
+			castSkillByName("SwordSlash");
 	}
 
 	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생
@@ -4104,13 +4431,18 @@ void Game::applyCursorPolicy() {
 		return;
 	}
 
-	// 전체화면/창모드와 관계없이 게임 창 안으로 커서를 묶는다.
-	// 단, 로비와 설정창에서는 포인터를 보여 UI를 클릭할 수 있게 한다.
+	// 로비 메인 메뉴와 설정창에서는 포인터를 자유롭게 둔다.
+	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
+		|| settingsPanel_.isOpen();
 	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
-	cursorCaptureEnabled_ = true;
+	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
 
-	captureCursor();
+	if (releaseCursorNow) {
+		releaseCursor();
+	} else {
+		captureCursor();
+	}
 	if (showCursorNow) {
 		showCursor();
 	} else {

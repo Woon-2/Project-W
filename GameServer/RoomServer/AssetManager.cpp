@@ -18,6 +18,9 @@ void AssetManager::loadAssets() {
     {
         ServerSkillCompiler compiler;
         skillAssets_ = compiler.compileAll("../resources/skills");
+        // VFXParticle 히트박스용 게임플레이 설정(effect JSON + lua 오버라이드)을
+        // 부팅 시 1회 빌드해 전 룸이 공유한다 (shared_ptr, 불변).
+        buildVfxGameplayConfigs(skillAssets_, "../resources");
         skillAssets_.shrink_to_fit();
         // id가 지정되지 않은(0) asset에 1부터 순번 부여. 공유 레지스트리가
         // 바인딩 전에 id 확정 상태가 되도록 여기서 1회만 수행한다.

@@ -356,7 +356,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 
 		if (result.hit) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
-			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), result.hit->targetId, result.hit->newHp));
 		}
 	}
 
@@ -499,6 +499,7 @@ void Room::enter(GameSession* session) {
 	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
+	player->setWeaponType(PlayerWeaponType::Katana);
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -514,6 +515,7 @@ void Room::enter(GameSession* session) {
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
 		.materialSetIdx = 0,
+		.weaponType = player->weaponType(),
 		.hp = kPlayerMaxHp,
 		.maxHp = kPlayerMaxHp,
 		.pos = player->pos().getXmf(),
@@ -530,6 +532,7 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Player,
 			.objectId = static_cast<uint16>(session->id()),
 			.materialSetIdx = 0,
+			.weaponType = session->player()->weaponType(),
 			.hp = session->player()->hp(),
 			.maxHp = kPlayerMaxHp,
 			.pos = session->player()->pos().getXmf(),
@@ -747,7 +750,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 	if (sessionIt == idSessionMap_.end()) return;
 
@@ -764,21 +767,26 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
 
 	// Start server-side skill instance for authoritative hit detection.
+	// skillSeed: caster-generated per-cast seed; drives the deterministic
+	// VFXParticle hitbox sampler so server hits match the caster's visuals.
 	// Reuse skillEvList_ (serialized with updateSkillSystem via the room job queue).
 	SkillDispatchContext startCtx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
 	bindGroundQueries(startCtx);
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(player->getId()),
-	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) });
+	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) },
+	                                      skillSeed);
 	clearEvents(skillEvList_);
 	if (instIdx < 0)
 		std::cout << "[Room::skillStart] WARNING: startSkill failed (asset id=" << skillAssetId << " not in registry)\n";
 
-	// Broadcast to OTHER clients so they play the visual effect
+	// Broadcast to OTHER clients so they play the visual effect (with the
+	// same seed so their layout matches the server's hitboxes).
 	broadcastExcept(sessionIt->second,
 		PacketManager::makeSSkillStartPacket(
 			skillAssetId,
 			static_cast<uint16>(player->getId()),
-			elapsedMs
+			elapsedMs,
+			skillSeed
 		)
 	);
 }
@@ -821,7 +829,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 			int32 newHp = std::max(goblin.hp() - kDamage, 0);
 			goblin.setHp(newHp);
 
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(goblin.getId()), newHp));
 		}
 	}
 
@@ -833,7 +841,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		if (collides(hitbox, aabb).hit) {
 			int32 newHp = std::max(o->hp() - kDamage, 0);
 			o->setHp(newHp);
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(o->getId()), newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(o->getId()), newHp));
 		}
 	};
 	for (auto& npc : tacticalNpcs_) tryMeleeTactical(npc.get());
@@ -893,7 +901,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (!result.hits.empty())
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
 		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(platoonLeader_->getId()), hit.targetId, hit.newHp));
 	}
 
 	for (auto& squad : tacticalSquads_) {
@@ -921,7 +929,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (!result.hits.empty())
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc->getId())));
 		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(npc->getId()), hit.targetId, hit.newHp));
 	}
 
 	if (!moveInfos.empty())

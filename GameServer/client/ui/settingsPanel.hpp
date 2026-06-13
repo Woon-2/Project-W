@@ -28,6 +28,9 @@ class Label;
 // game so the lobby, the in-game HUD and gameplay systems all read the same values.
 struct GameSettings {
     bool fullscreen           = false;  // default windowed -> resolution control is enabled from the start
+    // Default on: uncapped Present from several clients on one GPU starves the
+    // compositor and triggers TDR (device removal) for every process on the GPU.
+    bool vsync                = true;
     bool allyDamageVisible    = true;
     int  resolutionIndex      = 0;    // index into the runtime windowed-resolution list (0 = smallest/default)
     int  monsterDamageOpacity = 100;  // percent, [0..100]
@@ -69,6 +72,8 @@ private:
     Button*    resolutionPrevButton_ = nullptr;
     Button*    resolutionNextButton_ = nullptr;
     Label*     resolutionValueLabel_ = nullptr;
+    Button*    vsyncOffButton_ = nullptr;
+    Button*    vsyncOnButton_ = nullptr;
     Button*    allyDamageOffButton_ = nullptr;
     Button*    allyDamageOnButton_ = nullptr;
     Button*    monsterOpacityPrevButton_ = nullptr;

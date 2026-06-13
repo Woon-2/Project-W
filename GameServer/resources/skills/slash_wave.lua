@@ -7,7 +7,15 @@ skill.name             = "SlashWave"
 skill.totalDurationMs  = 1000
 skill.interruptible    = true
 
-skill:addVFX(2, "effects/slash_wave.json")
+-- systems[]: ParticleEffect composition (index = addSystem order in game.cpp).
+-- The slot-3 hitbox tracks system 1 (SlashPath projectile wave).
+skill:addVFX(2, "effects/Slash wave_ParticleSystems.json", {
+    systems = {
+        { name = "Slash wave",           mode = "Continuous", looping = false },
+        { name = "Slash wave/SlashPath", mode = "Continuous", looping = false,
+          direction = Vec3(0.0, 0.0, 1.0) },
+    }
+})
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",

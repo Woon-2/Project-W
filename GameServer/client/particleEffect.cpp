@@ -113,6 +113,16 @@ void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform)
     }
 }
 
+void ParticleEffect::setDeterministicSeed(std::uint32_t seed)
+{
+    for (int i = 0; i < static_cast<int>(systems_.size()); ++i) {
+        if (systems_[i].isSubEmitter)
+            continue;
+        systems_[i].ps.setDeterministicSeed(
+            pg::mixSeed(seed, static_cast<std::uint32_t>(i)));
+    }
+}
+
 void ParticleEffect::stop()
 {
     for (auto& e : systems_)

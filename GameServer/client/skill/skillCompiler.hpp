@@ -21,6 +21,13 @@
 // sol2 is included only here -- runtime code never includes sol2
 #include <sol/sol.hpp>
 
+// Builds the per-system gameplay configs (effect-JSON import + Lua overrides)
+// for every addVFX `systems` entry of the compiled assets. Each effect JSON
+// is parsed at most once. Call once right after compileAll(); the resulting
+// configs are immutable and shared (deterministic VFXParticle hitboxes).
+void buildVfxGameplayConfigs(std::vector<SkillAsset>& assets,
+                             const std::filesystem::path& resourceRoot);
+
 class SkillCompiler {
 public:
     // Compile all *.lua files under skillDir.

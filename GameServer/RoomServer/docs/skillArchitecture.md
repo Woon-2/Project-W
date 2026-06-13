@@ -251,6 +251,22 @@ per-particle 히트박스를 매 프레임 free/realloc하던 것을 핸들 재�
 
 ---
 
+## VFXParticle 히트박스 — 결정론적 샘플러 (2026-06-11)
+
+이전까지 서버의 `updateParticleHitboxSources()`는 no-op(파티클 시스템 부재)이었다.
+이제 캐스터가 생성한 per-cast 시드(`C_SkillStart::skillSeed`)와
+`common/particleGameplay.hpp`의 카운터 기반 PRNG + 해석적 평가(`pg::evaluateParticles`)로
+**클라이언트 비주얼과 동일한 파티클 위치에 서버 히트박스를 생성**한다.
+
+- `PlayVFX` 이벤트는 더 이상 no-op이 아니다: 이펙트의 월드 앵커(위치+회전+이벤트 시각)를
+  `SkillInstance::vfxAnchors`에 기록한다 (클라 PlayVFX 변환 수식 미러).
+- `SpawnHitbox`(VFXParticle)는 Lua `addVFX(id, path, { systems = ... })` 구성으로
+  effect JSON의 게임플레이 설정을 lazy-load해 소스에 바인딩한다. 구성 테이블이 없는
+  스킬은 기존처럼 히트박스 비활성(경고 로그) — 점진적 마이그레이션.
+- 상세 설계·제약·SYNC 계약: `client/docs/particleHitboxDeterminism.md` 참조.
+
+---
+
 ## 피아 식별 (Faction, 2026-05-29)
 
 아군(같은 진영)끼리는 서로 타격할 수 없어야 한다. 진영 개념을 도입해 **피격 정확성 + broad

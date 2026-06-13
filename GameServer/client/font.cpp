@@ -95,65 +95,91 @@ void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, fl
 	DISPLAY_ERROR_DX_HR( DWriteCreateFactory( DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory5), (IUnknown**)&pDWFactory_ ), true );
 }
 
-void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
+bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
-	BOOL	bResult = FALSE;
+	// 이 경로는 매 프레임 Label 갱신에서 호출된다. D2D/DWrite 실패(디바이스 손실 등)는
+	// 프로세스를 종료시키지 않고 false를 돌려준다 — 호출자가 dirty를 유지해 다음
+	// 프레임에 재시도한다. (이전의 std::exit는 정적 소멸 순서 문제로 2차 크래시까지 유발)
+	*piOutWidth = 0;
+	*piOutHeight = 0;
 
 	ID2D1DeviceContext* pD2DDeviceContext = pD2DDeviceContext_.Get();
 	IDWriteFactory5* pDWFactory = pDWFactory_.Get();
+	if ( !pD2DDeviceContext || !pDWFactory || !pTextFormat )
+	{
+		return false;
+	}
+
 	D2D1_SIZE_F max_size = pD2DDeviceContext->GetSize();
 	max_size.width = (float)D2DBitmapWidth_;
 	max_size.height = (float)D2DBitmapHeight_;
 
-	IDWriteTextLayout* pTextLayout = nullptr;
-	if ( pDWFactory && pTextFormat )
+	ComPtr<IDWriteTextLayout> pTextLayout;
+	DISPLAY_ERROR_DX_HR( pDWFactory->CreateTextLayout( wchString, dwLen, pTextFormat, max_size.width, max_size.height, &pTextLayout ), false );
+	if ( !pTextLayout )
 	{
-		DISPLAY_ERROR_DX_HR( pDWFactory->CreateTextLayout( wchString, dwLen, pTextFormat, max_size.width, max_size.height, &pTextLayout ), true );
+		return false;
 	}
+
 	DWRITE_TEXT_METRICS metrics = {};
+	pTextLayout->GetMetrics( &metrics );
 
-	if ( pTextLayout )
+	// 타겟설정
+	pD2DDeviceContext->SetTarget( pD2DTargetBitmap_.Get() );
+
+	// 안티앨리어싱모드 설정
+	pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE );
+
+	// 텍스트 렌더링
+	pD2DDeviceContext->BeginDraw();
+
+	pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
+	pD2DDeviceContext->SetTransform( D2D1::Matrix3x2F::Identity() );
+
+	ComPtr<ID2D1SolidColorBrush> pColorBrush;
+	HRESULT hrBrush = pD2DDeviceContext->CreateSolidColorBrush( color, &pColorBrush );
+	DISPLAY_ERROR_DX_HR( hrBrush, false );
+	if ( SUCCEEDED( hrBrush ) )
 	{
-		pTextLayout->GetMetrics( &metrics );
-
-		// 타겟설정
-		pD2DDeviceContext->SetTarget( pD2DTargetBitmap_.Get() );
-
-		// 안티앨리어싱모드 설정
-		pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE );
-
-		// 텍스트 렌더링
-		pD2DDeviceContext->BeginDraw();
-
-		pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
-		pD2DDeviceContext->SetTransform( D2D1::Matrix3x2F::Identity() );
-
-		ComPtr<ID2D1SolidColorBrush> pColorBrush;
-		DISPLAY_ERROR_DX_HR( pD2DDeviceContext->CreateSolidColorBrush( color, &pColorBrush ), true );
-		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pColorBrush.Get() ), true);
-
-		// We ignore D2DERR_RECREATE_TARGET here. This error indicates that the device
-		// is lost. It will be handled during the next call to Present.
-		DISPLAY_ERROR_DX_HR( pD2DDeviceContext->EndDraw(), true);
-
-		// 안티앨리어싱 모드 복구    
-		pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_DEFAULT );
-		pD2DDeviceContext->SetTarget( nullptr );
-
-		// 레이아웃 오브젝트 필요없으니 Release
-		pTextLayout->Release();
-		pTextLayout = nullptr;
+		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout.Get(), pColorBrush.Get() ), false );
 	}
+
+	// BeginDraw와 짝을 맞추기 위해 실패 여부와 관계없이 EndDraw를 호출한다.
+	// 디바이스 손실(D2DERR_RECREATE_TARGET 등)은 여기서 보고된다.
+	HRESULT hrEndDraw = pD2DDeviceContext->EndDraw();
+	DISPLAY_ERROR_DX_HR( hrEndDraw, false );
+
+	// 안티앨리어싱 모드 복구
+	pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_DEFAULT );
+	pD2DDeviceContext->SetTarget( nullptr );
+
+	if ( FAILED( hrBrush ) || FAILED( hrEndDraw ) )
+	{
+		return false;
+	}
+
 	int width = (int)ceil( metrics.width );
 	int height = (int)ceil( metrics.height );
 
-	D2D1_POINT_2U	destPos = {};
-	D2D1_RECT_U		srcRect = { 0, 0, width, height };
+	// 공백뿐인 문자열 등 그릴 픽셀이 없으면 복사를 생략한다(성공 취급, 출력 크기 0).
+	if ( width <= 0 || height <= 0 )
+	{
+		return true;
+	}
 
-	DISPLAY_ERROR_DX_HR( pD2DTargetBitmapRead_->CopyFromBitmap( &destPos, pD2DTargetBitmap_.Get(), &srcRect ), true );
+	D2D1_POINT_2U	destPos = {};
+	D2D1_RECT_U		srcRect = { 0, 0, (UINT32)width, (UINT32)height };
+
+	HRESULT hrCopy = pD2DTargetBitmapRead_->CopyFromBitmap( &destPos, pD2DTargetBitmap_.Get(), &srcRect );
+	DISPLAY_ERROR_DX_HR( hrCopy, false );
+	if ( FAILED( hrCopy ) )
+	{
+		return false;
+	}
 
 	*piOutWidth = width;
 	*piOutHeight = height;
+	return true;
 }
 
 FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
@@ -168,6 +194,8 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 
 	if ( pDWFactory )
 	{
+		// 실패 시 pTextFormat이 null로 남고, 이후 CreateBitmapFromText가 false를
+		// 돌려 호출자가 재시도한다. 프로세스를 종료시키지 않는다.
 		DISPLAY_ERROR_DX_HR( pDWFactory->CreateTextFormat(
 			fontFamilyName,
 			pFontCollection,                       // Font collection (nullptr sets it to use the system font collection).
@@ -177,7 +205,7 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 			fontSize,
 			L"ko-kr",
 			&pTextFormat
-		), true );
+		), false );
 	}
 
 	wcscpy_s( ret.wchFontFamilyName, fontFamilyName );
@@ -185,8 +213,8 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 
 	if ( pTextFormat )
 	{
-		DISPLAY_ERROR_DX_HR( pTextFormat->SetTextAlignment( DWRITE_TEXT_ALIGNMENT_LEADING ), true );
-		DISPLAY_ERROR_DX_HR( pTextFormat->SetParagraphAlignment( DWRITE_PARAGRAPH_ALIGNMENT_NEAR ), true );
+		DISPLAY_ERROR_DX_HR( pTextFormat->SetTextAlignment( DWRITE_TEXT_ALIGNMENT_LEADING ), false );
+		DISPLAY_ERROR_DX_HR( pTextFormat->SetParagraphAlignment( DWRITE_PARAGRAPH_ALIGNMENT_NEAR ), false );
 	}
 
 	ret.pTextFormat = pTextFormat;
@@ -194,12 +222,18 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 	return ret;
 }
 
-void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
+bool Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
 	int iTextWidth = 0;
 	int iTextHeight = 0;
 
-	CreateBitmapFromText( &iTextWidth, &iTextHeight, pFontHandle->pTextFormat.Get(), wchString, dwLen, color );
+	*piOutWidth = 0;
+	*piOutHeight = 0;
+
+	if ( !CreateBitmapFromText( &iTextWidth, &iTextHeight, pFontHandle->pTextFormat.Get(), wchString, dwLen, color ) )
+	{
+		return false;
+	}
 
 	if ( iTextWidth > (int)DestWidth )
 		iTextWidth = (int)DestWidth;
@@ -208,7 +242,12 @@ void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHe
 		iTextHeight = (int)DestHeight;
 
 	D2D1_MAPPED_RECT	mappedRect;
-	DISPLAY_ERROR_HR( pD2DTargetBitmapRead_->Map( D2D1_MAP_OPTIONS_READ, &mappedRect ), true );
+	HRESULT hrMap = pD2DTargetBitmapRead_->Map( D2D1_MAP_OPTIONS_READ, &mappedRect );
+	DISPLAY_ERROR_HR( hrMap, false );
+	if ( FAILED( hrMap ) )
+	{
+		return false;
+	}
 
 	BYTE* pDest = pDestImage->pData.data();
 	char* pSrc = (char*)mappedRect.bits;
@@ -220,9 +259,10 @@ void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHe
 		pSrc += mappedRect.pitch;
 	}
 	pD2DTargetBitmapRead_->Unmap();
-	
+
 	*piOutWidth = iTextWidth;
 	*piOutHeight = iTextHeight;
+	return true;
 }
 
 void Font::measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH )

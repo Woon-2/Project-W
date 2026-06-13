@@ -665,6 +665,12 @@ Game::Game() {
 Game::~Game() {
 	if (goblin_ && goblin_->ragdoll().isBuilt())
 		goblin_->ragdoll().destroy(physicsWorld_);
+	threadPool_.stop();
+
+	// Drain the GPU before member destruction: members declared after gfx_ are
+	// destroyed before ~GFX's fence waits, so without this the process releases
+	// resources still referenced by in-flight GPU commands (device fault → TDR).
+	gfx_.drainGpu();
 }
 
 
@@ -752,6 +758,9 @@ void Game::setupStage() {
 		const Skeleton* pSkeleton = (player_ && player_->model())
 		    ? &player_->model()->skeleton : nullptr;
 		auto skillAssets = compiler.compileAll("../resources/skills", pSkeleton);
+		// VFXParticle 히트박스용 게임플레이 설정(effect JSON + lua 오버라이드) 빌드.
+		// 이펙트 구성 완료 후 bindVfxGameplayConfigs()로 각 시스템에 주입된다.
+		buildVfxGameplayConfigs(skillAssets, "../resources");
 		skillSystem_.registerAssets(std::move(skillAssets));
 
 		skillObjectById_.assign(2, nullptr);
@@ -1272,6 +1281,8 @@ void Game::setParticle()
 				.inheritSize     = true,
 			} };
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+			// Gameplay config for the hitbox-bound system 0 comes from the
+			// skill lua (addVFX systems table) via bindVfxGameplayConfigs().
 		}
 
 		// child: crystal pillars (StretchedBillboard in Unity)
@@ -2204,6 +2215,10 @@ void Game::setParticle()
 		}
 	}
 
+	// 모든 이펙트 구성 완료 후: 스킬 lua의 addVFX systems 구성으로 빌드된
+	// 게임플레이 설정을 각 ParticleEffect 시스템에 주입 (결정론 모드 활성).
+	skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
+	                                    static_cast<int>(skillVfxById_.size()));
 }
 
 // Helper: configure a monster body as Dynamic with shared character properties.
@@ -2941,7 +2956,12 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+		// Input-read failures are survivable: log and drop the event instead of
+		// exiting the process (see the online Game::receiveWndMsg counterpart).
+		DISPLAY_ERROR_GLE(rawInputResult != -1, false);
+		if (rawInputResult == static_cast<UINT>(-1)) {
+			return 0;
+		}
 
 		if (rawInputSize > sRawInputBuffer.size()) {
 			sRawInputBuffer.resize(rawInputSize);
@@ -2951,16 +2971,18 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
-		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, false);
+		if (rawInputResult != rawInputSize) {
+			return 0;
+		}
 
 		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
 		if (ri->header.dwType == RIM_TYPEMOUSE) {
-			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
-			DISPLAY_ERROR_STR( !(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
-				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
-				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
-				true
-			);
+			// Absolute moves (input synthesized during focus churn, RDP, tablets)
+			// are not camera input; drop the event instead of exiting the process.
+			if (ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
+				return 0;
+			}
 
 			// 마우스 이동량 기록
 			mouseDeltaX_ += ri->data.mouse.lLastX;

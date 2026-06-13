@@ -80,7 +80,7 @@ void Label::onUpdate(const UpdateContext& ctx) {
 
     int outW = 0, outH = 0;
     std::ranges::fill(ownedTextImage_.pData, static_cast<BYTE>(0));
-    ctx.gfx->WriteTextToBitmap(
+    if (!ctx.gfx->WriteTextToBitmap(
         &ownedTextImage_,
         ownedTextImage_.width, ownedTextImage_.height,
         ownedTextImage_.width * 4,
@@ -89,7 +89,11 @@ void Label::onUpdate(const UpdateContext& ctx) {
         text_.c_str(),
         static_cast<DWORD>(text_.size()),
         textColor_
-    );
+    )) {
+        // Text rendering failed (e.g. transient device loss). Keep dirty_ so the
+        // label retries next frame; skip the upload so the previous texture stays.
+        return;
+    }
 
     // Shift pixels within pData to implement alignment.
     if (outW > 0 && outH > 0) {

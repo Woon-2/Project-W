@@ -63,6 +63,13 @@ enum class ObjectType : uint16 {
 	Stronghold,
 };
 
+enum class PlayerWeaponType : uint8 {
+	Katana,
+	SpearHook,
+	CrystalWand,
+	HeavyArrow,
+};
+
 struct PacketHeader {
 	uint16 size;
 	PacketType type;
@@ -88,7 +95,7 @@ private:
 
 // Authoritative default player HP, shared by client and server so enter-time
 // HP sync agrees on the same value.
-constexpr int32 kPlayerMaxHp = 1'000'000;
+constexpr int32 kPlayerMaxHp = 500;
 
 #pragma pack(push, 1)
 
@@ -99,6 +106,7 @@ struct CEnterPacket : public PacketHeader {
 struct PlayerInfo {
 	uint16 playerId;
 	uint16 materialSetIdx;
+	PlayerWeaponType weaponType;
 	int32 hp;
 	int32 maxHp;
 	DirectX::XMFLOAT3 pos;
@@ -111,6 +119,7 @@ struct ObjectInfo {
 	ObjectType type;
 	uint16 objectId;
 	uint16 materialSetIdx;
+	PlayerWeaponType weaponType;
 	int32 hp;
 	int32 maxHp;
 	DirectX::XMFLOAT3 pos;
@@ -230,6 +239,7 @@ struct SPlayerAttackPacket : public PacketHeader {
 };
 
 struct SHitPacket : public PacketHeader {
+	uint16 attackerId;
 	uint16 targetId;
 	int32  newHp;
 };
@@ -243,12 +253,14 @@ struct SNpcRespawnPacket : public PacketHeader {
 struct CSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint64 clientMs;
+	uint32 skillSeed;   // caster-generated per-cast seed (deterministic particle hitboxes)
 };
 
 struct SSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint16 ownerId;
 	uint16 elapsedMs;
+	uint32 skillSeed;   // relayed caster seed; remote clients reproduce identical VFX params
 };
 
 struct SSkillHitPacket : public PacketHeader {

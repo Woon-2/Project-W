@@ -1,6 +1,7 @@
 ﻿#ifndef room_server_object_hpp
 #define room_server_object_hpp
 
+#include "protocol.hpp"
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
 #include "serverAnimation.hpp"
@@ -165,6 +166,12 @@ class Player : public Object {
 public:
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
+
+	void setWeaponType(PlayerWeaponType weaponType) { weaponType_ = weaponType; }
+	PlayerWeaponType weaponType() const { return weaponType_; }
+
+private:
+	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
 };
 
 class Cube : public Object {

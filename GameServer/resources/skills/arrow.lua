@@ -7,7 +7,18 @@ skill.name             = "Arrow"
 skill.totalDurationMs  = 600
 skill.interruptible    = true
 
-skill:addVFX(10, "effects/arrow.json")
+-- systems[1] = arrow mesh (code-built in game.cpp; no JSON source -> name omitted).
+-- Overrides mirror the client cfg so server hitboxes track the same projectile.
+skill:addVFX(10, "effects/arrow.json", {
+    systems = {
+        {
+            mode = "Emit", looping = false,
+            lifetime = 0.4, speed = 40.0, startSize = 0.3,
+            shapeType = "Point", direction = Vec3(0.0, 0.0, 1.0),
+            maxParticles = 32,
+        },
+    }
+})
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",

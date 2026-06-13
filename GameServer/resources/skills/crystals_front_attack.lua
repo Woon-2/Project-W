@@ -7,7 +7,15 @@ skill.name             = "CrystalsFrontAttack"
 skill.totalDurationMs  = 800
 skill.interruptible    = true
 
-skill:addVFX(6, "effects/crystals_front_attack.json")
+-- systems[]: ParticleEffect composition (index = addSystem order in game.cpp).
+-- Lets the server rebuild system 0 for deterministic VFXParticle hitboxes.
+-- looping=false mirrors the client-side cfg.main.looping override.
+skill:addVFX(6, "effects/Crystals front attack_ParticleSystems.json", {
+    systems = {
+        { name = "Crystals front attack",          mode = "Continuous", looping = false },
+        { name = "Crystals front attack/Crystals", mode = "Emit" },
+    }
+})
 
 skill:addEvent(0, "PlayAnimation", {
     clipName  = "Player_Attack",

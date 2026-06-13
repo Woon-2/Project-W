@@ -3,6 +3,7 @@
 #include "../Model.hpp"
 #include "../collision.hpp"
 #include <algorithm>
+#include <iostream>
 #include <string_view>
 
 // ---------------------------------------------------------------------------
@@ -82,6 +83,7 @@ int SkillInstancePool::alloc(const SkillAsset* asset, i32t ownerObjectId) {
     inst.nextEventIdx  = 0;
     inst.active        = true;
     inst.interrupted   = false;
+    inst.seed          = 0;
     inst.resetSlots();
 
     activeList.push_back(idx);
@@ -196,7 +198,8 @@ const SkillAsset* SkillSystem::findAsset(u32t id) const {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx) {
+int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                            u32t seed) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
@@ -204,6 +207,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     if (idx < 0) return -1;
 
     SkillInstance& inst = instancePool_.instances[idx];
+    inst.seed = seed;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
@@ -214,7 +218,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                            Milliseconds initialElapsed) {
+                            Milliseconds initialElapsed, u32t seed) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
@@ -223,6 +227,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 
     SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
+    inst.seed    = seed;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
@@ -429,7 +434,8 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             hb.worldAABB  = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
             hb.targetMask = owner ? hostileMask(owner->faction()) : 0u;
         } else {
-            // VFXParticle: create source entry; pSystem always null on server
+            // VFXParticle: create a source entry driven by the deterministic
+            // gameplay sampler (counterpart of the client's live ParticleSystem).
             int oldS = inst.getParticleHandle(slot);
             if (oldS >= 0) freeParticleSource(oldS);
 
@@ -449,7 +455,32 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             src.useParticleSize    = def.useParticleSize;
             src.applyRotation      = def.applyAttachRotation;
             src.hitboxHandles.clear();
-            // src.pSystem = nullptr (not present; VFXParticle hitboxes are no-ops on server)
+
+            // Bind the deterministic sampler. Per-system seed mirrors the
+            // client chain: ParticleEffect seed = mixSeed(inst.seed, vfxId),
+            // then system i seed = mixSeed(effectSeed, i). Gameplay configs
+            // are prebuilt at boot (buildVfxGameplayConfigs) and shared.
+            src.vfxId       = def.attach.vfxId;
+            src.gameplayCfg = nullptr;
+            src.vdef        = nullptr;
+            src.systemIdx   = static_cast<u8t>(def.attach.particleSystemIdx);
+            src.effectSeed  = pg::mixSeed(inst.seed, def.attach.vfxId);
+            if (def.attach.vfxId < inst.asset->vfxDefs.size()) {
+                const SkillAsset::VfxDef& vdef = inst.asset->vfxDefs[def.attach.vfxId];
+                const int sysIdx = def.attach.particleSystemIdx;
+                if (sysIdx >= 0 && sysIdx < static_cast<int>(vdef.systems.size())) {
+                    src.vdef        = &vdef;
+                    src.gameplayCfg = vdef.systems[static_cast<std::size_t>(sysIdx)]
+                                          .gameplayCfg.get();
+                }
+            }
+            if (!src.gameplayCfg) {
+                std::cout << "[SkillSystem] VFXParticle hitbox has no gameplay config"
+                             " (skill '" << inst.asset->name
+                          << "' vfx " << static_cast<int>(def.attach.vfxId)
+                          << " sys " << def.attach.particleSystemIdx
+                          << "); add a systems table to addVFX. Hitboxes inactive.\n";
+            }
         }
         break;
     }
@@ -469,7 +500,58 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
     }
 
     case SkillEventType::PlayVFX: {
-        // No-op on server (no ParticleEffect registry)
+        // No rendering on the server, but the deterministic VFXParticle
+        // hitbox sampler needs the effect's world anchor. The transform math
+        // mirrors the client PlayVFX handler (client/skill/skillSystem.cpp)
+        // so both sides place the emitter identically.
+        const auto& p = ev.payload.playVFX;
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        if (!owner) break;
+
+        mu::Mat4x4 baseXform = mu::Mat4x4(owner->orient()) * mu::translate(owner->pos());
+
+        const bool hasBoneAttach = (p.attachType == static_cast<u8t>(AttachType::Bone) &&
+                                    p.attachTargetName[0] != '\0');
+        if (hasBoneAttach && owner->model() && !owner->model()->skeleton.empty()) {
+            const auto& nameToIdx = owner->model()->skeleton.nameToIdx;
+            auto it = nameToIdx.find(p.attachTargetName);
+            if (it != nameToIdx.end()) {
+                const auto& boneXforms = owner->boneWorldXforms();
+                if (it->second >= 0 && it->second < static_cast<i32t>(boneXforms.size()))
+                    baseXform = boneXforms[static_cast<std::size_t>(it->second)];
+            }
+        }
+
+        mu::Mat4x4 baseRot;
+        if (p.flags & kPlayVFXFlagYawOnly) {
+            mu::Vec3 fwd = mu::normalize(mu::Vec3(mu::Vec4(0.f, 0.f, 1.f, 0.f) * baseXform));
+            baseRot = mu::rotateYH(mu::Radian{ std::atan2(fwd.x(), fwd.z()) });
+        } else {
+            baseRot = mu::Mat4x4(mu::NQuat(mu::quatRotMat(baseXform)));
+        }
+
+        mu::Mat4x4 eulerOff = mu::rotateRPYH(mu::Degree{ p.localEulerDeg.z() },   // roll
+                                             mu::Degree{ p.localEulerDeg.y() },   // pitch
+                                             mu::Degree{ p.localEulerDeg.x() });  // yaw
+        mu::Mat4x4 aim = eulerOff * baseRot;
+
+        mu::Vec3 origin = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * baseXform);
+        const mu::Vec3& off = p.localOffset;
+        mu::Vec3 worldPos = origin + mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 0.f) * aim);
+
+        if ((p.flags & kPlayVFXFlagGroundSnap) && ctx.groundHeight) {
+            worldPos.setComponent(1, ctx.groundHeight(worldPos.x(), worldPos.z()) + off.y());
+            if ((p.flags & kPlayVFXFlagGroundAlign) && ctx.groundNormal) {
+                aim = aim * mu::Mat4x4(alignQuatYToNormal(
+                    ctx.groundNormal(worldPos.x(), worldPos.z())));
+            }
+        }
+
+        // Particle ground-conform override (Lua particleConform), forwarded to
+        // the sampler exactly like ParticleEffect::setGroundBehavior on client.
+        const u8t confOrd = (p.flags & kPlayVFXParticleConformMask) >> kPlayVFXParticleConformShift;
+        inst.setVfxAnchor(p.vfxId, worldPos, aim, ev.time,
+                          static_cast<pg::GroundConform>(confOrd));
         break;
     }
 
@@ -555,17 +637,121 @@ void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
 }
 
 // ---------------------------------------------------------------------------
-// VFX particle hitbox source sync (no-op on server: pSystem always null)
+// VFX particle hitbox source sync (deterministic sampler)
+//
+// Server counterpart of the client's updateParticleHitboxSources: instead of
+// reading a live ParticleSystem pool, evaluate pg::evaluateParticles at the
+// VFX-local time. Spawn parameters are keyed by (seed, stream, id), so they
+// equal the casting client's particles regardless of tick rates.
 // ---------------------------------------------------------------------------
 
 void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
-    for (ParticleHitboxSource& src : particleSources_) {
+    for (int si = 0; si < static_cast<int>(particleSources_.size()); ++si) {
+        ParticleHitboxSource& src = particleSources_[si];
         if (!src.active) continue;
-        // No ParticleSystem on server; release any stale hitbox handles and leave empty
-        for (int h : src.hitboxHandles) freeHitbox(h);
-        src.hitboxHandles.clear();
+
+        const SkillInstance& inst = instancePool_.instances[src.instanceIdx];
+        const SkillInstance::VfxAnchor* anchor =
+            inst.active ? inst.findVfxAnchor(src.vfxId) : nullptr;
+
+        // No config (unmigrated effect) or VFX not started yet: no hitboxes.
+        if (!src.gameplayCfg || !src.vdef || !anchor) {
+            for (int h : src.hitboxHandles) freeHitbox(h);
+            src.hitboxHandles.clear();
+            continue;
+        }
+
+        const float tReal = (inst.elapsed - anchor->startTime).count() * 0.001f;
+        const pg::EmitterFrame frame{ anchor->pos, anchor->orient };
+        const pg::GroundQuery  ground{ ctx.groundHeight, ctx.groundNormal };
+
+        // Resolver over the effect composition: lets the sampler follow
+        // sub-emitter chains (chainParent) to root systems recursively.
+        const SkillAsset::VfxDef* vdef = src.vdef;
+        const std::uint32_t effectSeed = src.effectSeed;
+        auto resolver = [vdef, effectSeed](int idx) -> pg::SystemRef {
+            pg::SystemRef r;
+            if (idx < 0 || idx >= static_cast<int>(vdef->systems.size()))
+                return r;
+            const SkillAsset::VfxSystemDef& s =
+                vdef->systems[static_cast<std::size_t>(idx)];
+            r.cfg          = s.gameplayCfg.get();
+            r.seed         = pg::mixSeed(effectSeed, static_cast<std::uint32_t>(idx));
+            r.mode         = (s.playMode == 1) ? pg::PlayMode::Continuous
+                                               : pg::PlayMode::Emit;
+            r.chainParent  = s.chainParent;
+            r.chainOnBirth = s.chainOnBirth;
+            return r;
+        };
+        pg::evaluateSystemParticles(resolver, src.systemIdx, frame, tReal,
+                                    ground, anchor->conformOverride,
+                                    kMaxGameplayParticles, particleScratch_);
+
+        // Reuse existing per-particle hitbox handles; only grow/shrink the count.
+        const int needed = static_cast<int>(particleScratch_.size());
+        while (static_cast<int>(src.hitboxHandles.size()) > needed) {
+            freeHitbox(src.hitboxHandles.back());
+            src.hitboxHandles.pop_back();
+        }
+        while (static_cast<int>(src.hitboxHandles.size()) < needed) {
+            int hi = allocHitbox();
+            if (hi < 0) break;
+
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.localOBBs              = src.templateOBBs;
+            hb.onHit                  = src.onHit;
+            hb.targetMask             = src.targetMask;
+            hb.ownerObjectId          = src.ownerObjectId;
+            hb.instanceIdx            = src.instanceIdx;
+            hb.slot                   = src.slot;
+            hb.hitGroup               = src.hitGroup;
+            hb.hitGroupCooldownMs     = src.hitGroupCooldownMs;
+            hb.applyAttachRotation    = src.applyRotation;
+            hb.particleSourceIdx      = si;
+            hb.resolvedAttach.type    = AttachType::VFXParticle;
+            hb.worldOBBs.resize(src.templateOBBs.size());
+
+            src.hitboxHandles.push_back(hi);
+        }
+
+        // Refresh per-particle world transforms (mirrors the client math).
+        for (int pi = 0; pi < static_cast<int>(src.hitboxHandles.size()); ++pi) {
+            AttachedHitbox& hb = hitboxPool_[src.hitboxHandles[pi]];
+            const pg::ParticleState& p = particleScratch_[pi];
+
+            const float sz = src.useParticleSize ? p.sizeNow : 1.f;
+
+            hb.worldOBBs.resize(src.templateOBBs.size());
+            if (src.applyRotation) {
+                // Replicates buildParticleMeshGeometry rotation:
+                // angularAngle3D euler + baseRotation (same as client).
+                mu::Mat4x4 particleRot = mu::rotateXH(mu::Radian{ p.angularAngle3D.x() })
+                                       * mu::rotateYH(mu::Radian{ p.angularAngle3D.y() })
+                                       * mu::rotateZH(mu::Radian{ p.angularAngle3D.z() })
+                                       * p.baseRotation;
+                mu::NQuat particleOrient(mu::quatRotMat(particleRot));
+                for (int oi = 0; oi < static_cast<int>(src.templateOBBs.size()); ++oi) {
+                    const OBB& tmpl = src.templateOBBs[oi];
+                    mu::Vec3 rotatedCenter = mu::Vec3(mu::Vec4(tmpl.center, 0.f) * particleRot);
+                    hb.worldOBBs[oi].center      = p.pos + rotatedCenter;
+                    hb.worldOBBs[oi].halfExtents = tmpl.halfExtents * sz;
+                    hb.worldOBBs[oi].orient      = tmpl.orient * particleOrient;
+                }
+            } else {
+                // Position follows the particle; orientation is fixed.
+                for (int oi = 0; oi < static_cast<int>(src.templateOBBs.size()); ++oi) {
+                    const OBB& tmpl = src.templateOBBs[oi];
+                    hb.worldOBBs[oi].center      = p.pos + tmpl.center;
+                    hb.worldOBBs[oi].halfExtents = tmpl.halfExtents * sz;
+                    hb.worldOBBs[oi].orient      = tmpl.orient;
+                }
+            }
+            hb.worldAABB = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+        }
     }
 }
+
 
 // ---------------------------------------------------------------------------
 // Attachment resolve and transform

@@ -69,7 +69,7 @@ public:
 	void move(int32 sessionId, CMovePacket* cMvPkt);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 clientMs);
-	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs);
+	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
