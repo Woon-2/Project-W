@@ -27,6 +27,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRDeferredLightingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTonemapResolveShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -939,6 +940,18 @@ struct PerFrameData {
 };
 
 }	// namespace PBRDeferredLightingShader
+
+// TonemapResolveShader — fullscreen triangle HDR -> LDR resolve pass.
+// Samples the HDR scene-color RT (bindless) and writes the LDR backbuffer.
+namespace TonemapResolveShader {
+
+// Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
+// 16 bytes — a single bindless index for the scene-color SRV.
+struct PerDrawcallData {
+	BindlessIndex idxSceneColor;
+};
+
+}	// namespace TonemapResolveShader
 
 // TwoSidesShader
 // Port of Unity Shader Graphs/HS_Blend_TwoSides.

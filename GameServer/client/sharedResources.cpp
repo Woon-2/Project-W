@@ -839,6 +839,99 @@ void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorP
 
 }	// namespace GBuffer
 
+namespace SceneColor {
+
+std::vector<SceneColorData> sceneColorData;
+
+namespace {
+
+// HDR scene-color RT(R16G16B16A16_FLOAT)를 생성하고 RTV + bindless SRV를 등록한다.
+// tonemap resolve 패스가 fullscreen으로 샘플하므로 BilinearClamp 샘플러를 쓴다.
+Texture createSceneColorRT( ID3D12Device* device, u32t width, u32t height,
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color = {0.f, 0.f, 0.f, 0.f} };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	createRTV(device, tex, D3D12_RENDER_TARGET_VIEW_DESC{
+		.Format        = format,
+		.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = 0u, .PlaneSlice = 0u }
+	}, rtvPool);
+
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = format,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::BilinearClamp);
+
+	return tex;
+}
+
+}	// anonymous namespace
+
+void addSceneColor( ID3D12Device* device, u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+) {
+	sceneColorData.reserve(roomCnt);
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		SceneColorData sc{};
+		sc.width  = width;
+		sc.height = height;
+
+		const auto suffix = "[" + std::to_string(r) + "]";
+		sc.color = createSceneColorRT(device, width, height, rtvPool, srvTexPool,
+			("SceneColor" + suffix).c_str());
+
+		sc.rtv      = rtvPool.cpuHandle(sc.color.idxRtv);
+		sc.curState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+		sceneColorData.push_back(std::move(sc));
+	}
+}
+
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& sc = sceneColorData[roomIdx];
+	if (sc.curState != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+		transitionResourceState(cmdList, sc.color.res.Get(),
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_RENDER_TARGET
+		);
+		sc.curState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	}
+}
+
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& sc = sceneColorData[roomIdx];
+	if (sc.curState != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+		transitionResourceState(cmdList, sc.color.res.Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+		);
+		sc.curState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	}
+}
+
+void eraseSceneColor( DescriptorPool& rtvPool, DescriptorPool& srvTexPool ) {
+	for (auto& sc : sceneColorData) {
+		freeRTV(sc.color, rtvPool);
+		freeSRV(sc.color, srvTexPool);
+	}
+	sceneColorData.clear();
+}
+
+}	// namespace SceneColor
+
 namespace Portrait {
 
 std::vector<PortraitRTData> portraitData;
