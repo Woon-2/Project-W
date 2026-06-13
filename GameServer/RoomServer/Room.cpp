@@ -763,19 +763,6 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
 	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
 
-	// Server-authoritative validation: drop silently if the skill is unknown,
-	// already running, or still on cooldown. Damage is server-authoritative, so a
-	// dropped request simply yields no S_SkillStart / S_SkillHit. The client predicts
-	// the same cooldown locally, so rejects should be rare (no reject packet needed).
-	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
-	if (!asset) {
-		std::cout << "[Room::skillStart] WARNING: unknown skill asset id=" << skillAssetId << "\n";
-		return;
-	}
-	if (skillSystem_.hasActiveSkill(static_cast<i32t>(player->getId()))) return;
-	if (!player->skillOffCooldown(skillAssetId, serverNow)) return;
-	player->markSkillUsed(skillAssetId, serverNow + static_cast<uint64>(asset->cooldown.count()));
-
 	// Start server-side skill instance for authoritative hit detection.
 	// Reuse skillEvList_ (serialized with updateSkillSystem via the room job queue).
 	SkillDispatchContext startCtx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };

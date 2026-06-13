@@ -5,7 +5,6 @@
 local skill = Skill()
 skill.name             = "CrystalsCrossFade"
 skill.totalDurationMs  = 1400
-skill.cooldownMs       = 1900
 skill.interruptible    = true
 
 skill:addVFX(9, "effects/crystals_cross_fade.json")

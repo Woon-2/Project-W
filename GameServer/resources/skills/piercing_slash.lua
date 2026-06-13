@@ -5,7 +5,6 @@
 local skill = Skill()
 skill.name             = "PiercingSlash"
 skill.totalDurationMs  = 500
-skill.cooldownMs       = 1000
 skill.interruptible    = true
 
 skill:addVFX(16, "effects/piercing_slash.json")

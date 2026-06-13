@@ -1753,28 +1753,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 			skillObjectById_[sid] = goblin.get();
 		}
 
-		// vfxId -> ParticleEffect binding (mirrors standalone game.cpp). Index 0 is
-		// reserved (hit/blood, nullptr); 1..18 map to the skill VFX referenced by
-		// PlayVFX{vfxId} in resources/skills/*.lua.
-		skillVfxById_.assign(19, nullptr);
-		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
-		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
-		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
-		skillVfxById_[4]  = &swordSlash7Effect_;          // Slash7
-		skillVfxById_[5]  = &spikesAttackEffect_;         // Spikes
-		skillVfxById_[6]  = &crystalsFrontAttackEffect_;  // CrystalsFrontAttack
-		skillVfxById_[7]  = &aoESlashGreenEffect_;        // AoESlashGreen
-		skillVfxById_[8]  = &redEnergyExplosionEffect_;   // RedEnergyExplosion
-		skillVfxById_[9]  = &crystalsCrossFadeEffect_;    // CrystalsCrossFade
-		skillVfxById_[10] = &arrowEffect_;                // Arrow
-		skillVfxById_[11] = &arrowVolleyEffect_;          // ArrowVolley
-		skillVfxById_[12] = &arrowRainEffect_;            // ArrowRain
-		skillVfxById_[13] = &energyExplosionArrowEffect_; // EnergyExplosionArrow
-		skillVfxById_[14] = &tornadoShotEffect_;          // TornadoShot
-		skillVfxById_[15] = &piercingEffect_;             // Piercing
-		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
-		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
-		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
+		skillVfxById_.assign(2, nullptr);
+		skillVfxById_[1] = &swordSlash1Effect_;   // effects/sword_slash_1.json
 
 		skillCtx_.objectById          = skillObjectById_.data();
 		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
@@ -3910,9 +3890,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	currVelocity_ = player_->velocity();
 
-	// F9 key: toggle CSM cascade debug visualization
-	// (moved off 'C' to make room for the PiercingCircleSlash skill keybinding)
-	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) ) {
+	// C key: toggle CSM cascade debug visualization
+	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
 	}
 
@@ -3964,32 +3943,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
-	// Skill keybindings (temporary: one key per skill). The skill name must match
-	// SkillAsset::name in resources/skills/*.lua. The local cooldown gate predicts the
-	// server-authoritative gate in Room::skillStart, so requests are rarely dropped.
-	if (!playerDead_ && !uiManager_.needsCursor()) {
-		static const struct { int vk; const char* skill; } kSkillKeys[] = {
-			{ '1', "SwordSlash"           }, { '2', "SlashWave"             },
-			{ '3', "SlashCombo"           }, { '4', "Slash7"               },
-			{ '5', "Spikes"               }, { '6', "CrystalsFrontAttack"   },
-			{ '7', "CrystalsCrossFade"    }, { '8', "RedEnergyExplosion"    },
-			{ '9', "Arrow"                }, { '0', "ArrowVolley"           },
-			{ 'Q', "ArrowRain"            }, { 'E', "EnergyExplosionArrow"  },
-			{ 'R', "Piercing"             }, { 'F', "PiercingSlash"         },
-			{ 'C', "PiercingCircleSlash"  }, { 'V', "PiercingMulti"         },
-		};
-		const uint64 nowMs = static_cast<uint64>(
-			std::chrono::duration_cast<std::chrono::milliseconds>(
-				std::chrono::high_resolution_clock::now().time_since_epoch()).count());
-		for (const auto& bind : kSkillKeys) {
-			if (!(keyboardStateCurr_[bind.vk] & 0x80) || (keyboardStatePrev_[bind.vk] & 0x80))
-				continue;  // edge-trigger only
-			const SkillAsset* asset = skillSystem_.findAsset(bind.skill);
-			if (!asset) continue;
-			if (skillSystem_.hasActiveSkill(player_->getId())) break;  // one skill at a time
-			auto it = skillReadyAtMs_.find(asset->id);
-			if (it != skillReadyAtMs_.end() && nowMs < it->second) continue;  // on cooldown
-			skillReadyAtMs_[asset->id] = nowMs + static_cast<uint64>(asset->cooldown.count());
+	// Q key: start skill
+	if (!playerDead_
+		&& !uiManager_.needsCursor()
+		&& (keyboardStateCurr_['Q'] & 0x80)
+		&& !(keyboardStatePrev_['Q'] & 0x80))
+	{
+		const SkillAsset* asset = skillSystem_.findAsset("SwordSlash");
+		if (asset && !skillSystem_.hasActiveSkill(player_->getId())) {
 			skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_);
 			sendSkillStartPacket(asset->id);
 		}

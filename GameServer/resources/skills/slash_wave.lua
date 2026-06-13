@@ -5,7 +5,6 @@
 local skill = Skill()
 skill.name             = "SlashWave"
 skill.totalDurationMs  = 1000
-skill.cooldownMs       = 1500
 skill.interruptible    = true
 
 skill:addVFX(2, "effects/slash_wave.json")

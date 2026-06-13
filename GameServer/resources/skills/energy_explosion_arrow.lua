@@ -5,7 +5,6 @@
 local skill = Skill()
 skill.name             = "EnergyExplosionArrow"
 skill.totalDurationMs  = 3400
-skill.cooldownMs       = 4080
 skill.interruptible    = true
 
 skill:addVFX(13, "effects/energy_explosion_arrow.json")
