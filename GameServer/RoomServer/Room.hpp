@@ -132,6 +132,8 @@ public:
 	                                               int troopersPerSquad = 20);
 	// GrandBaum 중간보스 인카운터: 슬라임 3부대(0,1,2) + 뱀 1부대(3) + GrandBaum 전술 보스.
 	void MU_CALLCONV spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
+	// Isis 중간보스 인카운터: Buddy 2부대(0,1) + Bomber 2부대(2,3) + Isis 전술 보스(2연속 쐐기 협공).
+	void MU_CALLCONV spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
 
 	// ── GrandBaum ShieldWall ──────────────────────────────────────────────────
 	// 링 형성 순간 안쪽 플레이어를 바깥으로 넉백(클라 권한 이동잠금: S_PlayerKnockback).
@@ -166,6 +168,7 @@ private:
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandBaumEnter(Zone& zone, uint32 playerId);
+	void onArenaIsisEnter(Zone& zone, uint32 playerId);
 	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;

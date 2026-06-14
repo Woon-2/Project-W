@@ -193,17 +193,35 @@ void Room::init(const Level* levelData) {
 
 // Binds gameplay behavior to zone tags. Handlers run on the room thread each
 // tick; lambdas defined here have full access to Room internals.
+// [임시 디버그] 정식 Arena_Isis zone/마커가 레벨에 아직 없어, 검증용으로 기존 Arena_Hobgoblin zone
+// 진입 시 홉고블린 대신 Isis 인카운터를 스폰한다. 정식 Arena_Isis 마커 저작 후 이 값을 0으로 되돌려
+// 홉고블린 정상 경로를 복원할 것.
+#define ISIS_DEBUG_TRIGGER_VIA_HOBGOBLIN 1
+
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
 	// ZoneMarker tagged "Arena_Hobgoblin" (factionMask = Players).
+#if ISIS_DEBUG_TRIGGER_VIA_HOBGOBLIN
+	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
+		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
+			room.onArenaIsisEnter(zone, playerId);   // [디버그] 홉고블린 대신 Isis 스폰
+		});
+#else
 	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaHobgoblinEnter(zone, playerId);
 		});
+#endif
 
 	zoneSystem_.on("Arena_GrandBaum", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaGrandBaumEnter(zone, playerId);
+		});
+
+	// 정식 Isis zone(레벨에 "Arena_Isis" 마커 저작 후 작동).
+	zoneSystem_.on("Arena_Isis", ZoneEvent::Enter,
+		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
+			room.onArenaIsisEnter(zone, playerId);
 		});
 }
 
@@ -324,6 +342,75 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 
 		if (haveSpawnPos) {
 			spawnGrandBaumEncounter(spawnPos, spawnPos);
+
+			std::vector<ObjectInfo> spawnInfos;
+			spawnInfos.reserve(tacticalNpcs_.size() + 1);
+			auto appendInfo = [&](const TacticalNpc& o) {
+				spawnInfos.push_back(ObjectInfo{
+					.type           = ObjectType::Goblin,
+					.objectId       = static_cast<uint16>(o.getId()),
+					.materialSetIdx = 0,
+					.hp             = o.hp(),
+					.maxHp          = o.maxHp(),
+					.pos            = o.pos().getXmf(),
+					.orient         = o.orient().getXmf(),
+					.scale          = o.scale().getXmf(),
+				});
+			};
+			for (const auto& npc : tacticalNpcs_)
+				if (npc) appendInfo(*npc);
+			if (platoonLeader_) appendInfo(*platoonLeader_);
+
+			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+		}
+	}
+
+	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+
+	zone.setArmed(false);   // one-shot trigger
+}
+
+// Arena_GrandBaum과 동일 패턴: Isis 마커(WallIsis_0/1, BossSpawn)로 벽/스폰점을 구성하고 Isis
+// 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm). 디버그 트리거(홉고블린
+// zone 재사용) 시에는 WallIsis 마커가 없어 벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.
+void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isis)\n";
+
+	if (!worldTerrain_) return;
+
+	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	mu::Vec3 wallSum{};
+	int      wallCount = 0;
+	for (const auto& m : worldTerrain_->markers()) {
+		if (m.type != "Wall") continue;
+		if (m.name != "WallIsis_0" && m.name != "WallIsis_1") continue;
+		spawnBarrierFromMarker(m);
+		wallSum += m.pos;
+		++wallCount;
+		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+
+	if (tacticalNpcs_.empty() && !platoonLeader_) {
+		mu::Vec3 spawnPos{};
+		bool     haveSpawnPos = false;
+		for (const auto& m : worldTerrain_->markers()) {
+			if (m.type != "BossSpawn") continue;
+			spawnPos     = m.pos;
+			haveSpawnPos = true;
+			std::cout << "[Zone] Isis spawn point '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+			break;
+		}
+		if (!haveSpawnPos && wallCount > 0) {
+			spawnPos     = wallSum / static_cast<float>(wallCount);
+			haveSpawnPos = true;
+			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
+			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
+		}
+
+		if (haveSpawnPos) {
+			spawnIsisEncounter(spawnPos, spawnPos);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
@@ -1363,6 +1450,103 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
 		makeBase(bossPos), bossCfg, std::make_unique<GrandBaumMidBossTactic>());
+	registerBody(*platoonLeader_);
+	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+
+	for (auto& sq : tacticalSquads_)
+		platoonLeader_->addSquad(sq.get());
+}
+
+// Isis 중간보스 인카운터. spawnGrandBaumEncounter 미러. 부대 계약: 0,1 = Buddy(2차 돌격 + 보스 합류),
+// 2,3 = Bomber(1차 돌격). 모델/ObjectType은 전용 에셋 추가 전까지 goblin 재사용. config/인원은
+// 시뮬(Buddy 12/12, Bomber 40/40) 기반 — M3 튜닝/성능 확인 대상.
+void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+{
+	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
+
+	auto makeBase = [](mu::Vec3 pos) {
+		Object base;
+		base.setPos(pos);
+		return base;
+	};
+	const auto& anims = assetManager_->goblinAnimations();
+	auto registerBody = [&](Object& obj) {
+		obj.setId(IdPool::pop());
+		obj.setFaction(Faction::Monsters);
+
+		obj.setModel(assetManager_->modelGoblin());
+		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+		obj.animController().switchClip("Idle");
+		obj.setCanReceiveDamage(true);
+
+		obj.body().setMotionType(MotionType::Dynamic);
+		obj.body().setMass(70.f);
+		obj.body().setLinearDamping(0.1f);
+		obj.body().setAngularDamping(25.f);
+		obj.body().setRestitution(0.0f);
+		obj.body().setUprightStiffness(4000.f);
+		obj.body().enableMotor(true);
+		obj.body().snapToCurrent();
+
+		Object* raw = &obj;
+		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+		registerObject(raw);
+		npcBodyOwner_[&obj.body()] = raw;
+	};
+
+	// 인게임 스케일 config (시뮬값 기반, M3 튜닝 대상).
+	TacticalNpcConfig buddyCfg{
+		.maxHp = 80.f, .moveSpeed = 4.f, .attackRange = 2.6f, .attackDamage = 10.f,
+		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
+		.separationRadius = 3.f, .separationWeight = 1.0f
+	};
+	TacticalNpcConfig bomberCfg{
+		.maxHp = 45.f, .moveSpeed = 5.f, .attackRange = 2.6f, .attackDamage = 8.f,
+		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
+		.separationRadius = 3.f, .separationWeight = 0.9f
+	};
+	TacticalNpcConfig bossCfg{
+		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
+		.separationRadius = 4.f, .separationWeight = 0.3f
+	};
+
+	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
+
+	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsisMidBossTactic의 squad 인덱스 계약을 보장.
+	struct IsisSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const IsisSquadDef squadDefs[] = {
+		{ &buddyCfg,  12 },
+		{ &buddyCfg,  12 },
+		{ &bomberCfg, 40 },
+		{ &bomberCfg, 40 },
+	};
+
+	for (int s = 0; s < 4; ++s) {
+		const TacticalNpcConfig& cfg = *squadDefs[s].cfg;
+		auto squad = std::make_unique<TacticalSquad>(s, cfg.attackRange, cfg.separationRadius);
+
+		for (int t = 0; t < squadDefs[s].count; ++t) {
+			mu::Vec3 npcPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
+			auto npc = std::make_unique<TacticalNpc>(makeBase(npcPos), cfg);
+			registerBody(*npc);
+			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지).
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->setSquadId(s);
+
+			squad->addMember(npc.get());
+			tacticalNpcs_.push_back(std::move(npc));
+		}
+
+		tacticalSquads_.push_back(std::move(squad));
+	}
+
+	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
+	platoonLeader_ = std::make_unique<PlatoonLeader>(
+		makeBase(bossPos), bossCfg, std::make_unique<IsisMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 
