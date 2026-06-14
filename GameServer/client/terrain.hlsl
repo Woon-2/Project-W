@@ -27,6 +27,15 @@ cbuffer PerFrameData : register(b1) {
     float4   cascadeSplitsFarV;
     float4x4 lightVP[MAX_CSM_CASCADES];
     float4   cascadeNormalOffsets;
+    // IBL (forward parity)
+    float3   camPos;
+    float    _padCam;
+    int4     idxIrradiance;
+    int4     idxPrefiltered;
+    int4     idxBRDFLUT;
+    uint     prefilteredMipCount;
+    float    iblIntensity;
+    float2   _iblPad;
 };
 
 static float4x4 gmtxTexturize = {
@@ -39,6 +48,7 @@ static float4x4 gmtxTexturize = {
 // Skip illuminate() from pbrLighting.hlsli (it requires a Material cbuffer
 // that terrain does not have — terrain blends albedo from splat layers instead).
 #define TERRAIN_SHADER
+#define IBL_ENABLED
 #include "pbrLighting.hlsli"
 
 // ---------------------------------------------------------------------------
@@ -195,8 +205,11 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     }
 #endif
 
-    // 6. Ambient.
+    // 6. Ambient (constant + IBL environment).
     color += globalAmbient * albedo * (1.f - ao);
+#ifdef IBL_ENABLED
+    color += computeIBL(normalize(input.normalW), normalize(camPos - input.posW), albedo, roughness, metallic, ao);
+#endif
 
     // 7. Tonemap (Reinhard) + gamma correction.
     color = color / (color + float3(1.f, 1.f, 1.f));

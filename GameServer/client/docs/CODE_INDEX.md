@@ -471,7 +471,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
 3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
 4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
-5. globalAmbient 더하기 → Reinhard tonemapping → gamma correction
+5. globalAmbient + IBL(`computeIBL`, `#define IBL_ENABLED`) ambient 가산 → Reinhard tonemapping → gamma (forward inline; 인게임 지형은 `terrainDeferred.hlsl`→공용 ACES resolve 경로)
 
 **Deferred Shading 관련 파일:**
 
@@ -491,7 +491,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
-| GB2 | R8G8B8A8_UNORM | LightAccum.rgb (ambient+emissive 선계산) + Roughness.a |
+| GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (정적·스킨드·지형 모두 emissive 전용; ambient/IBL는 lighting 패스) + Roughness.a |
 | GB3 | R8_UNORM | Metallic |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
@@ -499,22 +499,40 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - Normal Oct Encoding: `pbrLighting.hlsli`의 `octEncode()` / `octDecode()` 유틸리티 사용
 - depth + invProj → posV, posV + invView → posW (Lighting 패스에서 위치 재구성)
 
+**HDR / IBL / Bloom 관련 파일 (상세 아키텍처: `docs/graphicsArchitecture.md` "HDR + IBL + Bloom 파이프라인"):**
+
+| 파일 | 설명 |
+|------|------|
+| `sharedResources.{hpp,cpp}` | `SharedResources::SceneColor` — per-room R16G16B16A16_FLOAT HDR RT(+SRV). `SharedResources::IBL` — irradiance/prefiltered 큐브 + BRDF LUT(정적). `SharedResources::Bloom` — per-room HDR 밉체인(밉별 RTV+단일밉 SRV, 서브리소스별 상태 추적, `transitionMip`/`mip0Srv`) |
+| `iblIrradiance.hlsl` / `iblPrefilter.hlsl` / `iblBRDFLUT.hlsl` | IBL 프리컴퓨트 컴퓨트 셰이더(코사인 컨볼루션 / GGX importance / split-sum LUT). `envIsLDR` 토글 |
+| `iblPrecomputePipeline.{hpp,cpp}` | `precomputeIBL()` — 로드 타임 1회(LoadFence), 스카이박스 큐브→IBL 맵 3종 생성 |
+| `pbrLighting.hlsli` | `computeIBL`/`fresnelSchlickRoughness`(상단 정의, split-sum). `#define IBL_ENABLED` 셰이더만 컴파일 |
+| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → backbuffer. debugMode≠0 패스스루 |
+| `bloom.hlsl` / `BloomPipeline.{hpp,cpp}` | 픽셀 기반 bloom(VS 공유 + PSPrefilter/PSDownsample/PSUpsample). `Dispatcher::render()`가 전 패스를 단일 cmdlist에 기록 |
+
+- IBL/HDR/Bloom 노브(`gfx.hpp`): `tonemapExposure_`(1.0), `bloomThreshold_`(1.0), `bloomIntensity_`(0.08), `iblIntensity`(lpfd/forward FrameData).
+- Forward IBL 패리티: `pbr.hlsl`·`pbrSkinned.hlsl`·`terrain.hlsl` cbuffer에 camPos+IBL 필드, 포트레이트는 `FrameData::iblIntensity=0`.
+- **디스크립터 풀:** bloom RTV(밉×room) 때문에 `rtvPool_`/`rtvHeap_`=64. per-room×N RT 추가 시 풀 용량 갱신 필수.
+
 **Deferred 렌더 패스 순서 (`gfx.cpp::render()`):**
-1. GBuffer 클리어 (`clearGBuffer`)
+1. GBuffer + SceneColorHDR 클리어 (`clearGBuffer` + SceneColor `transitionToWrite`/clear)
 2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
 3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
 4. **GBuffer Indirect Pass (스킨드)** — Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw. Compact Pass 이후 visibleFlags → `visibilityReadback` 복사(1-frame delay). 동일 MRT + DSV.
 5. GBuffer Pass (지형) — TerrainDeferredPipeline, 동일 MRT + DSV
 6. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
-7. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
-8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
-9. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
+7. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력** (`direct + computeIBL + emissive`, fog 적용, 톤매핑 X)
+8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행.
+9. SceneColorHDR RTV→SRV (`SceneColor::transitionToRead`)
+10. **Bloom** (`gBufferDebugMode_==0`일 때): SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample) → mip0 SRV
+11. **Tonemap resolve**: SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **backbuffer(LDR)**
+12. Forward-always 오버레이(backbuffer, resolve 이후): Skybox, BV debug, Billboard, 파티클류 (GBuffer/SceneColorHDR 미사용)
 
 **GFX RenderPath 선택 (`gfx.hpp`):**
 - `enum class RenderPath { Forward, Deferred }`
 - `GFX::setRenderPath(RenderPath)` — 런타임 전환
-- `GFX::cycleGBufferDebugMode()` — 'G' 키로 GBuffer 채널 디버그 뷰 순환 (None→Albedo→Normal→AO→Roughness→Metallic→LightAccum→Depth)
-- `gBufferDebugMode_` (uint, 0~7) — Lighting PSO의 `debugMode` cbuffer 필드로 전달
+- `GFX::cycleGBufferDebugMode()` — 'G' 키로 디버그 뷰 순환 (0 None→Albedo→Normal→AO→Roughness→Metallic→LightAccum(=emissive)→Depth→**8 IBL diffuse→9 IBL specular→10 BRDF LUT**)
+- `gBufferDebugMode_` (uint, 0~10) — Lighting PSO의 `debugMode` cbuffer 필드로 전달. resolve는 `debugMode≠0` 시 패스스루(톤매핑 생략)
 
 **gfx.cpp 라이트 스테이징 (`gfx.cpp`):**
 - PBR Dispatcher 생성 직전에 `lightDataPBRPipeline_` → `PBRShader::Light` 변환 후 `resourcesTerrainPipeline_.mainPass.lightData` 스테이징

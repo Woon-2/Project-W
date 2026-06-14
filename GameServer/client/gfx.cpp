@@ -154,16 +154,17 @@ void GFX::init() {
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
-	// RTV 슬롯: 3 backbuffer + 4 GBuffer × 3 rooms = 15 + Portrait color × 3 rooms = 18 → 여유 포함 24
+	// RTV 슬롯 (room 최대 3 가정, room당): backbuffer 1 + GBuffer 4 + SceneColor 1 + Portrait 1
+	//   + Bloom mip chain (최대 6) = 13 → 13 × 3 rooms = 39 → 여유 포함 64.
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = 24u,
+		.NumDescriptors = 64u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		.NodeMask = 0
 	} );
 
-	// RTV Pool: RTVHeap의 [0, 24) 범위
-	rtvPool_ = DescriptorPool( 24u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
+	// RTV Pool: RTVHeap의 [0, 64) 범위
+	rtvPool_ = DescriptorPool( 64u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
 		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
 	);
@@ -309,6 +310,9 @@ void GFX::init() {
 	shaders_.try_emplace("PBRDeferredSkinnedIndirectGBufferShader", createPBRDeferredSkinnedIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TonemapResolveShader",            createTonemapResolveShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BloomPrefilterShader",            createBloomPrefilterShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BloomDownsampleShader",           createBloomDownsampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BloomUpsampleShader",             createBloomUpsampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLIrradianceShader",             createIBLIrradianceShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLPrefilterShader",              createIBLPrefilterShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLBRDFLUTShader",                createIBLBRDFLUTShader(device_.Get(), defaultRootSig.get()));
@@ -508,6 +512,10 @@ void GFX::createSwapChain() {
 	// Tonemap resolve pass ----
 	resourcesTonemapPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(TonemapResolveShader::PerDrawcallData), 1u, backBuffers_.size(), "Tonemap_PerDrawcallData"
+	);
+	// Bloom pass ---- one cbuffer element per bloom pass (prefilter + down/upsample chain)
+	resourcesBloomPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(BloomShader::PerDrawcallData), BloomPipeline::kMaxBloomPasses, backBuffers_.size(), "Bloom_PerDrawcallData"
 	);
 	// IBL precompute params (7 dispatches, room count 1 — load-time static)
 	iblParamsCBs_ = createConstantBufferArray(
@@ -1196,6 +1204,13 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
 		backBuffers_.size(), rtvPool_, srvTexPool_
 	);
+	// Bloom HDR mip chain (half-res; deferred path 합성용). SceneColor와 동일 수명/resize.
+	SharedResources::Bloom::addBloom(
+		device_.Get(),
+		static_cast<u32t>(gClientRect.right  - gClientRect.left),
+		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
+		backBuffers_.size(), rtvPool_, srvTexPool_
+	);
 	// IBL 타깃 리소스 생성 (irradiance/prefiltered 큐브 + BRDF LUT). 정적(환경 의존),
 	// 스카이박스 큐브 상주 후 loadRequestedAssets에서 precomputeIBL이 채운다.
 	SharedResources::IBL::addIBL(device_.Get(), uavPool_, srvTexCubePool_, srvTexPool_);
@@ -1481,6 +1496,7 @@ void GFX::resize(u32t width, u32t height) {
 	//    (포트레이트 RT는 셀 고정 크기라 해상도와 무관 → 건드리지 않는다.)
 	SharedResources::GBuffer::eraseGBuffer(rtvPool_, dsvPool_, srvTexPool_);
 	SharedResources::SceneColor::eraseSceneColor(rtvPool_, srvTexPool_);
+	SharedResources::Bloom::eraseBloom(rtvPool_, srvTexPool_);
 	SharedResources::HiZMap::eraseHiZMaps(srvTexPool_, uavPool_, dsvPool_);
 
 	for (int idx : allocatedRtvIndices_) { rtvPool_.free(idx); }
@@ -1547,6 +1563,9 @@ void GFX::resize(u32t width, u32t height) {
 		device_.Get(), width, height, backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
 	);
 	SharedResources::SceneColor::addSceneColor(
+		device_.Get(), width, height, backBuffers_.size(), rtvPool_, srvTexPool_
+	);
+	SharedResources::Bloom::addBloom(
 		device_.Get(), width, height, backBuffers_.size(), rtvPool_, srvTexPool_
 	);
 	SharedResources::HiZMap::addHiZMaps(
@@ -1800,7 +1819,21 @@ void GFX::render() {
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx],
 		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
-		sceneColorSrv, sceneColorRoomIdx
+		sceneColorSrv, sceneColorRoomIdx,
+		tonemapExposure_, bloomIntensity_, gBufferDebugMode_,
+		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx)
+	);
+
+	// Bloom dispatcher (deferred path only; runs before the resolve composite reads mip 0).
+	auto bloomPipelineDispatcher = BloomPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("BloomPrefilterShader"), shaders_.at("BloomDownsampleShader"), shaders_.at("BloomUpsampleShader"),
+		cmdQ_,
+		&fenceToSignal, &resourcesBloomPipeline_, &cmdListPool_,
+		sceneColorSrv, sceneColorRoomIdx, bloomThreshold_
 	);
 
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
@@ -2383,6 +2416,11 @@ void GFX::render() {
 				ID3D12CommandList* resolveBarrierCmds[] = { cmdCtxResolveBarrier.cmdList.Get() };
 				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, resolveBarrierCmds), false);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxResolveBarrier));
+			}
+			// Bloom: reads SceneColorHDR (now PIXEL_SHADER_RESOURCE), writes the bloom mip
+			// chain (mip 0 composited by the resolve). Skipped in debug views (passthrough).
+			if (gBufferDebugMode_ == 0u) {
+				bloomPipelineDispatcher.render();
 			}
 			tonemapPipelineDispatcher.updateGPUDataSingleThreaded();
 			tonemapPipelineDispatcher.drawSingleThreaded();

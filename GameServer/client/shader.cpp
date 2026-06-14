@@ -3876,6 +3876,84 @@ ComPtr<ID3D12PipelineState> createTonemapResolveShader(ID3D12Device* device, ID3
 	return ret;
 }
 
+// Shared builder for the three bloom PSOs. All render to an RGBA16F bloom mip with
+// no depth and no culling (fullscreen triangle). `additive` enables ONE/ONE blending
+// for the upsample pass (accumulates the smaller mip onto the larger one).
+static ComPtr<ID3D12PipelineState> createBloomShaderImpl(
+	ID3D12Device* device, ID3D12RootSignature* rootSig,
+	const char* psEntry, bool additive, const char* name
+) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("bloom.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("bloom.hlsl", nullptr, psEntry,  "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{ .pInputElementDescs = nullptr, .NumElements = 0u };
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{ .AlphaToCoverageEnable = false, .IndependentBlendEnable = false },
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode              = D3D12_FILL_MODE_SOLID,
+			.CullMode              = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias             = 0,
+			.DepthBiasClamp        = 0.f,
+			.SlopeScaledDepthBias  = 0.f,
+			.DepthClipEnable       = true,
+			.MultisampleEnable     = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount     = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable      = false,
+			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_ALWAYS,
+			.StencilEnable    = false,
+			.StencilReadMask  = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace        = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace         = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout           = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc            = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask              = 0u,
+		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable           = additive;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend             = additive ? D3D12_BLEND_ONE : D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+	setD3DName(ret.Get(), name);
+	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createBloomPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	return createBloomShaderImpl(device, rootSig, "PSPrefilter", false, "BloomPrefilterShader");
+}
+ComPtr<ID3D12PipelineState> createBloomDownsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	return createBloomShaderImpl(device, rootSig, "PSDownsample", false, "BloomDownsampleShader");
+}
+ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	return createBloomShaderImpl(device, rootSig, "PSUpsample", true, "BloomUpsampleShader");
+}
+
 // Builds the PSO used by TrailPipeline. No vertex buffer is bound — the VS
 // pulls each segment's endpoints from a StructuredBuffer (gTrailVertices) via
 // SV_VertexID. CullMode = NONE so trails are visible from either side.

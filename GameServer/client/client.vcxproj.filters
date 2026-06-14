@@ -207,6 +207,9 @@
     <ClCompile Include="TonemapPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="BloomPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -566,6 +569,9 @@
     <ClInclude Include="TonemapPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="BloomPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -812,6 +818,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="tonemapResolve.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="bloom.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="sample.hlsl">

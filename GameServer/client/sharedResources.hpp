@@ -207,6 +207,49 @@ void eraseSceneColor( DescriptorPool& rtvPool, DescriptorPool& srvTexPool );
 
 }	// namespace SceneColor
 
+// Bloom HDR mip chain (R16G16B16A16_FLOAT). The bloom pass downsamples the HDR
+// scene color into mip 0 (half-res) then progressively down/upsamples through the
+// chain; the tonemap-resolve pass adds mip 0 back into the scene. One per room.
+// Each mip has its own RTV (write target) and its own single-mip SRV (sampled as a
+// source), and its resource state is tracked per subresource for the barrier dance.
+struct BloomData {
+	Texture mips;                                       // RGBA16F, full mip chain, ALLOW_RENDER_TARGET
+	u32t    mipCount = 0u;                               // number of mips actually used by the bloom pass
+	u32t    fullWidth = 0u;                              // source scene-color dims (for the prefilter texel size)
+	u32t    fullHeight = 0u;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtv;        // per-mip RTV handle
+	std::vector<BindlessIndex>               srv;        // per-mip single-mip SRV (bindless)
+	std::vector<u32t>                        width;      // per-mip dimensions
+	std::vector<u32t>                        height;
+	std::vector<D3D12_RESOURCE_STATES>       mipState;   // per-mip (subresource) state tracking
+	std::vector<int>                         rtvPoolIndices;  // for eraseBloom
+	std::vector<int>                         srvPoolIndices;
+};
+
+namespace Bloom {
+
+// bloomData[roomIdx]: roomIdx번째 방의 bloom 밉체인. addBloom() 전에는 비어 있다.
+extern std::vector<BloomData> bloomData;
+
+// roomCnt개 방 각각에 fullWidth x fullHeight scene-color에 대응하는 bloom 밉체인을 만든다.
+// 밉 0은 half-res, 이후 절반씩. rtvPool: 밉당 1개, srvTexPool: 밉당 1개(× roomCnt).
+void addBloom( ID3D12Device* device, u32t fullWidth, u32t fullHeight,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+);
+
+// roomIdx번째 bloom의 mip(서브리소스)을 newState로 전환한다(이미 그 상태면 no-op).
+void transitionMip( std::size_t roomIdx, u32t mip,
+	D3D12_RESOURCE_STATES newState, ID3D12GraphicsCommandList* cmdList
+);
+
+// resolve 합성용 mip 0 SRV. bloomData가 비어 있으면 invalid index를 반환한다.
+BindlessIndex mip0Srv( std::size_t roomIdx );
+
+// 모든 방의 bloom 리소스를 해제하고 풀 슬롯을 반납한다(resize 시 erase 후 add).
+void eraseBloom( DescriptorPool& rtvPool, DescriptorPool& srvTexPool );
+
+}	// namespace Bloom
+
 // 로비 대기실 슬롯 캐릭터를 그리는 오프스크린 포트레이트 렌더 타깃.
 // 가로 아틀라스 1장(cellCount개 셀 × cellW)에 셀별 viewport로 캐릭터를 그린 뒤,
 // color SRV를 UI 슬롯 쿼드에 합성한다. depth는 샘플하지 않으므로 SRV 없이 DSV만 둔다.

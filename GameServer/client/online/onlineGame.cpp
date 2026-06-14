@@ -3777,7 +3777,7 @@ void Game::renderWaitingRoom() {
 	// 배경 카메라와 무관하게 각 캐릭터를 슬롯 전용 카메라로 RT 셀에 그린다(투명 배경).
 	const int filled = static_cast<int>(lobbyPlayers_.size());
 	gfx_.setLobbyPortraitActive(true);
-	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f) });
+	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f), .iblIntensity = 0.0f });
 	// 정면-상단 키 라이트(고정 방향, 배경광과 무관하게 캐릭터를 일관되게 비춤). shadow는 GFX에서 off.
 	{
 		const mu::NVec3 keyDir(-0.25f, -0.5f, -0.83f);

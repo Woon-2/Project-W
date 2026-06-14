@@ -42,6 +42,7 @@ struct LightData {
 struct FrameData {
     mu::Vec3 globalAmbient;
     u32t     lightCount = 0u;
+    float    iblIntensity = 1.0f;  // 0 disables IBL for this pass
 };
 
 struct DrawEvent {

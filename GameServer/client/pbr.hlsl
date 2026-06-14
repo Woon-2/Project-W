@@ -50,9 +50,20 @@ cbuffer PerFrameData : register(b1) {
     float4   cascadeSplitsFarV;
     float4x4 lightVP[MAX_CSM_CASCADES];
     float4   cascadeNormalOffsets;
+    // IBL (forward parity)
+    float3   camPos;
+    float    _padCam;
+    int4     idxIrradiance;
+    int4     idxPrefiltered;
+    int4     idxBRDFLUT;
+    uint     prefilteredMipCount;
+    float    iblIntensity;
+    float2   _iblPad;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
+
+#define IBL_ENABLED
 
 static float4x4 gmtxTexturize = {
 	0.5f, 0.0f, 0.0f, 0.0f,

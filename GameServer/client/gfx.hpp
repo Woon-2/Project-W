@@ -30,6 +30,7 @@
 #include "spriteAnimation.hpp"
 #include "pbrDeferredPipeline.hpp"
 #include "TonemapPipeline.hpp"
+#include "BloomPipeline.hpp"
 #include "pbrDeferredSkinnedPipeline.hpp"
 
 extern HWND ghWnd;
@@ -383,7 +384,7 @@ public:
 
 	// GBuffer 채널 debug 뷰를 순환한다 ('G' 키에 연결됨).
 	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth → None
-	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 8u; }
+	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 11u; }
 
 	// Returns false when text rendering fails (e.g. device loss); callers keep
 	// their text dirty and retry on a later frame.
@@ -485,6 +486,8 @@ private:
 	SkyboxPipeline::CameraData cameraDataSkyboxPipeline_{};
 	// Tonemap resolve pass (HDR scene-color -> LDR backbuffer)
 	TonemapPipeline::Resources resourcesTonemapPipeline_{};
+	// Bloom pass (HDR scene-color -> bloom mip chain, composited in the resolve)
+	BloomPipeline::Resources resourcesBloomPipeline_{};
 	// IBL precompute params cbuffer array (7 dispatches: 1 irradiance + 5 prefilter mips + 1 BRDF)
 	ConstantBufferArray iblParamsCBs_{};
 	// Bounding Volume Pipeline
@@ -606,7 +609,10 @@ private:
 	bool hiZCullEnabled_      = true;
 	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
-	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
+	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT
+	float tonemapExposure_    = 1.0f;  // linear exposure multiplier applied in the tonemap resolve pass
+	float bloomThreshold_     = 1.0f;  // bloom brightness threshold (HDR luminance)
+	float bloomIntensity_     = 0.08f; // bloom additive strength at composite (0 = bloom off)
 };
 
 #endif	// __GFX_HPP

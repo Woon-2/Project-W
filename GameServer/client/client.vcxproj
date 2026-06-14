@@ -224,6 +224,7 @@
     <ClCompile Include="pbrDeferredSkinnedPipeline.cpp" />
     <ClCompile Include="iblPrecomputePipeline.cpp" />
     <ClCompile Include="TonemapPipeline.cpp" />
+    <ClCompile Include="BloomPipeline.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -364,6 +365,7 @@
     <ClInclude Include="pbrDeferredSkinnedPipeline.hpp" />
     <ClInclude Include="iblPrecomputePipeline.hpp" />
     <ClInclude Include="TonemapPipeline.hpp" />
+    <ClInclude Include="BloomPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
     <ClInclude Include="ServerSession.hpp" />
@@ -499,6 +501,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="tonemapResolve.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="bloom.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
