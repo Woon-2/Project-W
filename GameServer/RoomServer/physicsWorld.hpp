@@ -6,7 +6,9 @@
 #include "contactConstraint.hpp"
 #include "broadPhase.hpp"
 #include "collision.hpp"
+#include "staticDepenetration.hpp"
 #include "terrain.hpp"
+#include "../common/slotVector.hpp"
 #include <functional>
 #include <unordered_map>
 #include <utility>
@@ -40,8 +42,13 @@ public:
     // Multi-terrain support (mirror of the client): several static height-field
     // chunks can be registered simultaneously. Each Dynamic body is routed to the
     // chunk(s) overlapping its XZ footprint during generateContacts().
-    using TerrainHandle = std::size_t;
-    static constexpr TerrainHandle kInvalidTerrainHandle = static_cast<std::size_t>(-1);
+    // Terrain and scatter colliders share one stable-handle registry.
+    using WorldColliderHandle = SlotVector<std::unique_ptr<WorldCollider>>::Handle;
+    using TerrainHandle = WorldColliderHandle;
+    using ScatterHandle = WorldColliderHandle;
+    static constexpr WorldColliderHandle kInvalidTerrainHandle =
+        SlotVector<std::unique_ptr<WorldCollider>>::kInvalid;
+    static constexpr WorldColliderHandle kInvalidScatterHandle = kInvalidTerrainHandle;
 
     // Register a static height-field terrain chunk for body-terrain collision.
     // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
@@ -50,6 +57,13 @@ public:
 
     // Remove a terrain chunk collider by handle. Safe with an invalid handle.
     void unregisterTerrain(TerrainHandle handle);
+
+    // Register a per-chunk static prop (scatter) collider. Queried per Dynamic
+    // body alongside terrain (monster-vs-prop on the server).
+    ScatterHandle registerScatter(std::unique_ptr<ScatterCollider> collider);
+
+    // Remove a previously registered scatter collider. Safe with an invalid handle.
+    void unregisterScatter(ScatterHandle handle);
 
     // Set the gravitational acceleration applied to Dynamic bodies each step.
     void MU_CALLCONV setGravity(mu::Vec3 g) { gravity_ = g; }
@@ -83,15 +97,16 @@ private:
     std::vector<std::unique_ptr<ContactConstraint>> contactConstraints_;
     std::vector<std::unique_ptr<Constraint>>        jointConstraints_;
 
-    // Registered terrain chunks. Terrain bodies are NOT in entries_ or
-    // broadPhase_; each TerrainCollider iterates Dynamic bodies directly.
-    // A slot with a null collider is inactive (reusable via freeTerrainSlots_).
-    struct TerrainEntry {
-        std::unique_ptr<TerrainCollider> collider;   // null == inactive slot
-        const TerrainHeightField*        hf = nullptr;
-    };
-    std::vector<TerrainEntry>                       terrains_;
-    std::vector<std::size_t>                        freeTerrainSlots_;
+    // Per-step static depenetration records (scatter props feed these; resolved
+    // after the dynamic solver). movedByStaticDepen_ is the dirty set whose pose
+    // was written directly and needs a BVH rebuild.
+    std::vector<StaticContact>                      staticContacts_;
+    std::vector<RigidBody*>                         movedByStaticDepen_;
+
+    // Registered static world colliders (terrain + scatter). NOT in entries_ or
+    // broadPhase_; each collider iterates Dynamic bodies directly and self-rejects
+    // bodies outside its footprint. Slots are stable (tombstone reuse).
+    SlotVector<std::unique_ptr<WorldCollider>>      worldColliders_;
 
     int     solverIterations_         = 10;
     int     positionSolveIterations_  = 3;

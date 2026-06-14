@@ -2,6 +2,8 @@
 #include "collision.hpp"
 #include "terrain.hpp"
 #include "rigidBody.hpp"
+#include "contactConstraint.hpp"
+#include "staticDepenetration.hpp"
 
 CollisionResult collides(const AABB& a, const AABB& b) {
     CollisionResult res{.hit = false};
@@ -134,6 +136,56 @@ AABB obbToAABB(const OBB& obb) {
         + std::abs(mu::dot(axes[1], mu::Vec3(0.f, 0.f, 1.f))) * obb.halfExtents.y()
         + std::abs(mu::dot(axes[2], mu::Vec3(0.f, 0.f, 1.f))) * obb.halfExtents.z();
     return AABB{obb.center, mu::Vec3(ex, ey, ez) * 2.f};
+}
+
+// --- Rigid world-space BVH transform (shared by Object + ScatterCollider) ---
+
+std::variant<AABB, OBB> MU_CALLCONV transformShapeRigid(
+    const std::variant<AABB, OBB>& local,
+    mu::Vec3 pos, mu::NQuat orient, mu::Vec3 scale)
+{
+    const mu::Vec3 rx = orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+    const mu::Vec3 ry = orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+    const bool hasRot =
+        std::abs(rx.x() - 1.f) > 1e-5f || std::abs(rx.y()) > 1e-5f || std::abs(rx.z()) > 1e-5f ||
+        std::abs(ry.y() - 1.f) > 1e-5f || std::abs(ry.x()) > 1e-5f || std::abs(ry.z()) > 1e-5f;
+
+    return std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, AABB>) {
+            if (!hasRot)
+                return AABB{ s.center * scale + pos, s.size * scale };
+            return OBB{ orient.rotate(s.center * scale) + pos, (s.size * 0.5f) * scale, orient };
+        } else {
+            mu::NQuat worldOrient = orient;
+            worldOrient *= s.orient;
+            return OBB{ orient.rotate(s.center * scale) + pos, s.halfExtents * scale, worldOrient };
+        }
+    }, local);
+}
+
+BVH MU_CALLCONV makeWorldBVH(const BVH& localBVH,
+                             mu::Vec3 pos, mu::NQuat orient, mu::Vec3 scale)
+{
+    BVH out;
+    if (localBVH.empty()) return out;
+    out.nodes.resize(localBVH.nodes.size());
+    for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
+        const auto& src = localBVH.nodes[i];
+        auto&       dst = out.nodes[i];
+        dst.children    = src.children;
+        dst.name        = src.name;
+        dst.boneName    = src.boneName;
+        dst.boneIdx     = src.boneIdx;
+        dst.damageCoeff = src.damageCoeff;
+        dst.shape       = transformShapeRigid(src.shape, pos, orient, scale);
+        dst.bounds      = std::visit([](auto&& s) -> AABB {
+            using T = std::decay_t<decltype(s)>;
+            if constexpr (std::is_same_v<T, OBB>) return obbToAABB(s);
+            else                                  return s;
+        }, dst.shape);
+    }
+    return out;
 }
 
 // --- BVH helpers ---
@@ -350,9 +402,9 @@ bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp, float 
     return true;
 }
 
-int TerrainCollider::generateContacts(const RigidBody& dynamic,
-                                      std::vector<ContactPoint>& outContacts,
-                                      float lookAhead) const
+int TerrainCollider::collectContacts(const RigidBody& dynamic,
+                                     float lookAhead,
+                                     std::vector<ContactPoint>& outContacts) const
 {
     if (!heightField_ || heightField_->empty()) return 0;
     if (dynamic.worldBVH().empty())             return 0;
@@ -437,4 +489,158 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray) {
     hit.normal = normal;
 
     return hit;
+}
+
+// ---------------------------------------------------------------------------
+// TerrainCollider (WorldCollider overrides)
+// ---------------------------------------------------------------------------
+
+bool TerrainCollider::footprintReject(mu::Vec3 bodyPos, float pad) const
+{
+    if (!heightField_) return true;
+    const mu::Vec3 origin = terrainBody_->pos();
+    if (bodyPos.x() < origin.x() - pad || bodyPos.x() > origin.x() + heightField_->sizeX + pad) return true;
+    if (bodyPos.z() < origin.z() - pad || bodyPos.z() > origin.z() + heightField_->sizeZ + pad) return true;
+    return false;
+}
+
+int TerrainCollider::generateContacts(RigidBody& dyn, const ContactSink& sink) const
+{
+    if (dyn.worldBVH().empty()) return 0;
+    if (!sink.constraints)      return 0;
+
+    const float vy        = dyn.linearVel().y();
+    const float lookAhead = (vy < 0.f) ? std::min(0.15f, std::abs(vy) * sink.subDtSec) : 0.f;
+
+    std::vector<ContactPoint> contacts;
+    contacts.reserve(4);
+    const int cnt = collectContacts(dyn, lookAhead, contacts);
+    if (cnt == 0) return 0;
+
+    const mu::Vec3 origin = terrainBody_->pos();
+    auto cc = std::make_unique<ContactConstraint>(&dyn, terrainBody_);
+    cc->setExternalAccels(sink.gravity, mu::Vec3(0.f, 0.f, 0.f));
+    cc->setTerrainContact(true);
+    for (auto& cp : contacts) {
+        cp.localA = cp.worldPos - dyn.pos();
+        cp.localB = cp.worldPos - origin;
+        cc->addContact(cp);
+    }
+    sink.constraints->push_back(std::move(cc));
+    return cnt;
+}
+
+// ---------------------------------------------------------------------------
+// ScatterCollider
+// ---------------------------------------------------------------------------
+
+ScatterCollider::ScatterCollider(const std::vector<InstanceInput>& instances)
+{
+    insts_.reserve(instances.size());
+
+    bool     haveBounds = false;
+    mu::Vec3 lo(0.f, 0.f, 0.f), hi(0.f, 0.f, 0.f);
+
+    for (const auto& in : instances) {
+        if (!in.modelBVH || in.modelBVH->empty()) continue;
+
+        Inst inst;
+        inst.worldBVH = makeWorldBVH(*in.modelBVH, in.pos, in.rot, in.scale);
+        if (inst.worldBVH.empty()) continue;
+
+        bool     first = true;
+        mu::Vec3 ilo(0.f, 0.f, 0.f), ihi(0.f, 0.f, 0.f);
+        for (const auto& node : inst.worldBVH.nodes) {
+            const mu::Vec3 c   = node.bounds.center;
+            const mu::Vec3 h   = node.bounds.size * 0.5f;
+            const mu::Vec3 nlo = c - h, nhi = c + h;
+            if (first) { ilo = nlo; ihi = nhi; first = false; }
+            else {
+                ilo = mu::Vec3(std::min(ilo.x(), nlo.x()), std::min(ilo.y(), nlo.y()), std::min(ilo.z(), nlo.z()));
+                ihi = mu::Vec3(std::max(ihi.x(), nhi.x()), std::max(ihi.y(), nhi.y()), std::max(ihi.z(), nhi.z()));
+            }
+        }
+        inst.worldAABB = AABB{ (ilo + ihi) * 0.5f, ihi - ilo };
+
+        if (!haveBounds) { lo = ilo; hi = ihi; haveBounds = true; }
+        else {
+            lo = mu::Vec3(std::min(lo.x(), ilo.x()), std::min(lo.y(), ilo.y()), std::min(lo.z(), ilo.z()));
+            hi = mu::Vec3(std::max(hi.x(), ihi.x()), std::max(hi.y(), ihi.y()), std::max(hi.z(), ihi.z()));
+        }
+        insts_.push_back(std::move(inst));
+    }
+
+    if (insts_.empty()) return;
+    bounds_ = AABB{ (lo + hi) * 0.5f, hi - lo };
+
+    gridMinX_ = lo.x() - 0.01f;
+    gridMinZ_ = lo.z() - 0.01f;
+    nx_ = std::max(1, static_cast<int>((hi.x() - gridMinX_) / cellSize_) + 1);
+    nz_ = std::max(1, static_cast<int>((hi.z() - gridMinZ_) / cellSize_) + 1);
+    cells_.assign(static_cast<std::size_t>(nx_) * static_cast<std::size_t>(nz_), {});
+
+    for (int i = 0; i < static_cast<int>(insts_.size()); ++i) {
+        const AABB& a   = insts_[i].worldAABB;
+        const float ax0 = a.center.x() - a.size.x() * 0.5f;
+        const float ax1 = a.center.x() + a.size.x() * 0.5f;
+        const float az0 = a.center.z() - a.size.z() * 0.5f;
+        const float az1 = a.center.z() + a.size.z() * 0.5f;
+        const int cx0 = std::clamp(static_cast<int>((ax0 - gridMinX_) / cellSize_), 0, nx_ - 1);
+        const int cx1 = std::clamp(static_cast<int>((ax1 - gridMinX_) / cellSize_), 0, nx_ - 1);
+        const int cz0 = std::clamp(static_cast<int>((az0 - gridMinZ_) / cellSize_), 0, nz_ - 1);
+        const int cz1 = std::clamp(static_cast<int>((az1 - gridMinZ_) / cellSize_), 0, nz_ - 1);
+        for (int cz = cz0; cz <= cz1; ++cz)
+            for (int cx = cx0; cx <= cx1; ++cx)
+                cells_[cellIndex(cx, cz)].push_back(i);
+    }
+    visited_.assign(insts_.size(), -1);
+}
+
+bool ScatterCollider::footprintReject(mu::Vec3 bodyPos, float pad) const
+{
+    if (insts_.empty()) return true;
+    const mu::Vec3 c = bounds_.center;
+    const mu::Vec3 h = bounds_.size * 0.5f;
+    if (std::abs(bodyPos.x() - c.x()) > h.x() + pad) return true;
+    if (std::abs(bodyPos.z() - c.z()) > h.z() + pad) return true;
+    return false;
+}
+
+int ScatterCollider::generateContacts(RigidBody& dyn, const ContactSink& sink) const
+{
+    const BVH& bvh = dyn.worldBVH();
+    if (bvh.empty() || insts_.empty() || !sink.staticContacts) return 0;
+
+    const AABB bodyAABB = bvh.nodes[0].bounds;   // root subtree bounds
+
+    int added = 0;
+    forEachCandidate(bodyAABB, [&](int i) {
+        const Inst& inst = insts_[i];
+        if (!collides(bodyAABB, inst.worldAABB).hit) return;
+
+        const CollisionResult res = collides(bvh, inst.worldBVH);
+        if (!res.hit) return;
+
+        // res.normal is B->A = static(inst) -> movable(dyn): the push-out direction.
+        mu::NVec3 n = res.normal;
+        if (mu::Vec3(n).len2() < 0.5f) {
+            const mu::Vec3 sep = dyn.pos() - inst.worldAABB.center;
+            n = (sep.len2() > 1e-6f)
+                ? mu::normalize(sep)
+                : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+        }
+
+        StaticContact sc;
+        sc.movable    = &dyn;
+        sc.staticBody = nullptr;
+        ContactPoint cp;
+        cp.worldPos = res.contactPoint;
+        cp.normal   = n;
+        cp.depth    = res.depth;
+        cp.localA   = res.contactPoint - dyn.pos();
+        sc.addContact(cp);
+        sink.staticContacts->push_back(std::move(sc));
+        ++added;
+    });
+    return added;
 }

@@ -181,6 +181,10 @@ void Room::init(const Level* levelData) {
 			physicsWorld_.registerTerrain(&t.body(), hf);
 		});
 
+	// Static prop (tree/rock) colliders for monster-vs-prop authority. Baked from
+	// the shared prop BVHs + per-chunk instance data; no room-local bodies needed.
+	terrainChunks.registerScatterColliders(physicsWorld_);
+
 	// 스킬 레지스트리는 부팅 시 AssetManager가 1회 컴파일하여 전 룸이 공유한다.
 	// (사양이 방마다 달라지지 않으므로 참조만 바인딩; 컴파일/복사 없음.)
 	skillSystem_.bindRegistry(&levelData->assetManager->skillAssets());

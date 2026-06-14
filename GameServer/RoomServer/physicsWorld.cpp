@@ -23,26 +23,22 @@ void PhysicsWorld::registerBody(RigidBody* body,
 PhysicsWorld::TerrainHandle PhysicsWorld::registerTerrain(RigidBody* terrainBody,
                                     const TerrainHeightField* hf)
 {
-    std::size_t slot;
-    if (!freeTerrainSlots_.empty()) {
-        slot = freeTerrainSlots_.back();
-        freeTerrainSlots_.pop_back();
-    } else {
-        slot = terrains_.size();
-        terrains_.emplace_back();
-    }
-    terrains_[slot].collider = std::make_unique<TerrainCollider>(terrainBody, hf);
-    terrains_[slot].hf       = hf;
-    return static_cast<TerrainHandle>(slot);
+    return worldColliders_.add(std::make_unique<TerrainCollider>(terrainBody, hf));
 }
 
 void PhysicsWorld::unregisterTerrain(TerrainHandle handle)
 {
-    if (handle == kInvalidTerrainHandle || handle >= terrains_.size()) return;
-    if (!terrains_[handle].collider) return;   // already inactive
-    terrains_[handle].collider.reset();
-    terrains_[handle].hf = nullptr;
-    freeTerrainSlots_.push_back(handle);
+    worldColliders_.remove(handle);
+}
+
+PhysicsWorld::ScatterHandle PhysicsWorld::registerScatter(std::unique_ptr<ScatterCollider> collider)
+{
+    return worldColliders_.add(std::move(collider));
+}
+
+void PhysicsWorld::unregisterScatter(ScatterHandle handle)
+{
+    worldColliders_.remove(handle);
 }
 
 void PhysicsWorld::unregisterBody(RigidBody* body)
@@ -65,6 +61,18 @@ void PhysicsWorld::step(Seconds dt)
         integrate(subDt);
         generateContacts();
         solveConstraints(subDt);
+
+        // Static obstacles (scatter props) get the final word on position: after
+        // the dynamic solver so a monster squeezed against a tree ends up outside
+        // it. resolveStaticPenetration writes pos directly, so rebuild the BVH of
+        // any body it moved before the next sub-step's narrow phase.
+        movedByStaticDepen_.clear();
+        resolveStaticPenetration(staticContacts_, movedByStaticDepen_);
+        for (RigidBody* b : movedByStaticDepen_) {
+            auto it = std::ranges::find(entries_, b, &Entry::body);
+            if (it != entries_.end() && it->onRebuildBVH)
+                it->onRebuildBVH();
+        }
     }
 }
 
@@ -165,6 +173,7 @@ void PhysicsWorld::integrate(Seconds dt)
 void PhysicsWorld::generateContacts()
 {
     contactConstraints_.clear();
+    staticContacts_.clear();
 
     broadPhase_->update();
     const auto pairs = broadPhase_->queryPairs();
@@ -233,47 +242,26 @@ void PhysicsWorld::generateContacts()
         contactConstraints_.push_back(std::move(cc));
     }
 
-    // --- Body-Terrain contacts ---
-    if (!terrains_.empty()) {
-        for (auto& e : entries_) {
-            RigidBody* body = e.body;
-            if (body->motionType() != MotionType::Dynamic) continue;
-            if (body->worldBVH().empty()) continue;
-
-            const float vy = body->linearVel().y();
-            const float lookAhead = (vy < 0.f)
-                ? std::min(0.15f, std::abs(vy) * currentSubDt_.count())
-                : 0.f;
-
-            for (auto& te : terrains_) {
-                if (!te.collider) continue;
-
-                // Cheap XZ-footprint reject before walking the body's BVH leaves.
-                const mu::Vec3 origin = te.collider->terrainBody()->pos();
-                const mu::Vec3 bp = body->pos();
-                constexpr float kPad = 4.f;   // body half-extent + look-ahead tolerance
-                if (te.hf) {
-                    if (bp.x() < origin.x() - kPad || bp.x() > origin.x() + te.hf->sizeX + kPad) continue;
-                    if (bp.z() < origin.z() - kPad || bp.z() > origin.z() + te.hf->sizeZ + kPad) continue;
-                }
-
-                std::vector<ContactPoint> contacts;
-                contacts.reserve(4);
-                const int cnt = te.collider->generateContacts(*body, contacts, lookAhead);
-                if (cnt == 0) continue;
-
-                auto cc = std::make_unique<ContactConstraint>(body, te.collider->terrainBody());
-                cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
-                cc->setTerrainContact(true);
-
-                for (auto& cp : contacts) {
-                    cp.localA = cp.worldPos - body->pos();
-                    cp.localB = cp.worldPos - origin;
-                    cc->addContact(cp);
-                }
-                contactConstraints_.push_back(std::move(cc));
-            }
-        }
+    // --- Body vs static world colliders (terrain + scatter props) ---
+    // For each Dynamic body, query every registered collider (each self-rejects
+    // by footprint). Terrain emits support ContactConstraints; scatter emits
+    // push-out StaticContacts resolved later by resolveStaticPenetration(). The
+    // Dynamic-only filter encodes authority: on the server only monsters are
+    // Dynamic (monster-vs-prop); players are Kinematic (client-authoritative).
+    ContactSink sink;
+    sink.constraints    = &contactConstraints_;
+    sink.staticContacts = &staticContacts_;
+    sink.gravity        = gravity_;
+    sink.subDtSec       = currentSubDt_.count();
+    for (auto& e : entries_) {
+        RigidBody* body = e.body;
+        if (body->motionType() != MotionType::Dynamic) continue;
+        if (body->worldBVH().empty()) continue;
+        constexpr float kPad = 4.f;   // body half-extent + look-ahead tolerance
+        worldColliders_.forEach([&](const WorldCollider& wc) {
+            if (wc.footprintReject(body->pos(), kPad)) return;
+            wc.generateContacts(*body, sink);
+        });
     }
 }
 

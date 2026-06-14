@@ -109,7 +109,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `SAPBroadPhase` | `broadPhase.hpp #74` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
 | `SAPBroadPhase::queryAABB` | `broadPhase.hpp #74` | 정렬된 endpoints + active-set sweep으로 box 겹침 후보 반환 |
 | `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
-| `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
+| `WorldCollider` (추상) / `ContactSink` | `collision.hpp` | 정적 환경 콜라이더 베이스(footprintReject/generateContacts/queryArm). terrain·scatter 공통; ContactSink로 자기 의미의 contact append |
+| `TerrainCollider : WorldCollider` | `collision.hpp` | Dynamic body ↔ 지형 높이맵 support ContactConstraint 생성(+queryArm=N6 지면샘플) |
+| `ScatterCollider : WorldCollider` | `collision.hpp`/`.cpp` | chunk당 1개 정적 prop 콜라이더; collidable 인스턴스 world BVH 1회 베이크+XZ uniform grid, StaticContact(push-out) 생성, queryArm=RaycastBVH(카메라) |
+| `transformShapeRigid()` / `makeWorldBVH()` | `collision.hpp`/`.cpp` | 비본 강체 world-BVH 변환(회전 시 AABB→OBB). Object::rebuildBodyBVH 비본 경로 + ScatterCollider 공유 |
 | `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
 | `PhysicsWorld::registerBody()` | `physicsWorld.hpp #37` | body + onRebuildBVH 콜백 + collisionGroup/Mask + broad phase 등록 |
 | `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp #43` | 등록 해제 |
@@ -119,15 +122,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
 | `PhysicsWorld::setIgnoreCollision()` | `physicsWorld.hpp #58` | 특정 body 쌍의 충돌 완전 무시 (symmetric). Ragdoll이 joint 연결/2-hop 쌍 등록에 사용 |
 | `PhysicsWorld::ignoreCollisionPairs_` | `physicsWorld.hpp #182` | normKey 정규화된 per-pair ignore set; generateContacts()에서 group/mask 이후 체크 |
-| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | **다중 지형**: Static body+heightField 등록 → `TerrainHandle` 반환. 여러 청크 동시 등록 가능(각 collider가 XZ footprint 밖 body 자체 reject) |
-| `PhysicsWorld::unregisterTerrain(handle)` | `physicsWorld.hpp` | 핸들로 개별 청크 collider 해제 (slot tombstone 재사용) |
-| `PhysicsWorld::terrains_` | `physicsWorld.hpp` | `vector<TerrainEntry{collider, hf}>` + `freeTerrainSlots_`; generateContacts/queryCameraArm가 전 청크 순회(XZ reject) |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | TerrainCollider를 worldColliders_에 등록 → `TerrainHandle` 반환(시그니처 불변) |
+| `PhysicsWorld::unregisterTerrain(handle)` | `physicsWorld.hpp` | 핸들로 collider 해제 (SlotVector tombstone 재사용) |
+| `PhysicsWorld::registerScatter()`/`unregisterScatter()` | `physicsWorld.hpp`/`.cpp` | 청크 ScatterCollider 등록/해제(terrain과 동일 registry·핸들 공간) |
+| `PhysicsWorld::worldColliders_` | `physicsWorld.hpp` | `SlotVector<unique_ptr<WorldCollider>>`(terrain+scatter 통합); generateContacts/queryCameraArm가 Dynamic body마다 전 collider 순회(footprintReject) → `SlotVector<T>`는 `common/slotVector.hpp` |
 | `PhysicsWorld::registerCameraObstacle()` | `physicsWorld.hpp #67` | body를 카메라 obstacle로 cameraBroadPhase_에 등록 |
 | `PhysicsWorld::unregisterCameraObstacle()` | `physicsWorld.hpp #68` | 카메라 obstacle 등록 해제 |
-| `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (지형 N=6 샘플 + BVH raycast) |
+| `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (worldColliders_.queryArm: 지형 N=6 샘플 + scatter RaycastBVH, 이후 obstacle broad phase) |
 | `PhysicsWorld::cameraBroadPhase_` | `physicsWorld.hpp #140` | 카메라 전용 SAPBroadPhase 인스턴스 (일반 physicsWorld broadPhase와 독립) |
 | `PhysicsWorld::step()` | `physicsWorld.hpp #63` | (substep) integrate → generateContacts → solveConstraints → applyPseudoVelocity → resolveStaticPenetration + moved body BVH 재빌드 |
-| `PhysicsWorld::staticContacts_` / `movedByStaticDepen_` | `physicsWorld.hpp` | step별 static 충돌 레코드 + depenetration으로 직접 이동된 body dirty set |
+| `PhysicsWorld::staticContacts_` / `movedByStaticDepen_` | `physicsWorld.hpp` | step별 static 충돌 레코드(broad-phase static 분기 + ScatterCollider) + depenetration으로 직접 이동된 body dirty set |
 | `PhysicsWorld::generateContacts()` static 분기 | `physicsWorld.cpp` | static 포함 쌍(aStatic != bStatic)은 StaticContact로 라우팅 후 continue(ContactConstraint 미생성); normal을 static→movable로 정규화 |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
 | `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | velocity PGS 반복 횟수 (기본 4, ragdoll 활성 시 16) |

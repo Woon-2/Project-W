@@ -115,6 +115,7 @@ private:
         TerrainData     data;                 // owns mesh/splat/heightField when Ready
         std::shared_ptr<TerrainObject> object;
         std::size_t     physHandle = static_cast<std::size_t>(-1);  // PhysicsWorld::TerrainHandle
+        std::size_t     scatterHandle = static_cast<std::size_t>(-1);  // PhysicsWorld::ScatterHandle
         float           expireSeconds = 0.f;  // accumulates while Expiring
         std::vector<ScatterInstanceResolved> scatter;  // resident scattered foliage instances
     };
@@ -155,6 +156,19 @@ private:
     void loadScatterAssets();
     void resolveChunkScatter(LoadedChunk& slot);
     void submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const;
+
+    // One raw scatter instance resolved to world primitives (ground-snapped pos,
+    // orientation, per-axis scale). Shared by render-instance resolution and the
+    // static prop collider so both reference identical geometry.
+    struct ScatterWorldXform {
+        mu::Vec3  pos{};
+        mu::NQuat rot{};
+        mu::Vec3  scale{ 1.f, 1.f, 1.f };
+    };
+    ScatterWorldXform resolveInstanceXform(const LoadedChunk& slot, const ScatterInstance& inst) const;
+
+    // Builds + registers a per-chunk ScatterCollider from collidable instances.
+    void registerChunkScatterCollider(LoadedChunk& slot);
 
     GFX*          gfx_          = nullptr;
     PhysicsWorld* physicsWorld_ = nullptr;

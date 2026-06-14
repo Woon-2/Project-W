@@ -867,23 +867,10 @@ void Object::rebuildBodyBVH() {
 				return OBB{ worldCenter, worldHalfExtents, worldOrient };
 			}, src.shape);
 		} else {
-			dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
-				using T = std::decay_t<decltype(s)>;
-				if constexpr (std::is_same_v<T, AABB>) {
-					return AABB{
-						s.center * bScale + bPos,
-						s.size   * bScale,
-					};
-				} else {
-					mu::NQuat worldOrient = bOrient;
-					worldOrient *= s.orient;
-					return OBB{
-						bOrient.rotate(s.center * bScale) + bPos,
-						s.halfExtents * bScale,
-						worldOrient,
-					};
-				}
-			}, src.shape);
+			// Rigid (non-bone) path shared with ScatterCollider. Correctly turns a
+			// rotated axis-aligned model box into a world OBB (previously the
+			// rotation was dropped for AABB shapes).
+			dst.shape = transformShapeRigid(src.shape, bPos, bOrient, bScale);
 		}
 
 		dst.bounds = std::visit([](auto&& s) -> AABB {

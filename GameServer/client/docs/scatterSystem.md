@@ -97,14 +97,24 @@ Detail Density Scale`. 트리는 `treeInstances`(개별)라 그대로 정확.
 - prototype별 `Material`(mapAlbedo=grass 텍스처, 나머지 맵 비활성 idxRange=-1, cutoff 적용).
 - 인스턴스 크기는 `ComputeDetailInstanceTransforms`의 `scaleXZ/scaleY`가 **월드 크기 그대로** 담으므로, 프로토타입 `BillboardSize`는 1×1로 두고 unit quad에 scale만 적용한다(고정 quad, 카메라 추종은 미구현).
 
-## 충돌(Physics) 대비 — 이번엔 미구현, 구조로 대비
+## 충돌(Physics) — 구현됨 (`ScatterCollider`)
 
-`ModelExtractor`로 추출한 Tree/Rock 모델은 `Model::bvh`(model-space)를 갖는다. 향후 인스턴스 world 변환으로 충돌 처리를 붙일 수 있도록:
-- 인스턴스를 emit-후-폐기하지 않고 `LoadedChunk::scatter`(world 행렬 + worldAABB)로 **상주**시킨다.
-- `ResolvedScatterProto.model`(BVH 소유, 정적 프롭은 `boneIdx==-1`)과 `collidable`(=`!bvh.empty()`)를 보관.
-- 향후 `TerrainCollider`/`PhysicsWorld::registerTerrain` 슬롯 패턴을 미러링한 `ScatterCollider`(chunk당 1개)를 추가해
-  model BVH를 world로 변환 → depenetration / `collides(BVH,OBB)`·`RaycastBVH` 질의에 대응(chunk 언로드 시 해제).
+`ModelExtractor`로 추출한 Tree/Rock 모델은 `Model::bvh`(model-space)를 갖는다. 이를 `TerrainCollider`/`registerTerrain`
+슬롯 패턴을 일반화한 `WorldCollider` 추상화로 처리한다(`collision.hpp`, `common/slotVector.hpp`):
+- **클라**: `activateChunkRenderAndPhysics`가 collidable 인스턴스(`ResolvedScatterProto.collidable`)의 `(model->bvh, pos/rot/scale)`로
+  `ScatterCollider`를 만들어 `PhysicsWorld::registerScatter`, 핸들을 `LoadedChunk::scatterHandle`에 보관(`unloadChunk`에서 해제).
+- `ScatterCollider`는 인스턴스 world BVH를 `makeWorldBVH`로 **1회 베이크**(정적→재빌드 없음)하고 XZ uniform grid로 인덱싱.
+  Dynamic body마다 `collides(BVH,BVH)` → `StaticContact`(push-out, 회전·분리속도 없음) → `resolveStaticPenetration`.
+  카메라 암은 `queryArm`이 `RaycastBVH`로 차단.
+- **권위 분리(무분기)**: Dynamic body만 질의 → 클라=로컬 플레이어(player-vs-prop), 서버=몬스터(monster-vs-prop).
+  플레이어 위치는 `C_Move`, 몬스터 위치는 `S_NpcMoveBatch`로 복제 → 다중 체인에서도 위치 동기화.
+- **결정론**: 클라/서버가 `common/scatterTransform.hpp::makeScatterWorld` + 동일 ground-snap으로 prop world를 동일하게 계산.
+  형상 소스도 동일(`MultiBoundingVolume`→`ModelExtractor(ForServer)` BoundingVolumes).
+- **서버**: `parseChunkIndex`가 scatter prototype 이름 + per-chunk 인스턴스를 저장, `loadPropBVHs`가 `<name>Server.bin`(BV-only,
+  `ModelExtractorForServer`로 추출)을 로드, `Room::init`이 `registerScatterColliders`로 룸 PhysicsWorld에 등록.
+  서버에 `staticDepenetration`를 헤더 전용으로 포팅. **collidable prop은 `<name>Server.bin` 재추출 필요**(없으면 비충돌로 skip).
 - 빌보드 풀은 BVH 없음 → 비충돌.
+- (향후 최적화) 서버는 룸마다 world BVH를 베이크한다(터레인 콜라이더와 동일 per-room). 룸 수가 많으면 베이크 데이터를 공유로 전환 가능.
 
 ## 확장 대비 / 향후 작업 (의도된 단순화와 끼워넣을 자리)
 

@@ -7,6 +7,7 @@
 #include "staticDepenetration.hpp"
 #include "broadPhase.hpp"
 #include "collision.hpp"
+#include "../common/slotVector.hpp"
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -61,9 +62,14 @@ public:
     // Ragdoll uses this for joint-connected pairs (1-hop) and near-chain pairs (2-hop).
     void setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore);
 
-    // Opaque handle to a registered terrain chunk (stable across other (un)registers).
-    using TerrainHandle = std::size_t;
-    static constexpr TerrainHandle kInvalidTerrainHandle = static_cast<std::size_t>(-1);
+    // Opaque handle to a registered static world collider (terrain or scatter),
+    // stable across other (un)registers. Terrain and scatter share one registry.
+    using WorldColliderHandle = SlotVector<std::unique_ptr<WorldCollider>>::Handle;
+    using TerrainHandle = WorldColliderHandle;
+    using ScatterHandle = WorldColliderHandle;
+    static constexpr WorldColliderHandle kInvalidTerrainHandle =
+        SlotVector<std::unique_ptr<WorldCollider>>::kInvalid;
+    static constexpr WorldColliderHandle kInvalidScatterHandle = kInvalidTerrainHandle;
 
     // Register a static height-field terrain chunk for body-terrain collision.
     // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
@@ -73,6 +79,13 @@ public:
 
     // Remove a previously registered terrain chunk. Safe with kInvalidTerrainHandle.
     void unregisterTerrain(TerrainHandle handle);
+
+    // Register a per-chunk static prop (scatter) collider. Queried per Dynamic
+    // body alongside terrain. Returns a handle for later unregisterScatter().
+    ScatterHandle registerScatter(std::unique_ptr<ScatterCollider> collider);
+
+    // Remove a previously registered scatter collider. Safe with an invalid handle.
+    void unregisterScatter(ScatterHandle handle);
 
     // Register a body as a camera obstacle for queryCameraArm().
     // Call update() on the camera broad phase immediately, so subsequent
@@ -154,16 +167,11 @@ private:
     // Non-owning joint references (added via addJointRef, e.g. from Ragdoll).
     std::vector<Constraint*>                    jointRefs_;
 
-    // Registered terrain chunks. Terrain bodies are NOT in entries_ or broadPhase_;
-    // each TerrainCollider iterates Dynamic bodies directly and self-rejects bodies
-    // outside its XZ footprint. Slots are stable; unregister leaves an inactive
-    // tombstone (collider == nullptr) reused by later registerTerrain calls.
-    struct TerrainEntry {
-        std::unique_ptr<TerrainCollider> collider;   // null == inactive slot
-        const TerrainHeightField*        hf = nullptr;
-    };
-    std::vector<TerrainEntry>                   terrains_;
-    std::vector<std::size_t>                    freeTerrainSlots_;
+    // Registered static world colliders (terrain + scatter). These are NOT in
+    // entries_ or broadPhase_; each collider iterates Dynamic bodies directly and
+    // self-rejects bodies outside its footprint. Slots are stable; unregister
+    // leaves an inactive tombstone reused by later register* calls.
+    SlotVector<std::unique_ptr<WorldCollider>>  worldColliders_;
 
     // Separate broad phase for camera obstacle queries (not part of physics sim).
     std::unique_ptr<BroadPhase>                 cameraBroadPhase_;

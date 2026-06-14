@@ -2,6 +2,7 @@
 #define room_server_terrain_hpp
 
 #include "strongholdDef.hpp"
+#include "collision.hpp"          // BVH (prop collision volumes)
 #include "../common/zoneDef.hpp"
 #include "../common/markerDef.hpp"
 #include <filesystem>
@@ -38,6 +39,16 @@ struct TerrainHeightField {
 // splat fields are parsed to keep the stream aligned, then discarded.
 // ---------------------------------------------------------------------------
 
+// One scattered prop instance (server: collision authority for monster-vs-prop).
+// Render-only fields (billboards, tint) are discarded during parsing.
+struct ScatterInstance {
+    uint16_t  protoIdx = 0;
+    mu::Vec3  posLocal{};       // chunk-local position (ground-snapped at collider build)
+    mu::NQuat rot{};            // orientation (trees yaw, details ground-align)
+    float     scaleW = 1.f;     // XZ scale
+    float     scaleH = 1.f;     // Y scale
+};
+
 struct ChunkIndexEntry {
     int   col = 0, row = 0;
     float sizeX = 0.f, sizeY = 0.f, sizeZ = 0.f;
@@ -46,11 +57,13 @@ struct ChunkIndexEntry {
     std::vector<std::pair<int, int>> neighbors;
     std::string heightPath;
     std::string splatPath; // parsed but unused on the server
+    std::vector<ScatterInstance> scatter;   // per-chunk prop instances (collision)
 };
 
 struct ChunkIndex {
     int version = 0;
     std::vector<ChunkIndexEntry> chunks;
+    std::vector<std::string>     scatterPrototypeNames;  // protoIdx -> prop model name
     std::vector<StrongholdDef>   strongholds;   // gameplay: monster spawner bases
     std::vector<ZoneDef>         zones;         // gameplay/cosmetic: trigger volumes
     std::vector<MarkerDef>       markers;       // generic placements (type+name+transform)
@@ -115,6 +128,12 @@ public:
         return mu::Vec3(col * chunkSizeX_, 0.f, row * chunkSizeZ_);
     }
 
+    // Builds + registers per-chunk collidable scatter (prop) colliders into the
+    // given room PhysicsWorld. Call once per Room::init after terrain colliders.
+    // Prop BVHs + instance data are shared (loaded in init); each room bakes its
+    // own colliders (mirrors the per-room terrain colliders).
+    void registerScatterColliders(class PhysicsWorld& physicsWorld) const;
+
 private:
     static int64_t packCoord(int col, int row) {
         return (static_cast<int64_t>(col) << 32) |
@@ -126,8 +145,25 @@ private:
         return (it != heightFields_.end()) ? &it->second : nullptr;
     }
 
+    // Loads model-space BVHs for collidable scatter prototypes from
+    // "<propDir>/<name>Server.bin" (only those that have a server BV export).
+    void loadPropBVHs();
+
+    // One raw scatter instance resolved to world primitives (ground-snapped pos,
+    // orientation, per-axis scale). Mirrors the client resolveInstanceXform so
+    // both peers build identical prop geometry.
+    struct ScatterWorldXform {
+        mu::Vec3  pos{};
+        mu::NQuat rot{};
+        mu::Vec3  scale{ 1.f, 1.f, 1.f };
+    };
+    ScatterWorldXform resolveInstanceXform(int col, int row,
+                                           const TerrainHeightField* hf,
+                                           const ScatterInstance& inst) const;
+
     ChunkIndex index_;
     std::unordered_map<int64_t, TerrainHeightField> heightFields_;
+    std::unordered_map<std::string, BVH>            propBVHs_;   // prop name -> model-space BVH
     float chunkSizeX_ = 0.f;
     float chunkSizeZ_ = 0.f;
 };

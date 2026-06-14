@@ -5,6 +5,7 @@
 #include "physicsWorld.hpp"
 #include "threadPool.hpp"
 #include "errorHandling.hpp"   // setD3DName
+#include "../common/scatterTransform.hpp"
 
 #include <cmath>
 #include <chrono>
@@ -293,30 +294,36 @@ void TerrainChunkManager::loadScatterAssets() {
                << " prop models, " << billboardCount << " billboard prototypes.\n";
 }
 
+TerrainChunkManager::ScatterWorldXform
+TerrainChunkManager::resolveInstanceXform(const LoadedChunk& slot, const ScatterInstance& inst) const {
+    const mu::Vec3 offset = worldOffset(slot.entry.col, slot.entry.row);
+    const auto&    proto  = index_.scatterPrototypes[inst.protoIdx];
+
+    // Ground-snap to this chunk's height field (height map matches Unity's, so this
+    // only removes float drift) and place at the chunk world offset. The server
+    // mirrors this exact ground-snap so prop colliders are identical on both peers.
+    mu::Vec3 pos = offset + inst.posLocal;
+    if (!slot.data.heightField.empty())
+        pos = mu::Vec3(pos.x(), offset.y() + slot.data.heightField.getHeightAt(inst.posLocal.x(), inst.posLocal.z()), pos.z());
+
+    const mu::Vec3 scl = (proto.kind == ScatterPrototype::Kind::BillboardGrass)
+        ? mu::Vec3(proto.billboardWidth * inst.scaleW, proto.billboardHeight * inst.scaleH, proto.billboardWidth * inst.scaleW)
+        : mu::Vec3(inst.scaleW, inst.scaleH, inst.scaleW);
+
+    return ScatterWorldXform{ pos, mu::NQuat(inst.rot.x, inst.rot.y, inst.rot.z, inst.rot.w), scl };
+}
+
 void TerrainChunkManager::resolveChunkScatter(LoadedChunk& slot) {
     slot.scatter.clear();
     if (resolvedProtos_.empty() || slot.entry.scatter.empty()) return;
 
-    const mu::Vec3 offset = worldOffset(slot.entry.col, slot.entry.row);
     slot.scatter.reserve(slot.entry.scatter.size());
 
     for (const auto& inst : slot.entry.scatter) {
         if (inst.protoIdx >= resolvedProtos_.size()) continue;
-        const auto& proto = index_.scatterPrototypes[inst.protoIdx];
 
-        // Ground-snap to this chunk's height field (height map matches Unity's, so this
-        // only removes float drift) and place at the chunk world offset.
-        mu::Vec3 pos = offset + inst.posLocal;
-        if (!slot.data.heightField.empty())
-            pos = mu::Vec3(pos.x(), offset.y() + slot.data.heightField.getHeightAt(inst.posLocal.x(), inst.posLocal.z()), pos.z());
-
-        mu::Vec3 scl = (proto.kind == ScatterPrototype::Kind::BillboardGrass)
-            ? mu::Vec3(proto.billboardWidth * inst.scaleW, proto.billboardHeight * inst.scaleH, proto.billboardWidth * inst.scaleW)
-            : mu::Vec3(inst.scaleW, inst.scaleH, inst.scaleW);
-
-        const mu::Mat4x4 world = mu::scaleH(scl)
-            * mu::NQuat(inst.rot.x, inst.rot.y, inst.rot.z, inst.rot.w).mat4()
-            * mu::translate(pos);
+        const ScatterWorldXform x = resolveInstanceXform(slot, inst);
+        const mu::Mat4x4 world = makeScatterWorld(x.pos, x.rot, x.scale);
 
         slot.scatter.push_back(ScatterInstanceResolved{
             .protoIdx = inst.protoIdx,
@@ -324,6 +331,25 @@ void TerrainChunkManager::resolveChunkScatter(LoadedChunk& slot) {
             .worldAABB = transformAABB(resolvedProtos_[inst.protoIdx].localBounds, world)
         });
     }
+}
+
+void TerrainChunkManager::registerChunkScatterCollider(LoadedChunk& slot) {
+    if (!physicsWorld_ || resolvedProtos_.empty() || slot.entry.scatter.empty()) return;
+
+    std::vector<ScatterCollider::InstanceInput> insts;
+    for (const auto& inst : slot.entry.scatter) {
+        if (inst.protoIdx >= resolvedProtos_.size()) continue;
+        const auto& rp = resolvedProtos_[inst.protoIdx];
+        if (!rp.collidable || !rp.model) continue;   // billboards / no-BVH props are skipped
+
+        const ScatterWorldXform x = resolveInstanceXform(slot, inst);
+        insts.push_back(ScatterCollider::InstanceInput{ &rp.model->bvh, x.pos, x.rot, x.scale });
+    }
+    if (insts.empty()) return;
+
+    auto collider = std::make_unique<ScatterCollider>(insts);
+    if (!collider->empty())
+        slot.scatterHandle = physicsWorld_->registerScatter(std::move(collider));
 }
 
 void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const {
@@ -525,6 +551,9 @@ void TerrainChunkManager::activateChunkRenderAndPhysics(LoadedChunk& slot) {
     // Resolve this chunk's scattered foliage instances (resident; see header).
     resolveChunkScatter(slot);
 
+    // Register a static prop collider for this chunk's collidable scatter (trees/rocks).
+    registerChunkScatterCollider(slot);
+
     slot.state = State::Ready;
 }
 
@@ -532,6 +561,10 @@ void TerrainChunkManager::unloadChunk(LoadedChunk& slot) {
     if (physicsWorld_ && slot.physHandle != static_cast<std::size_t>(-1)) {
         physicsWorld_->unregisterTerrain(slot.physHandle);
         slot.physHandle = static_cast<std::size_t>(-1);
+    }
+    if (physicsWorld_ && slot.scatterHandle != static_cast<std::size_t>(-1)) {
+        physicsWorld_->unregisterScatter(slot.scatterHandle);
+        slot.scatterHandle = static_cast<std::size_t>(-1);
     }
 
     PendingUnload pu;

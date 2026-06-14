@@ -1,8 +1,13 @@
 #include "rspch.hpp"
 #include "terrain.hpp"
 #include "binaryImport.hpp"
+#include "Model.hpp"          // loadModelFromFile (prop BVHs)
+#include "physicsWorld.hpp"   // PhysicsWorld::registerScatter
 #include <algorithm>
 #include <cmath>
+
+// Where server-side prop BV exports live: "<dir>/<name>Server.bin" (BV-only).
+static const std::filesystem::path kPropModelDir = "../resources/models/props/";
 
 // ---------------------------------------------------------------------------
 // Path resolution (mirror of the client resolveTerrainPath helper)
@@ -50,16 +55,17 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readFloat(ifs, "Roughness");
     }
 
-    // ---- scatter prototypes (read and discard; client render-only, index ver >= 2) ----
+    // ---- scatter prototypes (store name for prop BVH lookup; rest discarded) ----
     if (result.version >= 2) {
         const int PN = readInteger(ifs, "PrototypeCount");
+        result.scatterPrototypeNames.resize(PN);
         for (int p = 0; p < PN; ++p) {
             readHeadTag(ifs, "ScatterPrototype");
-            readText(ifs, "Name");
-            readInteger(ifs, "Kind");
-            readText(ifs, "TexturePath");
-            readVec2(ifs, "BillboardSize");
-            readVec4(ifs, "Tint");
+            result.scatterPrototypeNames[p] = readText(ifs, "Name");
+            readInteger(ifs, "Kind");        // discard (collidability = has *Server.bin BVH)
+            readText(ifs, "TexturePath");    // discard (render-only)
+            readVec2(ifs, "BillboardSize");  // discard
+            readVec4(ifs, "Tint");           // discard
             readTailTag(ifs, "ScatterPrototype");
         }
     }
@@ -88,15 +94,25 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         e.heightPath = readText(ifs, "HeightPath");
         e.splatPath  = readText(ifs, "SplatPath");
 
-        // ---- per-chunk scatter instances (read and discard; ver >= 2) ----
+        // ---- per-chunk scatter instances (stored for monster-vs-prop collision) ----
         if (result.version >= 2) {
             const int instCount = readInteger(ifs, "InstanceCount");
+            e.scatter.resize(instCount);
             for (int i = 0; i < instCount; ++i) {
-                readInteger(ifs, "ProtoIdx");
-                readVec3(ifs, "PosLocal");
-                if (result.version >= 3) readVec4(ifs, "Rot");   // v3+: orientation quaternion
-                else                     readFloat(ifs, "Yaw");  // v2 (legacy): yaw float
-                readVec2(ifs, "Scale");
+                auto& si = e.scatter[i];
+                si.protoIdx = static_cast<uint16_t>(readInteger(ifs, "ProtoIdx"));
+                const auto pl = readVec3(ifs, "PosLocal");
+                si.posLocal = mu::Vec3(pl.x, pl.y, pl.z);
+                if (result.version >= 3) {
+                    const auto q = readVec4(ifs, "Rot");          // v3+: orientation quaternion
+                    si.rot = mu::NQuat(q.x, q.y, q.z, q.w);
+                } else {
+                    const float yaw = readFloat(ifs, "Yaw");      // v2 (legacy): yaw float
+                    si.rot = mu::NQuat(0.f, std::sin(yaw * 0.5f), 0.f, std::cos(yaw * 0.5f));
+                }
+                const auto sc = readVec2(ifs, "Scale");
+                si.scaleW = sc.x;
+                si.scaleH = sc.y;
             }
         }
 
@@ -239,9 +255,60 @@ void TerrainChunkManager::init(const std::filesystem::path& terrainDir) {
         heightFields_.emplace(packCoord(e.col, e.row), std::move(hf));
     }
 
+    loadPropBVHs();
+
     gSharedLog << "[Terrain] Loaded " << heightFields_.size()
                << " chunk height fields (shared, read-only).\n";
     dumpLog();
+}
+
+void TerrainChunkManager::loadPropBVHs() {
+    for (const std::string& name : index_.scatterPrototypeNames) {
+        if (name.empty() || propBVHs_.count(name)) continue;
+        const auto path = kPropModelDir / (name + "Server.bin");
+        if (!std::filesystem::exists(path)) continue;   // billboards / no server BV -> non-collidable
+        Model m = loadModelFromFile(path);
+        if (!m.bvh.empty())
+            propBVHs_.emplace(name, std::move(m.bvh));
+    }
+    gSharedLog << "[Terrain] Loaded " << propBVHs_.size() << " collidable prop BVHs.\n";
+}
+
+TerrainChunkManager::ScatterWorldXform
+TerrainChunkManager::resolveInstanceXform(int col, int row,
+                                          const TerrainHeightField* hf,
+                                          const ScatterInstance& inst) const {
+    const mu::Vec3 offset = worldOffset(col, row);
+    // Ground-snap exactly as the client resolveInstanceXform so prop geometry
+    // is identical on both peers (multi-chain position sync invariant).
+    mu::Vec3 pos = offset + inst.posLocal;
+    if (hf && !hf->empty())
+        pos = mu::Vec3(pos.x(), offset.y() + hf->getHeightAt(inst.posLocal.x(), inst.posLocal.z()), pos.z());
+    const mu::Vec3 scale(inst.scaleW, inst.scaleH, inst.scaleW);   // collidable props are meshes
+    return ScatterWorldXform{ pos, inst.rot, scale };
+}
+
+void TerrainChunkManager::registerScatterColliders(PhysicsWorld& physicsWorld) const {
+    if (propBVHs_.empty()) return;
+    for (const auto& e : index_.chunks) {
+        if (e.scatter.empty()) continue;
+        const TerrainHeightField* hf = findHf(e.col, e.row);
+
+        std::vector<ScatterCollider::InstanceInput> insts;
+        for (const auto& si : e.scatter) {
+            if (si.protoIdx >= index_.scatterPrototypeNames.size()) continue;
+            auto it = propBVHs_.find(index_.scatterPrototypeNames[si.protoIdx]);
+            if (it == propBVHs_.end() || it->second.empty()) continue;   // non-collidable (billboard)
+
+            const ScatterWorldXform x = resolveInstanceXform(e.col, e.row, hf, si);
+            insts.push_back(ScatterCollider::InstanceInput{ &it->second, x.pos, x.rot, x.scale });
+        }
+        if (insts.empty()) continue;
+
+        auto collider = std::make_unique<ScatterCollider>(insts);
+        if (!collider->empty())
+            physicsWorld.registerScatter(std::move(collider));
+    }
 }
 
 std::optional<std::pair<int, int>>
