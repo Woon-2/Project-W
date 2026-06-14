@@ -223,6 +223,7 @@ private:
 	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
 	std::unique_ptr<PlatoonLeader>              platoonLeader_;
 	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
+	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;
 	uint32_t nextWedgeChargeId_{ 1 };

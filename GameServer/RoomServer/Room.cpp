@@ -193,25 +193,25 @@ void Room::init(const Level* levelData) {
 
 // Binds gameplay behavior to zone tags. Handlers run on the room thread each
 // tick; lambdas defined here have full access to Room internals.
-// [임시 디버그] 정식 Arena_Isis zone/마커가 레벨에 아직 없어, 검증용으로 기존 Arena_Hobgoblin zone
-// 진입 시 홉고블린 대신 Isis 인카운터를 스폰한다. 정식 Arena_Isis 마커 저작 후 이 값을 0으로 되돌려
-// 홉고블린 정상 경로를 복원할 것.
-#define ISIS_DEBUG_TRIGGER_VIA_HOBGOBLIN 1
+// [디버그] Arena_Hobgoblin 진입 시 띄울 전술 전투 선택. 0=Goblin(정식) / 1=GrandBaum / 2=Isis.
+// 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
+// (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. GrandBaum/Isis는 Hobgoblin
+//  레벨에 WallXxx 마커가 없어 후방벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.)
+#define HOBGOBLIN_DEBUG_TACTIC 1
 
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
 	// ZoneMarker tagged "Arena_Hobgoblin" (factionMask = Players).
-#if ISIS_DEBUG_TRIGGER_VIA_HOBGOBLIN
 	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-			room.onArenaIsisEnter(zone, playerId);   // [디버그] 홉고블린 대신 Isis 스폰
-		});
+#if HOBGOBLIN_DEBUG_TACTIC == 1
+			room.onArenaGrandBaumEnter(zone, playerId);   // [디버그] 홉고블린 대신 GrandBaum 스폰
+#elif HOBGOBLIN_DEBUG_TACTIC == 2
+			room.onArenaIsisEnter(zone, playerId);        // [디버그] 홉고블린 대신 Isis 스폰
 #else
-	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
-		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaHobgoblinEnter(zone, playerId);
-		});
 #endif
+		});
 
 	zoneSystem_.on("Arena_GrandBaum", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
@@ -339,6 +339,27 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
+		// [디버그 트리거] 전용 WallGrandBaum/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
+		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
+		if (!haveSpawnPos) {
+			mu::Vec3 anyWallSum{};
+			int      anyWallCount = 0;
+			for (const auto& m : worldTerrain_->markers()) {
+				if (m.type != "Wall") continue;
+				anyWallSum += m.pos;
+				++anyWallCount;
+			}
+			if (anyWallCount > 0) {
+				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
+				haveSpawnPos = true;
+				std::cout << "[Zone] GrandBaum spawn point (debug fallback: any Wall 중점)\n";
+			}
+			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
+				spawnPos     = s->player()->pos();
+				haveSpawnPos = true;
+				std::cout << "[Zone] GrandBaum spawn point (debug fallback: 진입 플레이어 위치)\n";
+			}
+		}
 
 		if (haveSpawnPos) {
 			spawnGrandBaumEncounter(spawnPos, spawnPos);
@@ -407,6 +428,27 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 			haveSpawnPos = true;
 			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
+		}
+		// [디버그 트리거] 전용 WallIsis/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
+		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
+		if (!haveSpawnPos) {
+			mu::Vec3 anyWallSum{};
+			int      anyWallCount = 0;
+			for (const auto& m : worldTerrain_->markers()) {
+				if (m.type != "Wall") continue;
+				anyWallSum += m.pos;
+				++anyWallCount;
+			}
+			if (anyWallCount > 0) {
+				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
+				haveSpawnPos = true;
+				std::cout << "[Zone] Isis spawn point (debug fallback: any Wall 중점)\n";
+			}
+			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
+				spawnPos     = s->player()->pos();
+				haveSpawnPos = true;
+				std::cout << "[Zone] Isis spawn point (debug fallback: 진입 플레이어 위치)\n";
+			}
 		}
 
 		if (haveSpawnPos) {
@@ -1401,7 +1443,7 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	// 인게임 스케일 config (시뮬값 기반, M3 튜닝 대상)
 	TacticalNpcConfig slimeCfg{
-		.maxHp = 60.f, .moveSpeed = 4.f, .attackRange = 2.6f, .attackDamage = 8.f,
+		.maxHp = 60.f, .moveSpeed = 2.5f, .attackRange = 2.6f, .attackDamage = 8.f,
 		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
 		.separationRadius = 3.f, .separationWeight = 1.0f
 	};
@@ -1560,9 +1602,9 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 	// 인게임 스케일 넉백(시뮬 SHIELD_WALL_KNOCKBACK_*: speed 90 × ~0.4). 이동 권한은 클라에
 	// 있으므로 서버는 S_PlayerKnockback만 보내고, 클라가 로컬에서 넉백 + 이동잠금을 실행한다.
 	constexpr float  SHIELD_WALL_KNOCKBACK_PADDING = 0.4f;
-	constexpr float  SHIELD_WALL_KNOCKBACK_SPEED   = 36.f;
+	constexpr float  SHIELD_WALL_KNOCKBACK_SPEED   = 54.f;  // 거리 ≈ speed×0.32s (≈17m). 인게임 튜닝
 	constexpr uint16 KNOCK_MS    = 320;    // 0.32s 강제 이동
-	constexpr uint16 POSTLOCK_MS = 1200;   // 1.2s 입력잠금
+	constexpr uint16 POSTLOCK_MS = 2000;   // 2.0s 입력잠금
 
 	const float safeRadius = ringRadius + SHIELD_WALL_KNOCKBACK_PADDING;
 
@@ -1589,20 +1631,34 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 // ShieldWall 중 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환한다. 평소 trooper는 Player를
 // 통과(~(Player|Boss))하지만, 여기서 Player 충돌을 다시 켜(~Boss) 링이 벽처럼 막히게 한다.
 void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
-	clearShieldWallBlockers();   // 이전 블로커가 남아있으면 먼저 원복(중복/매틱 호출 안전)
+	// 이전 ids 마스크 원복(broadcast 없이) — 매 틱 살아있는 슬라임 ids 갱신 대응.
+	for (uint32_t id : shieldWallBlockerIds_) {
+		if (TacticalNpc* npc = findTacticalNpcById(id))
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+	}
 	for (uint32_t id : blockerIds) {
-		TacticalNpc* npc = findTacticalNpcById(id);
-		if (!npc) continue;
-		npc->body().setCollisionMask(~CollisionLayer::Boss);
+		if (TacticalNpc* npc = findTacticalNpcById(id))
+			npc->body().setCollisionMask(~CollisionLayer::Boss);
 	}
 	shieldWallBlockerIds_ = blockerIds;
+
+	// 클라에 블로커 활성 통지(Goblin divide와 동일 S_NpcBarrier 경로 재사용). 플레이어 이동은 클라
+	// 권한이라 서버 마스크만으론 못 막는다 → 클라가 슬라임을 barrier로 등록해 로컬 물리로 밀어내게 한다.
+	// setShieldWallBlockers는 매 틱 호출되므로 on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
+	if (!shieldWallBarrierOn_) {
+		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
+		shieldWallBarrierOn_ = true;
+	}
 }
 
 void Room::clearShieldWallBlockers() {
 	for (uint32_t id : shieldWallBlockerIds_) {
-		TacticalNpc* npc = findTacticalNpcById(id);
-		if (!npc) continue;
-		npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+		if (TacticalNpc* npc = findTacticalNpcById(id))
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+	}
+	if (shieldWallBarrierOn_) {
+		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
+		shieldWallBarrierOn_ = false;
 	}
 	shieldWallBlockerIds_.clear();
 }

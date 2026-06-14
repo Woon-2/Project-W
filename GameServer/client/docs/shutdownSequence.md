@@ -21,7 +21,7 @@
 
 ```
 gClose = true
-→ INet::ClientApp::release()   // 게임·세션·retiredSession_ 파괴 (스레드 풀 join 포함)
+→ INet::ClientApp::release()   // 게임·워커 join → 세션 closeAndDrain(소켓 닫고 잔여 완료 APC 드레인) → 파괴
 → SendBufferManager::release() // TLS 청크 해제 + 정적 큐 drain (신규)
 → MemoryManager::release()     // 풀 delete + poolTable_ null 초기화
 → SocketUtils::release()       // WSACleanup
@@ -29,6 +29,10 @@ gClose = true
 ```
 
 순서 불변 조건:
+- `ServerSession`은 **completion-routine 기반 alertable overlapped I/O**다. 종료 시
+  `closeAndDrain()`으로 소켓을 닫아 pending recv/send를 취소시킨 뒤, 취소 완료 APC를
+  `SleepEx(alertable)`로 전부 드레인(`pendingIo_ == 0`)한 다음에 세션(=`recvOver_`/`sendOver_`)을
+  파괴해야 한다. 드레인 없이 파괴/`WSACleanup`하면 미완료 overlapped와 winsock teardown이 경합해 크래시한다.
 - `SendBufferManager::release()`는 **메인 스레드에서**, 모든 워커 스레드 join 이후(= Game 파괴 이후),
   `MemoryManager::release()` 이전에 호출해야 한다. 호출 시점부터 push deleter는 재enqueue 대신
   `odelete`로 실제 해제한다(`shuttingDown_` 플래그).

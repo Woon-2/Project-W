@@ -1039,3 +1039,103 @@ GrandBaum 슬라임 부대 교전에 안정화 기능을 적용하기 위한 리
 
 **검증:** RoomServer·client 모두 Debug/x64 빌드 통과. GrandBaum 전술의 예방·해제 경로 양쪽 컴파일
 레벨 완성. 실제 인게임 거동 검증은 `Arena_GrandBaum` 레벨 마커 저작 후(후속 과제).
+
+---
+
+### 2026.06.14 ~ 06.15
+## [feat] Isis(이시스) 중간보스 전술 포팅 — 2연속 쐐기 협공
+## [feat] 중간보스 전술 디버그 토글 (Arena_Hobgoblin에서 Goblin/GrandBaum/Isis 선택)
+## [fix] client 종료 WSACleanup 크래시 — alertable overlapped I/O 드레인 누락
+## [fix] GrandBaum/Isis 디버그 스폰 좌표 fallback (마커 없을 때 인카운터 스킵)
+## [mod] GrandBaum ShieldWall 튜닝 5종 + 방패벽 통과 차단(S_NpcBarrier 클라 통지)
+
+**수정 파일:** `RoomServer/MidBossTactics.hpp/cpp`, `RoomServer/Room.hpp/cpp`,
+`client/ServerSession.hpp/cpp`, `client/ClientApp.hpp`, `client/docs/shutdownSequence.md`
+**신규 문서:** `RoomServer/docs/isisTactic.md`
+**커밋:** 미커밋(working tree)
+
+---
+
+### [1] Isis 중간보스 전술 포팅
+
+NPCAI(`sim/MidBossTactics.*`, `IsisMidBossTactic`)의 Isis 중간보스 전술을 RoomServer로 포팅. GrandBaum(수동적
+생존형)과 대비되는 **능동적 섬멸형**. 상세 설계는 `RoomServer/docs/isisTactic.md` 참조.
+
+**구성·흐름:**
+
+- 부대 계약: `squad[0]/[1]` = Buddy(2차 돌격 + 보스 합류), `squad[2]/[3]` = Bomber(1차 돌격), 보스 본체 =
+  `PlatoonLeader`. 스폰 순서로 인덱스 계약 보장.
+- 평소엔 4스쿼드 분산 교전(`issueStableEngage`) + 보스 자체 근접전. **어느 한 스쿼드든 초기 인원 80% 미만**
+  으로 깎이면 협공 사이클 잠금 해제(`checkUnlockCondition`).
+- 7-phase: `Engage` ⇄ `Cooldown` → `RetreatForPincer`(전군 후퇴·집결) → `RegroupBombers` →
+  `FirstBomberWedge`(Bomber 1차 쐐기) → `RegroupBuddies`(보스 합류 자리 예약) → `SecondBuddyWedge`
+  (Buddy+보스 2차 쐐기, **피해 ×1.5**).
+- 2단 타겟 분리(`selectStrikeClusters`): 점수 = 군집 인원 ×1000 − 거리. 2차는 1차 타깃과 겹치는 군집에
+  `SECOND_STRIKE_REPEAT_PENALTY(350)` 차감 → 다른 군집으로 분산 협공.
+- 보스 근접 FSM: Goblin `updateBossPersonalCombat`(score 타깃 + switch margin) 미러 + **피해 반응
+  Backstep/Retreat**(누적 피해 60↑ 시 이탈, 3s 쿨다운). 협공 phase 동안엔 phase 가드로 정지(2차 쐐기 직접 합류).
+
+**핵심 설계 판단 — 기존 인프라 전부 재사용(순수 서버 AI):**
+
+- GrandBaum과 달리 **새 패킷·넉백·피해경감·동적소환이 일절 없음**. `MidBossTactics`에 동거 → 신규 파일 0.
+- **보스 합류 ×1.5 피해** = `SquadOrder::wedgeDamageMult` → `TacticalSquad`의 `impactDamage *=
+  wedgeDamageMult`. 새 피해 메커니즘 불필요.
+- 쐐기 = `SquadOrderType::WedgeCharge`(+`reserveWedgeApex`로 보스 apex 슬롯 예약), 집결 = `FormationHold`,
+  교전 = `issueStableEngage`, 군집 = `buildPlayerClusters` — 모두 Goblin/GrandBaum 경로 재사용.
+- **보스 고속 이동**(후퇴/쐐기돌진/백스텝): 시뮬은 `setPosition` 직접적분(×15.5/28/20)이나 GameServer
+  보스는 물리 모터(`setDesiredVel`, `moveBossToward`)라 그대로 못 씀 → 인게임값으로 캡(주석에 시뮬 원본 병기).
+- **상수 스케일**: 월드 거리/오프셋은 인게임 스케일 ×~0.4, 시간/비율/카운트/점수(0.80, ×1000−d, 350, ×1.5,
+  타이머)는 시뮬 원본 유지.
+- config: Buddy 80HP/4spd, Bomber 45HP/5spd, 보스 2000HP/4spd. 인원 12/12/40/40(=104기 + 보스).
+  모델/`ObjectType`은 전용 에셋 전까지 goblin 재사용.
+
+### [2] 중간보스 전술 디버그 토글
+
+정식 `Arena_Isis`/`Arena_GrandBaum` 레벨 마커가 없어, 검증용으로 기존 `Arena_Hobgoblin` 존 진입 시 띄울
+전술을 고르는 컴파일 토글 `#define HOBGOBLIN_DEBUG_TACTIC`(0=Goblin / 1=GrandBaum / 2=Isis)을 `Room.cpp`에
+추가. `bindZoneHandlers`에서 토글 값에 따라 `onArenaHobgoblin/GrandBaum/Isis Enter`로 분기. 정식 존 핸들러
+(`Arena_GrandBaum`/`Arena_Isis`) 등록은 그대로 유지 → 추후 마커 저작 시 디버그 토글만 걷어내면 자연 분리.
+
+### [3] GrandBaum/Isis 디버그 스폰 좌표 fallback
+
+**문제:** `onArenaGrandBaumEnter`/`onArenaIsisEnter`가 스폰 좌표를 `BossSpawn` → 자기 전용
+`WallGrandBaum`/`WallIsis` 마커 순으로만 찾는데, 디버그 트리거(Hobgoblin 존 재사용)엔 `WallHobgoblin`만
+있고 `BossSpawn`도 없어 `haveSpawnPos=false` → **인카운터가 통째로 스킵돼 NPC가 0**이었다(GrandBaum 전환 시
+아무 NPC도 안 나옴).
+**수정:** 두 핸들러에 fallback 추가 — 전용 마커가 없으면 **아무 `Wall` 마커 중점 → 진입 플레이어 위치** 순으로
+스폰점을 잡는다. 마커 구성과 무관하게 스폰됨.
+
+### [4] client 종료 WSACleanup 크래시 수정
+
+**원인:** client는 IOCP가 아니라 **completion-routine 기반 alertable overlapped I/O**(`ServerSession::registerRecv`
+→ `WSARecv(…, &completionCallback)`)를 쓴다. 완료 APC는 메인 스레드가 `SleepEx(alertable)`일 때만 배달된다.
+종료 시 `ClientApp::release()`가 세션을 `closesocket`하면 pending `WSARecv`가 취소되고 그 완료 APC가
+큐잉되지만, **이를 드레인할 alertable wait가 종료 경로에 없어** 미완료 overlapped(이미 소멸된 세션의
+`recvOver_`/`sendOver_`를 가리킴)가 남은 채 `WSACleanup()`이 호출되어 경합 크래시(간헐). 직전 커밋
+`a7254c7a`(SendBuffer 정적 큐 UB)와 별개로 남아 있던 종료 결함.
+**수정:** `ServerSession`에 `pendingIo_` 카운터 추가(`registerRecv`/`registerSend` 성공·PENDING 시 `++`,
+`completionCallback`에서 **`gClose` 가드보다 먼저** `--`). 신규 `closeAndDrain()`이 `closesocket` 후
+`pendingIo_`가 0이 될 때까지 `SleepEx(1, TRUE)`로 취소 완료 APC를 전부 드레인(200ms 가드). `ClientApp::release()`를
+**게임 → 세션 `closeAndDrain` → 세션 파괴** 순서로 재구성.
+**검증:** 로비 Online 연결 후 정상 종료(WM_CLOSE → WM_QUIT) **5회 반복 exit 0**(자동 검증). 클라 변경만, 서버
+무관.
+
+### [5] GrandBaum ShieldWall 튜닝 5종
+
+인게임 확인 후 거동 개선. 1~4는 값 튜닝(인게임 재조정 전제), 5는 버그 수정.
+
+1. 플레이어 넉백 거리 ↑ — `SHIELD_WALL_KNOCKBACK_SPEED` 36 → 54 (거리 ≈ speed×0.32s ≈ 17m).
+2. 넉백 후 입력잠금 시간 ↑ — `POSTLOCK_MS` 1200 → 2000ms.
+3. 중간보스 이동 속도 ↑ — `BOSS_CHASE_SPEED_MULT` 1.0 → 1.8 (모터 desired vel = moveSpeed 4 × 1.8).
+4. 슬라임 이동 속도 ↓ — slime `moveSpeed` 4 → 2.5.
+5. **방패벽 통과 차단(버그 수정)** — `Room::setShieldWallBlockers`가 **서버 물리 콜리전 마스크만** 바꾸고
+   클라에 통지하지 않아, **클라 권한인 플레이어 이동을 못 막아** 슬라임 링을 통과하던 문제. → Goblin
+   DivideAndConquer와 동일한 `S_NpcBarrier` 경로 재사용: `set/clearShieldWallBlockers`에서
+   `broadcast(makeSNpcBarrierPacket(true/false, slimeIds))`. 클라가 슬라임을 `barrierObjects_`에 등록해
+   `resolveBarrierSeparation`(로컬 물리 position push-out)으로 차단. `setShieldWallBlockers`가 매 틱
+   호출되므로 `shieldWallBarrierOn_` 플래그로 on/off **각 1회만** 송신(죽은 슬라임은 클라가 hp로 자동 제외 =
+   슬라임 처치로 구멍 내기, 의도된 카운터플레이). **클라 변경 0**(기존 barrier 경로 재사용).
+
+**검증:** RoomServer·client Debug/x64 빌드 통과(오류 0). WSACleanup 수정은 자동 5회 검증 완료. Isis 전술·
+ShieldWall 튜닝·방패벽 차단의 인게임 거동 검증은 디버그 토글로 진행(일부 인게임 확인됨). 정식 `Arena_*`
+레벨 마커 저작·밸런싱은 후속 과제.

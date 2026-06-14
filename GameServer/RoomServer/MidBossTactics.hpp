@@ -314,7 +314,7 @@ private:
     static constexpr float SHIELD_RING_LANE_SPACING      = 0.9f;    // 시뮬 2.2 (다중 열 간격)
     static constexpr int32 MIN_SHIELD_WALL_SLIME_COUNT   = 10;
     static constexpr float SHIELDWALL_DAMAGE_MULT        = 0.1f;
-    static constexpr float BOSS_CHASE_SPEED_MULT         = 1.0f;   // setDesiredVel motor 방식(시뮬 8.0 직접적분 대체)
+    static constexpr float BOSS_CHASE_SPEED_MULT         = 1.8f;   // setDesiredVel motor 방식(시뮬 8.0 직접적분 대체). 인게임 튜닝
     static constexpr Seconds BOSS_TARGET_LOCK_DURATION{ 1.4f };
     static constexpr Seconds BOSS_SAME_PRIORITY_RETARGET_INTERVAL{ 2.5f };
     static constexpr float BOSS_SLIME_THREAT_RANGE       = 5.f;     // 시뮬 12
