@@ -52,6 +52,7 @@ struct CameraData {
 
 struct FrameData {
 	mu::Vec3 globalAmbient;
+	float    iblIntensity = 1.0f;  // 0 disables IBL for this pass (e.g. lobby portrait)
 };
 
 struct DrawEvent {

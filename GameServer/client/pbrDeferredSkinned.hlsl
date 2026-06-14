@@ -218,8 +218,11 @@ GBufferOutput PSMain(VSOutput input) {
         emissive = sampleBindless(material.idxEmmisive, input.uv).rgb;
     }
 
-    // --- Pre-compute ambient + emissive (stored in GB2.rgb) ---
-    float3 lightAccum = globalAmbient * albedo.rgb * (1.0f - ao) + emissive;
+    // --- Pre-compute emissive (stored in GB2.rgb) ---
+    // GB2.rgb holds emissive only; ambient/IBL is computed in the deferred lighting
+    // pass (matches pbrDeferred.hlsl). Baking globalAmbient here too would double the
+    // ambient on skinned meshes (constant ambient in GB2 + IBL added by the lighting pass).
+    float3 lightAccum = emissive;
 
     GBufferOutput o;
     o.gb0 = float4(albedo.rgb, ao);

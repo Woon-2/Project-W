@@ -932,6 +932,102 @@ void eraseSceneColor( DescriptorPool& rtvPool, DescriptorPool& srvTexPool ) {
 
 }	// namespace SceneColor
 
+namespace Bloom {
+
+std::vector<BloomData> bloomData;
+
+void addBloom( ID3D12Device* device, u32t fullWidth, u32t fullHeight,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	constexpr u32t kMaxBloomMips = 6u;
+
+	bloomData.reserve(roomCnt);
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		BloomData b{};
+		b.fullWidth  = fullWidth;
+		b.fullHeight = fullHeight;
+
+		const u32t baseW = std::max(1u, fullWidth  / 2u);
+		const u32t baseH = std::max(1u, fullHeight / 2u);
+
+		// createTextureWithMips builds the full chain; the bloom pass uses the first N.
+		b.mipCount = std::min(kMaxBloomMips, calcMipCount(baseW, baseH));
+
+		b.mips = createTextureWithMips(device, baseW, baseH, format,
+			D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		setD3DName(b.mips.res.Get(), ("Bloom_Mips[" + std::to_string(r) + "]").c_str());
+
+		b.mipState.assign(b.mipCount, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		for (u32t m = 0u; m < b.mipCount; ++m) {
+			b.width.push_back(std::max(1u, baseW >> m));
+			b.height.push_back(std::max(1u, baseH >> m));
+
+			createRTV(device, b.mips, D3D12_RENDER_TARGET_VIEW_DESC{
+				.Format        = format,
+				.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+				.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = m, .PlaneSlice = 0u }
+			}, rtvPool);
+			b.rtv.push_back(rtvPool.cpuHandle(b.mips.idxRtv));
+			b.rtvPoolIndices.push_back(b.mips.idxRtv);
+
+			createSRV(device, b.mips, D3D12_SHADER_RESOURCE_VIEW_DESC{
+				.Format                  = format,
+				.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = m, .MipLevels = 1u }
+			}, srvTexPool);
+			BindlessIndex si{};
+			si.idxRange    = etoi(Texture::Type::Tex2D);
+			si.idxResource = b.mips.idxSrv.idxResource;
+			si.idxInArray  = 0;
+			si.idxSampler  = etoi(Samplers::BilinearClamp);
+			b.srv.push_back(si);
+			b.srvPoolIndices.push_back(b.mips.idxSrv.idxResource);
+		}
+
+		bloomData.push_back(std::move(b));
+	}
+}
+
+void transitionMip( std::size_t roomIdx, u32t mip,
+	D3D12_RESOURCE_STATES newState, ID3D12GraphicsCommandList* cmdList
+) {
+	auto& b = bloomData[roomIdx];
+	if (b.mipState[mip] == newState) return;
+	auto barrier = D3D12_RESOURCE_BARRIER{
+		.Type  = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+		.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+			.pResource   = b.mips.res.Get(),
+			.Subresource = mip,
+			.StateBefore = b.mipState[mip],
+			.StateAfter  = newState
+		}
+	};
+	cmdList->ResourceBarrier(1u, &barrier);
+	b.mipState[mip] = newState;
+}
+
+BindlessIndex mip0Srv( std::size_t roomIdx ) {
+	if (bloomData.empty() || bloomData[roomIdx].srv.empty()) {
+		return BindlessIndex{ -1, -1, -1, -1 };
+	}
+	return bloomData[roomIdx].srv[0];
+}
+
+void eraseBloom( DescriptorPool& rtvPool, DescriptorPool& srvTexPool ) {
+	for (auto& b : bloomData) {
+		for (int idx : b.rtvPoolIndices) rtvPool.free(idx);
+		for (int idx : b.srvPoolIndices) srvTexPool.free(idx);
+	}
+	bloomData.clear();
+}
+
+}	// namespace Bloom
+
 namespace Portrait {
 
 std::vector<PortraitRTData> portraitData;

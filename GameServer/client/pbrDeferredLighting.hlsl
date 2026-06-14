@@ -10,6 +10,9 @@
 #define GBUF_DEBUG_METALLIC   5u
 #define GBUF_DEBUG_LIGHTACCUM 6u
 #define GBUF_DEBUG_DEPTH      7u
+#define GBUF_DEBUG_IBL_DIFFUSE  8u
+#define GBUF_DEBUG_IBL_SPECULAR 9u
+#define GBUF_DEBUG_BRDF         10u
 
 struct VSOutput {
     float4 pos : SV_Position;
@@ -116,6 +119,9 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // normalW = mul(normalV, invView3x3) in row-major convention.
     float3 normalW = normalize(mul(normalV, (float3x3)invView));
 
+    // World-space view vector (needed by both IBL and the IBL debug views below).
+    float3 Vworld = normalize(camPos - posW);
+
     // --- GBuffer Debug Views ---
     if (debugMode == GBUF_DEBUG_ALBEDO) {
         float3 srgb = pow(abs(albedo), 1.0f / 2.2f);
@@ -142,13 +148,38 @@ float4 PSMain(VSOutput input) : SV_TARGET {
         // Raw NDC depth (0=near, 1=far) shown as grayscale
         return float4(rawDepth, rawDepth, rawDepth, 1.0f);
     }
+    // IBL debug views. Display-encoded here; the resolve pass passes debug output
+    // through untouched (no second tonemap/gamma).
+    if (debugMode == GBUF_DEBUG_IBL_DIFFUSE) {
+        float  NdotV = max(dot(normalW, Vworld), 0.0f);
+        float3 F0    = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metallic);
+        float3 kS    = fresnelSchlickRoughness(NdotV, F0, roughness);
+        float3 kD    = (1.0f - kS) * (1.0f - metallic);
+        float3 irr   = sampleBindlessCube(idxIrradiance, normalW).rgb;
+        float3 d     = kD * irr * albedo;
+        return float4(pow(abs(d), 1.0f / 2.2f), 1.0f);
+    }
+    if (debugMode == GBUF_DEBUG_IBL_SPECULAR) {
+        float  NdotV = max(dot(normalW, Vworld), 0.0f);
+        float3 F0    = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metallic);
+        float3 R     = reflect(-Vworld, normalW);
+        float  maxMip = float(max(prefilteredMipCount, 1u) - 1u);
+        float3 pf    = sampleLevelBindlessCube(idxPrefiltered, R, roughness * maxMip).rgb;
+        float2 brdf  = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
+        float3 s     = pf * (F0 * brdf.x + brdf.y);
+        return float4(pow(abs(s), 1.0f / 2.2f), 1.0f);
+    }
+    if (debugMode == GBUF_DEBUG_BRDF) {
+        float  NdotV = max(dot(normalW, Vworld), 0.0f);
+        float2 brdf  = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
+        return float4(brdf, 0.0f, 1.0f);
+    }
 
     // --- Full Deferred Lighting ---
     // illuminateFromGBuffer returns direct lighting * shadow (pre-tonemap)
     float3 directLight = illuminateFromGBuffer(posV, posW, normalV, normalW, albedo, roughness, metallic, ao);
 
     // Image-based lighting (diffuse irradiance + specular reflection). World-space N/V.
-    float3 Vworld = normalize(camPos - posW);
     float3 ibl = computeIBL(normalW, Vworld, albedo, roughness, metallic, ao);
 
     // precompLight (GB2.rgb) is emissive only now; combine direct + IBL + emissive.

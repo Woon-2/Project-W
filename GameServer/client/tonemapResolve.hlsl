@@ -13,9 +13,14 @@ struct VSOutput {
 };
 
 // PerDrawcallData (b0). Matches TonemapResolveShader::PerDrawcallData in shader.hpp.
-// idxSceneColor is a bindless index (idxRange, idxResource, idxInArray, idxSampler).
+// idxSceneColor / idxBloom are bindless indices (idxRange, idxResource, idxInArray, idxSampler).
 cbuffer PerDrawcallData : register(b0) {
-    int4 idxSceneColor;
+    int4  idxSceneColor;
+    int4  idxBloom;
+    float exposure;
+    float bloomIntensity;
+    uint  debugMode;
+    float _pad;
 }
 
 // Fullscreen triangle — no vertex buffer needed.
@@ -33,11 +38,33 @@ VSOutput VSMain(uint vertexID : SV_VertexID) {
     return ret;
 }
 
+// ACES Filmic tone mapping curve (Narkowicz 2015 approximation).
+// Retains highlight saturation far better than per-channel Reinhard.
+float3 acesFilmic(float3 x) {
+    const float a = 2.51f;
+    const float b = 0.03f;
+    const float c = 2.43f;
+    const float d = 0.59f;
+    const float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
 float4 PSMain(VSOutput input) : SV_TARGET {
     float3 color = sampleBindless(idxSceneColor, input.uv).rgb;
 
-    // Reinhard tonemapping + gamma correction (curve preserved from lighting pass).
-    color = color / (color + float3(2.0f, 2.0f, 2.0f));
+    // GBuffer debug views are already display-encoded by the lighting pass.
+    // Pass them through untouched so they are not double tonemapped / gamma'd.
+    if (debugMode != 0u) {
+        return float4(color, 1.0f);
+    }
+
+    // Additive bloom. sampleBindless returns 0 for an invalid index, so this is a
+    // no-op until the bloom pass is wired (idxBloom valid, bloomIntensity > 0).
+    color += sampleBindless(idxBloom, input.uv).rgb * bloomIntensity;
+
+    // Exposure -> ACES Filmic -> gamma.
+    color *= exposure;
+    color = acesFilmic(color);
     color = pow(abs(color), 1.0f / 2.2f);
 
     return float4(color, 1.0f);

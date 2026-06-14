@@ -28,6 +28,9 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRDeferredLightingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTonemapResolveShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBloomPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBloomDownsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -229,6 +232,15 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
+	// IBL (forward parity) — must match cbuffer PerFrameData in pbr.hlsl
+	XMFLOAT3      camPos;
+	float         _padCam;
+	BindlessIndex idxIrradiance;
+	BindlessIndex idxPrefiltered;
+	BindlessIndex idxBRDFLUT;
+	u32t          prefilteredMipCount;
+	float         iblIntensity;
+	XMFLOAT2      _iblPad;
 };
 }	// namespace PBRShader
 
@@ -299,6 +311,15 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;
+	// IBL (forward parity) — must match cbuffer PerFrameData in pbrSkinned.hlsl
+	XMFLOAT3      camPos;
+	float         _padCam;
+	BindlessIndex idxIrradiance;
+	BindlessIndex idxPrefiltered;
+	BindlessIndex idxBRDFLUT;
+	u32t          prefilteredMipCount;
+	float         iblIntensity;
+	XMFLOAT2      _iblPad;
 };
 }	// namespace PBRSkinnedShader
 
@@ -714,6 +735,15 @@ struct PerFrameData {
     XMFLOAT4   cascadeSplitsFarV;
     XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
     XMFLOAT4   cascadeNormalOffsets;
+    // IBL (forward parity) — must match cbuffer PerFrameData in terrain.hlsl
+    XMFLOAT3      camPos;
+    float         _padCam;
+    BindlessIndex idxIrradiance;
+    BindlessIndex idxPrefiltered;
+    BindlessIndex idxBRDFLUT;
+    u32t          prefilteredMipCount;
+    float         iblIntensity;
+    XMFLOAT2      _iblPad;
 };
 
 }	// namespace TerrainShader
@@ -986,12 +1016,31 @@ struct PerFrameData {
 namespace TonemapResolveShader {
 
 // Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
-// 16 bytes — a single bindless index for the scene-color SRV.
+// 48 bytes. Layout finalized up-front (exposure/debug/bloom) so the cbuffer is
+// not re-packed as later Phase 2 features land.
 struct PerDrawcallData {
-	BindlessIndex idxSceneColor;
+	BindlessIndex idxSceneColor;   // HDR scene-color SRV
+	BindlessIndex idxBloom;        // bloom mip0 SRV (invalid => additive bloom is a no-op)
+	float         exposure;        // linear exposure multiplier applied before tonemapping
+	float         bloomIntensity;  // additive bloom strength (0 => off)
+	u32t          debugMode;       // GBuffer debug mode; !=0 => passthrough (skip tonemap)
+	float         _pad;
 };
 
 }	// namespace TonemapResolveShader
+
+// BloomShader — pixel-based HDR bloom (prefilter / downsample / upsample). bloom.hlsl.
+namespace BloomShader {
+
+// Matches cbuffer PerDrawcallData : register(b0) in bloom.hlsl (32 bytes).
+struct PerDrawcallData {
+	BindlessIndex idxSrc;        // source SRV (scene color for prefilter, a bloom mip otherwise)
+	XMFLOAT2      srcTexelSize;  // 1 / source dimensions
+	float         threshold;     // prefilter brightness threshold
+	float         _pad;
+};
+
+}	// namespace BloomShader
 
 // TwoSidesShader
 // Port of Unity Shader Graphs/HS_Blend_TwoSides.

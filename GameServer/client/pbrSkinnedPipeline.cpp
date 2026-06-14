@@ -707,6 +707,13 @@ void Dispatcher::mainUpdate() {
 		const auto& o = mainDirectionalLightData_.cascadeNormalOffsets;
 		pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
 	}
+	// IBL (forward parity)
+	pfd.camPos              = cameraData_.pos.getXmf();
+	pfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
+	pfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
+	pfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
+	pfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
+	pfd.iblIntensity        = frameData_.iblIntensity;
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
@@ -809,6 +816,13 @@ void Dispatcher::mainUpdateMT() {
 		const auto& o = mainDirectionalLightData_.cascadeNormalOffsets;
 		pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
 	}
+	// IBL (forward parity)
+	pfd.camPos              = cameraData_.pos.getXmf();
+	pfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
+	pfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
+	pfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
+	pfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
+	pfd.iblIntensity        = frameData_.iblIntensity;
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 

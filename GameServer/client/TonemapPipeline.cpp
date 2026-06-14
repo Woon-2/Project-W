@@ -20,7 +20,11 @@ Dispatcher::Dispatcher(
 	Resources* pResources,
 	CommandListPool* commandListPool,
 	const BindlessIndex& idxSceneColor,
-	std::size_t roomIdx
+	std::size_t roomIdx,
+	float exposure,
+	float bloomIntensity,
+	u32t debugMode,
+	const BindlessIndex& idxBloom
 ) : descriptorHeaps_(descriptorHeaps),
 	pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
@@ -28,6 +32,7 @@ Dispatcher::Dispatcher(
 	viewport_(viewport), scissorRect_(scissorRect), backBufferRtv_(backBufferRtv),
 	pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
 	idxSceneColor_(idxSceneColor), roomIdx_(roomIdx),
+	exposure_(exposure), bloomIntensity_(bloomIntensity), debugMode_(debugMode), idxBloom_(idxBloom),
 	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
 	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
 	rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
@@ -37,7 +42,12 @@ Dispatcher::Dispatcher(
 
 void Dispatcher::updateGPUDataSingleThreaded() {
 	auto pdd = TonemapResolveShader::PerDrawcallData{
-		.idxSceneColor = idxSceneColor_
+		.idxSceneColor  = idxSceneColor_,
+		.idxBloom       = idxBloom_,
+		.exposure       = exposure_,
+		.bloomIntensity = bloomIntensity_,
+		.debugMode      = debugMode_,
+		._pad           = 0.0f
 	};
 	pResources_->perDrawcallData.cbuffers[0].stage(roomIdx_, &pdd, 1u);
 }

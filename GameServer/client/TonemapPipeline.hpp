@@ -41,7 +41,11 @@ public:
 		Resources* pResources,
 		CommandListPool* commandListPool,
 		const BindlessIndex& idxSceneColor,
-		std::size_t roomIdx
+		std::size_t roomIdx,
+		float exposure,
+		float bloomIntensity,
+		u32t debugMode,
+		const BindlessIndex& idxBloom
 	);
 
 	// Stages the b0 constant buffer with the scene-color bindless index.
@@ -67,6 +71,10 @@ private:
 	CommandListPool* cmdListPool_ = nullptr;
 	BindlessIndex idxSceneColor_{};
 	std::size_t roomIdx_{};
+	float exposure_       = 1.0f;
+	float bloomIntensity_ = 0.0f;
+	u32t  debugMode_      = 0u;
+	BindlessIndex idxBloom_{ -1, -1, -1, -1 };
 
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxTexPool_{};

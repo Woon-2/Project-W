@@ -437,6 +437,13 @@ void Dispatcher::mainUpdate() {
         const auto& o = light.cascadeNormalOffsets;
         pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
     }
+    // IBL (forward parity)
+    pfd.camPos              = cameraData_.pos.getXmf();
+    pfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
+    pfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
+    pfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
+    pfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
+    pfd.iblIntensity        = frameData_.iblIntensity;
 
     pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }
