@@ -2297,6 +2297,17 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 	player->netInterpAcc_ = 0s;
 }
 
+void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs ) {
+	// 로컬 플레이어만 처리한다(다른 플레이어의 넉백은 그쪽 클라가 실행해 S_Move로 위치가 동기화됨).
+	if ( playerId != myId_ || player_ == nullptr ) {
+		return;
+	}
+	knockbackDir_           = mu::Vec3( dirX, 0.f, dirZ );
+	knockbackSpeed_         = speed;
+	knockbackTimer_         = static_cast<float>( knockMs ) / 1000.f;
+	postKnockbackLockTimer_ = static_cast<float>( postLockMs ) / 1000.f;
+}
+
 void Game::rotatePlayer(uint16 playerId, float yawRad) {
 	auto player = idPlayerMap_[playerId];
 
@@ -3851,13 +3862,37 @@ void Game::processInput(Milliseconds deltaTime) {
 void Game::processInputGame(Milliseconds deltaTime) {
 	const auto prevForward = player_->forward();
 
+	// GrandBaum 넉백/이동잠금: 이동 권한은 클라에 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다.
+	// 넉백 중에는 WASD를 무시하고 서버가 준 방향·속도로 밀려나고, 이어 입력잠금 동안 수평 정지한다.
+	// (둘 다 그 위치가 매 프레임 C_Move로 서버에 반영된다. 서버는 넉백 동안 클램프를 면제한다.)
+	bool movementLocked = false;
+	{
+		const float kbDt = Seconds(deltaTime).count();
+		if (knockbackTimer_ > 0.f) {
+			knockbackTimer_ -= kbDt;
+			const float vy = player_->velocity().y();
+			player_->setVelocity(mu::Vec3(knockbackDir_.x() * knockbackSpeed_, vy, knockbackDir_.z() * knockbackSpeed_));
+			if (knockbackTimer_ <= 0.f) {
+				knockbackTimer_ = 0.f;
+				knockbackSpeed_ = 0.f;
+			}
+			movementLocked = true;
+		}
+		else if (postKnockbackLockTimer_ > 0.f) {
+			postKnockbackLockTimer_ -= kbDt;
+			const float vy = player_->velocity().y();
+			player_->setVelocity(mu::Vec3(0.f, vy, 0.f));   // 입력잠금: 수평 정지(y는 중력 보존)
+			movementLocked = true;
+		}
+	}
+
 	// 이동 가속도만 담당. 감속은 PhysicsWorld의 linearDamping(마찰)이 처리한다.
 	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
 	const bool rightMouseDragging = !uiManager_.needsCursor() && (keyboardStateCurr_[VK_RBUTTON] & 0x80);
 
-	if (moveXSign || moveZSign) {
+	if (!movementLocked && (moveXSign || moveZSign)) {
 		if (!rightMouseDragging && std::abs(static_cast<float>(cameraYaw_)) > 1e-5f) {
 			player_->setOrient(player_->orient() * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), cameraYaw_));
 			cameraYaw_ = 0.f;

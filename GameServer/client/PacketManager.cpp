@@ -81,6 +81,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSZoneStatePacket( buffer, len );
 		break;
 
+	case PacketType::S_PlayerKnockback:
+		handleSPlayerKnockbackPacket( buffer, len );
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -266,6 +270,11 @@ void PacketManager::handleSStrongholdStatePacket( byte* buffer, int32 len ) {
 void PacketManager::handleSZoneStatePacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SZoneStatePacket*>(buffer);
 	INet::ClientApp::onlineGame()->onZoneState( pkt->zoneId, pkt->state );
+}
+
+void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SPlayerKnockbackPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onPlayerKnockback( pkt->playerId, pkt->dirX, pkt->dirZ, pkt->speed, pkt->knockMs, pkt->postLockMs );
 }
 
 void PacketManager::handleSCreateRoomPacket( byte* buffer, int32 len ) {

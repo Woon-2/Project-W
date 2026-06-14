@@ -88,6 +88,7 @@ public:
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
+	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -404,6 +405,13 @@ private:
 	uint16                   hostId_ = 0;
 	uint16                   myId_   = 0;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
+
+	// GrandBaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
+	// 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다(processInputGame).
+	float    knockbackTimer_         = 0.f;   // 남은 강제 이동 시간(s)
+	float    knockbackSpeed_         = 0.f;
+	mu::Vec3 knockbackDir_           = {};
+	float    postKnockbackLockTimer_ = 0.f;   // 넉백 후 입력잠금 남은 시간(s)
 
 	// S_GameStart 핸드오프 요청(onGameStart가 적재, LobbyScene이 에셋 로드 후 실행).
 	bool        pendingHandoff_ = false;

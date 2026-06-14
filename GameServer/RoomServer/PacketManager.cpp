@@ -154,6 +154,25 @@ std::shared_ptr<SendBuffer> PacketManager::makeSMovePacket(uint16 playerId, Dire
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSPlayerKnockbackPacket(uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SPlayerKnockbackPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SPlayerKnockbackPacket>();
+	pkt->playerId   = playerId;
+	pkt->dirX       = dirX;
+	pkt->dirZ       = dirZ;
+	pkt->speed      = speed;
+	pkt->knockMs    = knockMs;
+	pkt->postLockMs = postLockMs;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_PlayerKnockback;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());

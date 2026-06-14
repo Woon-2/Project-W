@@ -972,3 +972,70 @@ SendBuffer 시스템의 설계:
 **검증:** 4개 프로젝트 Release x64 빌드 OK. 실제 client로 로비 접속·로딩 중 종료(3/5/8초) 포함
 자동 검증 전부 exit 0, 재현 테스트 약 5회 크래시 미발생. 서버 3종은 동일한 잠재 문제 보유 —
 정상 종료 경로 도입 시 같은 순서 적용 필요(후속 과제).
+
+---
+
+### 2026.06.14
+## [feat] GrandBaum(그랜드밤) 중간보스 전술 포팅
+## [refactor] squad 교전 배정 안정화(`issueStableEngage`) 공용화
+
+**수정 파일:** `RoomServer/MidBossTactics.hpp/cpp`, `RoomServer/Room.hpp/cpp`, `RoomServer/object.hpp`, `RoomServer/GameSession.hpp`, `RoomServer/PacketManager.hpp/cpp`, `ServerEngine/protocol.hpp`, `client/PacketManager.hpp/cpp`, `client/online/onlineGame.hpp/cpp`  
+**신규 문서:** `RoomServer/docs/grandBaumTactic.md`  
+**커밋:** 미커밋(working tree)
+
+---
+
+### [1] GrandBaum 중간보스 전술 포팅
+
+NPCAI(`sim/MidBossTactics.*`, `sim/ScenarioGrandBaum.cpp`)의 GrandBaum 중간보스 전술을 RoomServer로
+포팅. 홉고블린(`GoblinMidBossTactic`) 인프라 재사용. 상세 설계는 `RoomServer/docs/grandBaumTactic.md` 참조.
+
+**구성·흐름:**
+
+- 슬라임 3부대(0,1,2) + 뱀 1부대(3) + 보스(`GrandBaumMidBossTactic`, Goblin 전술과 같은 파일에 동거).
+- 평상시: 슬라임은 Engage, 뱀은 personal 회피 기동, 보스는 표적 우선순위(Snake>Slime>Nearest) melee.
+- **단일 ShieldWall 전술** — 보스 HP **66% / 33%** 각 1회 발동.
+  - 발동 게이트: 그 순간 살아있는 슬라임 ≥ 10 **AND** 원본 뱀 ≥ 1. 불충족 시 발동 스킵(→Cooldown).
+  - 발동 효과: 슬라임이 보스를 **하드블로커 링**으로 감싸고(플레이어 통과 불가), **보스+슬라임 받는
+    피해 90% 감소(×0.1)**.
+  - 파훼는 오직 뱀: **예방**(발동 전 원본 뱀 전멸 → 스킵) / **해제**(발동 후 증원 웨이브 =
+    원본뱀×10·최대 60 전멸 → 종료·재취약). 웨이브 수는 플레이어 수와 무관.
+  - `Engage` ⇄ `ShieldWall` → `Cooldown(8s)` → `Engage` 루프. 한 큐에 두 단계를 건너뛰면(폭딜)
+    발동은 1회로 합쳐짐.
+
+**핵심 설계 판단(클라-서버 구조):**
+
+- **데미지 경감 훅** — `Object::damageTakenMultiplier_`(기본 1.0)를 스킬 피격 적용부에서 곱함.
+  ShieldWall이 보스/슬라임에 0.1 적용.
+- **플레이어 넉백/이동잠금** — 플레이어 이동은 **클라 권한**이라 서버 `setPos`가 무효(클라가 다음
+  프레임에 덮어씀). → 신규 `S_PlayerKnockback` 명령 패킷으로 클라가 로컬에서 넉백(0.32s)·입력잠금
+  (1.2s)을 실행하고, 서버는 그동안 안티치트 이동 클램프를 면제(`GameSession`).
+- **전투 중 동적 소환/디스폰**(증원 웨이브) — `Room::spawnTacticalWaveNpc / addDynamicTacticalSquad /
+  removeTacticalNpcById / removeTacticalSquadById / broadcastTacticalNpcSpawn / reviveTacticalNpc`.
+  `tacticalNpcs_`는 `unique_ptr` 벡터라 재할당돼도 객체 주소(raw 포인터)가 불변 → tactic 실행
+  중(분대/NPC 순회 이전) 즉시 push/erase 안전. 디스폰 패킷이 없어 살아있는 웨이브 강제 정리는
+  `setHp(0)+S_Hit`로 대체. 부활은 `reviveAt` + 물리 바디 재등록 + `S_NpcRespawn`.
+- **슬라임 하드블로커** — ShieldWall 중 슬라임 콜리전 마스크를 `~Boss`로 토글
+  (`Room::set/clearShieldWallBlockers`). 슬라임은 클라에도 존재하므로 클라 로컬 물리도 자연히 막힘.
+- **상수 스케일** — 거리/반경/슬롯간격은 인게임 스케일 ×~0.4 적용(시뮬 원본 병기). 시간·비율·HP
+  임계·카운트는 시뮬 원본 유지.
+- 모델: 전용 슬라임/뱀/보스 에셋 추가 전까지 goblin 모델/`ObjectType::Goblin` 재사용(홉고블린과 동일).
+- 트리거: zone `"Arena_GrandBaum"` + 마커(`WallGrandBaum_0/1`, `BossSpawn`). **레벨 마커 미저작 →
+  실제 인게임 검증·밸런싱은 후속 과제.**
+
+---
+
+### [2] squad 교전 배정 안정화 공용화
+
+GrandBaum 슬라임 부대 교전에 안정화 기능을 적용하기 위한 리팩토링.
+
+- **공격권 예약**은 `TacticalNpc` 자체 기능 — 상태 핸들러가 `canEnterAttackSlot()` →
+  `Room::tryReserveTacticalAttackSlot`(targetId당 최대 5슬롯, `tacticalNpcs_` 전체 후보)을 직접
+  호출하므로 **전술 무관**. GrandBaum 슬라임·뱀·웨이브 모두 이미 적용돼 있었음(추가 작업 불필요).
+- **squad 교전 배정 안정화**(`issueStableEngage`: 균형배정 + 생존중 고정 + 죽은 것만 재배정)는
+  `GoblinMidBossTactic`의 private였음 → `engageTargetBySquad_`·`isLivingPlayerTarget`과 함께
+  **`MidBossTacticBase`로 승격**. GrandBaum `issueEngage`가 슬라임 부대(0,1,2)에 이를 재사용
+  (원본 뱀은 회피, 웨이브는 `DistributedEngage`). Goblin 동작은 상속으로 불변.
+
+**검증:** RoomServer·client 모두 Debug/x64 빌드 통과. GrandBaum 전술의 예방·해제 경로 양쪽 컴파일
+레벨 완성. 실제 인게임 거동 검증은 `Arena_GrandBaum` 레벨 마커 저작 후(후속 과제).

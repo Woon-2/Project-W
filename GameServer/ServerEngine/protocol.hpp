@@ -44,6 +44,8 @@ enum class PacketType : uint16 {
 
 	S_ZoneState,
 
+	S_PlayerKnockback,
+
 	// Lobby
 	C_CreateRoom,
 	S_CreateRoom,
@@ -149,6 +151,18 @@ struct SMovePacket : public PacketHeader {
 	uint16 playerId;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT3 velocity;
+};
+
+// 서버→클라 강제 넉백 명령(GrandBaum ShieldWall). 플레이어 이동은 클라 권한이므로 서버가 위치를
+// 강제할 수 없다 → 클라가 이 명령을 받아 로컬에서 knockMs 동안 dir·speed로 밀려나고, 이어
+// postLockMs 동안 입력을 잠근다(그 위치를 계속 C_Move로 서버에 반영).
+struct SPlayerKnockbackPacket : public PacketHeader {
+	uint16 playerId;
+	float  dirX;
+	float  dirZ;
+	float  speed;
+	uint16 knockMs;      // 넉백(강제 이동) 지속(ms)
+	uint16 postLockMs;   // 넉백 후 입력잠금(ms)
 };
 
 struct CMouseMovePacket : public PacketHeader {

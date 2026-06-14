@@ -82,6 +82,11 @@ public:
 	bool canReceiveDamage() const { return canReceiveDamage_; }
 	void setCanReceiveDamage(bool v) { canReceiveDamage_ = v; }
 
+	// 받는 피해 배율(기본 1.0). GrandBaum ShieldWall에서 보스/슬라임에 0.1을 걸어
+	// 받는 피해를 90% 경감하는 데 사용. 스킬 피격 적용부(Room::updateSkillSystem)가 곱한다.
+	float damageTakenMultiplier() const { return damageTakenMultiplier_; }
+	void setDamageTakenMultiplier(float m) { damageTakenMultiplier_ = m; }
+
 	Faction faction() const { return faction_; }
 	void setFaction(Faction f) { faction_ = f; }
 
@@ -140,6 +145,7 @@ private:
 	AnimController animController_;
 	std::vector<mu::Mat4x4> boneWorldXforms_;
 	bool canReceiveDamage_ = false;
+	float damageTakenMultiplier_ = 1.f;
 	Faction faction_ = Faction::Neutral;
 
 	float cameraPitch_{};

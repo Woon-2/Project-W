@@ -130,6 +130,26 @@ public:
 	                                               mu::Vec3 bossPos,
 	                                               int numSquads        = 3,
 	                                               int troopersPerSquad = 20);
+	// GrandBaum 중간보스 인카운터: 슬라임 3부대(0,1,2) + 뱀 1부대(3) + GrandBaum 전술 보스.
+	void MU_CALLCONV spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
+
+	// ── GrandBaum ShieldWall ──────────────────────────────────────────────────
+	// 링 형성 순간 안쪽 플레이어를 바깥으로 넉백(클라 권한 이동잠금: S_PlayerKnockback).
+	void MU_CALLCONV knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius);
+	// 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환/해제(콜리전 마스크 토글).
+	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
+	void clearShieldWallBlockers();
+
+	// GrandBaum 뱀 증원 웨이브: 전투 중 전술 NPC/분대 동적 소환·디스폰.
+	// tacticalNpcs_는 unique_ptr 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
+	// (분대/NPC 순회 이전) 즉시 호출해도 안전하다.
+	TacticalNpc* MU_CALLCONV spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId);
+	TacticalSquad* addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad);
+	void removeTacticalNpcById(uint32_t id);
+	void removeTacticalSquadById(int32 squadId);
+	void broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds);
+	// 죽은 전술 NPC 부활: 상태 복구(reviveAt) + 사망 시 제거됐던 물리 바디 재등록 + 클라 통지(S_NpcRespawn).
+	void MU_CALLCONV reviveTacticalNpc(uint32_t id, mu::Vec3 pos);
 
 private:
 	int32 id_;
@@ -145,6 +165,8 @@ private:
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
+	void onArenaGrandBaumEnter(Zone& zone, uint32 playerId);
+	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
@@ -197,6 +219,7 @@ private:
 	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
 	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
 	std::unique_ptr<PlatoonLeader>              platoonLeader_;
+	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;
 	uint32_t nextWedgeChargeId_{ 1 };

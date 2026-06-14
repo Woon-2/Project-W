@@ -10,6 +10,7 @@
 #include "collision.hpp"
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
+#include "MidBossTactics.hpp"
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -199,6 +200,11 @@ void Room::bindZoneHandlers() {
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaHobgoblinEnter(zone, playerId);
 		});
+
+	zoneSystem_.on("Arena_GrandBaum", ZoneEvent::Enter,
+		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
+			room.onArenaGrandBaumEnter(zone, playerId);
+		});
 }
 
 // Triggered once when a player first enters the mid-boss arena. Builds the rear
@@ -273,6 +279,74 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	}
 
 	// Clients build the same walls locally so the predicted player collides.
+	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+
+	zone.setArmed(false);   // one-shot trigger
+}
+
+// Arena_Hobgoblin과 동일 패턴: GrandBaum 마커(WallGrandBaum_0/1, BossSpawn)로 벽/스폰점을
+// 구성하고 GrandBaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
+void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
+
+	if (!worldTerrain_) return;
+
+	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	mu::Vec3 wallSum{};
+	int      wallCount = 0;
+	for (const auto& m : worldTerrain_->markers()) {
+		if (m.type != "Wall") continue;
+		if (m.name != "WallGrandBaum_0" && m.name != "WallGrandBaum_1") continue;
+		spawnBarrierFromMarker(m);
+		wallSum += m.pos;
+		++wallCount;
+		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+
+	if (tacticalNpcs_.empty() && !platoonLeader_) {
+		mu::Vec3 spawnPos{};
+		bool     haveSpawnPos = false;
+		for (const auto& m : worldTerrain_->markers()) {
+			if (m.type != "BossSpawn") continue;
+			spawnPos     = m.pos;
+			haveSpawnPos = true;
+			std::cout << "[Zone] GrandBaum spawn point '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+			break;
+		}
+		if (!haveSpawnPos && wallCount > 0) {
+			spawnPos     = wallSum / static_cast<float>(wallCount);
+			haveSpawnPos = true;
+			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
+			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
+		}
+
+		if (haveSpawnPos) {
+			spawnGrandBaumEncounter(spawnPos, spawnPos);
+
+			std::vector<ObjectInfo> spawnInfos;
+			spawnInfos.reserve(tacticalNpcs_.size() + 1);
+			auto appendInfo = [&](const TacticalNpc& o) {
+				spawnInfos.push_back(ObjectInfo{
+					.type           = ObjectType::Goblin,
+					.objectId       = static_cast<uint16>(o.getId()),
+					.materialSetIdx = 0,
+					.hp             = o.hp(),
+					.maxHp          = o.maxHp(),
+					.pos            = o.pos().getXmf(),
+					.orient         = o.orient().getXmf(),
+					.scale          = o.scale().getXmf(),
+				});
+			};
+			for (const auto& npc : tacticalNpcs_)
+				if (npc) appendInfo(*npc);
+			if (platoonLeader_) appendInfo(*platoonLeader_);
+
+			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+		}
+	}
+
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 
 	zone.setArmed(false);   // one-shot trigger
@@ -661,7 +735,8 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	mu::Vec3 newPos = DirectX::XMLoadFloat3(&cMvPkt->pos);
 	const mu::Vec3 deltaXZ{ newPos.x() - oldPos.x(), 0.f, newPos.z() - oldPos.z() };
 	const float horizDist = deltaXZ.len();
-	if (horizDist > kMaxMovePerPacket) {
+	// GrandBaum 넉백 중인 세션은 클램프 면제(클라가 넉백 속도로 빠르게 밀려나므로).
+	if (!session->isMoveClampExempt() && horizDist > kMaxMovePerPacket) {
 		const float s = kMaxMovePerPacket / horizDist;
 		// XZ만 허용치로 클램프, Y(낙하/지형)는 그대로 둔다.
 		newPos = mu::Vec3{ oldPos.x() + deltaXZ.x() * s, newPos.y(), oldPos.z() + deltaXZ.z() * s };
@@ -727,7 +802,9 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		Object* tgt = objectById_[hit->targetId];
 		if (!tgt) continue;
 
-		int32 newHp = std::max(tgt->hp() - hit->damage, 0);
+		// 받는 피해 배율 적용(기본 1.0; GrandBaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
+		int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
+		int32 newHp = std::max(tgt->hp() - dmg, 0);
 		tgt->setHp(newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
 			static_cast<uint16>(hit->attackerId),
@@ -1193,4 +1270,268 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
+}
+
+// GrandBaum 중간보스 인카운터 스폰. 슬라임 3부대(0,1,2) + 뱀 1부대(3)를 spawnCenter 주변에
+// 산개시키고, bossPos에 GrandBaum 전술(GrandBaumMidBossTactic) 보스를 배치한다.
+// NPC 모델/물리 셋업은 일반 goblin과 동일(전용 슬라임/뱀 모델 추가 전까지 goblin 재사용).
+void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+{
+	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
+
+	auto makeBase = [](mu::Vec3 pos) {
+		Object base;
+		base.setPos(pos);
+		return base;
+	};
+	const auto& anims = assetManager_->goblinAnimations();
+	auto registerBody = [&](Object& obj) {
+		obj.setId(IdPool::pop());
+		obj.setFaction(Faction::Monsters);
+
+		obj.setModel(assetManager_->modelGoblin());
+		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+		obj.animController().switchClip("Idle");
+		obj.setCanReceiveDamage(true);
+
+		obj.body().setMotionType(MotionType::Dynamic);
+		obj.body().setMass(70.f);
+		obj.body().setLinearDamping(0.1f);
+		obj.body().setAngularDamping(25.f);
+		obj.body().setRestitution(0.0f);
+		obj.body().setUprightStiffness(4000.f);
+		obj.body().enableMotor(true);
+		obj.body().snapToCurrent();
+
+		Object* raw = &obj;
+		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+		registerObject(raw);
+		npcBodyOwner_[&obj.body()] = raw;
+	};
+
+	// 인게임 스케일 config (시뮬값 기반, M3 튜닝 대상)
+	TacticalNpcConfig slimeCfg{
+		.maxHp = 60.f, .moveSpeed = 4.f, .attackRange = 2.6f, .attackDamage = 8.f,
+		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
+		.separationRadius = 3.f, .separationWeight = 1.0f
+	};
+	TacticalNpcConfig snakeCfg{
+		.maxHp = 45.f, .moveSpeed = 8.f, .attackRange = 2.6f, .attackDamage = 12.f,
+		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
+		.separationRadius = 3.f, .separationWeight = 0.9f
+	};
+	TacticalNpcConfig bossCfg{
+		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
+		.separationRadius = 4.f, .separationWeight = 0.3f
+	};
+
+	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
+
+	// 부대 구성: 0,1,2 = 슬라임, 3 = 뱀. 인원은 시뮬(A12/B12/C48/D10) 기반(난이도 튜닝 가능).
+	struct GrandBaumSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const GrandBaumSquadDef squadDefs[] = {
+		{ &slimeCfg, 12 },
+		{ &slimeCfg, 12 },
+		{ &slimeCfg, 48 },
+		{ &snakeCfg, 10 },
+	};
+
+	for (int s = 0; s < 4; ++s) {
+		const TacticalNpcConfig& cfg = *squadDefs[s].cfg;
+		auto squad = std::make_unique<TacticalSquad>(s, cfg.attackRange, cfg.separationRadius);
+
+		for (int t = 0; t < squadDefs[s].count; ++t) {
+			mu::Vec3 npcPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
+			auto npc = std::make_unique<TacticalNpc>(makeBase(npcPos), cfg);
+			registerBody(*npc);
+			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
+			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
+			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->setSquadId(s);
+
+			squad->addMember(npc.get());
+			tacticalNpcs_.push_back(std::move(npc));
+		}
+
+		tacticalSquads_.push_back(std::move(squad));
+	}
+
+	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
+	platoonLeader_ = std::make_unique<PlatoonLeader>(
+		makeBase(bossPos), bossCfg, std::make_unique<GrandBaumMidBossTactic>());
+	registerBody(*platoonLeader_);
+	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+
+	for (auto& sq : tacticalSquads_)
+		platoonLeader_->addSquad(sq.get());
+}
+
+// ── GrandBaum ShieldWall 헬퍼 ────────────────────────────────────────────────
+
+void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
+	// 인게임 스케일 넉백(시뮬 SHIELD_WALL_KNOCKBACK_*: speed 90 × ~0.4). 이동 권한은 클라에
+	// 있으므로 서버는 S_PlayerKnockback만 보내고, 클라가 로컬에서 넉백 + 이동잠금을 실행한다.
+	constexpr float  SHIELD_WALL_KNOCKBACK_PADDING = 0.4f;
+	constexpr float  SHIELD_WALL_KNOCKBACK_SPEED   = 36.f;
+	constexpr uint16 KNOCK_MS    = 320;    // 0.32s 강제 이동
+	constexpr uint16 POSTLOCK_MS = 1200;   // 1.2s 입력잠금
+
+	const float safeRadius = ringRadius + SHIELD_WALL_KNOCKBACK_PADDING;
+
+	for (GameSession* s : getLivingPlayers()) {
+		if (!s || !s->player()) continue;
+
+		mu::Vec3 p = s->player()->pos();
+		mu::Vec3 outDir{ p.x() - center.x(), 0.f, p.z() - center.z() };
+		float dist = outDir.len();
+		if (dist >= safeRadius) continue;   // 링 밖이면 넉백 불필요
+
+		mu::Vec3 dir = (dist > 0.01f) ? outDir * (1.f / dist) : mu::Vec3{ 1.f, 0.f, 0.f };
+		// 안쪽 깊이 낀 플레이어는 0.32초 안에 링 밖으로 밀어내기 위해 필요 속도를 보장.
+		float requiredSpeed  = (safeRadius - dist) / (static_cast<float>(KNOCK_MS) / 1000.f);
+		float knockbackSpeed = std::max(SHIELD_WALL_KNOCKBACK_SPEED, requiredSpeed);
+
+		s->grantMoveClampExemption(std::chrono::milliseconds(KNOCK_MS + POSTLOCK_MS));
+
+		broadcast(PacketManager::makeSPlayerKnockbackPacket(
+			static_cast<uint16>(s->id()), dir.x(), dir.z(), knockbackSpeed, KNOCK_MS, POSTLOCK_MS));
+	}
+}
+
+// ShieldWall 중 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환한다. 평소 trooper는 Player를
+// 통과(~(Player|Boss))하지만, 여기서 Player 충돌을 다시 켜(~Boss) 링이 벽처럼 막히게 한다.
+void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
+	clearShieldWallBlockers();   // 이전 블로커가 남아있으면 먼저 원복(중복/매틱 호출 안전)
+	for (uint32_t id : blockerIds) {
+		TacticalNpc* npc = findTacticalNpcById(id);
+		if (!npc) continue;
+		npc->body().setCollisionMask(~CollisionLayer::Boss);
+	}
+	shieldWallBlockerIds_ = blockerIds;
+}
+
+void Room::clearShieldWallBlockers() {
+	for (uint32_t id : shieldWallBlockerIds_) {
+		TacticalNpc* npc = findTacticalNpcById(id);
+		if (!npc) continue;
+		npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+	}
+	shieldWallBlockerIds_.clear();
+}
+
+// ── GrandBaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
+
+// 일반 goblin과 동일한 모델/물리(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록.
+// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandBaumEncounter의 registerBody와 동일 셋업).
+void Room::registerTacticalNpcBody(Object& obj) {
+	const auto& anims = assetManager_->goblinAnimations();
+	obj.setId(IdPool::pop());
+	obj.setFaction(Faction::Monsters);
+
+	obj.setModel(assetManager_->modelGoblin());
+	obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+	obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+	obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+	obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+	obj.animController().switchClip("Idle");
+	obj.setCanReceiveDamage(true);
+
+	obj.body().setMotionType(MotionType::Dynamic);
+	obj.body().setMass(70.f);
+	obj.body().setLinearDamping(0.1f);
+	obj.body().setAngularDamping(25.f);
+	obj.body().setRestitution(0.0f);
+	obj.body().setUprightStiffness(4000.f);
+	obj.body().enableMotor(true);
+	obj.body().snapToCurrent();
+
+	Object* raw = &obj;
+	physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+	registerObject(raw);
+	npcBodyOwner_[&obj.body()] = raw;
+}
+
+TacticalNpc* Room::spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId) {
+	if (!assetManager_) return nullptr;
+
+	Object base;
+	base.setPos(mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z()));
+	auto npc = std::make_unique<TacticalNpc>(std::move(base), cfg);
+	registerTacticalNpcBody(*npc);
+	// 평소 trooper처럼 플레이어/보스를 통과(경로 차단 방지).
+	npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+	npc->setSquadId(squadId);
+
+	TacticalNpc* raw = npc.get();
+	tacticalNpcs_.push_back(std::move(npc));
+	return raw;
+}
+
+TacticalSquad* Room::addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad) {
+	TacticalSquad* raw = squad.get();
+	tacticalSquads_.push_back(std::move(squad));
+	return raw;
+}
+
+void Room::removeTacticalNpcById(uint32_t id) {
+	for (auto it = tacticalNpcs_.begin(); it != tacticalNpcs_.end(); ++it) {
+		if (*it && (*it)->getId() == id) {
+			Object* raw = it->get();
+			physicsWorld_.unregisterBody(&raw->body());
+			npcBodyOwner_.erase(&raw->body());
+			unregisterObject(raw);          // objectById_ 슬롯 정리(스킬 히트 후보에서 제외)
+			IdPool::push(id);
+			tacticalNpcs_.erase(it);
+			return;
+		}
+	}
+}
+
+void Room::removeTacticalSquadById(int32 squadId) {
+	for (auto it = tacticalSquads_.begin(); it != tacticalSquads_.end(); ++it) {
+		if (*it && (*it)->getSquadId() == squadId) {
+			tacticalSquads_.erase(it);
+			return;
+		}
+	}
+}
+
+void Room::broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds) {
+	std::vector<ObjectInfo> spawnInfos;
+	spawnInfos.reserve(npcIds.size());
+	for (uint32_t id : npcIds) {
+		TacticalNpc* o = findTacticalNpcById(id);
+		if (!o) continue;
+		spawnInfos.push_back(ObjectInfo{
+			.type           = ObjectType::Goblin,
+			.objectId       = static_cast<uint16>(o->getId()),
+			.materialSetIdx = 0,
+			.hp             = o->hp(),
+			.maxHp          = o->maxHp(),
+			.pos            = o->pos().getXmf(),
+			.orient         = o->orient().getXmf(),
+			.scale          = o->scale().getXmf(),
+		});
+	}
+	if (!spawnInfos.empty()) {
+		broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+	}
+}
+
+void Room::reviveTacticalNpc(uint32_t id, mu::Vec3 pos) {
+	TacticalNpc* npc = findTacticalNpcById(id);
+	if (!npc) return;
+
+	pos = mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z());
+	npc->reviveAt(pos);
+	// 사망 시 물리 바디가 제거됐으므로 재등록한다(reviveAt은 객체 상태만 복구).
+	physicsWorld_.registerBody(&npc->body(), [npc]() { npc->rebuildBodyBVH(); });
+	npcBodyOwner_[&npc->body()] = npc;
+	npc->body().snapToCurrent();
+
+	broadcast(PacketManager::makeSNpcRespawnPacket(static_cast<uint16>(id), npc->hp(), pos.getXmf()));
 }
