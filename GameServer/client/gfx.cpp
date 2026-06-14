@@ -307,6 +307,7 @@ void GFX::init() {
 	shaders_.try_emplace("PBRDeferredSkinnedGBufferShader", createPBRDeferredSkinnedGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredSkinnedIndirectGBufferShader", createPBRDeferredSkinnedIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TonemapResolveShader",            createTonemapResolveShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainDeferredGBufferShader",    createTerrainDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("HiZOccluderShader", createHiZOccluderShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("HiZMapShader", createHiZMapShader(device_.Get(), defaultRootSig.get()));
@@ -499,6 +500,10 @@ void GFX::createSwapChain() {
 	);
 	resourcesSkyboxPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(SkyboxShader::PerDrawcallData), 32u, backBuffers_.size(), "Skybox_PerDrawcallData"
+	);
+	// Tonemap resolve pass ----
+	resourcesTonemapPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(TonemapResolveShader::PerDrawcallData), 1u, backBuffers_.size(), "Tonemap_PerDrawcallData"
 	);
 	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
@@ -1176,6 +1181,13 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
 		backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
 	);
+	// HDR scene-color RT (deferred path lighting/skybox 렌더 타깃; tonemap resolve로 백버퍼에 합성)
+	SharedResources::SceneColor::addSceneColor(
+		device_.Get(),
+		static_cast<u32t>(gClientRect.right  - gClientRect.left),
+		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
+		backBuffers_.size(), rtvPool_, srvTexPool_
+	);
 	// hi-z map 생성 (hi-z occlusion culling용)
 	SharedResources::HiZMap::addHiZMaps(
 		device_.Get(), static_cast<u32t>(gClientRect.right  - gClientRect.left),
@@ -1432,6 +1444,7 @@ void GFX::resize(u32t width, u32t height) {
 	// 2. 해상도 의존 리소스 해제 + 디스크립터 풀 슬롯 반납.
 	//    (포트레이트 RT는 셀 고정 크기라 해상도와 무관 → 건드리지 않는다.)
 	SharedResources::GBuffer::eraseGBuffer(rtvPool_, dsvPool_, srvTexPool_);
+	SharedResources::SceneColor::eraseSceneColor(rtvPool_, srvTexPool_);
 	SharedResources::HiZMap::eraseHiZMaps(srvTexPool_, uavPool_, dsvPool_);
 
 	for (int idx : allocatedRtvIndices_) { rtvPool_.free(idx); }
@@ -1496,6 +1509,9 @@ void GFX::resize(u32t width, u32t height) {
 	// 6. GBuffer + HiZ맵을 새 해상도로 재생성 (deferred path / occlusion culling).
 	SharedResources::GBuffer::addGBuffer(
 		device_.Get(), width, height, backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
+	);
+	SharedResources::SceneColor::addSceneColor(
+		device_.Get(), width, height, backBuffers_.size(), rtvPool_, srvTexPool_
 	);
 	SharedResources::HiZMap::addHiZMaps(
 		device_.Get(), width, height, backBuffers_.size(), srvTexPool_, uavPool_, dsvPool_
@@ -1597,6 +1613,17 @@ void GFX::render() {
 		const auto gbRoomIdx = frameIdx_ % backBuffers_.size();
 		SharedResources::GBuffer::transitionToWrite(gbRoomIdx, cmdListClear);
 		SharedResources::GBuffer::clearGBuffer(gbRoomIdx, cmdListClear);
+
+		// HDR scene-color RT 클리어 (deferred lighting/skybox 렌더 타깃)
+		if (!SharedResources::SceneColor::sceneColorData.empty()) {
+			SharedResources::SceneColor::transitionToWrite(gbRoomIdx, cmdListClear);
+			constexpr FLOAT sceneColorClear[4] = { 0.f, 0.f, 0.f, 1.f };
+			DISPLAY_ERROR_DX_VOID(
+				cmdListClear->ClearRenderTargetView(
+					SharedResources::SceneColor::sceneColorData[gbRoomIdx].rtv, sceneColorClear, 0u, nullptr
+				), false
+			);
+		}
 	}
 
 	const auto clRect = gClientRect;
@@ -1703,16 +1730,40 @@ void GFX::render() {
 		skyboxIdxSrv = drawEventsSkyboxPipeline_[0].texSkybox->idxSrv;
 	}
 
+	// HDR scene-color: deferred path에서는 lit 출력(skybox 포함)을 SceneColorHDR로 보내고
+	// tonemap resolve 패스가 백버퍼로 합성한다. forward path는 기존대로 백버퍼에 직접 출력.
+	const auto sceneColorRoomIdx = frameIdx_ % backBuffers_.size();
+	const bool hdrEnabled = (renderPath_ == RenderPath::Deferred)
+		&& !SharedResources::SceneColor::sceneColorData.empty();
+	const D3D12_CPU_DESCRIPTOR_HANDLE skyboxRtv = hdrEnabled
+		? SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].rtv
+		: backBufferRtvs_[backbufIdx];
+	const BindlessIndex sceneColorSrv = SharedResources::SceneColor::sceneColorData.empty()
+		? BindlessIndex{}
+		: SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].color.idxSrv;
+
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
 		cmdQ_, viewport, clRect,
-		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		skyboxRtv, depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
 		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// Tonemap resolve dispatcher (deferred path에서만 draw; SceneColorHDR -> 백버퍼 LDR)
+	auto tonemapPipelineDispatcher = TonemapPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("TonemapResolveShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx],
+		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
+		sceneColorSrv, sceneColorRoomIdx
 	);
 
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
@@ -2221,7 +2272,11 @@ void GFX::render() {
 				const auto rootSig = rootSigs_.at("DefaultRootSignature");
 				DISPLAY_ERROR_DX_VOID(cl->SetGraphicsRootSignature(rootSig->get()), false);
 				DISPLAY_ERROR_DX_VOID(cl->SetPipelineState(shaders_.at("PBRDeferredLightingShader").Get()), false);
-				DISPLAY_ERROR_DX_VOID(cl->OMSetRenderTargets(1u, &backBufferRtvs_[backbufIdx], false, nullptr), false);
+				// HDR: deferred lighting writes linear radiance into SceneColorHDR (tonemap resolve가 백버퍼로 합성).
+				const D3D12_CPU_DESCRIPTOR_HANDLE deferredLitRtv = !SharedResources::SceneColor::sceneColorData.empty()
+					? SharedResources::SceneColor::sceneColorData[roomIdx].rtv
+					: backBufferRtvs_[backbufIdx];
+				DISPLAY_ERROR_DX_VOID(cl->OMSetRenderTargets(1u, &deferredLitRtv, false, nullptr), false);
 				DISPLAY_ERROR_DX_VOID(cl->RSSetViewports(1u, &viewport), false);
 				DISPLAY_ERROR_DX_VOID(cl->RSSetScissorRects(1u, &clRect), false);
 
@@ -2277,6 +2332,23 @@ void GFX::render() {
 		// (Terrain is now rendered into GBuffer above, so it is excluded here)
 		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 		skyboxPipelineDispatcher.drawSingleThreaded();
+
+		// HDR tonemap resolve: SceneColorHDR -> 백버퍼(LDR). HDR 그룹(deferred lighting + skybox)
+		// 직후, LDR 오버레이(BV/파티클/UI) 직전에 수행.
+		if (!SharedResources::SceneColor::sceneColorData.empty()) {
+			CommandContext cmdCtxResolveBarrier{};
+			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxResolveBarrier) && cmdCtxResolveBarrier.cmdList) {
+				DISPLAY_ERROR_DX_HR(cmdCtxResolveBarrier.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cmdCtxResolveBarrier.cmdList->Reset(cmdCtxResolveBarrier.cmdAlloc.Get(), nullptr), false);
+				SharedResources::SceneColor::transitionToRead(roomIdx, cmdCtxResolveBarrier.cmdList.Get());
+				DISPLAY_ERROR_DX_HR(cmdCtxResolveBarrier.cmdList->Close(), false);
+				ID3D12CommandList* resolveBarrierCmds[] = { cmdCtxResolveBarrier.cmdList.Get() };
+				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, resolveBarrierCmds), false);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxResolveBarrier));
+			}
+			tonemapPipelineDispatcher.updateGPUDataSingleThreaded();
+			tonemapPipelineDispatcher.drawSingleThreaded();
+		}
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();

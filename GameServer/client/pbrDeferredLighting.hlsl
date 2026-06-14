@@ -148,9 +148,8 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     
     color = lerp(color, fogColor, computeExponentialHeightFog(posW, camPos, fogDensity, heightFalloff, fogBaseHeight));
     
-    // Reinhard tonemapping + gamma correction
-    color = color / (color + float3(1.0f, 1.0f, 1.0f));
-    color = pow(abs(color), 1.0f / 2.2f);
+    // HDR pipeline: output linear radiance into SceneColorHDR.
+    // Tonemap (Reinhard) + gamma is applied later by the dedicated tonemap-resolve pass.
 
     return float4(color, 1.0f);
 }

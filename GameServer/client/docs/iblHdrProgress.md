@@ -12,9 +12,32 @@ DX12 클라이언트에 **HDR scene-color 파이프라인 + 글로벌 IBL** 도�
 사용자 지시로 **에이전트 팀 운영**. Agent 툴이 team_name/name 미지원 → Lead(메인 세션)가 **백그라운드 워커**를 스폰해 위임하고 task list로 조정. 충돌 핫스팟(`gfx.cpp render()`, `shader.hpp`, `pbrLighting.hlsli`)은 Lead 직접 소유.
 
 ## 현재 repo 상태 (중요)
-- 워커가 **Task #1 (Phase 0 HDR 타깃+tonemap 파이프라인)** 파일들을 **이미 디스크에 작성 완료**(커밋 안 함, 빌드 검증 안 함).
-- **Lead는 아직 어떤 파일도 편집하지 않음.** Task #2/#3 미착수(분석만 완료).
-- 즉 working tree = 원본 + 워커의 Task #1 추가분.
+- **Phase 0 코드 완료 + 빌드 통과**(`x64\Debug\client.exe` 생성, 무해 C4244만). 커밋 안 함.
+- **남은 것: 런타임 "룩 동일" 시각 검증**(실행→before/after 스크린샷). D3D12 상태전이/resolve 샘플링은 빌드로 안 잡히므로 실행 확인 필요.
+- 다음: Phase 1a(IBL 프리컴퓨트) 착수.
+
+### Phase 0 설계 정제 (실행 중 변경 — 중요)
+포트레이트 회귀(로비 포트레이트가 forward `illuminateCSM`을 LDR RT에 렌더; `ui.hlsl`은 톤매핑 없이 표시)를 피하려고 **Phase 0를 Deferred 경로 전용 HDR로 한정**했다.
+- Deferred 경로(기본)에서 forward `illuminateCSM`은 **포트레이트만** 사용 → 손대지 않으면 포트레이트 안전.
+- 그래서 톤매핑 제거는 `pbrDeferredLighting.hlsl` 한 곳만. `illuminateCSM`/`terrain.hlsl`/`illuminate`/forward 경로/포트레이트 **전부 무수정**.
+- **Forward 경로 HDR 누적은 후속**(Phase 0b/2): `applyTonemap` 플래그(forward `PBRShader`/`PBRSkinnedShader` PerFrameData에 uint 추가, 메인=0·포트레이트=1, `illuminateCSM` 말미 조건부 톤매핑)로 처리. forward는 현재 inline-tonemap 유지(룩 동일). Phase 1b에서 forward IBL은 inline-tonemap illuminateCSM에 computeIBL 추가로 동작(포트레이트도 환경광 받음).
+- 알려진 minor: deferred GBuffer 디버그뷰(G키)는 HDR 경로에서 이미 감마인코딩된 값이 resolve에서 한 번 더 톤매핑/감마됨 → 더블감마(개발용·무해, 추후 정리).
+
+### Phase 0 완료 편집 내역
+- `pbrDeferredLighting.hlsl`: Reinhard+gamma 제거(fog lerp 유지, 선형 반환). [Task#2]
+- `gfx.hpp`: `#include "TonemapPipeline.hpp"` + `TonemapPipeline::Resources resourcesTonemapPipeline_{};` 멤버.
+- `gfx.cpp` [Task#3]:
+  - init: `TonemapResolveShader` 등록 + `resourcesTonemapPipeline_.perDrawcallData` init(count=1).
+  - initSharedResources: `SceneColor::addSceneColor`(addGBuffer 직후).
+  - resize: `SceneColor::eraseSceneColor` + `addSceneColor`.
+  - clear 단계(deferred 블록): SceneColor `transitionToWrite` + black clear.
+  - 디스패처 블록: `skyboxRtv`(deferred=SceneColorHDR / forward=백버퍼 경로분기) + `sceneColorSrv` 계산, skybox RTV 교체, `tonemapPipelineDispatcher` 생성(SceneColor SRV→백버퍼).
+  - deferred lighting RTV(2224): `deferredLitRtv`(SceneColorHDR)로 교체.
+  - deferred 경로 skybox 직후·BV 직전: SceneColor `transitionToRead` 배리어 + `tonemapPipelineDispatcher` resolve draw.
+- 워커 Task#1 산출물(SceneColor 네임스페이스, TonemapPipeline, tonemapResolve.hlsl, createTonemapResolveShader, vcxproj 등록)은 그대로 사용.
+
+### (구) 원래 상태 메모
+워커가 Task #1을 디스크에 작성 완료한 상태에서 Lead가 Task #2/#3를 위 내역대로 완료함.
 
 ## 작업 목록 상태 (team `ibl-hdr`)
 - #1 [완료] Phase0 SceneColorHDR 리소스 + tonemap resolve 셰이더/PSO/Dispatcher (워커 산출)
