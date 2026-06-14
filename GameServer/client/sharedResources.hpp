@@ -169,6 +169,44 @@ void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorP
 
 }	// namespace GBuffer
 
+// HDR scene-color render target (R16G16B16A16_FLOAT).
+// The deferred lighting + forward passes render linear HDR radiance here,
+// and a later tonemap-resolve pass reads it (as a bindless SRV) to produce
+// the LDR backbuffer. One set per room.
+struct SceneColorData {
+	Texture color;                       // R16G16B16A16_FLOAT — RTV + bindless SRV
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv;     // OMSetRenderTargets / ClearRenderTargetView 용 (addSceneColor 시 캐싱)
+	D3D12_RESOURCE_STATES curState;      // 리소스 상태 추적 (전환 최적화용)
+	u32t width;
+	u32t height;
+};
+
+namespace SceneColor {
+
+// sceneColorData[roomIdx]: roomIdx번째 방의 HDR scene-color RT. addSceneColor() 전에는 비어 있다.
+extern std::vector<SceneColorData> sceneColorData;
+
+// roomCnt개 방 각각에 대해 width x height 크기의 R16G16B16A16_FLOAT scene-color RT를 생성한다.
+// rtvPool: color RT 1개 × roomCnt, srvTexPool: color SRV 1개 × roomCnt.
+// 초기 상태는 RENDER_TARGET.
+void addSceneColor( ID3D12Device* device, u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+);
+
+// roomIdx번째 scene-color RT를 쓰기 상태(RENDER_TARGET)로 전환한다.
+// PIXEL_SHADER_RESOURCE → RENDER_TARGET (이미 쓰기면 no-op)
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+// roomIdx번째 scene-color RT를 읽기 상태(PIXEL_SHADER_RESOURCE)로 전환한다.
+// RENDER_TARGET → PIXEL_SHADER_RESOURCE (이미 읽기면 no-op)
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+
+// 모든 방의 scene-color 리소스를 해제하고 RTV/SRV 풀 슬롯을 반납한 뒤 sceneColorData를 비운다.
+// 해상도가 바뀔 경우 eraseSceneColor 호출 후 변경된 해상도로 addSceneColor를 다시 호출해야 한다.
+// (호출 전 GPU가 이 리소스들을 더 이상 사용하지 않도록 idle 상태여야 한다.)
+void eraseSceneColor( DescriptorPool& rtvPool, DescriptorPool& srvTexPool );
+
+}	// namespace SceneColor
+
 // 로비 대기실 슬롯 캐릭터를 그리는 오프스크린 포트레이트 렌더 타깃.
 // 가로 아틀라스 1장(cellCount개 셀 × cellW)에 셀별 viewport로 캐릭터를 그린 뒤,
 // color SRV를 UI 슬롯 쿼드에 합성한다. depth는 샘플하지 않으므로 SRV 없이 DSV만 둔다.
@@ -244,6 +282,54 @@ void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
 
 }	// namespace SharedResources::HiZMap
+
+namespace IBL {
+
+// Precomputed image-based-lighting resources. There is a single, scene-wide
+// instance (not per-room): the environment is global, so these are computed
+// once at load time and shared by every room's lighting pass.
+//
+//   irradiance  : 32x32 R16G16B16A16_FLOAT cube — diffuse irradiance convolution.
+//   prefiltered : 128x128 R16G16B16A16_FLOAT cube w/ 5 mips — specular split-sum.
+//   brdfLUT     : 256x256 R16G16_FLOAT 2D — environment BRDF integration.
+//
+// SRVs are bindless (TextureCube pool for the cubes, Texture2D pool for the LUT).
+// UAVs (one per writable mip) are used only by the precompute dispatches.
+struct IBLData {
+	Texture irradiance;     // cube, TextureCube SRV (srvTexCubePool), 1 UAV
+	Texture prefiltered;    // cube, TextureCube SRV (srvTexCubePool), per-mip UAVs
+	Texture brdfLUT;        // 2D,   Texture2D   SRV (srvTexPool),    1 UAV
+
+	// Per-mip UAV pool slot indices / GPU handles for the prefiltered cube.
+	// (createUAV overwrites Texture::idxUav each call, so each mip is recorded here.)
+	std::vector<int>                         prefilteredMipUavIdx;
+	std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> prefilteredMipUavHandles;
+
+	int                         irradianceUavIdx     = -1;
+	D3D12_GPU_DESCRIPTOR_HANDLE irradianceUavHandle  = {};
+	int                         brdfUavIdx           = -1;
+	D3D12_GPU_DESCRIPTOR_HANDLE brdfUavHandle        = {};
+
+	u32t prefilteredMipCount = 0u;
+
+	bool created = false;
+};
+
+// Single scene-wide IBL resource set. Populated by addIBL(), released by eraseIBL().
+extern IBLData iblData;
+
+// Creates the IBL textures (irradiance cube, prefiltered cube, BRDF LUT) and their
+// bindless SRVs + per-mip UAVs. Idempotent guard: a second call without eraseIBL is a no-op.
+// All textures start in D3D12_RESOURCE_STATE_UNORDERED_ACCESS so precomputeIBL can write
+// them directly; precomputeIBL transitions them to PIXEL_SHADER_RESOURCE when done.
+void addIBL( ID3D12Device* device,
+	DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool
+);
+
+// Releases the IBL textures and returns every UAV/SRV pool slot.
+void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool );
+
+}	// namespace SharedResources::IBL
 
 }	// namespace SharedResources
 

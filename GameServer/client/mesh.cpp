@@ -258,6 +258,134 @@ Mesh buildCubeMesh(
     return mesh;
 }
 
+// Procedural UV sphere. 5 vertex attributes for the PBR(Deferred) input layout
+// (Position/Normal/Tangent/Bitangent/UV) + 16-bit indices. Material is a smooth
+// metal with no textures, for inspecting IBL reflections.
+Mesh buildSphereMesh(
+    ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+    Fence& fenceToAssociate, float radius, u32t stacks, u32t slices
+) {
+    constexpr float kPi = 3.14159265358979f;
+
+    std::vector<XMFLOAT3> positions;
+    std::vector<XMFLOAT3> normals;
+    std::vector<XMFLOAT3> tangents;
+    std::vector<XMFLOAT3> bitangents;
+    std::vector<XMFLOAT2> uvs;
+
+    for (u32t i = 0u; i <= stacks; ++i) {
+        const float v     = static_cast<float>(i) / static_cast<float>(stacks);
+        const float theta = v * kPi;            // 0 (top) .. PI (bottom)
+        const float sinT  = std::sin(theta);
+        const float cosT  = std::cos(theta);
+        for (u32t j = 0u; j <= slices; ++j) {
+            const float u    = static_cast<float>(j) / static_cast<float>(slices);
+            const float phi  = u * 2.f * kPi;   // 0 .. 2PI
+            const float sinP = std::sin(phi);
+            const float cosP = std::cos(phi);
+
+            const XMFLOAT3 n = XMFLOAT3(sinT * cosP, cosT, sinT * sinP);
+            positions.emplace_back(n.x * radius, n.y * radius, n.z * radius);
+            normals.emplace_back(n);
+            // tangent along +phi (east); bitangent = cross(normal, tangent)
+            const XMFLOAT3 t = XMFLOAT3(-sinP, 0.f, cosP);
+            tangents.emplace_back(t);
+            bitangents.emplace_back(
+                n.y * t.z - n.z * t.y,
+                n.z * t.x - n.x * t.z,
+                n.x * t.y - n.y * t.x
+            );
+            uvs.emplace_back(u, v);
+        }
+    }
+
+    std::vector<u16t> indices;
+    const u32t ringStride = slices + 1u;
+    for (u32t i = 0u; i < stacks; ++i) {
+        for (u32t j = 0u; j < slices; ++j) {
+            const u16t row0 = static_cast<u16t>(i * ringStride + j);
+            const u16t row1 = static_cast<u16t>((i + 1u) * ringStride + j);
+            // DX back-face cull (CW front). If the sphere ever renders inside-out,
+            // swap the last two indices of each triangle.
+            indices.push_back(row0);
+            indices.push_back(static_cast<u16t>(row0 + 1u));
+            indices.push_back(row1);
+            indices.push_back(static_cast<u16t>(row0 + 1u));
+            indices.push_back(static_cast<u16t>(row1 + 1u));
+            indices.push_back(row1);
+        }
+    }
+
+    // Build a default(GPU) vertex buffer + an upload buffer, record the copy, and
+    // keep the upload buffer alive via the fence until the GPU finishes.
+    auto makeVB = [&](const void* data, std::size_t bytes, const char* name) {
+        auto def = createBufferResource(device, nullptr, bytes, BufferCreationType::VertexBuffer);
+        setD3DName(def.Get(), name);
+        auto upl = createBufferResource(device, data, bytes, BufferCreationType::UploadBuffer);
+        copyResource(cmdList, upl.Get(), def.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        fenceToAssociate.associatedResources_.push_back(std::move(upl));
+        return def;
+    };
+
+    auto vbPosition  = makeVB(positions.data(),  positions.size()  * sizeof(XMFLOAT3), "MetalSphereMesh_VB_Position");
+    auto vbNormal    = makeVB(normals.data(),    normals.size()    * sizeof(XMFLOAT3), "MetalSphereMesh_VB_Normal");
+    auto vbTangent   = makeVB(tangents.data(),   tangents.size()   * sizeof(XMFLOAT3), "MetalSphereMesh_VB_Tangent");
+    auto vbBitangent = makeVB(bitangents.data(), bitangents.size() * sizeof(XMFLOAT3), "MetalSphereMesh_VB_Bitangent");
+    auto vbUV        = makeVB(uvs.data(),        uvs.size()        * sizeof(XMFLOAT2), "MetalSphereMesh_VB_UV");
+
+    auto ib  = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
+    setD3DName(ib.Get(), "MetalSphereMesh_IB");
+    auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
+    copyResource(cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+    fenceToAssociate.associatedResources_.push_back(std::move(ibu));
+
+    auto mesh = Mesh{ .name = "MetalSphereMesh" };
+
+    mesh.vbViews.emplace_back(vbPosition->GetGPUVirtualAddress(),  static_cast<UINT>(positions.size()  * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+    mesh.vbViews.emplace_back(vbNormal->GetGPUVirtualAddress(),    static_cast<UINT>(normals.size()    * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+    mesh.vbViews.emplace_back(vbTangent->GetGPUVirtualAddress(),   static_cast<UINT>(tangents.size()   * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+    mesh.vbViews.emplace_back(vbBitangent->GetGPUVirtualAddress(), static_cast<UINT>(bitangents.size() * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+    mesh.vbViews.emplace_back(vbUV->GetGPUVirtualAddress(),        static_cast<UINT>(uvs.size()        * sizeof(XMFLOAT2)), static_cast<UINT>(sizeof(XMFLOAT2)));
+
+    mesh.subMeshes.emplace_back(
+        /* .name = */ "MetalSphereMesh_SubMesh",
+        /* .ibView = */ D3D12_INDEX_BUFFER_VIEW{
+            .BufferLocation = ib->GetGPUVirtualAddress(),
+            .SizeInBytes    = static_cast<UINT>(indices.size() * sizeof(u16t)),
+            .Format         = DXGI_FORMAT_R16_UINT
+        }
+    );
+
+    auto& matSet = mesh.materialSets.emplace_back(
+        /* .name = */ "MetalSphereMesh_DefaultMaterialSet",
+        /* .materials = */ std::vector<Material>{
+            Material{
+                .constantAlbedo     = XMFLOAT4(0.95f, 0.95f, 0.97f, 1.f),
+                .constantRoughness  = 0.1f,
+                .constantMetallic   = 1.0f,
+                .constantAOStrength = 0.f,
+                .constantEmmisive   = XMFLOAT3(0.f, 0.f, 0.f)
+            }
+        }
+    );
+    auto& mat = matSet.materials[0];
+    mat.mapAlbedo.idxSrv.idxRange = -1;             mat.mapAlbedo.idxUav.idxRange = -1;
+    mat.mapMetallicSmoothness.idxSrv.idxRange = -1; mat.mapMetallicSmoothness.idxUav.idxRange = -1;
+    mat.mapNormal.idxSrv.idxRange = -1;             mat.mapNormal.idxUav.idxRange = -1;
+    mat.mapEmmisive.idxSrv.idxRange = -1;           mat.mapEmmisive.idxUav.idxRange = -1;
+    mat.mapAmbientOcclusion.idxSrv.idxRange = -1;   mat.mapAmbientOcclusion.idxUav.idxRange = -1;
+
+    mesh.vbs.push_back(std::move(vbPosition));   mesh.vbIdxMap.try_emplace("MetalSphereMesh_VB_Position",  0u);
+    mesh.vbs.push_back(std::move(vbNormal));     mesh.vbIdxMap.try_emplace("MetalSphereMesh_VB_Normal",    1u);
+    mesh.vbs.push_back(std::move(vbTangent));    mesh.vbIdxMap.try_emplace("MetalSphereMesh_VB_Tangent",   2u);
+    mesh.vbs.push_back(std::move(vbBitangent));  mesh.vbIdxMap.try_emplace("MetalSphereMesh_VB_Bitangent", 3u);
+    mesh.vbs.push_back(std::move(vbUV));         mesh.vbIdxMap.try_emplace("MetalSphereMesh_VB_UV",        4u);
+    mesh.ibs.push_back(std::move(ib));
+
+    return mesh;
+}
+
 Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap, DescriptorPool& texPool, Fence& fenceToAssociate )
 {
     static const auto positions = std::vector<XMFLOAT3>{

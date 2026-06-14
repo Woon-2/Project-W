@@ -90,6 +90,14 @@ Mesh buildCubeMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+// 절차적 UV 구체 메시를 생성한다 (PBR Deferred용 5속성 Position/Normal/Tangent/Bitangent/UV).
+// 매끄러운 금속 머티리얼(텍스처 없음)을 부여하므로 IBL 반사 확인용으로 적합하다.
+// 업로드 버퍼는 전달된 펜스에 연관되므로, GPU 작업 완료 후 해제된다.
+Mesh buildSphereMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, float radius = 0.5f, u32t stacks = 32u, u32t slices = 32u
+);
+
 // 빌보드를 위한 점 한개짜리 메시를 생성한다.
 // @return Mesh
 Mesh buildPointMesh(

@@ -144,7 +144,8 @@ GBufferOutput PSMain(VSOutput input) {
     }
 
     // --- Pre-compute ambient + emissive (stored in GB2.rgb) ---
-    float3 lightAccum = globalAmbient * albedo.rgb * (1.0f - ao) + emissive;
+    // GB2.rgb holds emissive only; ambient/IBL is computed in the deferred lighting pass (view-dependent specular).
+    float3 lightAccum = emissive;
 
     GBufferOutput o;
     o.gb0 = float4(albedo.rgb, ao);

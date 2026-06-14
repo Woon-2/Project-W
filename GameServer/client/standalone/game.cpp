@@ -723,6 +723,23 @@ void Game::setupStage() {
 	player_->enableBVRendering();
 	goblin_->enableBVRendering();
 
+	// IBL 반사 확인용 금속 구 (StandAlone). GPU에 메시 업로드 후 플레이어 앞에 배치.
+	gfx_.recordTerrainResourceLoad(
+		[this](ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, DescriptorPool&, Fence& fence) {
+			Mesh sphereMesh = buildSphereMesh(device, cmdList, fence, 0.5f, 32u, 32u);
+			metalSphereModel_ = Model{};
+			metalSphereModel_.name = "MetalSphere";
+			metalSphereModel_.meshWithDressXforms.push_back(
+				MeshWithDressXform{ .mesh = std::move(sphereMesh), .dressXform = mu::Mat4x4() });
+		},
+		/*wait=*/ true
+	);
+	metalSphere_ = std::make_shared<Cube>();
+	metalSphere_->setModel(&metalSphereModel_);
+	metalSphere_->setScale(mu::Vec3(1.5f, 1.5f, 1.5f));
+	metalSphere_->setPos(player_->pos() + mu::Vec3(0.f, 1.2f, 3.f));
+	metalSphere_->update(Milliseconds(0), 1.f);   // 정적 객체: renderState_.world 1회 베이크
+
 	setParticle();
 
 	// 전투 시스템에 참가자 등록
@@ -2890,6 +2907,7 @@ void Game::render() {
 	for (auto& g : goblins_) {
 		g->render(gfx_);
 	}
+	if (metalSphere_) metalSphere_->render(gfx_);
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);

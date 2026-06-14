@@ -140,9 +140,10 @@ GBufferOutput PSMain(VSOutput input) {
     }
 
     // 5. Pack GBuffer.
-    // Terrain has no AO map and no emissive; lightAccum = ambient contribution only.
+    // Terrain has no AO map and no emissive. GB2.rgb holds emissive only (= 0);
+    // ambient now comes from IBL in the deferred lighting pass (matches pbrDeferred.hlsl).
     const float ao        = 0.0f;
-    float3 lightAccum     = globalAmbient * albedo;
+    float3 lightAccum     = float3(0.f, 0.f, 0.f);
 
     GBufferOutput o;
     o.gb0 = float4(albedo, ao);

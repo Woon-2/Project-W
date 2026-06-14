@@ -1,0 +1,44 @@
+// Tonemap resolve pass.
+// Reads the HDR scene-color render target (R16G16B16A16_FLOAT) via a bindless
+// SRV index and writes the LDR backbuffer (R8G8B8A8_UNORM).
+// The tonemap curve here is intentionally identical to the one previously baked
+// into pbrDeferredLighting.hlsl (Reinhard + 2.2 gamma), so moving the curve from
+// the lighting pass to this resolve pass is a no-op on final image appearance.
+
+#include "bindless.hlsli"
+
+struct VSOutput {
+    float4 pos : SV_Position;
+    float2 uv  : UV;
+};
+
+// PerDrawcallData (b0). Matches TonemapResolveShader::PerDrawcallData in shader.hpp.
+// idxSceneColor is a bindless index (idxRange, idxResource, idxInArray, idxSampler).
+cbuffer PerDrawcallData : register(b0) {
+    int4 idxSceneColor;
+}
+
+// Fullscreen triangle — no vertex buffer needed.
+// Covers the entire screen with 3 vertices driven by SV_VertexID.
+// (Same scheme as pbrDeferredLighting.hlsl::VSMain.)
+VSOutput VSMain(uint vertexID : SV_VertexID) {
+    // vertexID 0 -> uv(0,0), 1 -> uv(2,0), 2 -> uv(0,2)
+    float2 uv  = float2((vertexID << 1) & 2, vertexID & 2);
+    // NDC: uv(0,0) -> (-1,+1), uv(2,0) -> (+3,+1), uv(0,2) -> (-1,-3)
+    float4 pos = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, 0.0f, 1.0f);
+
+    VSOutput ret;
+    ret.pos = pos;
+    ret.uv  = uv;
+    return ret;
+}
+
+float4 PSMain(VSOutput input) : SV_TARGET {
+    float3 color = sampleBindless(idxSceneColor, input.uv).rgb;
+
+    // Reinhard tonemapping + gamma correction (curve preserved from lighting pass).
+    color = color / (color + float3(2.0f, 2.0f, 2.0f));
+    color = pow(abs(color), 1.0f / 2.2f);
+
+    return float4(color, 1.0f);
+}
