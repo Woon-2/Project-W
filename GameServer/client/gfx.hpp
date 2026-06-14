@@ -485,6 +485,8 @@ private:
 	SkyboxPipeline::CameraData cameraDataSkyboxPipeline_{};
 	// Tonemap resolve pass (HDR scene-color -> LDR backbuffer)
 	TonemapPipeline::Resources resourcesTonemapPipeline_{};
+	// IBL precompute params cbuffer array (7 dispatches: 1 irradiance + 5 prefilter mips + 1 BRDF)
+	ConstantBufferArray iblParamsCBs_{};
 	// Bounding Volume Pipeline
 	std::vector<BVPipeline::DrawEvent> drawEventsBVPipeline_{};
 	BVPipeline::Resources resourcesBVPipeline_{};

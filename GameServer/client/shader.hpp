@@ -60,6 +60,14 @@ ComPtr<ID3D12PipelineState> createHiZCompactShader(ID3D12Device* device, ID3D12R
 ComPtr<ID3D12PipelineState> createHiZCommandShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPrefixSumShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
+// IBL runtime precompute compute shaders (irradiance / specular prefilter / BRDF LUT).
+// All three share the IBLShader::IBLParams cbuffer bound at "PerDrawcallData" (b0)
+// and write to a UAV bound at "DestTex" (u0). The source environment cube is read
+// bindlessly (TextureCubePool + SamplerPool).
+ComPtr<ID3D12PipelineState> createIBLIrradianceShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createIBLPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createIBLBRDFLUTShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
 class RootSig {
@@ -111,6 +119,31 @@ struct DrawIndexedInstancedArgs
 };
 
 // 셰이더별 구조체 ------------------------------------
+// IBLShader — shared cbuffer for the IBL precompute compute shaders.
+// Layout MUST match the "IBLParams" cbuffer (register b0) in iblIrradiance.hlsl /
+// iblPrefilter.hlsl / iblBRDFLUT.hlsl. 48 bytes total.
+//   idxEnv    : BindlessIndex (HLSL int4) — source environment cube SRV
+//   faceRes   : output face / LUT resolution in pixels
+//   mipLevel  : current mip index (prefilter only)
+//   mipCount  : total mip count   (prefilter only)
+//   envIsLDR  : 1 => recover approx HDR from an LDR source
+//   roughness : current mip roughness in [0,1] (prefilter only)
+//   _pad      : padding to 48 bytes
+namespace IBLShader {
+
+struct IBLParams {
+	BindlessIndex idxEnv;
+	u32t          faceRes;
+	u32t          mipLevel;
+	u32t          mipCount;
+	u32t          envIsLDR;
+	float         roughness;
+	XMFLOAT3      _pad;
+};
+static_assert(sizeof(IBLParams) == 48u, "IBLShader::IBLParams must match the 48-byte HLSL IBLParams cbuffer.");
+
+}	// namespace IBLShader
+
 // SampleShader
 namespace SampleShader {
 

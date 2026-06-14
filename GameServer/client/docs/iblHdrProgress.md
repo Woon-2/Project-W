@@ -12,9 +12,10 @@ DX12 클라이언트에 **HDR scene-color 파이프라인 + 글로벌 IBL** 도�
 사용자 지시로 **에이전트 팀 운영**. Agent 툴이 team_name/name 미지원 → Lead(메인 세션)가 **백그라운드 워커**를 스폰해 위임하고 task list로 조정. 충돌 핫스팟(`gfx.cpp render()`, `shader.hpp`, `pbrLighting.hlsli`)은 Lead 직접 소유.
 
 ## 현재 repo 상태 (중요)
-- **Phase 0 코드 완료 + 빌드 통과**(`x64\Debug\client.exe` 생성, 무해 C4244만). 커밋 안 함.
-- **남은 것: 런타임 "룩 동일" 시각 검증**(실행→before/after 스크린샷). D3D12 상태전이/resolve 샘플링은 빌드로 안 잡히므로 실행 확인 필요.
-- 다음: Phase 1a(IBL 프리컴퓨트) 착수.
+- **Phase 0 (Deferred HDR) 완료 + 빌드 통과.** 커밋 안 함.
+- **Phase 1a (IBL 프리컴퓨트) 완료 + 빌드 통과.** IBL 맵(irradiance/prefiltered/brdfLUT)이 로드 시 생성됨. **단 아직 조명에 미사용**(Phase 1b가 연결). 즉 지금 실행해도 시각 변화 없음(로드 시 프리컴퓨트만 추가 실행).
+- **다음 = Phase 1b (Deferred IBL 셰이딩 통합)** — 미착수. 아래 "Phase 1b 배선 계획"대로 편집하면 됨. 이게 실제 시각 payoff.
+- 미검증: 런타임 "룩 동일"(Phase 0) + IBL 맵 시각(Phase 1a) — 사용자가 직접 실행 검증 예정.
 
 ### Phase 0 설계 정제 (실행 중 변경 — 중요)
 포트레이트 회귀(로비 포트레이트가 forward `illuminateCSM`을 LDR RT에 렌더; `ui.hlsl`은 톤매핑 없이 표시)를 피하려고 **Phase 0를 Deferred 경로 전용 HDR로 한정**했다.
@@ -147,6 +148,103 @@ TonemapPipeline::Dispatcher(
 - `SharedResources::Portrait` RT 포맷 + UI 포트레이트 합성 경로(포트레이트 회귀 판정용) — **Task#2 착수 전 필수**.
 - gfx.cpp Resources init 정확한 라인(L490-510 Skybox 패턴), gfx.hpp Resources 멤버 선언 위치 + 파이프라인 include 위치.
 - forward PBR/PBRSkinned/Terrain PerFrameData 빌드/스테이징 위치(Phase1b #7/#9).
+
+## Phase 1a 진행 중 (현재 위치)
+- **IBL 컴퓨트 셰이더 3종 = Lead가 작성 완료**: `iblIrradiance.hlsl`(cosine convolution), `iblPrefilter.hlsl`(GGX importance, 256 samples), `iblBRDFLUT.hlsl`(split-sum, k=rough²/2). D3D 큐브 basis(+X,-X,+Y,-Y,+Z,-Z), GL Y-flip 없음, envIsLDR 역Reinhard 토글. 공통 계약: cbuffer `IBLParams`@b0(48B: int4 idxEnv/uint faceRes/mipLevel/mipCount/envIsLDR/float roughness/float3 pad), 출력 UAV@u0("DestTex": 큐브=RWTexture2DArray<float4> / LUT=RWTexture2D<float2>), env=bindless `sampleLevelBindlessCube`. numthreads(8,8,1), 큐브 dispatch z=6.
+- **C++ 플러밍 = ibl-compute 워커 진행 중**(백그라운드): shader.hpp/cpp(IBLShader::IBLParams struct + create*Shader 3종 PSO), SharedResources::IBL(irradiance RGBA16F 32²/prefiltered RGBA16F 128² 5밉/brdfLUT RG16F 256², 큐브 밉 UAV=TEXTURE2DARRAY 6슬라이스/SRV=TEXTURECUBE), iblPrecomputePipeline.{hpp,cpp}(precomputeIBL — hiZPassCompute idiom, LoadFence), vcxproj 등록. **gfx.cpp/gfx.hpp는 안 건드림.** 워커가 빌드 검증까지 수행.
+
+### Task #6 (Lead) 배선 계획 — 워커 완료 후
+- `GFX::init`(~L309 셰이더 등록부): IBL 컴퓨트 PSO 3종 try_emplace + `iblParamsCBs_ = createConstantBufferArray(device, sizeof(IBLShader::IBLParams), 7, 1, "IBL_Params")`. gfx.hpp에 `ConstantBufferArray iblParamsCBs_;` 멤버.
+- `initSharedResources`(addSceneColor 근처): `SharedResources::IBL::addIBL(device, uavPool_, srvTexCubePool_, srvTexPool_)`.
+- **`loadRequestedAssets` 끝**(L1390 `waitOnFence("LoadFence")` 직후 ~ L1394 `requestsSkyboxLoad_.clear()` 이전)에 `precomputeIBL(...)` 1회 호출. 이 시점에 스카이박스 큐브 **데이터 상주**(LoadFence 완료) + `requestsSkyboxLoad_[0].pDest`(로드된 `Skybox`)로 `texSkybox.idxSrv`/`.res` 접근. envCurState=워커 보고값(loadTexture 후 상태), envIsLDR=true(현재 LDR), descriptorHeaps={srvCbvUavHeap_.heap, samHeap_.heap}.
+- IBL은 정적(해상도 무관) → **resize 무수정**.
+- **주의:** 워커 빌드 검증 중에는 gfx.cpp에 워커 함수 호출 추가 금지(미정의 참조로 워커 빌드 깨짐). 워커 완료 통지 후 배선.
+
+## Phase 1b 배선 계획 (재개 시 바로 실행) — Deferred IBL 셰이딩
+
+목표: deferred lighting에서 상수 ambient를 IBL로 교체. GB2.rgb=emissive 전용으로 변경. 시각 payoff 단계.
+
+**IBL 리소스 API(워커 산출, 확인됨):** `SharedResources::IBL::iblData.{irradiance,prefiltered,brdfLUT}.idxSrv`(BindlessIndex), `.prefilteredMipCount`(=5). 이미 PIXEL_SHADER_RESOURCE 상태.
+
+**편집 1 — `pbrLighting.hlsli` 끝(현재 L577 `#endif // DEFERRED_LIGHTING_PASS` 뒤)에 추가:**
+IBL 함수는 cbuffer 전역(idxIrradiance 등)을 참조하므로 `#ifdef IBL_ENABLED` 가드(이 매크로 정의한 셰이더만 컴파일). N/V는 **월드 공간**. AO 규약은 기존과 동일하게 `(1-ao)`(ao=0→차폐 없음).
+```hlsl
+#ifdef IBL_ENABLED
+float3 fresnelSchlickRoughness(float cosTheta, float3 F0, float roughness) {
+    float3 r = max(float3(1.0f - roughness, 1.0f - roughness, 1.0f - roughness), F0);
+    return F0 + (r - F0) * pow(saturate(1.0f - cosTheta), 5.0f);
+}
+// N, V: world-space. ao: 0=no occlusion (engine convention) -> multiply by (1-ao).
+float3 computeIBL(float3 N, float3 V, float3 albedo, float roughness, float metallic, float ao) {
+    float  NdotV = max(dot(N, V), 0.0f);
+    float3 R     = reflect(-V, N);
+    float3 F0    = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metallic);
+    float3 kS    = fresnelSchlickRoughness(NdotV, F0, roughness);
+    float3 kD    = (1.0f - kS) * (1.0f - metallic);
+    float3 irradiance = sampleBindlessCube(idxIrradiance, N).rgb;
+    float3 diffuse    = irradiance * albedo;
+    float  maxMip     = float(max(prefilteredMipCount, 1u) - 1u);
+    float3 prefiltered = sampleLevelBindlessCube(idxPrefiltered, R, roughness * maxMip).rgb;
+    float2 brdf       = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
+    float3 specular   = prefiltered * (F0 * brdf.x + brdf.y);
+    return (kD * diffuse + specular) * (1.0f - ao) * iblIntensity;
+}
+#endif
+```
+
+**편집 2 — `pbrDeferredLighting.hlsl`:**
+- cbuffer 끝(L51 `float _pad2;` 다음, L52 `}` 앞)에 IBL 필드 추가:
+```hlsl
+    // IBL
+    int4  idxIrradiance;
+    int4  idxPrefiltered;
+    int4  idxBRDFLUT;
+    uint  prefilteredMipCount;
+    float iblIntensity;
+    float2 _iblPad;
+```
+- L62 `#include "pbrLighting.hlsli"` **앞**에 `#define IBL_ENABLED` 추가.
+- PSMain(L138-143): GB2.rgb는 이제 emissive 전용. computeIBL 가산:
+```hlsl
+    float3 directLight = illuminateFromGBuffer(posV, posW, normalV, normalW, albedo, roughness, metallic, ao);
+    float3 Vworld = normalize(camPos - posW);
+    float3 ibl = computeIBL(normalW, Vworld, albedo, roughness, metallic, ao);
+    float3 color = directLight + ibl + precompLight;   // precompLight = emissive only now
+```
+(fog/return L145-154는 그대로.)
+
+**편집 3 — `shader.hpp` `PBRDeferredLightingShader::PerFrameData`(struct 시작 ~L942):**
+struct 끝(camPos XMFLOAT3 + _pad2 float 뒤)에 HLSL과 동일 추가(16B 정렬):
+```cpp
+    BindlessIndex idxIrradiance;
+    BindlessIndex idxPrefiltered;
+    BindlessIndex idxBRDFLUT;
+    u32t          prefilteredMipCount;
+    float         iblIntensity;
+    XMFLOAT2      _iblPad;
+```
+(재개 시 struct 끝 위치 정확히 읽고 추가. HLSL cbuffer와 바이트 동일 유지.)
+
+**편집 4 — `pbrDeferred.hlsl` L147 (geometry pass, GB2 emissive 전용화):**
+`float3 lightAccum = globalAmbient * albedo.rgb * (1.0f - ao) + emissive;` → `float3 lightAccum = emissive;`
+(GB2.a=roughness 불변. globalAmbient는 이제 deferred에서 미사용이나 cbuffer 필드는 유지.)
+주의: GBUF_DEBUG_LIGHTACCUM 디버그뷰는 이제 emissive만 표시(무해).
+
+**편집 5 — `gfx.cpp` deferred lighting PerFrameData 빌드(anchor: `lpfd.idxSkybox = skyboxIdxSrv;`) 뒤에 추가:**
+```cpp
+lpfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
+lpfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
+lpfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
+lpfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
+lpfd.iblIntensity        = 1.0f;
+```
+
+**빌드/검증:** MSBuild client(/p:SolutionDir). 실행 시 금속이 환경 반사, 유전체가 irradiance 받음. iblIntensity로 강도 조절. envIsLDR=true라 LDR 근사(HDR HDRI 확보 전).
+
+### Phase 1b-forward + Phase 2 (후속)
+- Forward IBL: pbr.hlsl/pbrSkinned.hlsl(illuminateCSM)에 computeIBL 추가 + PBRShader/PBRSkinnedShader PerFrameData에 IBL 필드 + #define IBL_ENABLED + gfx.cpp forward PerFrameData 스테이징. illuminateCSM은 inline-tonemap이라 ambient를 computeIBL로 교체(포트레이트도 환경광 받음). Terrain도 동일.
+- Forward HDR 누적(applyTonemap 플래그) — 별개 후속.
+- Phase 2: 디버그뷰(irradiance/specular/BRDF), iblIntensity 튜닝, ACES/bloom 옵션, HDR HDRI 에셋, docs/iblArchitecture.md, CODE_INDEX 갱신.
 
 ## Phase 1 요약 (나중)
 - 1a: `iblIrradiance/iblPrefilter/iblBRDFLUT.hlsl`(컴퓨트, RWTexture2DArray 큐브면, D3D basis·GL Y-flip 금지, envIsLDR 역톤매핑 토글), shader.cpp PSO(createHiZ*Shader 패턴), `SharedResources::IBL`(irradiance RGBA16F 32²/prefiltered RGBA16F 128² 5밉/brdfLUT RG16F 256², 큐브 밉 UAV=TEXTURE2DARRAY, HiZMap UAV 패턴 sharedResources.cpp:1023), `iblPrecomputePipeline`(hiZPassCompute idiom pbrDeferredSkinnedPipeline.cpp:283-421, LoadFence). 트리거: loadRequestedAssets skybox 로드(L1277) 직후.

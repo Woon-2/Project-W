@@ -283,6 +283,54 @@ void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12Comman
 
 }	// namespace SharedResources::HiZMap
 
+namespace IBL {
+
+// Precomputed image-based-lighting resources. There is a single, scene-wide
+// instance (not per-room): the environment is global, so these are computed
+// once at load time and shared by every room's lighting pass.
+//
+//   irradiance  : 32x32 R16G16B16A16_FLOAT cube — diffuse irradiance convolution.
+//   prefiltered : 128x128 R16G16B16A16_FLOAT cube w/ 5 mips — specular split-sum.
+//   brdfLUT     : 256x256 R16G16_FLOAT 2D — environment BRDF integration.
+//
+// SRVs are bindless (TextureCube pool for the cubes, Texture2D pool for the LUT).
+// UAVs (one per writable mip) are used only by the precompute dispatches.
+struct IBLData {
+	Texture irradiance;     // cube, TextureCube SRV (srvTexCubePool), 1 UAV
+	Texture prefiltered;    // cube, TextureCube SRV (srvTexCubePool), per-mip UAVs
+	Texture brdfLUT;        // 2D,   Texture2D   SRV (srvTexPool),    1 UAV
+
+	// Per-mip UAV pool slot indices / GPU handles for the prefiltered cube.
+	// (createUAV overwrites Texture::idxUav each call, so each mip is recorded here.)
+	std::vector<int>                         prefilteredMipUavIdx;
+	std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> prefilteredMipUavHandles;
+
+	int                         irradianceUavIdx     = -1;
+	D3D12_GPU_DESCRIPTOR_HANDLE irradianceUavHandle  = {};
+	int                         brdfUavIdx           = -1;
+	D3D12_GPU_DESCRIPTOR_HANDLE brdfUavHandle        = {};
+
+	u32t prefilteredMipCount = 0u;
+
+	bool created = false;
+};
+
+// Single scene-wide IBL resource set. Populated by addIBL(), released by eraseIBL().
+extern IBLData iblData;
+
+// Creates the IBL textures (irradiance cube, prefiltered cube, BRDF LUT) and their
+// bindless SRVs + per-mip UAVs. Idempotent guard: a second call without eraseIBL is a no-op.
+// All textures start in D3D12_RESOURCE_STATE_UNORDERED_ACCESS so precomputeIBL can write
+// them directly; precomputeIBL transitions them to PIXEL_SHADER_RESOURCE when done.
+void addIBL( ID3D12Device* device,
+	DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool
+);
+
+// Releases the IBL textures and returns every UAV/SRV pool slot.
+void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool );
+
+}	// namespace SharedResources::IBL
+
 }	// namespace SharedResources
 
 #endif	// __sharedResources_HPP

@@ -1176,4 +1176,156 @@ void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12Comman
 
 }	// namespace SharedResources::HiZMap
 
+namespace IBL {
+
+IBLData iblData;
+
+namespace {
+
+// Creates a cubemap-capable Texture2D (DepthOrArraySize = 6) with the requested mip
+// count, in the UNORDERED_ACCESS state. createTexture() in gfxUtil only makes
+// single-slice Tex2D resources, so the committed resource is built directly here.
+Texture createCubeTextureUAV( ID3D12Device* device, u32t res, u32t mips, DXGI_FORMAT format ) {
+	Texture tex{};
+
+	const auto desc = D3D12_RESOURCE_DESC{
+		.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment        = 0u,
+		.Width            = res,
+		.Height           = res,
+		.DepthOrArraySize = 6u,
+		.MipLevels        = static_cast<UINT16>(mips),
+		.Format           = format,
+		.SampleDesc       = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+	};
+
+	const auto heapProps = D3D12_HEAP_PROPERTIES{ .Type = D3D12_HEAP_TYPE_DEFAULT };
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateCommittedResource(
+			&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+			__uuidof(ID3D12Resource), &tex.res
+		), false
+	);
+
+	return tex;
+}
+
+}	// anonymous namespace
+
+void addIBL( ID3D12Device* device,
+	DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool
+) {
+	if (iblData.created) return;
+
+	constexpr DXGI_FORMAT cubeFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	constexpr DXGI_FORMAT lutFormat  = DXGI_FORMAT_R16G16_FLOAT;
+
+	constexpr u32t irradianceRes  = 32u;
+	constexpr u32t prefilteredRes = 128u;
+	constexpr u32t prefilteredMip = 5u;   // 128, 64, 32, 16, 8
+	constexpr u32t brdfRes        = 256u;
+
+	// --- Irradiance cube (single mip) ---
+	iblData.irradiance = createCubeTextureUAV( device, irradianceRes, 1u, cubeFormat );
+	setD3DName(iblData.irradiance.res.Get(), "IBL_Irradiance");
+
+	createSRV( device, iblData.irradiance, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = cubeFormat,
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.TextureCube = D3D12_TEXCUBE_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexCubePool );
+	iblData.irradiance.idxSrv.idxRange   = etoi(Texture::Type::TexCube);
+	iblData.irradiance.idxSrv.idxSampler = etoi(Samplers::TrilinearClamp);
+
+	createUAV( device, iblData.irradiance, D3D12_UNORDERED_ACCESS_VIEW_DESC{
+		.Format = cubeFormat,
+		.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY,
+		.Texture2DArray = D3D12_TEX2D_ARRAY_UAV{
+			.MipSlice = 0u, .FirstArraySlice = 0u, .ArraySize = 6u
+		}
+	}, uavPool );
+	iblData.irradianceUavIdx    = iblData.irradiance.idxUav.idxResource;
+	iblData.irradianceUavHandle = uavPool.gpuHandle(iblData.irradianceUavIdx);
+
+	// --- Prefiltered specular cube (per-mip UAVs) ---
+	iblData.prefiltered = createCubeTextureUAV( device, prefilteredRes, prefilteredMip, cubeFormat );
+	setD3DName(iblData.prefiltered.res.Get(), "IBL_Prefiltered");
+
+	createSRV( device, iblData.prefiltered, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = cubeFormat,
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.TextureCube = D3D12_TEXCUBE_SRV{ .MostDetailedMip = 0u, .MipLevels = prefilteredMip }
+	}, srvTexCubePool );
+	iblData.prefiltered.idxSrv.idxRange   = etoi(Texture::Type::TexCube);
+	iblData.prefiltered.idxSrv.idxSampler = etoi(Samplers::TrilinearClamp);
+
+	iblData.prefilteredMipCount = prefilteredMip;
+	iblData.prefilteredMipUavIdx.reserve(prefilteredMip);
+	iblData.prefilteredMipUavHandles.reserve(prefilteredMip);
+	for (u32t m = 0u; m < prefilteredMip; ++m) {
+		createUAV( device, iblData.prefiltered, D3D12_UNORDERED_ACCESS_VIEW_DESC{
+			.Format = cubeFormat,
+			.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY,
+			.Texture2DArray = D3D12_TEX2D_ARRAY_UAV{
+				.MipSlice = m, .FirstArraySlice = 0u, .ArraySize = 6u
+			}
+		}, uavPool );
+		// createUAV overwrites idxUav.idxResource each call; record each mip's slot.
+		iblData.prefilteredMipUavIdx.push_back( iblData.prefiltered.idxUav.idxResource );
+		iblData.prefilteredMipUavHandles.push_back( uavPool.gpuHandle(iblData.prefiltered.idxUav.idxResource) );
+	}
+
+	// --- BRDF integration LUT (Texture2D) ---
+	iblData.brdfLUT = createTexture( device, brdfRes, brdfRes, lutFormat,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	);
+	setD3DName(iblData.brdfLUT.res.Get(), "IBL_BRDFLUT");
+
+	createSRV( device, iblData.brdfLUT, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = lutFormat,
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool );
+	iblData.brdfLUT.idxSrv.idxRange   = etoi(Texture::Type::Tex2D);
+	iblData.brdfLUT.idxSrv.idxSampler = etoi(Samplers::BilinearClamp);
+
+	createUAV( device, iblData.brdfLUT, D3D12_UNORDERED_ACCESS_VIEW_DESC{
+		.Format = lutFormat,
+		.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+		.Texture2D = D3D12_TEX2D_UAV{ .MipSlice = 0u }
+	}, uavPool );
+	iblData.brdfUavIdx    = iblData.brdfLUT.idxUav.idxResource;
+	iblData.brdfUavHandle = uavPool.gpuHandle(iblData.brdfUavIdx);
+
+	iblData.created = true;
+}
+
+void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool ) {
+	if (!iblData.created) return;
+
+	// SRVs
+	srvTexCubePool.free(iblData.irradiance.idxSrv.idxResource);
+	srvTexCubePool.free(iblData.prefiltered.idxSrv.idxResource);
+	srvTexPool.free(iblData.brdfLUT.idxSrv.idxResource);
+
+	// UAVs
+	uavPool.free(iblData.irradianceUavIdx);
+	for (int uavIdx : iblData.prefilteredMipUavIdx) {
+		uavPool.free(uavIdx);
+	}
+	uavPool.free(iblData.brdfUavIdx);
+
+	iblData = IBLData{};
+}
+
+}	// namespace SharedResources::IBL
+
 }	// namespace SharedResources

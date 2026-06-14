@@ -1,5 +1,6 @@
 ﻿#include "pch.hpp"
 #include "gfx.hpp"
+#include "iblPrecomputePipeline.hpp"
 #include "errorHandling.hpp"
 
 GFX::HiZStats GFX::getHiZStats() const {
@@ -308,6 +309,9 @@ void GFX::init() {
 	shaders_.try_emplace("PBRDeferredSkinnedIndirectGBufferShader", createPBRDeferredSkinnedIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TonemapResolveShader",            createTonemapResolveShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("IBLIrradianceShader",             createIBLIrradianceShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("IBLPrefilterShader",              createIBLPrefilterShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("IBLBRDFLUTShader",                createIBLBRDFLUTShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainDeferredGBufferShader",    createTerrainDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("HiZOccluderShader", createHiZOccluderShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("HiZMapShader", createHiZMapShader(device_.Get(), defaultRootSig.get()));
@@ -504,6 +508,10 @@ void GFX::createSwapChain() {
 	// Tonemap resolve pass ----
 	resourcesTonemapPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(TonemapResolveShader::PerDrawcallData), 1u, backBuffers_.size(), "Tonemap_PerDrawcallData"
+	);
+	// IBL precompute params (7 dispatches, room count 1 — load-time static)
+	iblParamsCBs_ = createConstantBufferArray(
+		device_.Get(), sizeof(IBLShader::IBLParams), 7u, 1u, "IBL_Params"
 	);
 	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
@@ -1188,6 +1196,9 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
 		backBuffers_.size(), rtvPool_, srvTexPool_
 	);
+	// IBL 타깃 리소스 생성 (irradiance/prefiltered 큐브 + BRDF LUT). 정적(환경 의존),
+	// 스카이박스 큐브 상주 후 loadRequestedAssets에서 precomputeIBL이 채운다.
+	SharedResources::IBL::addIBL(device_.Get(), uavPool_, srvTexCubePool_, srvTexPool_);
 	// hi-z map 생성 (hi-z occlusion culling용)
 	SharedResources::HiZMap::addHiZMaps(
 		device_.Get(), static_cast<u32t>(gClientRect.right  - gClientRect.left),
@@ -1388,6 +1399,28 @@ void GFX::loadRequestedAssets() {
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
 	signalFence("LoadFence");
 	waitOnFence("LoadFence");
+
+	// IBL 프리컴퓨트: 스카이박스 큐브 데이터가 상주(LoadFence 완료)한 직후 1회 실행.
+	// requestsSkyboxLoad_가 아직 비워지지 않아 로드된 Skybox(texSkybox)에 접근 가능.
+	if (!requestsSkyboxLoad_.empty() && requestsSkyboxLoad_.front().pDest
+		&& requestsSkyboxLoad_.front().pDest->texSkybox.res) {
+		const auto& skybox = *requestsSkyboxLoad_.front().pDest;
+		precomputeIBL(
+			device_.Get(),
+			skybox.texSkybox.idxSrv,
+			skybox.texSkybox.res.Get(),
+			D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,   // loadTexture leaves the env cube here
+			rootSigs_.at("DefaultRootSignature").get(),
+			shaders_.at("IBLIrradianceShader").Get(),
+			shaders_.at("IBLPrefilterShader").Get(),
+			shaders_.at("IBLBRDFLUTShader").Get(),
+			{ srvCbvUavHeap_.heap, samHeap_.heap },
+			srvTexPool_, srvTexArrayPool_, srvTexCubePool_, samPool_, cmpSamPool_,
+			iblParamsCBs_,
+			cmdQ_.Get(), cmdListPool_, fences_.at("LoadFence"),
+			/*envIsLDR=*/ true
+		);
+	}
 
 	// 요청 비우기
 	requestsModelLoad_.clear();

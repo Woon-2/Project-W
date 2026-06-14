@@ -3059,6 +3059,75 @@ ComPtr<ID3D12PipelineState> createPrefixSumShader(ID3D12Device* device, ID3D12Ro
 	return ret;
 }
 
+ComPtr<ID3D12PipelineState> createIBLIrradianceShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	// Compile the IBL diffuse-irradiance convolution compute shader.
+	auto csCode = compileShader("iblIrradiance.hlsl", nullptr, "CSMain", "cs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto psoDesc = D3D12_COMPUTE_PIPELINE_STATE_DESC {
+		.pRootSignature = rootSig,
+		.CS = csCode.byteCode,
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateComputePipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "IBLIrradianceShader");
+
+	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createIBLPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	// Compile the IBL specular prefilter (split-sum) compute shader.
+	auto csCode = compileShader("iblPrefilter.hlsl", nullptr, "CSMain", "cs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto psoDesc = D3D12_COMPUTE_PIPELINE_STATE_DESC {
+		.pRootSignature = rootSig,
+		.CS = csCode.byteCode,
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateComputePipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "IBLPrefilterShader");
+
+	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createIBLBRDFLUTShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	// Compile the IBL BRDF integration LUT compute shader.
+	auto csCode = compileShader("iblBRDFLUT.hlsl", nullptr, "CSMain", "cs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto psoDesc = D3D12_COMPUTE_PIPELINE_STATE_DESC {
+		.pRootSignature = rootSig,
+		.CS = csCode.byteCode,
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateComputePipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "IBLBRDFLUTShader");
+
+	return ret;
+}
+
 void RootSig::addParam(const std::string& paramName,
 	UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc
 ) {
