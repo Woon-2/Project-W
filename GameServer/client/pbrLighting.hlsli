@@ -575,3 +575,38 @@ float3 illuminateFromGBuffer(
     return color * calcCSMShadow(posV, posW, normalW, rawNdotl);
 }
 #endif // DEFERRED_LIGHTING_PASS
+
+// ---------------------------------------------------------------------------
+// Image Based Lighting (split-sum). Only compiled where the including shader
+// defines IBL_ENABLED and declares idxIrradiance / idxPrefiltered / idxBRDFLUT /
+// prefilteredMipCount / iblIntensity in its cbuffer (before this include).
+// N, V are WORLD-space. ao follows the engine convention (0 = no occlusion),
+// so the ambient term is scaled by (1 - ao).
+// ---------------------------------------------------------------------------
+#ifdef IBL_ENABLED
+float3 fresnelSchlickRoughness(float cosTheta, float3 F0, float roughness) {
+    float3 r = max(float3(1.f - roughness, 1.f - roughness, 1.f - roughness), F0);
+    return F0 + (r - F0) * pow(saturate(1.f - cosTheta), 5.f);
+}
+
+float3 computeIBL(float3 N, float3 V, float3 albedo, float roughness, float metallic, float ao) {
+    float  NdotV = max(dot(N, V), 0.f);
+    float3 R     = reflect(-V, N);
+
+    float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metallic);
+    float3 kS = fresnelSchlickRoughness(NdotV, F0, roughness);
+    float3 kD = (1.f - kS) * (1.f - metallic);
+
+    // Diffuse irradiance.
+    float3 irradiance = sampleBindlessCube(idxIrradiance, N).rgb;
+    float3 diffuse    = irradiance * albedo;
+
+    // Specular prefiltered reflection + BRDF LUT (split-sum).
+    float  maxMip      = float(max(prefilteredMipCount, 1u) - 1u);
+    float3 prefiltered = sampleLevelBindlessCube(idxPrefiltered, R, roughness * maxMip).rgb;
+    float2 brdf        = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
+    float3 specular    = prefiltered * (F0 * brdf.x + brdf.y);
+
+    return (kD * diffuse + specular) * (1.f - ao) * iblIntensity;
+}
+#endif // IBL_ENABLED

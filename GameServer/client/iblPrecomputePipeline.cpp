@@ -85,10 +85,27 @@ void precomputeIBL(
 	DISPLAY_ERROR_DX_VOID(cmdList->SetComputeRootDescriptorTable(paramSamPool,      samPool.gpuHandle(0)),      false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetComputeRootDescriptorTable(paramCmpSamPool,   cmpSamPool.gpuHandle(0)),   false);
 
+	// Transition helper covering ALL subresources. Cubemaps (6 faces × mips) and mip
+	// chains have many subresources; transitionResourceState() only touches subresource 0,
+	// leaving the rest in the wrong state (RESOURCE_BARRIER_BEFORE_AFTER_MISMATCH).
+	auto barrierAll = [&](ID3D12Resource* res, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
+		auto b = D3D12_RESOURCE_BARRIER{
+			.Type  = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+			.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+			.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+				.pResource   = res,
+				.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+				.StateBefore = before,
+				.StateAfter  = after
+			}
+		};
+		cmdList->ResourceBarrier(1u, &b);
+	};
+
 	// --- Transition the source environment cube to a compute-readable SRV state ---
+	// Freshly loaded textures (loadDDS) are left in COPY_DEST; transition all subresources.
 	if (envCurState != D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
-		transitionResourceState(cmdList, envCubeRes,
-			envCurState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		barrierAll(envCubeRes, envCurState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
 
 	const u32t envIsLDRu = envIsLDR ? 1u : 0u;
@@ -178,17 +195,13 @@ void precomputeIBL(
 		uavBarrier(cmdList, iblData.brdfLUT.res.Get());
 	}
 
-	// --- Transition outputs UNORDERED_ACCESS -> PIXEL_SHADER_RESOURCE ---
-	transitionResourceState(cmdList, iblData.irradiance.res.Get(),
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	transitionResourceState(cmdList, iblData.prefiltered.res.Get(),
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	transitionResourceState(cmdList, iblData.brdfLUT.res.Get(),
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	// --- Transition outputs UNORDERED_ACCESS -> PIXEL_SHADER_RESOURCE (all subresources) ---
+	barrierAll(iblData.irradiance.res.Get(),  D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	barrierAll(iblData.prefiltered.res.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	barrierAll(iblData.brdfLUT.res.Get(),     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	// --- Restore the environment cube to PIXEL_SHADER_RESOURCE ---
-	transitionResourceState(cmdList, envCubeRes,
-		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	// --- Restore the environment cube to PIXEL_SHADER_RESOURCE (all subresources) ---
+	barrierAll(envCubeRes, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	// --- Submit and synchronize via the load fence (one-shot, blocking) ---
 	auto hrClose = cmdList->Close();

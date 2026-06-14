@@ -970,6 +970,13 @@ struct PerFrameData {
     float _pad1;
 	XMFLOAT3 camPos;
 	float _pad2;
+	// IBL
+	BindlessIndex idxIrradiance;
+	BindlessIndex idxPrefiltered;
+	BindlessIndex idxBRDFLUT;
+	u32t          prefilteredMipCount;
+	float         iblIntensity;
+	XMFLOAT2      _iblPad;
 };
 
 }	// namespace PBRDeferredLightingShader

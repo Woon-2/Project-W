@@ -1409,7 +1409,7 @@ void GFX::loadRequestedAssets() {
 			device_.Get(),
 			skybox.texSkybox.idxSrv,
 			skybox.texSkybox.res.Get(),
-			D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,   // loadTexture leaves the env cube here
+			D3D12_RESOURCE_STATE_COPY_DEST,   // loadDDS leaves the env cube in COPY_DEST (no read-state transition)
 			rootSigs_.at("DefaultRootSignature").get(),
 			shaders_.at("IBLIrradianceShader").Get(),
 			shaders_.at("IBLPrefilterShader").Get(),
@@ -1418,7 +1418,10 @@ void GFX::loadRequestedAssets() {
 			srvTexPool_, srvTexArrayPool_, srvTexCubePool_, samPool_, cmpSamPool_,
 			iblParamsCBs_,
 			cmdQ_.Get(), cmdListPool_, fences_.at("LoadFence"),
-			/*envIsLDR=*/ true
+			// envIsLDR=false: 현재 환경맵이 LDR이지만 역Reinhard(c/(1-c))가 하늘의 1.0 근처
+			// 채널을 폭발적으로 증폭해 과도한 파란 틴트를 유발하므로, 원본 LDR 값을 그대로 쓴다.
+			// (진짜 HDR HDRI 확보 시 자연스럽게 HDR 레인지 확보 → 이 플래그 무관.)
+			/*envIsLDR=*/ false
 		);
 	}
 
@@ -1616,15 +1619,21 @@ void GFX::render() {
 		false
 	);
 
-	FLOAT clearColor[4] = { 0.25f, 0.3f, 0.85f, 1.f };
-	DISPLAY_ERROR_DX_VOID(
-		cmdListClear->ClearRenderTargetView(backBufferRtvs_[backbufIdx], clearColor, 0u, nullptr),
-		false
-	);
-	
+	// 백버퍼는 swapchain 리소스라 optimized clear value가 없어 ClearRenderTargetView가
+	// 경고(#820)를 낸다. Deferred 경로는 tonemap resolve가 백버퍼 전체를 fullscreen으로
+	// 덮어쓰므로 클리어가 불필요 → forward 경로에서만 클리어한다.
+	if (renderPath_ == RenderPath::Forward) {
+		FLOAT clearColor[4] = { 0.25f, 0.3f, 0.85f, 1.f };
+		DISPLAY_ERROR_DX_VOID(
+			cmdListClear->ClearRenderTargetView(backBufferRtvs_[backbufIdx], clearColor, 0u, nullptr),
+			false
+		);
+	}
+
+	// D32_FLOAT 깊이 버퍼는 stencil aspect가 없으므로 DEPTH만 클리어한다(STENCIL 플래그 시 경고 #821).
 	DISPLAY_ERROR_DX_VOID(
 		cmdListClear->ClearDepthStencilView(depthBufferDsvs_[backbufIdx],
-			D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+			D3D12_CLEAR_FLAG_DEPTH,
 			1.0f, 0u, 0u, nullptr
 		), false
 	);
@@ -1650,7 +1659,7 @@ void GFX::render() {
 		// HDR scene-color RT 클리어 (deferred lighting/skybox 렌더 타깃)
 		if (!SharedResources::SceneColor::sceneColorData.empty()) {
 			SharedResources::SceneColor::transitionToWrite(gbRoomIdx, cmdListClear);
-			constexpr FLOAT sceneColorClear[4] = { 0.f, 0.f, 0.f, 1.f };
+			constexpr FLOAT sceneColorClear[4] = { 0.f, 0.f, 0.f, 0.f };
 			DISPLAY_ERROR_DX_VOID(
 				cmdListClear->ClearRenderTargetView(
 					SharedResources::SceneColor::sceneColorData[gbRoomIdx].rtv, sceneColorClear, 0u, nullptr
@@ -1763,14 +1772,9 @@ void GFX::render() {
 		skyboxIdxSrv = drawEventsSkyboxPipeline_[0].texSkybox->idxSrv;
 	}
 
-	// HDR scene-color: deferred path에서는 lit 출력(skybox 포함)을 SceneColorHDR로 보내고
-	// tonemap resolve 패스가 백버퍼로 합성한다. forward path는 기존대로 백버퍼에 직접 출력.
+	// HDR scene-color: deferred path의 lit 출력(deferred lighting)만 SceneColorHDR로 보낸다.
+	// skybox는 원래대로 톤매핑 없이 raw로, resolve 이후 백버퍼에 직접 그린다(룩 보존 + PSO 포맷 일치).
 	const auto sceneColorRoomIdx = frameIdx_ % backBuffers_.size();
-	const bool hdrEnabled = (renderPath_ == RenderPath::Deferred)
-		&& !SharedResources::SceneColor::sceneColorData.empty();
-	const D3D12_CPU_DESCRIPTOR_HANDLE skyboxRtv = hdrEnabled
-		? SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].rtv
-		: backBufferRtvs_[backbufIdx];
 	const BindlessIndex sceneColorSrv = SharedResources::SceneColor::sceneColorData.empty()
 		? BindlessIndex{}
 		: SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].color.idxSrv;
@@ -1781,7 +1785,7 @@ void GFX::render() {
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
 		cmdQ_, viewport, clRect,
-		skyboxRtv, depthBufferDsvs_[backbufIdx],
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
 		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
@@ -2259,9 +2263,15 @@ void GFX::render() {
 			lpfd.idxDepth = gbData.depth.idxSrv;
 			lpfd.debugMode = gBufferDebugMode_;
 			lpfd.idxSkybox = skyboxIdxSrv;
+			// IBL maps (generated at load by precomputeIBL)
+			lpfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
+			lpfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
+			lpfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
+			lpfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
+			lpfd.iblIntensity        = 1.0f;
 			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
 			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
-			lpfd.fogDensity = 0.0005f;
+			lpfd.fogDensity = 0.0008f;
 			lpfd.fogBaseHeight = 25.f;
 			lpfd.heightFalloff = 0.024f;
 			deferredLightingPerFrameData_.stage(roomIdx, &lpfd, 1u);
@@ -2361,13 +2371,8 @@ void GFX::render() {
 			}
 		}
 
-		// Forward passes that always run regardless of render path
-		// (Terrain is now rendered into GBuffer above, so it is excluded here)
-		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-		skyboxPipelineDispatcher.drawSingleThreaded();
-
-		// HDR tonemap resolve: SceneColorHDR -> 백버퍼(LDR). HDR 그룹(deferred lighting + skybox)
-		// 직후, LDR 오버레이(BV/파티클/UI) 직전에 수행.
+		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).
+		// deferred lighting 직후 수행. 이후 skybox/오버레이는 백버퍼에 그린다.
 		if (!SharedResources::SceneColor::sceneColorData.empty()) {
 			CommandContext cmdCtxResolveBarrier{};
 			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxResolveBarrier) && cmdCtxResolveBarrier.cmdList) {
@@ -2382,6 +2387,11 @@ void GFX::render() {
 			tonemapPipelineDispatcher.updateGPUDataSingleThreaded();
 			tonemapPipelineDispatcher.drawSingleThreaded();
 		}
+
+		// Forward-always 패스: skybox(raw, 백버퍼)·BV·파티클. resolve 이후 백버퍼에 그린다.
+		// (skybox는 원래도 톤매핑 없이 raw로 그려졌으므로 SceneColorHDR를 거치지 않는다.)
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();

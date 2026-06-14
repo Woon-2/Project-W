@@ -49,6 +49,13 @@ cbuffer PerFrameData : register(b1) {
     float _pad1;
     float3 camPos;
     float _pad2;
+    // IBL
+    int4  idxIrradiance;
+    int4  idxPrefiltered;
+    int4  idxBRDFLUT;
+    uint  prefilteredMipCount;
+    float iblIntensity;
+    float2 _iblPad;
 }
 
 // gmtxTexturize required by sampleCascadePCF in pbrLighting.hlsli
@@ -59,6 +66,7 @@ static float4x4 gmtxTexturize = {
     0.5f,  0.5f, 0.0f, 1.0f
 };
 
+#define IBL_ENABLED
 #include "pbrLighting.hlsli"
 
 // Fullscreen triangle — no vertex buffer needed.
@@ -139,8 +147,12 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // illuminateFromGBuffer returns direct lighting * shadow (pre-tonemap)
     float3 directLight = illuminateFromGBuffer(posV, posW, normalV, normalW, albedo, roughness, metallic, ao);
 
-    // Add pre-computed ambient + emissive from GB2.rgb
-    float3 color = directLight + precompLight;
+    // Image-based lighting (diffuse irradiance + specular reflection). World-space N/V.
+    float3 Vworld = normalize(camPos - posW);
+    float3 ibl = computeIBL(normalW, Vworld, albedo, roughness, metallic, ao);
+
+    // precompLight (GB2.rgb) is emissive only now; combine direct + IBL + emissive.
+    float3 color = directLight + ibl + precompLight;
 
     // Apply Exponential Height Fog
     float3 viewDir = normalize(posW);

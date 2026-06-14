@@ -3796,7 +3796,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredLightingShader(ID3D12Device* device
 	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
 	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	// HDR: deferred lighting writes into SceneColorHDR (R16G16B16A16_FLOAT), resolved to backbuffer later.
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	// No DSVFormat — depth test disabled
 
 	DISPLAY_ERROR_DX_HR(

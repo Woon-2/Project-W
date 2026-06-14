@@ -12,10 +12,16 @@ DX12 클라이언트에 **HDR scene-color 파이프라인 + 글로벌 IBL** 도�
 사용자 지시로 **에이전트 팀 운영**. Agent 툴이 team_name/name 미지원 → Lead(메인 세션)가 **백그라운드 워커**를 스폰해 위임하고 task list로 조정. 충돌 핫스팟(`gfx.cpp render()`, `shader.hpp`, `pbrLighting.hlsli`)은 Lead 직접 소유.
 
 ## 현재 repo 상태 (중요)
-- **Phase 0 (Deferred HDR) 완료 + 빌드 통과.** 커밋 안 함.
-- **Phase 1a (IBL 프리컴퓨트) 완료 + 빌드 통과.** IBL 맵(irradiance/prefiltered/brdfLUT)이 로드 시 생성됨. **단 아직 조명에 미사용**(Phase 1b가 연결). 즉 지금 실행해도 시각 변화 없음(로드 시 프리컴퓨트만 추가 실행).
-- **다음 = Phase 1b (Deferred IBL 셰이딩 통합)** — 미착수. 아래 "Phase 1b 배선 계획"대로 편집하면 됨. 이게 실제 시각 payoff.
-- 미검증: 런타임 "룩 동일"(Phase 0) + IBL 맵 시각(Phase 1a) — 사용자가 직접 실행 검증 예정.
+- **Phase 0 (Deferred HDR) + Phase 1a (IBL 프리컴퓨트) + Phase 1b (Deferred IBL 셰이딩) 완료 + 빌드 통과.** 커밋 안 함.
+- **D3D #613 (RENDER_TARGET_FORMAT_MISMATCH) 수정 완료:** ① `createPBRDeferredLightingShader` RTV를 R16G16B16A16_FLOAT로(SceneColorHDR 전용). ② skybox는 SceneColorHDR가 아니라 **resolve 이후 백버퍼에 raw로** 그림(원래 동작 보존, PSO R8 유지) — render() deferred 순서를 `deferred lighting → resolve → skybox → 오버레이`로 재배치. ③ SceneColor clear 값 `{0,0,0,0}`로 리소스 생성값과 일치(clear-value 경고 제거).
+- **이제 Deferred 경로에서 IBL이 실제 적용됨:** 금속=환경 반사(prefiltered+BRDF LUT), 유전체=irradiance diffuse, 상수 ambient 제거. GB2.rgb=emissive 전용. envIsLDR=true(LDR 환경 역톤매핑 근사). iblIntensity=1.0(gfx.cpp lpfd에서 조정 가능).
+- **미검증: 런타임 실행** — 사용자가 실행해 (a) D3D 에러 사라졌는지 (b) 금속 반사/IBL 보이는지 확인 필요.
+- 남은 후속: Forward 경로 IBL(illuminateCSM+포트레이트), Forward HDR(applyTonemap), IBL 디버그뷰, ACES/bloom, HDR HDRI 에셋. (아래 "Phase 1b-forward + Phase 2 (후속)")
+
+### 사후 수정 (빌드 통과)
+- **경고 정리:** ① 백버퍼 color clear는 deferred에서 생략(resolve가 전체 덮어씀) → swapchain "did not pass clear value"(#820) 제거. ② depth clear를 `DEPTH`만(D32_FLOAT 스텐실 없음) → #821 제거. ③ SceneColor clear 값 `{0,0,0,0}`.
+- **지형 푸른 느낌 수정:** ① `terrainDeferred.hlsl` GB2.rgb를 emissive 전용(=0)으로 → **이중 ambient 버그 제거**(기존 globalAmbient*albedo + IBL 중복). ② `precomputeIBL(envIsLDR=false)` → 역Reinhard의 하늘 1.0 채널 과증폭(파란 폭발) 제거. (지형 metallic은 manifest per-layer 데이터; 0이 아니면 반사 발생 — 남으면 데이터 확인 또는 지형 metallic 클램프.)
+- **금속 구 (StandAlone):** `buildSphereMesh`(mesh.cpp/hpp — UV 구체, 5속성 Position/Normal/Tangent/Bitangent/UV, 16비트 IB, 금속 머티리얼 metallic=1/roughness=0.1/은색). setupStage에서 `recordTerrainResourceLoad`로 GPU 빌드 후 `metalSphereModel_` 소유, `metalSphere_`(Cube) 플레이어 앞(+Z 3, up 1.2)에 배치, render()에서 그림. Hi-Z/cull 미등록(항상 렌더). 인사이드아웃이면 winding 1줄 플립.
 
 ### Phase 0 설계 정제 (실행 중 변경 — 중요)
 포트레이트 회귀(로비 포트레이트가 forward `illuminateCSM`을 LDR RT에 렌더; `ui.hlsl`은 톤매핑 없이 표시)를 피하려고 **Phase 0를 Deferred 경로 전용 HDR로 한정**했다.

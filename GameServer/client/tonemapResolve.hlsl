@@ -37,7 +37,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     float3 color = sampleBindless(idxSceneColor, input.uv).rgb;
 
     // Reinhard tonemapping + gamma correction (curve preserved from lighting pass).
-    color = color / (color + float3(1.0f, 1.0f, 1.0f));
+    color = color / (color + float3(2.0f, 2.0f, 2.0f));
     color = pow(abs(color), 1.0f / 2.2f);
 
     return float4(color, 1.0f);

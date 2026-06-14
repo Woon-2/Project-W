@@ -120,6 +120,10 @@ private:
 	std::vector< std::shared_ptr<Goblin> > goblins_{};
 	std::shared_ptr<Goblin> goblin_{};
 
+	// IBL 반사 확인용 금속 구 (StandAlone). Model은 Game이 소유, Object는 포인터로 참조.
+	Model metalSphereModel_{};
+	std::shared_ptr<Cube> metalSphere_{};
+
 	SkyboxObject skybox_{};
 	TerrainChunkManager chunkManager_{};
 
