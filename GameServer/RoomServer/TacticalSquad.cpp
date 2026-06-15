@@ -774,6 +774,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 .type = TacticalCommandType::HoldSlot,
 				.targetId = ord.targetId,
 				.slotOffset = slot,
+				.speedMult = ord.speedMult,        // 방패벽 형성 가속
 				.useHoldFacing = true,
 				.holdFacing = outward
             };

@@ -1442,6 +1442,19 @@ void GrandBaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& lead
         if ( orderRefreshTimer_ <= 0s ) {
             orderRefreshTimer_ = ORDER_REFRESH_INTERVAL;
             issueShieldWall( room, leader );
+
+            // 벽이 형성될 때까지(슬라임 슬롯 미도착 동안) 링 안에 들어온 플레이어를 재넉백+재락한다.
+            // 고정 락(2s)은 형성 시간(가변)을 못 따라가 미형성 벽으로 재진입을 허용하므로, 형성 상태에
+            // 게이트한다. 형성 완료 시 슬라임 barrier가 차단을 인계 → 재넉백 중단. 안전 타임아웃으로 영구 락 방지.
+            if ( shieldWallRingIssued_ && !shieldWallFormed_ ) {
+                shieldWallFormTimer_ += ORDER_REFRESH_INTERVAL;
+                if ( isShieldWallFormed( room, leader ) || shieldWallFormTimer_ >= SHIELD_WALL_FORM_KNOCK_MAX ) {
+                    shieldWallFormed_ = true;
+                }
+                else {
+                    room.knockPlayersOutOfShieldWall( shieldWallRingCenter_, shieldWallRingRadius_ );
+                }
+            }
         }
 
         TacticalSquad* originalSnakeSquad = squads.size() >= 4 ? squads[ 3 ] : nullptr;
@@ -1462,6 +1475,8 @@ void GrandBaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
         engageOrderIssued_ = false;
         engageRefreshTimer_ = 0s;
         shieldWallRingIssued_ = false;
+        shieldWallFormed_ = false;
+        shieldWallFormTimer_ = 0s;
         shieldWallRingRadius_ = MAX_SHIELD_RING_RADIUS;
         snakeRetreatTimer_ = 0s;
         snakeWaveSpawned_ = false;
@@ -1479,6 +1494,8 @@ void GrandBaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
         snakeRetreatTimer_ = 0s;
         snakeWaveSpawned_ = false;
         shieldWallRingIssued_ = false;
+        shieldWallFormed_ = false;
+        shieldWallFormTimer_ = 0s;
         resetBossMelee( leader );
         snakePersonalTargets_.clear();
         snakePersonalTimers_.clear();
@@ -2121,6 +2138,7 @@ void GrandBaumMidBossTactic::issueShieldWall( Room& room, PlatoonLeader& leader 
                 ord.approachRadius = shieldWallRingRadius_;
                 ord.slotSpacingScale = SHIELD_RING_MIN_ARC_SPACING;
                 ord.slotColumnScale = SHIELD_RING_LANE_SPACING;
+                ord.speedMult = SHIELD_WALL_APPROACH_SPEED_MULT;   // 형성 접근만 가속(전투 속도 불변)
                 squad->receiveOrder( ord );
 
                 angleAccum += sectorSpan;
@@ -2213,6 +2231,27 @@ int32 GrandBaumMidBossTactic::countLiveSlimeMembers( Room& room, const PlatoonLe
 
 bool GrandBaumMidBossTactic::canFormShieldWall( int32 liveSlimeCount ) const {
     return liveSlimeCount >= MIN_SHIELD_WALL_SLIME_COUNT;
+}
+
+// 슬라임 부대(0,1,2) 중 살아있는 멤버가 있는 부대가 모두 슬롯 도착이면 형성 완료. 한 부대라도 미도착이면 false.
+bool GrandBaumMidBossTactic::isShieldWallFormed( Room& room, PlatoonLeader& leader ) const {
+    const auto& squads = leader.getSquads();
+    const size_t slimeIndices[] = { 0, 1, 2 };
+    bool anyLiveSquad = false;
+    for ( size_t idx : slimeIndices ) {
+        if ( idx >= squads.size() ) {
+            continue;
+        }
+        TacticalSquad* squad = squads[ idx ];
+        if ( !squad || squad->isEmpty() || countLiveMembers( room, squad ) <= 0 ) {
+            continue;
+        }
+        anyLiveSquad = true;
+        if ( !squad->areMembersAtSlots() ) {
+            return false;
+        }
+    }
+    return anyLiveSquad;
 }
 
 float GrandBaumMidBossTactic::calcShieldWallRadius( int32 liveSlimeCount ) const {

@@ -261,6 +261,8 @@ private:
     int32        countLiveMembers( Room& room, TacticalSquad* squad ) const;
     int32        countLiveSlimeMembers( Room& room, const PlatoonLeader& leader ) const;
     bool         canFormShieldWall( int32 liveSlimeCount ) const;
+    // 슬라임 부대(0,1,2) 중 살아있는 부대가 모두 슬롯 도착(areMembersAtSlots)이면 true = 방패벽 형성 완료.
+    bool         isShieldWallFormed( Room& room, PlatoonLeader& leader ) const;
     float        calcShieldWallRadius( int32 liveSlimeCount ) const;
     int32        calcSnakeWaveSpawnCount( int32 liveOriginalSnakeCount ) const;
     bool         isSnakeWaveAnnihilated( Room& room ) const;
@@ -278,6 +280,8 @@ private:
     bool               snakeWaveSpawned_{ false };
     bool               pendingShieldWallTrigger_{ false };
     bool               shieldWallRingIssued_{ false };
+    bool               shieldWallFormed_{ false };       // 벽 형성 완료 → 형성 중 재넉백 중단(슬라임 barrier가 인계)
+    Seconds            shieldWallFormTimer_{};            // 형성 경과(안전 타임아웃용)
     mu::Vec3           shieldWallRingCenter_{};
     float              shieldWallRingRadius_{ 12.f };
     float              shieldWallRingStartAngle_{ 0.f };
@@ -314,6 +318,10 @@ private:
     static constexpr float SHIELD_RING_LANE_SPACING      = 0.9f;    // 시뮬 2.2 (다중 열 간격)
     static constexpr int32 MIN_SHIELD_WALL_SLIME_COUNT   = 10;
     static constexpr float SHIELDWALL_DAMAGE_MULT        = 0.1f;
+    // 방패벽 형성 가속(RingGuard 오더 speedMult). 전투 속도(slime moveSpeed 2.5)는 불변, 형성 접근만 ×2 (≈15 m/s).
+    static constexpr float SHIELD_WALL_APPROACH_SPEED_MULT = 2.0f;
+    // 형성 중 재넉백 안전 타임아웃: 형성이 비정상 지연돼도 이 시간 후엔 재넉백 중단(플레이어 영구 락 방지).
+    static constexpr Seconds SHIELD_WALL_FORM_KNOCK_MAX{ 6.0f };
     static constexpr float BOSS_CHASE_SPEED_MULT         = 1.8f;   // setDesiredVel motor 방식(시뮬 8.0 직접적분 대체). 인게임 튜닝
     static constexpr Seconds BOSS_TARGET_LOCK_DURATION{ 1.4f };
     static constexpr Seconds BOSS_SAME_PRIORITY_RETARGET_INTERVAL{ 2.5f };

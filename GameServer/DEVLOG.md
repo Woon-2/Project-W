@@ -1139,3 +1139,64 @@ NPCAI(`sim/MidBossTactics.*`, `IsisMidBossTactic`)의 Isis 중간보스 전술�
 **검증:** RoomServer·client Debug/x64 빌드 통과(오류 0). WSACleanup 수정은 자동 5회 검증 완료. Isis 전술·
 ShieldWall 튜닝·방패벽 차단의 인게임 거동 검증은 디버그 토글로 진행(일부 인게임 확인됨). 정식 `Arena_*`
 레벨 마커 저작·밸런싱은 후속 과제.
+
+## [fix] 방패벽(슬롯 유지) NPC 도착 진동 제거 + 자리 찾기 가속
+
+그랜드밤 방패벽 형성 시 두 가지 체감 문제 수정. 슬롯 유지 이동은 전부 `TacticalNpc::updateHoldSlot`이
+담당하며, `HoldSlot`/`GuardSlot` 커맨드가 **모두** `TacticalNpcState::HoldSlot`로 수렴하므로 본 수정은
+방패벽(`RingGuard`)뿐 아니라 회랑 차단선(`FormationGuard`) 등 **모든 슬롯 유지 대형에 공통** 적용된다.
+
+### [1] 도착 후 진동 — 모터 vs 솔버 한계 진동(limit cycle)
+
+**원인:** 전술 NPC는 `setCollisionMask(~(Player|Boss))`로 **NPC끼리는 물리 충돌**하는 Dynamic(mass 70)
+바디다. 밀집 링 슬롯에서 바디가 겹치면 PGS+Baumgarte 솔버가 밀어내는데, 기존 도착 정지 임계가
+`separationRadius_ × 0.25 ≈ 0.75m`로 **히스테리시스가 없어**, 솔버가 0.75m 밖으로 밀어내면 모터가 곧바로
+다시 슬롯으로 강하게 당김 → 솔버 밀어냄 ↔ 모터 당김의 무한 반복(떨림).
+**수정:** 안착 래치(히스테리시스) 도입. `updateSlotSettled(distToSlot)` — `inner`(0.25×sepRad) 진입 시
+`slotSettled_=true`, `outer`(0.7×sepRad ≈ 2.1m) 이탈 시에만 해제. 안착 동안 `settleAtSlot()`이
+`setDesiredVel(0)` + 잔여 XZ 선속도 감쇠(`×0.3`, Y는 중력 보존)로 솔버 주입 속도까지 흡수한다. 즉 한 번
+안착하면 ~2.1m 밖으로 밀려나기 전까지 모터를 제동 상태로 묶어, 솔버 평형 변위에 재당김하지 않게 한다.
+새 슬롯 수령(`HoldSlot`/`GuardSlot` 커맨드)·`reviveAt` 시 `slotSettled_=false`로 리셋.
+
+### [2] 자리 찾기 느림 — 마지막 접근 크롤링
+
+**원인:** `TACTICAL_SLOT_ARRIVE_SLOW_RADIUS=3.0m` 안에서 거리비례 감속 + 최저 `MIN_SCALE=0.15`(≈1.8 m/s)로
+마지막 ~3m를 기어가듯 접근.
+**수정:** 래치가 오버슈트를 흡수하므로 더 공격적으로 튜닝 — `SLOW_RADIUS` 3.0→1.5, `MIN_SCALE` 0.15→0.35
+(최저 ≈4.2 m/s). 전속(12 m/s) 구간을 1.5m까지 연장, 감속 구간 절반으로 단축. 선두가 빨리 안착해 모터 압박을
+멈추면 후속 NPC의 물리 교착도 빨리 풀려 대형 완성 시간이 전반적으로 단축된다.
+
+**변경 파일:** `RoomServer/TacticalNpc.{hpp,cpp}` (`slotSettled_` 멤버, `updateSlotSettled`/`settleAtSlot`
+헬퍼, 래치/감쇠 상수, 감속 상수 2개 튜닝, 두 도착 분기·커맨드·`reviveAt` 적용).
+**보조 옵션(미적용):** 다중 열 구간에 잔여 떨림이 남으면 `MidBossTactics.hpp`의 `SHIELD_RING_LANE_SPACING`
+0.9→~1.3, `SHIELD_RING_MIN_ARC_SPACING` 1.2→~1.5로 정지 시 바디 겹침 자체를 줄일 수 있음(방패벽이 약간
+퍼져 보이는 트레이드오프).
+**검증:** RoomServer Debug/x64 빌드 통과(경고·오류 0). 인게임 거동(빠른 안착·무진동) 확인은 후속.
+
+### [3] 방패벽 형성 속도 추가 가속 (RingGuard 오더 speedMult)
+
+[2]의 감속 튜닝 후에도 더 빠른 형성을 원해 추가. 슬라임 접근 = `moveSpeed(2.5) × TACTICAL_SPEED_MULT(3.0)
+× speedMult(1.0) = 7.5 m/s`인데, 슬라임 `moveSpeed 2.5`는 전투 페이싱용으로 낮춘 값(`Room.cpp:1446`)이라
+건드리지 않고, 전역 `TACTICAL_SPEED_MULT`는 모든 전술 NPC에 영향. → **방패벽 오더에만 speedMult를 실어**
+형성만 가속(전투 속도 불변). `TacticalSlime` 서브클래스는 미도입(슬라임은 트루퍼·뱀과 수치만 다른 config 차이,
+고유 행위 없음 — 이 코드베이스는 "행위는 상속(`PlatoonLeader`), 스탯은 config" 패턴).
+**수정:** `SHIELD_WALL_APPROACH_SPEED_MULT=2.0`(`MidBossTactics.hpp`) 신설 → `issueShieldWall`의 RingGuard
+`ord.speedMult`에 부여 → `TacticalSquad.cpp` RingGuard case의 HoldSlot 커맨드에 `.speedMult=ord.speedMult`
+전달(기존 `SquadOrder`/`TacticalCommand.speedMult` 배선 재사용). 형성 접근 7.5→15 m/s. 방패벽 종료
+(`issueEngage`) 시 `speedMult_` 1.0 리셋되어 boost는 형성 단계 한정.
+**검증:** RoomServer Debug/x64 빌드 통과(경고·오류 0). 인게임 체감(더 빠른 형성)·과속 시 1.6 하향은 후속.
+
+### [4] 방패벽 형성 완료 전 플레이어 재진입 차단 (형성 동안 재넉백)
+
+**증상:** 방패벽 발동 시 넉백+2초 입력락으로 플레이어를 밀어내지만, 슬라임이 링을 완성하는 데 2초보다 더
+걸려서, 락이 풀리는 시점엔 벽이 아직 형성 중(큰 틈)이라 플레이어가 다시 안으로 들어감.
+**원인:** 넉백+락은 **고정 시간**인데 형성 시간은 가변. 클라 차단벽은 *개별 슬라임* barrier 연결
+(`resolveBarrierSeparation`)이라 슬라임이 슬롯 미도착이면 벽 자체가 없음. 넉백은 `issueShieldWall` 첫 발령 시
+**1회만** 호출. → 락 연장은 미봉책.
+**수정(서버 전용, 기존 넉백 재사용):** `Phase::ShieldWall` 업데이트의 0.5s refresh 블록에 형성 게이트 추가 —
+`shieldWallFormed_`가 false인 동안, 신규 `isShieldWallFormed`(슬라임 부대 0,1,2가 모두 `areMembersAtSlots`)면
+플래그 set, 아니면 `room.knockPlayersOutOfShieldWall(center, radius)` 재호출(링 안 플레이어만 재넉백+재락).
+형성 완료 시 슬라임 barrier가 차단 인계 → 중단(슬라임 처치로 구멍 내는 카운터플레이 유지). 안전 타임아웃
+`SHIELD_WALL_FORM_KNOCK_MAX=6s`로 형성 비정상 지연 시 영구 락 방지. `enterPhase(ShieldWall/Engage)`에서
+`shieldWallFormed_`/`shieldWallFormTimer_` 리셋. **클라/프로토콜 변경 0.**
+**검증:** RoomServer Debug/x64 빌드 통과(경고·오류 0). 인게임(형성 전 재진입 차단·형성 후 카운터플레이 유지)은 후속.

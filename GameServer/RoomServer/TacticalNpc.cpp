@@ -118,6 +118,7 @@ void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
     pendingCmd_               = {};
     targetId_                 = 0;
     assignedSlot_             = {};
+    slotSettled_              = false;
     slotRefTargetPos_         = {};
     abandonDist_              = 15.f;
     chargeId_                 = 0;
@@ -245,6 +246,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         pressureReentering_    = false;
         speedMult_             = pendingCmd_.speedMult;
         chargeComplete_        = false;
+        slotSettled_           = false;   // 새 슬롯 수령 → 안착 래치 해제(재접근)
         targetId_     = pendingCmd_.targetId;
         assignedSlot_ = pendingCmd_.slotOffset;
         transitionTo( TacticalNpcState::HoldSlot );
@@ -258,6 +260,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         speedMult_             = pendingCmd_.speedMult;
+        slotSettled_           = false;   // 새 슬롯 수령 → 안착 래치 해제(재접근)
         targetId_     = pendingCmd_.targetId;
         assignedSlot_ = pendingCmd_.slotOffset;
         transitionTo( TacticalNpcState::HoldSlot );
@@ -975,6 +978,24 @@ void MU_CALLCONV TacticalNpc::applyPeerSeparation( Room& room, mu::Vec3& moveDir
     moveDir = norm3( steer );
 }
 
+bool MU_CALLCONV TacticalNpc::updateSlotSettled( float distToSlot ) {
+    if ( slotSettled_ ) {
+        if ( distToSlot > separationRadius_ * TACTICAL_SLOT_UNSETTLE_RADIUS_MULT ) {
+            slotSettled_ = false;   // 크게 밀려나면 래치 해제 → 재접근
+        }
+    }
+    else if ( distToSlot < separationRadius_ * TACTICAL_SLOT_SETTLE_RADIUS_MULT ) {
+        slotSettled_ = true;        // 충분히 가까우면 안착
+    }
+    return slotSettled_;
+}
+
+void MU_CALLCONV TacticalNpc::settleAtSlot() {
+    setDesiredVel( mu::Vec3{} );                 // 모터 목표 정지(제동 유지)
+    mu::Vec3 v = linearVel();                    // 솔버 주입 잔여 속도 감쇠(Y는 중력 보존)
+    setLinearVel( mu::Vec3( v.x() * TACTICAL_SLOT_SETTLE_VEL_DAMP, v.y(), v.z() * TACTICAL_SLOT_SETTLE_VEL_DAMP ) );
+}
+
 void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( guardNearestPlayer_ ) {
@@ -995,9 +1016,9 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
         if ( useHoldFacing_ ) {
             float distToSlot = lenXZ( pos() - assignedSlot_ );
 
-            if ( distToSlot < separationRadius_ * 0.25f ) {
+            if ( updateSlotSettled( distToSlot ) ) {
                 setFacingDir( *this, holdFacing_ );
-                setDesiredVel( mu::Vec3{} );
+                settleAtSlot();
                 return;
             }
 
@@ -1022,7 +1043,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     float distToSlot = lenXZ( pos() - assignedSlot_ );
 
-    if ( distToSlot < separationRadius_ * 0.25f ) {
+    if ( updateSlotSettled( distToSlot ) ) {
         if ( useHoldFacing_ && holdFacing_.len2() > 0.01f ) {
             setFacingDir( *this, holdFacing_ );
         }
@@ -1030,7 +1051,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             setFacingDir( *this, target->player()->pos() - pos() );
         }
 
-        setDesiredVel( mu::Vec3{} );
+        settleAtSlot();
         return;
     }
 

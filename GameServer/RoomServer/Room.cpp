@@ -197,7 +197,7 @@ void Room::init(const Level* levelData) {
 // 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
 // (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. GrandBaum/Isis는 Hobgoblin
 //  레벨에 WallXxx 마커가 없어 후방벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.)
-#define HOBGOBLIN_DEBUG_TACTIC 1
+#define HOBGOBLIN_DEBUG_TACTIC 0
 
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
