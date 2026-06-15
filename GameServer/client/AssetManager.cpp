@@ -39,6 +39,22 @@ const Texture* AssetManager::playerWeaponIcon(PlayerWeaponType weaponType) const
 	}
 }
 
+const Texture* AssetManager::skillIconByAssetName(std::string_view n) const {
+	if (n == "SlashWave")            return &skillIconSlashWave_;
+	if (n == "Slash7")               return &skillIconSlash7_;
+	if (n == "SlashCombo")           return &skillIconSlashCombo_;
+	if (n == "ArrowVolley")          return &skillIconArrowVolley_;
+	if (n == "ArrowRain")            return &skillIconArrowRain_;
+	if (n == "EnergyExplosionArrow") return &skillIconEnergyExplosionArrow_;
+	if (n == "CrystalsFrontAttack")  return &skillIconCrystalsFront_;
+	if (n == "CrystalsCrossFade")    return &skillIconCrystalsCross_;
+	if (n == "RedEnergyExplosion")   return &skillIconRedEnergy_;
+	if (n == "PiercingSlash")        return &skillIconPiercingSlash_;
+	if (n == "PiercingCircleSlash")  return &skillIconPiercingCircle_;
+	if (n == "PiercingMulti")        return &skillIconPiercingMulti_;
+	return nullptr;
+}
+
 void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	// Full load = Phase 1 (lobby visual) then Phase 2 (remaining in-game).
 	loadLobbyVisualAssets(gfx, configs);
@@ -185,6 +201,30 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp
 	} );
+
+	// Skill dial icons (12) — one per selectable weapon skill.
+	auto loadSkillIcon = [&]( const char* name, const char* file, Texture* dest ) {
+		gfx.addRequestTextureLoad( RequestTextureLoad{
+			.name            = name,
+			.texturePath     = file,
+			.pDest           = dest,
+			.pTexHashMap     = &texHashMap_,
+			.needsUploadInfo = false,
+			.sampler         = Samplers::BilinearClamp
+		} );
+	};
+	loadSkillIcon( "SkillIconSlashWave",           "../resources/UI/slash_wave.dds",            &skillIconSlashWave_ );
+	loadSkillIcon( "SkillIconSlash7",              "../resources/UI/slash_7.dds",               &skillIconSlash7_ );
+	loadSkillIcon( "SkillIconSlashCombo",          "../resources/UI/slash_combo.dds",           &skillIconSlashCombo_ );
+	loadSkillIcon( "SkillIconArrowVolley",         "../resources/UI/arrow_volley.dds",          &skillIconArrowVolley_ );
+	loadSkillIcon( "SkillIconArrowRain",           "../resources/UI/arrow_rain.dds",            &skillIconArrowRain_ );
+	loadSkillIcon( "SkillIconEnergyExplosionArrow","../resources/UI/energy_explosion_arrow.dds",&skillIconEnergyExplosionArrow_ );
+	loadSkillIcon( "SkillIconCrystalsFront",       "../resources/UI/crystals_front_attack.dds", &skillIconCrystalsFront_ );
+	loadSkillIcon( "SkillIconCrystalsCross",       "../resources/UI/crystals_cross_fade.dds",   &skillIconCrystalsCross_ );
+	loadSkillIcon( "SkillIconRedEnergy",           "../resources/UI/red_energy_explosion.dds",  &skillIconRedEnergy_ );
+	loadSkillIcon( "SkillIconPiercingSlash",       "../resources/UI/piercing_slash.dds",        &skillIconPiercingSlash_ );
+	loadSkillIcon( "SkillIconPiercingCircle",      "../resources/UI/piercing_circle_slash.dds", &skillIconPiercingCircle_ );
+	loadSkillIcon( "SkillIconPiercingMulti",       "../resources/UI/piercing_multi.dds",        &skillIconPiercingMulti_ );
 
 	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
 		.meshPath    = "../resources/effects/Slash3.meshbin",

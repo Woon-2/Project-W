@@ -6,6 +6,10 @@
 
 local skill = Skill()
 skill.name             = "Slash7"
+skill.weapon           = "sword"
+skill.dialSlot         = 1
+skill.chargeCost       = 5
+skill.cooldownMs       = 700
 skill.totalDurationMs  = 350
 skill.interruptible    = true
 

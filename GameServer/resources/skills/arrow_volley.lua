@@ -4,6 +4,10 @@
 
 local skill = Skill()
 skill.name             = "ArrowVolley"
+skill.weapon           = "bow"
+skill.dialSlot         = 0
+skill.chargeCost       = 3
+skill.cooldownMs       = 1100
 skill.totalDurationMs  = 700
 skill.interruptible    = true
 

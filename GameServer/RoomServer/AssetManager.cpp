@@ -29,6 +29,12 @@ void AssetManager::loadAssets() {
                 skillAssets_[i].id = i + 1;
         std::cout << "[AssetManager] Loaded " << skillAssets_.size() << " skill(s)\n";
     }
+
+    // 무기별 스킬 로드아웃(기본공격 + 3슬롯 + 코스트)을 스킬 메타에서 1회 빌드.
+    loadout_ = SkillLoadout::build(skillAssets_);
+
+    // 스택 충전 경제 튜닝(몬스터별 charge, 콤보, 소프트캡)을 부팅 시 1회 로드.
+    chargeConfig_.load("../resources/data/chargeConfig.lua");
 }
 
 const ServerAnimClip* AssetManager::findClip(const std::vector<ServerAnimClip>& set,

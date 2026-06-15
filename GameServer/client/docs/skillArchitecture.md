@@ -339,3 +339,20 @@ SkillSystem은 `SkillDispatchContext::objectById`(= `skillObjectById_`, id로 �
   신규 플레이어 추가 경로(`onEnterOther` 등)가 해당 id 슬롯을 갱신한다.
 
 > 서버 측 동일 제약은 `RoomServer/docs/skillArchitecture.md`의 「객체 수명주기와 연결 해제」 참조.
+
+---
+
+## 스택형 스킬 충전 레이어 (Stack-Charge) — 클라이언트
+
+상세는 `docs/skillChargeSystem.md`. 이 스킬 시스템 위에 얹힌 **사용 자원/입력/HUD** 레이어다.
+
+- **메타데이터 확장:** `SkillAsset`에 `weaponType/loadoutSlot/isBasic/chargeCost/cooldown`이 추가되어
+  skill lua에서 채워진다. `SkillSystem::assets()` + `SkillLoadout::build()`로 무기별 로드아웃을 만든다.
+- **입력 변경:** 기존 임시 1~0 키맵을 제거하고 `processInputGame`이 **휠=선택 / 휠클릭=사용 / 좌클릭=기본**으로
+  바뀌었다. 사용은 `SkillDialHUD`의 동기화 charge/쿨다운으로 **자체 게이트**한 뒤 즉시 `castSkillByName`
+  (기존 prediction 경로) — 서버가 재검증하고 거부 시 `onSkillUseReject`가 `interruptAll`로 롤백한다.
+- **HUD:** `ui/skillDialHUD`가 120° 다이얼을 그리고, 충전 fill은 `ui.hlsl`의 effect-mode 분기로 처리한다
+  (기존 UI 파이프라인 재사용; `Material.cRoughness/cMetallic`과 `PerFrameData.time` 재활용).
+- **charge는 예측하지 않는다.** 값은 `S_SkillCharge`로만 갱신(서버 확정). 시전 모션/쿨다운만 로컬 예측.
+
+> 서버 측 귀속/분배/게이트는 `RoomServer/docs/skillArchitecture.md`의 「스택형 스킬 충전」 절 참조.

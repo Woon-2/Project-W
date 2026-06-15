@@ -26,6 +26,10 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	{ "death",     "../resources/audio/sfx/death.wav",     Bus::Sfx, false, false, 1.0f },
 	{ "attack",    "../resources/audio/sfx/attack.wav",    Bus::Sfx, false, false, 0.9f },
 	{ "skill_hit", "../resources/audio/sfx/skill_hit.wav", Bus::Sfx, false, false, 1.0f },
+
+	// --- HUD ---
+	// Played when a skill slot reaches its first usable stack (0 -> 1).
+	{ "skill_ready", "../resources/audio/sfx/skill_ready.wav", Bus::Ui, false, false, 1.0f },
 });
 
 }	// namespace

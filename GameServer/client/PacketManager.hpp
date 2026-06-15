@@ -22,6 +22,10 @@ public:
 	static void handleSNpcRespawnPacket( byte* buffer, int32 len );
 	static void handleSSkillStartPacket( byte* buffer, int32 len );
 	static void handleSSkillHitPacket( byte* buffer, int32 len );
+	static void handleSSkillChargePacket( byte* buffer, int32 len );
+	static void handleSSkillSelectPacket( byte* buffer, int32 len );
+	static void handleSSkillUseRejectPacket( byte* buffer, int32 len );
+	static void handleSComboStatePacket( byte* buffer, int32 len );
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 	static void handleSZoneStatePacket( byte* buffer, int32 len );
@@ -37,6 +41,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
 	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 clientMs);
 	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
+	static std::shared_ptr<SendBuffer> makeCSelectSkillPacket(uint8 slot);
 
 	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode);
 

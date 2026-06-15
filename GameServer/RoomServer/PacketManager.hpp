@@ -15,6 +15,7 @@ public:
 	static void handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCAttackPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCSkillStartPacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCSelectSkillPacket(GameSession* session, byte* buffer, int32 len);
 
 	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
@@ -33,6 +34,10 @@ public:
 	static std::shared_ptr<SendBuffer> makeSZoneStatePacket(uint16 zoneId, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity);
+	static std::shared_ptr<SendBuffer> makeSSkillSelectPacket(uint16 playerId, uint8 slot);
+	static std::shared_ptr<SendBuffer> makeSSkillChargePacket(uint16 playerId, uint8 slot, float charge);
+	static std::shared_ptr<SendBuffer> makeSSkillUseRejectPacket(uint8 slot);
+	static std::shared_ptr<SendBuffer> makeSComboStatePacket(uint16 playerId, uint16 comboCount, float windowMs);
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 };
 

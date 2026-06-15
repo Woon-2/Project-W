@@ -6,6 +6,8 @@
 
 local skill = Skill()
 skill.name             = "Spikes"
+skill.weapon           = "wand"
+skill.isBasic          = true
 skill.totalDurationMs  = 800
 skill.interruptible    = true
 

@@ -288,6 +288,7 @@
     <ClCompile Include="ui\widgets\TextInput.cpp" />
     <ClCompile Include="ui\widgets\KillCountWidget.cpp" />
     <ClCompile Include="ui\digitAtlas.cpp" />
+    <ClCompile Include="ui\skillDialHUD.cpp" />
     <ClCompile Include="damageNumberSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -424,6 +425,7 @@
     <ClInclude Include="ui\widgets\TextInput.hpp" />
     <ClInclude Include="ui\widgets\KillCountWidget.hpp" />
     <ClInclude Include="ui\digitAtlas.hpp" />
+    <ClInclude Include="ui\skillDialHUD.hpp" />
     <ClInclude Include="damageNumberSystem.hpp" />
   </ItemGroup>
   <ItemGroup>

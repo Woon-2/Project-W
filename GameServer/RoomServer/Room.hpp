@@ -70,6 +70,7 @@ public:
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 clientMs);
 	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
+	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
@@ -152,6 +153,15 @@ private:
 	void updateTacticalAI(Milliseconds dt);
 	void updatePlayerAnimations(Milliseconds dt);
 	void updateSkillSystem(Milliseconds dt);
+
+	// Stack-charge: skill registry lookup + kill-charge attribution/distribution.
+	const SkillAsset* findSkillAsset(uint32 id) const;
+	// Records a player's damage to a target; on a chargeable-monster death,
+	// distributes kill-charge to all recent damagers. Call after HP is updated.
+	void noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp);
+	void distributeKillCharge(Object* monster);
+	void updateComboExpiry();   // resets stale combos (combo window elapsed) each tick
+
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
 

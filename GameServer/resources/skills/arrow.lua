@@ -4,6 +4,8 @@
 
 local skill = Skill()
 skill.name             = "Arrow"
+skill.weapon           = "bow"
+skill.isBasic          = true
 skill.totalDurationMs  = 600
 skill.interruptible    = true
 

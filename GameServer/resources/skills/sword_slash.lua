@@ -3,6 +3,8 @@
 
 local skill = Skill()
 skill.name             = "SwordSlash"
+skill.weapon           = "sword"
+skill.isBasic          = true
 skill.totalDurationMs  = 400
 skill.interruptible    = true
 

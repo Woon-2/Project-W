@@ -169,7 +169,8 @@ namespace UIPipeline {
 		// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 		auto pfd = UIShader::PerFrameData{
 			.screenWidth = frameData_.screenWidth,
-			.screenHeight = frameData_.screenHeight
+			.screenHeight = frameData_.screenHeight,
+			.time = frameData_.time
 		};
 		// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 		pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
@@ -223,7 +224,8 @@ namespace UIPipeline {
 		// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 		auto pfd = UIShader::PerFrameData{
 			.screenWidth = frameData_.screenWidth,
-			.screenHeight = frameData_.screenHeight
+			.screenHeight = frameData_.screenHeight,
+			.time = frameData_.time
 		};
 		// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 		pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
@@ -334,6 +336,8 @@ namespace UIPipeline {
 				.material = UIShader::Material{
 					.idxAlbedo = drawEvent.pTex->idxSrv,
 					.cAlbedo = drawEvent.colorMul,
+					.cRoughness = drawEvent.fillAmount,   // repurposed: skill charge fill 0..1
+					.cMetallic  = drawEvent.effectMode,   // repurposed: 0 normal / 1 charging / 2 ready
 				},
 				.firstInstanceIdx = idxDrawcall
 			};
@@ -572,6 +576,8 @@ namespace UIPipeline {
 					.material = UIShader::Material{
 						.idxAlbedo = drawEvent.pTex->idxSrv,
 						.cAlbedo = drawEvent.colorMul,
+						.cRoughness = drawEvent.fillAmount,   // repurposed: skill charge fill 0..1
+						.cMetallic  = drawEvent.effectMode,   // repurposed: 0 normal / 1 charging / 2 ready
 					},
 					.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 				};

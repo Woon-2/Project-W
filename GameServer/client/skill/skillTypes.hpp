@@ -189,6 +189,15 @@ struct SkillAsset {
     bool         interruptible = true;
     Milliseconds totalDuration { 0.f };
 
+    // --- Stack-charge / loadout metadata (set from skill Lua; see skillChargeSystem.md) ---
+    // weaponType ordinal mirrors PlayerWeaponType (protocol.hpp):
+    //   Katana(sword)=0, SpearHook(spear)=1, CrystalWand(wand)=2, HeavyArrow(bow)=3; 0xFF = no loadout.
+    u8t          weaponType  = 0xFFu;
+    int          loadoutSlot = -1;     // 0..2 dial slot; -1 = not a selectable loadout skill
+    bool         isBasic     = false;  // left-click basic attack: skips charge/cooldown gate
+    float        chargeCost  = 0.f;    // charge points required per cast (selectable skills only)
+    Milliseconds cooldown { 0.f };     // cast cooldown (>= totalDuration + margin)
+
     // Sorted by time ascending.
     std::vector<TimelineEvent>  timeline;
 

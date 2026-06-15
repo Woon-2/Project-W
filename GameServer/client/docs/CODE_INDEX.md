@@ -219,7 +219,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `buildVfxGameplayConfigs` | `skillCompiler.{hpp,cpp}` | addVFX systems(JSON+오버라이드) → `VfxSystemDef::gameplayCfg` 1회 빌드 (서버 미러: RoomServer AssetManager에서 호출) |
 | `parseVfxSystemOverrides` / `pg::VfxSystemOverrides` | `skillCompiler.cpp` / `../common/particleGameplay.hpp` | lua systems 엔트리의 게임플레이 오버라이드 (speed/lifetime/shape/bursts/volLinear 등) |
 | `SkillSystem::bindVfxGameplayConfigs` | `skillSystem.cpp` | 프리빌드 설정을 ParticleEffect 시스템에 주입 (이펙트 구성 완료 후 1회 호출) |
-| `Online::Game::castSkillByName` / 임시 키맵 | `online/onlineGame.cpp` `processInput` | 1~0 + Shift+1~6 = 16종 스킬, Q=SwordSlash. seed 생성+startSkill+C_SkillStart |
+| `Online::Game::castSkillByName` | `online/onlineGame.cpp` `processInputGame` | 휠클릭=선택 스킬 사용, 좌클릭=기본 공격(둘 다 스킬 시전). seed 생성+startSkill+C_SkillStart. (구 임시 1~0/Shift 키맵은 제거됨 → 3-C 다이얼) |
 | `Online::Game::skillVfxById_[1..18]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
 | `Online::Game::sendSkillStartPacket(assetId, seed)` | `online/onlineGame.cpp` | `C_SkillStart{assetId, clientMs, skillSeed}` 송신 (clientMs=ClientApp::clientMs) |
 | `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
@@ -227,6 +227,30 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 > VFXParticle 히트박스의 클라/서버 결정론 동기화: `docs/particleHitboxDeterminism.md`.
+
+---
+
+## 3-C. 스택형 스킬 충전 (Stack-Charge) — 다이얼 HUD
+
+**설계 문서:** `docs/skillChargeSystem.md`. 몬스터 처치(최근 15초 데미지 기여자 전원) → 선택 스킬에만 charge, 스택+쿨다운 2중 게이트, 콤보 가속·소프트캡. 서버 권위(클라 즉시 시전+재검증).
+
+| 항목 | 위치 | 설명 |
+|---|---|---|
+| 스킬 메타(`weaponType/loadoutSlot/isBasic/chargeCost/cooldown`) | `client|RoomServer/skill/skillTypes.hpp` `SkillAsset` | skill lua에서 파싱(`skillCompiler.cpp::tableToAsset`) |
+| `SkillLoadout::build()` | `client|RoomServer/skill/skillLoadout.hpp` | 컴파일된 자산 → 무기별 {기본, 3슬롯 assetId/코스트/쿨} |
+| 신규 패킷 | `ServerEngine/protocol.hpp` | `C_SelectSkill / S_SkillSelect / S_SkillCharge / S_SkillUseReject / S_ComboState` (사용 요청은 기존 `C_SkillStart` 재사용) |
+| `ChargeConfig` | `RoomServer/chargeConfig.{hpp,cpp}` | `resources/data/chargeConfig.lua`(몬스터 charge·윈도우·콤보·소프트캡) sol2 로드, `AssetManager` 전 룸 공유 |
+| `Player` 충전 상태 | `RoomServer/object.hpp` | `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_` |
+| `Object` 데미저 로그 + reward | `RoomServer/object.hpp` | `killChargeReward_`(스폰 시 `setupGoblin`에서 주입), `noteDamager`/`collectRecentDamagers` |
+| `Room::noteAndMaybeReward / distributeKillCharge` | `RoomServer/Room.cpp` | 데미지 기록 + HP 0 전이 시 최근 데미저 선택슬롯에 `reward×콤보×소프트캡`, `S_SkillCharge`/`S_ComboState` |
+| `Room::selectSkill / skillStart`(게이트) / `updateComboExpiry` | `RoomServer/Room.cpp` | 선택 동기화·사용 게이트(스택/쿨, 실패 시 `S_SkillUseReject`)·콤보 만료 |
+| `SkillDialHUD` | `client/ui/skillDialHUD.{hpp,cpp}` | 120° 회전 휠(선택=꼭대기), 슬롯별 충전/스택, ×N 배지, 0→1 준비 펄스 |
+| 충전 fill 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비. 아래서부터 일렁이는 액체 |
+| 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
+| 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
+| 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터) |
+
+> 시안: `docs/skill_hud_mockup/radial_dial.html`. 남은 폴리시(파티원 HUD 스택·콤보 바·사운드 자산·밸런스)는 설계 문서 §7 참조.
 
 ---
 

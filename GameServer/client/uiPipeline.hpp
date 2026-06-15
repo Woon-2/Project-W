@@ -21,7 +21,8 @@ namespace UIPipeline {
 	struct FrameData {
 		float screenWidth;
 		float screenHeight;
-		mu::Vec2 padding;
+		float time = 0.f;     // seconds; drives animated UI effects (skill charge fill)
+		float padding = 0.f;
 	};
 
 	struct DrawEvent {
@@ -31,6 +32,12 @@ namespace UIPipeline {
 		XMFLOAT4 colorMul = { 1.f, 1.f, 1.f, 1.f };  // per-draw color multiplier
 		// uv' = uv * uvScaleBias.xy + uvScaleBias.zw (identity = full texture). 9-slice 시 슬라이스별 부분 UV.
 		XMFLOAT4 uvScaleBias = { 1.f, 1.f, 0.f, 0.f };
+
+		// Skill charge-fill effect (mapped to Material.cRoughness/cMetallic; PS branches).
+		// effectMode: 0 = normal UI draw, 1 = charging (dim base, fill rises), 2 = ready
+		// (lit base, next-stack glow rises). fillAmount: 0..1 fraction toward next stack.
+		float fillAmount = 0.f;
+		float effectMode = 0.f;
 
 		// Optional scissor clip in backbuffer pixels. When clip==true the draw is
 		// restricted to clipRect (used by scrollable UI regions). Stamped by GFX

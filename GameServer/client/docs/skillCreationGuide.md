@@ -30,6 +30,26 @@ return skill   -- 반드시 skill 테이블을 반환
   내부적으로 시간순 정렬되므로 작성 순서는 자유.
 - `skill:addVFX(id, path)` — `id`를 PlayVFX/OnHit의 `vfxId`로 참조한다.
 
+### 스택형 충전 메타데이터 (선택, 무기 로드아웃용)
+
+스킬을 무기 다이얼(우하단 HUD)의 한 슬롯이나 기본 공격으로 편입하려면 아래 필드를 추가한다.
+지정하지 않으면 로드아웃 외 스킬(에디터/디버그용)로 취급된다. 시스템 전체 설계는
+`skillChargeSystem.md` 참조.
+
+```lua
+skill.weapon     = "sword"   -- sword|bow|wand|spear (PlayerWeaponType 매핑). 무기에 편입할 때 필수
+skill.isBasic    = true      -- 좌클릭 기본 공격. charge/쿨다운 게이트 면제(코스트 무시)
+-- 또는 다이얼 슬롯 스킬:
+skill.dialSlot   = 0         -- 0..2. 휠로 선택되는 다이얼 슬롯
+skill.chargeCost = 3         -- 1회 시전에 필요한 charge(스택 1칸). 정수 권장
+skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 살짝 길게
+```
+
+- 한 무기당 `isBasic` 1개 + `dialSlot` 0/1/2 각각 1개를 채운다(`skill/skillLoadout.hpp`가 자동 수집).
+- 아이콘은 `resources/UI/<스킬파일명>.dds`를 두고, 클라 `AssetManager::skillIconByAssetName()`의
+  이름→텍스처 매핑에 한 줄 추가하면 다이얼에 표시된다(스킬 자산 이름 기준, 예: `"SlashWave"`).
+- 무기·슬롯·코스트·쿨다운은 **재빌드 없이** lua만 고치면 반영된다(아이콘 추가만 C++ 한 줄).
+
 ### vfxId 바인딩 (필수 선결 조건)
 
 `vfxId`는 런타임에 실제 `ParticleEffect`로 매핑되어야 한다. 이 매핑은 lua가 아니라 C++에서 한다:

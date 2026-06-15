@@ -213,6 +213,20 @@ SkillAsset ServerSkillCompiler::tableToAsset(const sol::table& tbl) {
     asset.totalDuration = Milliseconds{ static_cast<float>(tbl.get_or("totalDurationMs", 0)) };
     asset.interruptible = tbl.get_or("interruptible", true);
 
+    // Stack-charge / loadout metadata (optional; absent fields keep defaults).
+    asset.weaponType = [&]() -> u8t {
+        const std::string w = tbl.get_or<std::string>("weapon", "");
+        if (w == "sword") return 0u;  // Katana
+        if (w == "spear") return 1u;  // SpearHook
+        if (w == "wand")  return 2u;  // CrystalWand
+        if (w == "bow")   return 3u;  // HeavyArrow
+        return 0xFFu;
+    }();
+    asset.loadoutSlot = tbl.get_or("dialSlot", -1);
+    asset.isBasic     = tbl.get_or("isBasic", false);
+    asset.chargeCost  = static_cast<float>(tbl.get_or("chargeCost", 0.0));
+    asset.cooldown    = Milliseconds{ static_cast<float>(tbl.get_or("cooldownMs", 0)) };
+
     sol::optional<sol::table> vfxList = tbl["vfxNames"];
     if (vfxList) {
         vfxList->for_each([&](sol::object, sol::object val) {

@@ -157,6 +157,7 @@
   <ItemGroup>
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="binaryImport.cpp" />
+    <ClCompile Include="chargeConfig.cpp" />
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
@@ -205,6 +206,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssetManager.hpp" />
+    <ClInclude Include="chargeConfig.hpp" />
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="errorHandling.hpp" />
@@ -238,6 +240,7 @@
     <ClInclude Include="rspch.hpp" />
     <ClInclude Include="skill\skillCompiler.hpp" />
     <ClInclude Include="skill\skillSystem.hpp" />
+    <ClInclude Include="skill\skillLoadout.hpp" />
     <ClInclude Include="skill\skillTypes.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="strongholdDef.hpp" />

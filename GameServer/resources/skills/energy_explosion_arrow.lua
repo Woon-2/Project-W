@@ -4,6 +4,10 @@
 
 local skill = Skill()
 skill.name             = "EnergyExplosionArrow"
+skill.weapon           = "bow"
+skill.dialSlot         = 2
+skill.chargeCost       = 9
+skill.cooldownMs       = 3800
 skill.totalDurationMs  = 3400
 skill.interruptible    = true
 

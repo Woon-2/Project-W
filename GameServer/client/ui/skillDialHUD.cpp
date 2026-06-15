@@ -1,0 +1,150 @@
+#include "pch.hpp"
+#include "skillDialHUD.hpp"
+#include "../gfx.hpp"
+#include "../uiPipeline.hpp"
+#include "digitAtlas.hpp"
+
+#include <cmath>
+#include <algorithm>
+
+namespace {
+    constexpr float kPi       = 3.14159265358979323846f;
+    constexpr float kTopDeg   = 90.f;    // selected slot sits at the top of the wheel
+    constexpr float kStepDeg  = 120.f;   // 3 slots evenly spaced -> symmetric, no teleport
+    constexpr float kRadius   = 95.f;
+    constexpr float kMarginX  = 130.f;   // wheel pivot offset from the right edge
+    constexpr float kMarginY  = 150.f;   // wheel pivot offset from the bottom edge
+    constexpr float kSelSize  = 96.f;
+    constexpr float kSideSize = 70.f;
+
+    inline mu::Mat4x4 quadWorld(float cx, float cy, float size) {
+        const float h = size * 0.5f;
+        return mu::Mat4x4(mu::scale(mu::Vec3{ h, h, 1.f }))
+             * mu::translate(mu::Vec3{ cx, cy, 0.f });
+    }
+}
+
+void SkillDialHUD::configure(unsigned weaponOrdinal,
+                             const Texture* const slotIcons[kSlots], const Texture* basicIcon,
+                             const float slotCost[kSlots], const float slotCooldownMs[kSlots],
+                             const Texture* digitAtlas) {
+    weaponOrdinal_ = weaponOrdinal;
+    basicIcon_  = basicIcon;
+    digitAtlas_ = digitAtlas;
+    for (int i = 0; i < kSlots; ++i) {
+        slotIcon_[i]       = slotIcons[i];
+        slotCost_[i]       = slotCost[i];
+        slotCooldownMs_[i] = slotCooldownMs[i];
+        charge_[i]         = 0.f;
+        cooldownEndSec_[i] = 0.f;
+    }
+    selected_  = 0;
+    rot_       = 0.f;
+    rotTarget_ = 0.f;
+}
+
+bool SkillDialHUD::setCharge(int slot, float charge) {
+    if (slot < 0 || slot >= kSlots) return false;
+    const int prevStacks = slotStacks(slot);
+    charge_[slot] = charge;
+    const int newStacks = slotStacks(slot);
+    const bool becameReady = (prevStacks < 1 && newStacks >= 1);
+    if (becameReady) readyPulse_[slot] = 0.45f;   // trigger the scale pop
+    return becameReady;
+}
+
+void SkillDialHUD::selectNext() { selected_ = (selected_ + 1) % kSlots;         rotTarget_ -= kStepDeg; }
+void SkillDialHUD::selectPrev() { selected_ = (selected_ + kSlots - 1) % kSlots; rotTarget_ += kStepDeg; }
+
+float SkillDialHUD::slotCharge(int slot) const { return (slot >= 0 && slot < kSlots) ? charge_[slot]   : 0.f; }
+float SkillDialHUD::slotCost(int slot)   const { return (slot >= 0 && slot < kSlots) ? slotCost_[slot] : 0.f; }
+
+int SkillDialHUD::slotStacks(int slot) const {
+    if (slot < 0 || slot >= kSlots) return 0;
+    const float c = slotCost_[slot];
+    return (c > 0.f) ? static_cast<int>(charge_[slot] / c) : 0;
+}
+
+bool SkillDialHUD::canUse(int slot, float nowSec) const {
+    return slotStacks(slot) >= 1 && nowSec >= cooldownEndSec_[slot];
+}
+
+void SkillDialHUD::notePredictedUse(int slot, float nowSec) {
+    if (slot >= 0 && slot < kSlots)
+        cooldownEndSec_[slot] = nowSec + slotCooldownMs_[slot] / 1000.f;
+}
+
+void SkillDialHUD::clearPredictedCooldown(int slot) {
+    if (slot >= 0 && slot < kSlots) cooldownEndSec_[slot] = 0.f;
+}
+
+void SkillDialHUD::update(float dtSec) {
+    const float k = std::min(1.f, dtSec * 12.f);   // critically-damped feel
+    rot_ += (rotTarget_ - rot_) * k;
+    for (int i = 0; i < kSlots; ++i)
+        readyPulse_[i] = std::max(0.f, readyPulse_[i] - dtSec);
+}
+
+void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
+    if (!visible_) return;
+
+    const float pivotX = screenW - kMarginX;
+    const float pivotY = kMarginY;   // bottom-origin pixel space (matches UI shader)
+
+    struct IconDraw { float cx, cy, size, fill; int mode; bool selected; int slot; };
+    IconDraw draws[kSlots];
+
+    for (int i = 0; i < kSlots; ++i) {
+        const float a     = (kTopDeg + i * kStepDeg + rot_) * (kPi / 180.f);
+        const bool  sel   = (i == selected_);
+        const float pulse = readyPulse_[i] / 0.45f;                 // 0..1, eased by linear decay
+        const float size  = (sel ? kSelSize : kSideSize) * (1.f + pulse * 0.22f);
+        const float cx   = pivotX + kRadius * std::cos(a);
+        const float cy   = pivotY + kRadius * std::sin(a);
+
+        const int   stacks = slotStacks(i);
+        const float cost   = slotCost_[i];
+        const float nf     = (cost > 0.f) ? (charge_[i] - stacks * cost) / cost : 0.f;
+        draws[i] = { cx, cy, size, nf, (stacks >= 1 ? 2 : 1), sel, i };
+    }
+
+    // Icons: non-selected first, selected last so the selected one draws on top.
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int i = 0; i < kSlots; ++i) {
+            const IconDraw& d = draws[i];
+            if (d.selected != (pass == 1) || !slotIcon_[d.slot]) continue;
+            const XMFLOAT4 tint = d.selected ? XMFLOAT4{ 1.f, 1.f, 1.f, 1.f }
+                                             : XMFLOAT4{ 0.72f, 0.74f, 0.80f, 0.90f };
+            gfx.addDrawEvent(UIPipeline::DrawEvent{
+                .world      = quadWorld(d.cx, d.cy, d.size),
+                .pTex       = slotIcon_[d.slot],
+                .colorMul   = tint,
+                .fillAmount = d.fill,
+                .effectMode = static_cast<float>(d.mode),
+            });
+        }
+    }
+
+    // Stack badges (x2, x3, ...): only once 2+ casts are banked.
+    if (digitAtlas_) {
+        for (int i = 0; i < kSlots; ++i) {
+            const int stacks = slotStacks(i);
+            if (stacks < 2) continue;
+            const IconDraw& d = draws[i];
+            const float topLeftY = screenH - d.cy;   // bottom-origin -> top-left origin
+            DigitAtlas::emitNumber(gfx, digitAtlas_,
+                d.cx + d.size * 0.30f, topLeftY - d.size * 0.30f,
+                d.size * 0.34f, screenH, stacks,
+                XMFLOAT4{ 1.f, 0.82f, 0.30f, 1.f }, DigitAtlas::Align::Center);
+        }
+    }
+
+    // Basic-attack chip (weapon icon) anchored to the corner.
+    if (basicIcon_) {
+        gfx.addDrawEvent(UIPipeline::DrawEvent{
+            .world    = quadWorld(screenW - 44.f, 44.f, 52.f),
+            .pTex     = basicIcon_,
+            .colorMul = XMFLOAT4{ 0.92f, 0.92f, 0.92f, 0.95f },
+        });
+    }
+}

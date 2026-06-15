@@ -38,6 +38,12 @@ enum class PacketType : uint16 {
 	S_SkillStart,
 	S_SkillHit,
 
+	C_SelectSkill,
+	S_SkillSelect,
+	S_SkillCharge,
+	S_SkillUseReject,
+	S_ComboState,
+
 	S_DebugHitbox,
 
 	S_StrongholdState,
@@ -269,6 +275,43 @@ struct SSkillHitPacket : public PacketHeader {
 	int32               newHp;
 	uint32              skillAssetId;
 	DirectX::XMFLOAT3  targetVelocity;  // target's linear velocity at hit time; used for ragdoll impulse on kill
+};
+
+// --- Stack-charge skill system ---
+
+// Client -> server: the player rotated the dial to a new selected slot (0..2).
+// Server stores it; monster-kill charge is credited to the player's selected slot.
+struct CSelectSkillPacket : public PacketHeader {
+	uint8 slot;
+};
+
+// Server -> other clients: relay a player's selected slot (teammate HUD mirror).
+struct SSkillSelectPacket : public PacketHeader {
+	uint16 playerId;
+	uint8  slot;
+};
+
+// Server -> all clients: authoritative per-slot charge for a player. Clients
+// derive stacks (= floor(charge / chargeCost)) and the fill fraction from the
+// skill asset. Sent on kill-credit and on cast consumption.
+struct SSkillChargePacket : public PacketHeader {
+	uint16 playerId;
+	uint8  slot;
+	float  charge;
+};
+
+// Server -> caster only: a wheel-click cast was rejected (insufficient stack or
+// still on cooldown) after the client already played it locally; caster rolls back.
+struct SSkillUseRejectPacket : public PacketHeader {
+	uint8 slot;
+};
+
+// Server -> caster: consecutive-kill combo state driving the combo UI. windowMs
+// is the full combo window so the client renders the local countdown.
+struct SComboStatePacket : public PacketHeader {
+	uint16 playerId;
+	uint16 comboCount;
+	float  windowMs;
 };
 
 struct OBBInfo {

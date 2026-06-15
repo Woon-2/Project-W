@@ -5,6 +5,8 @@
 #include "Level.hpp"
 #include "serverAnimation.hpp"
 #include "skill/skillTypes.hpp"
+#include "skill/skillLoadout.hpp"
+#include "chargeConfig.hpp"
 
 class AssetManager {
 public:
@@ -24,6 +26,12 @@ public:
 	// 부팅 시 1회 컴파일되어 전 룸이 공유하는 읽기 전용 스킬 레지스트리.
 	const std::vector<SkillAsset>& skillAssets() const { return skillAssets_; }
 
+	// 부팅 시 1회 로드되는 스택 충전 경제 튜닝(전 룸 공유, 읽기 전용).
+	const ChargeConfig& chargeConfig() const { return chargeConfig_; }
+
+	// 무기별 스킬 로드아웃(기본공격 + 3슬롯 + 코스트). 부팅 시 1회 빌드.
+	const SkillLoadout& loadout() const { return loadout_; }
+
 	static const ServerAnimClip* findClip(const std::vector<ServerAnimClip>& set,
 	                                      std::string_view name);
 
@@ -38,6 +46,8 @@ private:
 	std::vector<ServerAnimClip> goblinAnimations_;
 
 	std::vector<SkillAsset> skillAssets_;   // 전 룸 공유(부팅 1회 컴파일, 읽기 전용)
+	ChargeConfig            chargeConfig_;  // 전 룸 공유(부팅 1회 로드, 읽기 전용)
+	SkillLoadout            loadout_;       // 무기→스킬 로드아웃(부팅 1회 빌드)
 };
 
 #endif // room_server_asset_manager_hpp

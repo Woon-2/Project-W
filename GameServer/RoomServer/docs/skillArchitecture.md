@@ -315,3 +315,25 @@ SkillSystem은 **객체를 raw 포인터로 직접 들고 있지 않고**, `Skil
 
 > **신규 엔티티/디스폰 경로 추가 시:** objectById 슬롯 null + (필요 시) 소유 스킬 interrupt를
 > 반드시 함께 처리할 것.
+
+---
+
+## 스택형 스킬 충전 (Stack-Charge) — 서버 권위
+
+상세 설계는 `client/docs/skillChargeSystem.md`. 서버가 charge/쿨다운/콤보의 단일 권위원이다.
+
+- **튜닝 데이터:** `RoomServer/chargeConfig.{hpp,cpp}`가 `resources/data/chargeConfig.lua`(몬스터→charge,
+  `damageWindowMs`, combo, softCap)를 부팅 시 sol2로 로드해 `AssetManager`가 전 룸 공유한다. 스킬 코스트/쿨/
+  무기·슬롯은 skill lua → `SkillAsset` 메타(별개 경로).
+- **상태:** `Player`(`object.hpp`)에 `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_`.
+  몬스터(`Object`)에 `killChargeReward_`(스폰 시 `setupGoblin`에서 ChargeConfig로 주입) + 데미저 로그.
+- **귀속/분배:** 모든 플레이어→몬스터 데미지를 `Room::noteAndMaybeReward()`로 경유(주 경로=`updateSkillSystem`
+  의 `EvSkillHit` 루프, 보조=`attack()`). HP 0 전이 시 `distributeKillCharge()`가 최근 `damageWindowMs` 내
+  데미저 전원의 **선택 슬롯**에 `reward × comboMult × softCapFactor`를 가산하고 `S_SkillCharge`(전원)+
+  `S_ComboState`(해당)를 보낸다. 콤보 만료는 `updateComboExpiry()`(매 틱).
+- **사용 게이트:** `Room::skillStart()`가 자산 메타로 분기 — `isBasic`이면 무게이트, 스킬이면 슬롯·무기·
+  스택(`floor(charge/cost)≥1`)·쿨다운을 검증. 성공 시 소모+쿨 설정+`S_SkillCharge`, 실패 시 캐스터에게
+  `S_SkillUseReject`. 선택은 `Room::selectSkill()`(`C_SelectSkill`→`S_SkillSelect` 중계).
+
+> **신규 몬스터에 charge를 주려면:** `chargeConfig.lua`의 `monsters`에 ObjectType 항목 추가 +
+> 스폰 시 `setKillChargeReward()` 설정(보스 등 개별 override 가능).

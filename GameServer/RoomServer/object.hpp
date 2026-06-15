@@ -6,6 +6,7 @@
 #include "terrain.hpp"
 #include "serverAnimation.hpp"
 #include <vector>
+#include <utility>
 
 class GameSession;
 
@@ -107,6 +108,25 @@ public:
 	void setHp(int32 hp) { hp_ = hp; }
 	int32 hp() const { return hp_; }
 
+	// --- Stack-charge: kill-charge reward + recent-damager attribution (monsters) ---
+	// killChargeReward_ > 0 marks a chargeable monster; set at spawn from ChargeConfig.
+	float killChargeReward() const { return killChargeReward_; }
+	void  setKillChargeReward(float v) { killChargeReward_ = v; }
+
+	// Record that a player dealt damage at time `now`. One entry per player
+	// (party is tiny); repeat hits just refresh the timestamp.
+	void noteDamager(int32 playerId, Milliseconds now) {
+		for (auto& d : damagers_) { if (d.first == playerId) { d.second = now; return; } }
+		damagers_.push_back({ playerId, now });
+	}
+	// Append player ids that damaged within [now - window, now] to `out`.
+	void collectRecentDamagers(Milliseconds now, Milliseconds window,
+	                           std::vector<int32>& out) const {
+		for (const auto& d : damagers_)
+			if (now - d.second <= window) out.push_back(d.first);
+	}
+	void clearDamagers() { damagers_.clear(); }
+
 	void setLastMoveTimestamp(uint32 timestamp) { lastMoveTimestamp_ = timestamp; }
 	uint32 lastMoveTimestamp() const { return lastMoveTimestamp_; }
 
@@ -150,6 +170,9 @@ private:
 
 	int32 hp_{1'000'000};
 
+	float killChargeReward_ = 0.f;   // charge granted to attackers on this object's death
+	std::vector<std::pair<int32, Milliseconds>> damagers_;  // recent (playerId, damage time)
+
 	uint32 lastMoveTimestamp_{0u};
 
 	Milliseconds posUpdateMs_{0ms};
@@ -170,8 +193,42 @@ public:
 	void setWeaponType(PlayerWeaponType weaponType) { weaponType_ = weaponType; }
 	PlayerWeaponType weaponType() const { return weaponType_; }
 
+	// --- Stack-charge skill state (server-authoritative) ---
+	static constexpr int kSkillSlots = 3;
+
+	uint8 selectedSlot() const { return selectedSlot_; }
+	void  setSelectedSlot(uint8 s) { selectedSlot_ = (s < kSkillSlots) ? s : 0; }
+
+	float skillCharge(int slot) const {
+		return (slot >= 0 && slot < kSkillSlots) ? skillCharge_[slot] : 0.f;
+	}
+	void setSkillCharge(int slot, float v) {
+		if (slot >= 0 && slot < kSkillSlots) skillCharge_[slot] = v;
+	}
+	void addSkillCharge(int slot, float d) {
+		if (slot >= 0 && slot < kSkillSlots) skillCharge_[slot] += d;
+	}
+
+	Milliseconds cooldownEnd(int slot) const {
+		return (slot >= 0 && slot < kSkillSlots) ? cooldownEnd_[slot] : Milliseconds{ 0.f };
+	}
+	void setCooldownEnd(int slot, Milliseconds t) {
+		if (slot >= 0 && slot < kSkillSlots) cooldownEnd_[slot] = t;
+	}
+
+	uint16 comboCount() const { return comboCount_; }
+	void   setComboCount(uint16 c) { comboCount_ = c; }
+	Milliseconds lastCreditMs() const { return lastCreditMs_; }
+	void         setLastCreditMs(Milliseconds t) { lastCreditMs_ = t; }
+
 private:
 	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+
+	uint8        selectedSlot_ = 0;
+	float        skillCharge_[kSkillSlots] = { 0.f, 0.f, 0.f };
+	Milliseconds cooldownEnd_[kSkillSlots] = {};
+	uint16       comboCount_   = 0;
+	Milliseconds lastCreditMs_ { 0.f };
 };
 
 class Cube : public Object {

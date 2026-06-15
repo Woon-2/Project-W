@@ -234,6 +234,10 @@ public:
     const SkillAsset* findAsset(std::string_view name) const;
     const SkillAsset* findAsset(u32t id) const;
 
+    // Read-only registry (stable after registerAssets); used to build the
+    // weapon -> dial loadout for the skill HUD.
+    const std::vector<SkillAsset>& assets() const { return assetRegistry_; }
+
     // Start executing a skill on the given owner. `seed` is the per-cast
     // deterministic seed (0 = repeatable default; casters should pass a fresh
     // random value and share it via C_SkillStart).

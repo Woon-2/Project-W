@@ -4,6 +4,10 @@
 
 local skill = Skill()
 skill.name             = "CrystalsFrontAttack"
+skill.weapon           = "wand"
+skill.dialSlot         = 0
+skill.chargeCost       = 4
+skill.cooldownMs       = 1200
 skill.totalDurationMs  = 800
 skill.interruptible    = true
 

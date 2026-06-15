@@ -9,6 +9,7 @@
 #include "../ClientApp.hpp"
 #include "../sound/soundManager.hpp"
 #include "../ui/widgets/Button.hpp"
+#include "../ui/digitAtlas.hpp"
 #include "../skill/skillCompiler.hpp"
 
 extern HWND ghWnd;
@@ -1979,6 +1980,9 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		buildVfxGameplayConfigs(assets, "../resources");
 		skillSystem_.registerAssets(std::move(assets));
 
+		// Build the bottom-right skill dial from this weapon's loadout metadata.
+		setupSkillDial(playerInfo.weaponType);
+
 		skillObjectById_.assign(256, nullptr);
 		player_->setFaction(Faction::Players);
 		skillObjectById_[player_->getId()] = player_.get();
@@ -3369,9 +3373,31 @@ void Game::renderInGame() {
 
 	uiManager_.render(gfx_);
 
+	skillDial_.render(gfx_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top));
+
+	// Combo counter above the dial: kill-streak accelerator feedback. Shown while
+	// an active combo (>=2) is within its window; size eases down as it expires.
+	if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
+		const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+		const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+		const float frac = (comboWindowMs_ > 0.f)
+			? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
+		DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
+			sw - 130.f, sh - 150.f - 132.f, 34.f + frac * 12.f, sh,
+			static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
+			DigitAtlas::Align::Center);
+	}
+
+	static const auto uiT0 = std::chrono::steady_clock::now();
+	const float uiTimeSec = std::chrono::duration<float>(
+		std::chrono::steady_clock::now() - uiT0).count();
+
 	auto frameDataUI = UIPipeline::FrameData{
 		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
-		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
+		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top ),
+		.time = uiTimeSec
 	};
 	gfx_.addFrameData(frameDataUI);
 
@@ -4104,6 +4130,15 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case WM_SIZE:
 		return DefWindowProcA(hWnd, msg, wParam, lParam);
 
+	case WM_MOUSEWHEEL:
+		// In-game: accumulate wheel notches for the skill dial (consumed in
+		// processInputGame). With a cursor-capturing UI open, forward to the UI.
+		if (uiManager_.needsCursor())
+			uiManager_.onWndMsg(msg, wParam, lParam);
+		else
+			wheelAccum_ += GET_WHEEL_DELTA_WPARAM(wParam);
+		return 0;
+
 	default:
 		uiManager_.onWndMsg(msg, wParam, lParam);
 		break;
@@ -4151,6 +4186,63 @@ void Game::castSkillByName(std::string_view name) {
 	const uint32 skillSeed = std::random_device{}();
 	skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_, skillSeed);
 	sendSkillStartPacket(asset->id, skillSeed);
+}
+
+void Game::sendSelectSkillPacket(uint8 slot) {
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSelectSkillPacket(slot));
+}
+
+void Game::setupSkillDial(PlayerWeaponType weaponType) {
+	myWeaponOrdinal_ = static_cast<unsigned>(weaponType);
+	skillLoadout_ = SkillLoadout::build(skillSystem_.assets());
+	const WeaponLoadout& wl = skillLoadout_.forWeapon(myWeaponOrdinal_);
+
+	const Texture* slotIcons[SkillDialHUD::kSlots] = { nullptr, nullptr, nullptr };
+	float costs[SkillDialHUD::kSlots] = { 0.f, 0.f, 0.f };
+	float cds[SkillDialHUD::kSlots]   = { 0.f, 0.f, 0.f };
+	for (int s = 0; s < SkillDialHUD::kSlots; ++s) {
+		dialSlotAssetId_[s] = wl.slotAssetId[s];
+		costs[s] = wl.slotCost[s];
+		cds[s]   = wl.slotCooldownMs[s];
+		if (wl.slotAssetId[s] >= 0) {
+			if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(wl.slotAssetId[s])))
+				slotIcons[s] = assetManager_.skillIconByAssetName(a->name);
+		}
+	}
+	basicSkillAssetId_ = wl.basicAssetId;
+	skillDial_.configure(myWeaponOrdinal_, slotIcons, assetManager_.playerWeaponIcon(weaponType),
+	                     costs, cds, assetManager_.digitAtlasTex());
+	skillDial_.setVisible(true);
+}
+
+void Game::onSkillCharge(uint16 playerId, uint8 slot, float charge) {
+	if (!player_) return;
+	if (playerId == static_cast<uint16>(player_->getId())) {
+		// setCharge reports the 0 -> 1 transition; the icon also pops + flips to its
+		// lit "ready" shader mode. Fire the audio cue on the transition.
+		if (skillDial_.setCharge(slot, charge))
+			INet::ClientApp::sound().playSfx("skill_ready", 1.f);
+	} else if (slot < SkillDialHUD::kSlots) {
+		teammateCharge_[playerId][slot] = charge;
+	}
+}
+
+void Game::onSkillSelect(uint16 playerId, uint8 slot) {
+	if (player_ && playerId == static_cast<uint16>(player_->getId())) return;  // own selection is local
+	teammateSelected_[playerId] = slot;
+}
+
+void Game::onSkillUseReject(uint8 slot) {
+	skillDial_.clearPredictedCooldown(slot);
+	if (player_)
+		skillSystem_.interruptAll(static_cast<i32t>(player_->getId()), skillCtx_);  // roll back rejected cast
+}
+
+void Game::onComboState(uint16 playerId, uint16 comboCount, float windowMs) {
+	if (player_ && playerId != static_cast<uint16>(player_->getId())) return;  // own combo only
+	comboCount_    = comboCount;
+	comboWindowMs_ = windowMs;
+	comboSecLeft_  = windowMs / 1000.f;
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -4283,56 +4375,46 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
-	// 임시 스킬 키바인딩 (16종): 1~0 = 슬롯 1~10, Shift+1~6 = 슬롯 11~16.
-	// Q는 기존 SwordSlash 단축키로 유지. 정식 스킬 슬롯 UI가 생기면 대체한다.
-	// 순서는 editor/characterSkillMap.hpp의 Player 스킬 순서에서
-	// 미완성 스킬(AoESlashGreen, TornadoShot)을 뺀 것이다.
+	// --- Skill dial: wheel selects, wheel-click uses, left-click = basic attack ---
+	skillDial_.update(deltaTime.count() / 1000.f);
+	comboSecLeft_ = std::max(0.f, comboSecLeft_ - deltaTime.count() / 1000.f);   // local combo countdown
+
+	const float nowSec = std::chrono::duration<float>(
+		std::chrono::steady_clock::now().time_since_epoch()).count();
+
 	if (!playerDead_ && !uiManager_.needsCursor()) {
-		static constexpr std::array<std::string_view, 16> kTempSkillKeymap = {
-			"SwordSlash",           // 1
-			"SlashWave",            // 2
-			"SlashCombo",           // 3
-			"Slash7",               // 4
-			"Spikes",               // 5
-			"CrystalsFrontAttack",  // 6
-			"RedEnergyExplosion",   // 7
-			"CrystalsCrossFade",    // 8
-			"Arrow",                // 9
-			"ArrowVolley",          // 0
-			"ArrowRain",            // Shift+1
-			"EnergyExplosionArrow", // Shift+2
-			"Piercing",             // Shift+3
-			"PiercingSlash",        // Shift+4
-			"PiercingCircleSlash",  // Shift+5
-			"PiercingMulti",        // Shift+6
-		};
-		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
-		for (int i = 0; i < 10; ++i) {
-			const int vk = (i == 9) ? '0' : ('1' + i);
-			if (!(keyboardStateCurr_[vk] & 0x80) || (keyboardStatePrev_[vk] & 0x80))
-				continue;
-			const std::size_t slot = shiftHeld ? static_cast<std::size_t>(i) + 10
-			                                   : static_cast<std::size_t>(i);
-			if (slot < kTempSkillKeymap.size())
-				castSkillByName(kTempSkillKeymap[slot]);
+		// Wheel selection (one notch = one slot). Up = prev, down = next.
+		while (wheelAccum_ >= WHEEL_DELTA) {
+			wheelAccum_ -= WHEEL_DELTA;
+			skillDial_.selectPrev();
+			sendSelectSkillPacket(static_cast<uint8>(skillDial_.selected()));
 		}
-		if ((keyboardStateCurr_['Q'] & 0x80) && !(keyboardStatePrev_['Q'] & 0x80))
-			castSkillByName("SwordSlash");
-	}
+		while (wheelAccum_ <= -WHEEL_DELTA) {
+			wheelAccum_ += WHEEL_DELTA;
+			skillDial_.selectNext();
+			sendSelectSkillPacket(static_cast<uint8>(skillDial_.selected()));
+		}
 
-	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생
-	if (!playerDead_
-		&& !uiManager_.needsCursor()	// ui가 커서를 필요로 하는 상태가 아니어야 한다. (UI 상호작용 중에 공격이 나가는 것을 방지)
-		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
-	{
-		sendAttackPacket();
-		holdEvent( eventList_, EvAttack( player_->getId() ) );
+		// Wheel click (middle button): use the selected skill if it has a stack and
+		// is off (predicted) cooldown. Instant cast; the server re-validates.
+		if ((keyboardStateCurr_[VK_MBUTTON] & 0x80) && !(keyboardStatePrev_[VK_MBUTTON] & 0x80)) {
+			const int slot = skillDial_.selected();
+			if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
+				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
+					castSkillByName(a->name);
+					skillDial_.notePredictedUse(slot, nowSec);
+				}
+			}
+		}
 
-		const auto slashPos = player_->renderState().pos
-		                    + player_->forward() * 1.f
-		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		slashWaveEffect_.play(slashPos, player_->orient());
+		// Left click: basic attack (ungated weapon skill).
+		if ((keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
+		    && basicSkillAssetId_ >= 0) {
+			if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
+				castSkillByName(a->name);
+		}
+	} else {
+		wheelAccum_ = 0;   // discard notches while a cursor UI is open or the player is dead
 	}
 }
 

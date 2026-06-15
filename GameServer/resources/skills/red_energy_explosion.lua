@@ -6,6 +6,10 @@
 
 local skill = Skill()
 skill.name             = "RedEnergyExplosion"
+skill.weapon           = "wand"
+skill.dialSlot         = 2
+skill.chargeCost       = 10
+skill.cooldownMs       = 2400
 skill.totalDurationMs  = 2000
 skill.interruptible    = true
 

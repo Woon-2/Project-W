@@ -33,6 +33,9 @@ public:
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
+	// Skill dial icon resolved by compiled skill asset name (e.g. "SlashWave").
+	// Returns nullptr if the asset has no dial icon.
+	const Texture* skillIconByAssetName(std::string_view assetName) const;
 	const Texture* flameTex() const { return &flameTex_; }
 	const Texture* smokeTex() const { return &smokeTex_; }
 	const Mesh*    meshSlash3()            const { return &meshSlash3_; }
@@ -105,6 +108,19 @@ private:
 	Texture heavyArrow_{};
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
+	// Skill dial icons (12), one per selectable weapon skill.
+	Texture skillIconSlashWave_{};
+	Texture skillIconSlash7_{};
+	Texture skillIconSlashCombo_{};
+	Texture skillIconArrowVolley_{};
+	Texture skillIconArrowRain_{};
+	Texture skillIconEnergyExplosionArrow_{};
+	Texture skillIconCrystalsFront_{};
+	Texture skillIconCrystalsCross_{};
+	Texture skillIconRedEnergy_{};
+	Texture skillIconPiercingSlash_{};
+	Texture skillIconPiercingCircle_{};
+	Texture skillIconPiercingMulti_{};
 	Texture flameTex_{};
 	Texture smokeTex_{};
 	Mesh    meshSlash3_{};

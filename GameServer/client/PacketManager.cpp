@@ -69,6 +69,22 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSSkillHitPacket( buffer, len );
 		break;
 
+	case PacketType::S_SkillCharge:
+		handleSSkillChargePacket( buffer, len );
+		break;
+
+	case PacketType::S_SkillSelect:
+		handleSSkillSelectPacket( buffer, len );
+		break;
+
+	case PacketType::S_SkillUseReject:
+		handleSSkillUseRejectPacket( buffer, len );
+		break;
+
+	case PacketType::S_ComboState:
+		handleSComboStatePacket( buffer, len );
+		break;
+
 	case PacketType::S_DebugHitbox:
 		handleSDebugHitboxPacket( buffer, len );
 		break;
@@ -260,6 +276,26 @@ void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId, pkt->targetVelocity );
 }
 
+void PacketManager::handleSSkillChargePacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SSkillChargePacket*>(buffer);
+	INet::ClientApp::onlineGame()->onSkillCharge( pkt->playerId, pkt->slot, pkt->charge );
+}
+
+void PacketManager::handleSSkillSelectPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SSkillSelectPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onSkillSelect( pkt->playerId, pkt->slot );
+}
+
+void PacketManager::handleSSkillUseRejectPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SSkillUseRejectPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onSkillUseReject( pkt->slot );
+}
+
+void PacketManager::handleSComboStatePacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SComboStatePacket*>(buffer);
+	INet::ClientApp::onlineGame()->onComboState( pkt->playerId, pkt->comboCount, pkt->windowMs );
+}
+
 void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SDebugHitboxPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onDebugHitboxes( pkt );
@@ -323,6 +359,20 @@ std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAss
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_SkillStart;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCSelectSkillPacket(uint8 slot) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CSelectSkillPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CSelectSkillPacket>();
+	pkt->slot = slot;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_SelectSkill;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

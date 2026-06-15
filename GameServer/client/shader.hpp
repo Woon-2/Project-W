@@ -1264,7 +1264,8 @@ namespace UIShader {
 	struct PerFrameData {
 		float screenWidth;
 		float screenHeight;
-		XMFLOAT2 padding;
+		float time;        // seconds; drives animated UI effects (skill charge fill)
+		float padding;
 	};
 
 } // namespace UIShader

@@ -2,6 +2,8 @@
 #define __Online_game_HPP
 
 #include <atomic>
+#include <array>
+#include <unordered_map>
 
 #include "../IGame.hpp"
 
@@ -31,8 +33,10 @@
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
+#include "../ui/skillDialHUD.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
+#include "../skill/skillLoadout.hpp"
 
 class Timer;
 class SendBuffer;
@@ -89,6 +93,11 @@ public:
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
+	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
+	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
+	void onSkillSelect( uint16 playerId, uint8 slot );
+	void onSkillUseReject( uint8 slot );
+	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -113,6 +122,8 @@ private:
 	void sendMouseMovePacket();
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
+	void sendSelectSkillPacket(uint8 slot);
+	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
@@ -284,6 +295,20 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
+
+	// --- Stack-charge skill HUD ---
+	SkillDialHUD skillDial_{};
+	SkillLoadout skillLoadout_{};
+	unsigned     myWeaponOrdinal_    = 0;
+	int          dialSlotAssetId_[3] = { -1, -1, -1 };
+	int          basicSkillAssetId_  = -1;
+	int          wheelAccum_         = 0;     // accumulated WM_MOUSEWHEEL delta
+	uint16       comboCount_         = 0;     // last S_ComboState (own combo)
+	float        comboWindowMs_      = 0.f;
+	float        comboSecLeft_       = 0.f;   // local countdown of the combo window
+	// Teammate charge/selection mirror (for the party HP HUD stack indicator).
+	std::unordered_map<uint16, std::array<float, 3>> teammateCharge_{};
+	std::unordered_map<uint16, uint8>                teammateSelected_{};
 
 	UI::UIManager    uiManager_{};
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_

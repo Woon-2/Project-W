@@ -57,6 +57,7 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
 	g.setCanReceiveDamage(true);   // skill system targets require this (default ctor leaves it false)
+	g.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Goblin));
 	g.body().setMotionType(MotionType::Dynamic);
 	g.body().setMass(70.f);
 	g.body().setLinearDamping(0.1f);
@@ -323,6 +324,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 
 	// 경과 시간 누적, NpcGroup 기억 만료 정리, 활동 영역 밖 플레이어 메모리 정리
 	elapsedMs_ += dt;
+	updateComboExpiry();   // resets combos whose window elapsed (sends S_ComboState 0)
 	for (auto& grp : npcGroups_) {
 		grp->update(elapsedMs_);
 		grp->clearMemoryIfPlayerOutside(*this);
@@ -728,8 +730,10 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		Object* tgt = objectById_[hit->targetId];
 		if (!tgt) continue;
 
-		int32 newHp = std::max(tgt->hp() - hit->damage, 0);
+		const int32 prevHp = tgt->hp();
+		int32 newHp = std::max(prevHp - hit->damage, 0);
 		tgt->setHp(newHp);
+		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
 			static_cast<uint16>(hit->attackerId),
 			static_cast<uint16>(hit->targetId),
@@ -760,6 +764,29 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 
 	auto* player = sessionIt->second->player();
 	if (player->hp() <= 0) return;
+
+	// Stack-charge gate: selectable skills need >=1 stack and an elapsed cooldown.
+	// Basic attacks (isBasic) skip the gate. The client predicts the cast locally
+	// from its synced charge/cooldown; a rejected cast rolls back via S_SkillUseReject.
+	if (const SkillAsset* asset = findSkillAsset(skillAssetId); asset && !asset->isBasic) {
+		const int  slot      = asset->loadoutSlot;
+		const bool validSlot = (slot >= 0 && slot < Player::kSkillSlots);
+		const bool ownsWeapon = static_cast<unsigned>(asset->weaponType)
+		                        == static_cast<unsigned>(player->weaponType());
+		const Milliseconds now = elapsedMs_;
+		const float cost   = asset->chargeCost;
+		const int   stacks = (cost > 0.f) ? static_cast<int>(player->skillCharge(slot) / cost) : 0;
+		const bool  ready  = validSlot && ownsWeapon && stacks >= 1 && now >= player->cooldownEnd(slot);
+		if (!ready) {
+			sessionIt->second->send(PacketManager::makeSSkillUseRejectPacket(
+				static_cast<uint8>(validSlot ? slot : 0)));
+			return;
+		}
+		player->addSkillCharge(slot, -cost);
+		player->setCooldownEnd(slot, now + asset->cooldown);
+		broadcast(PacketManager::makeSSkillChargePacket(
+			static_cast<uint16>(player->getId()), static_cast<uint8>(slot), player->skillCharge(slot)));
+	}
 
 	// Compute elapsed time for lag compensation (same pattern as attack())
 	uint64 serverNow = static_cast<uint64>(
@@ -830,8 +857,10 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		AABB goblinAABB{ goblin.rewindPos(targetMs), {1.0f, 2.0f, 1.0f} };
 
 		if (collides(hitbox, goblinAABB).hit) {
-			int32 newHp = std::max(goblin.hp() - kDamage, 0);
+			const int32 prevHp = goblin.hp();
+			int32 newHp = std::max(prevHp - kDamage, 0);
 			goblin.setHp(newHp);
+			noteAndMaybeReward(static_cast<int32>(player->getId()), &goblin, prevHp, newHp);
 
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(goblin.getId()), newHp));
 		}
@@ -843,13 +872,94 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		if (!o || o->hp() <= 0) return;
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
-			int32 newHp = std::max(o->hp() - kDamage, 0);
+			const int32 prevHp = o->hp();
+			int32 newHp = std::max(prevHp - kDamage, 0);
 			o->setHp(newHp);
+			noteAndMaybeReward(static_cast<int32>(player->getId()), o, prevHp, newHp);
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(o->getId()), newHp));
 		}
 	};
 	for (auto& npc : tacticalNpcs_) tryMeleeTactical(npc.get());
 	tryMeleeTactical(platoonLeader_.get());
+}
+
+void Room::selectSkill(int32 sessionId, uint8 slot) {
+	auto it = idSessionMap_.find(sessionId);
+	if (it == idSessionMap_.end()) return;
+	Player* p = it->second->player();
+	if (!p || slot >= Player::kSkillSlots) return;
+	p->setSelectedSlot(slot);
+	// Relay so teammate HUDs mirror the selected skill.
+	broadcastExcept(it->second,
+		PacketManager::makeSSkillSelectPacket(static_cast<uint16>(p->getId()), slot));
+}
+
+const SkillAsset* Room::findSkillAsset(uint32 id) const {
+	if (!assetManager_) return nullptr;
+	for (const SkillAsset& a : assetManager_->skillAssets())
+		if (a.id == id) return &a;
+	return nullptr;
+}
+
+void Room::noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp) {
+	if (!target || target->killChargeReward() <= 0.f) return;   // not a chargeable monster
+	Object* atk = (attackerObjId >= 0 && attackerObjId < static_cast<int32>(objectById_.size()))
+		? objectById_[attackerObjId] : nullptr;
+	if (!atk || atk->faction() != Faction::Players) return;     // credit player attackers only
+	target->noteDamager(attackerObjId, elapsedMs_);
+	if (prevHp > 0 && newHp <= 0) distributeKillCharge(target);
+}
+
+void Room::distributeKillCharge(Object* monster) {
+	if (!assetManager_) return;
+	const ChargeConfig& cfg     = assetManager_->chargeConfig();
+	const SkillLoadout& loadout = assetManager_->loadout();
+	const Milliseconds  now     = elapsedMs_;
+	const float         reward  = monster->killChargeReward();
+
+	std::vector<int32> attackers;
+	monster->collectRecentDamagers(now, cfg.damageWindow(), attackers);
+	for (int32 pid : attackers) {
+		GameSession* sess = findLivingSessionByPlayerId(pid);
+		if (!sess) continue;
+		Player* p = sess->player();
+		if (!p) continue;
+
+		// Combo: extend if within the window, else restart at 1.
+		const uint16 combo = (now - p->lastCreditMs() <= cfg.comboWindow())
+			? static_cast<uint16>(p->comboCount() + 1) : static_cast<uint16>(1);
+		p->setComboCount(combo);
+		p->setLastCreditMs(now);
+
+		// Credit the selected slot, scaled by combo accelerator and soft cap.
+		const int      slot      = p->selectedSlot();
+		const unsigned w         = static_cast<unsigned>(p->weaponType());
+		const float    cost      = loadout.cost(w, slot);
+		const int      curStacks = (cost > 0.f) ? static_cast<int>(p->skillCharge(slot) / cost) : 0;
+		const float    gain      = reward * cfg.comboMult(combo) * cfg.softCapFactor(curStacks);
+		p->addSkillCharge(slot, gain);
+
+		broadcast(PacketManager::makeSSkillChargePacket(
+			static_cast<uint16>(p->getId()), static_cast<uint8>(slot), p->skillCharge(slot)));
+		sess->send(PacketManager::makeSComboStatePacket(
+			static_cast<uint16>(p->getId()), combo, cfg.comboWindow().count()));
+	}
+	monster->clearDamagers();
+}
+
+void Room::updateComboExpiry() {
+	if (!assetManager_) return;
+	const Milliseconds window = assetManager_->chargeConfig().comboWindow();
+	const Milliseconds now    = elapsedMs_;
+	for (GameSession* s : livingPlayersCache_) {
+		Player* p = s->player();
+		if (!p || p->comboCount() == 0) continue;
+		if (now - p->lastCreditMs() > window) {
+			p->setComboCount(0);
+			s->send(PacketManager::makeSComboStatePacket(
+				static_cast<uint16>(p->getId()), 0, window.count()));
+		}
+	}
 }
 
 void Room::broadcast(const std::shared_ptr<SendBuffer>& sendBuffer) {

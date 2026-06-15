@@ -30,6 +30,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCSkillStartPacket(session, buffer, len);
 		break;
 
+	case PacketType::C_SelectSkill:
+		handleCSelectSkillPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -79,6 +83,13 @@ void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer,
 	uint32 skillSeed    = pkt->skillSeed;
 	session->room()->doAsync( [session, skillAssetId, clientMs, skillSeed]() {
 		session->room()->skillStart( session->id(), skillAssetId, clientMs, skillSeed );
+	} );
+}
+
+void PacketManager::handleCSelectSkillPacket( GameSession* session, byte* buffer, int32 len ) {
+	uint8 slot = reinterpret_cast<CSelectSkillPacket*>(buffer)->slot;
+	session->room()->doAsync( [session, slot]() {
+		session->room()->selectSkill( session->id(), slot );
 	} );
 }
 
@@ -294,6 +305,67 @@ std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 attackerId, uin
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_Hit;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillSelectPacket(uint16 playerId, uint8 slot) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SSkillSelectPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SSkillSelectPacket>();
+	pkt->playerId = playerId;
+	pkt->slot     = slot;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_SkillSelect;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillChargePacket(uint16 playerId, uint8 slot, float charge) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SSkillChargePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SSkillChargePacket>();
+	pkt->playerId = playerId;
+	pkt->slot     = slot;
+	pkt->charge   = charge;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_SkillCharge;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillUseRejectPacket(uint8 slot) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SSkillUseRejectPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SSkillUseRejectPacket>();
+	pkt->slot = slot;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_SkillUseReject;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSComboStatePacket(uint16 playerId, uint16 comboCount, float windowMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SComboStatePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SComboStatePacket>();
+	pkt->playerId   = playerId;
+	pkt->comboCount = comboCount;
+	pkt->windowMs   = windowMs;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_ComboState;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

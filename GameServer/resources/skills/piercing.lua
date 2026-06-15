@@ -4,6 +4,8 @@
 
 local skill = Skill()
 skill.name             = "Piercing"
+skill.weapon           = "spear"
+skill.isBasic          = true
 skill.totalDurationMs  = 600
 skill.interruptible    = true
 
