@@ -6,6 +6,7 @@
 class IGame;
 class SendBuffer;
 class Timer;
+class SoundManager;
 
 namespace Online { class Game; }
 
@@ -41,11 +42,15 @@ public:
 	// Online 모드가 아닐 땐 사용하지 않도록 한다.
 	static Online::Game* onlineGame();
 
+	// 프로세스 전역 오디오 엔진. init() 이후 항상 유효하다(디바이스 실패 시에도 객체는 존재하며 no-op).
+	static SoundManager& sound();
+
 	static const std::string& serverIp() { return serverSession_->ip(); }
 	static uint16 serverPort() { return serverSession_->port(); }
 
 private:
 	static std::unique_ptr<IGame> game_;
+	static std::unique_ptr<SoundManager> sound_;
 	static std::unique_ptr<ServerSession> serverSession_;
 	// 은퇴한 로비 세션. 닫힌 소켓의 잔여 완료 APC(완료 콜백의 owner 포인터)가 안전히 드레인되도록
 	// 객체를 살려둔다(프로세스 수명 동안 보관, 1개라 무시 가능).

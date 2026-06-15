@@ -13,6 +13,8 @@ HWND ghWnd = nullptr;
 RECT gWndRect{ 0, 0, 1024, 768 };
 RECT gClientRect{ 0, 0, 1024, 768 };
 bool gClose = false;
+// 창 활성(포커스) 상태. 비활성 시 오디오를 음소거하기 위해 게임 렌더에서 참조한다.
+bool gWindowActive = true;
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -173,6 +175,12 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+
+	case WM_ACTIVATEAPP:
+		// 창 활성 상태 추적(오디오 포커스 음소거용). 게임에도 그대로 전달한다.
+		gWindowActive = (wParam != FALSE);
+		if (pGame) return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
 
 	default:
 		if (pGame) {

@@ -117,6 +117,18 @@ void UIElement::renderTree(const RenderContext& rc) {
 
     onRender(rc);
 
+    // Clip descendants to this element's rect (GPU scissor) for scrollable regions.
+    const bool pushedClip = clipsChildren && rc.gfx;
+    if (pushedClip) {
+        RECT clip{
+            static_cast<LONG>(std::round(resolvedRect_.x)),
+            static_cast<LONG>(std::round(resolvedRect_.y)),
+            static_cast<LONG>(std::round(resolvedRect_.x + resolvedRect_.width)),
+            static_cast<LONG>(std::round(resolvedRect_.y + resolvedRect_.height))
+        };
+        rc.gfx->pushUIClip(clip);
+    }
+
     // Sort children by zOrder for correct draw order.
     // UIPipeline draws in submission order with no depth test.
     std::vector<UIElement*> sorted;
@@ -128,6 +140,10 @@ void UIElement::renderTree(const RenderContext& rc) {
 
     for (auto* child : sorted) {
         child->renderTree(rc);
+    }
+
+    if (pushedClip) {
+        rc.gfx->popUIClip();
     }
 }
 

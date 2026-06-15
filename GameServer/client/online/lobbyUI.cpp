@@ -487,10 +487,33 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
         slotPanels_[i] = makeSolid(roomPanel, "slotPanelBg",
             x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f, slotPanelCol, 0);
 
+        // The portrait RT cell has a fixed aspect (kPortraitCellW:kPortraitCellH).
+        // The slot cell's aspect varies with the screen aspect (full-bleed lobby
+        // layout), so letterbox the bay to the portrait aspect and center it inside
+        // the cell — otherwise the character stretches when the resolution's aspect
+        // ratio changes. slotPanelBg keeps filling the full cell behind the margins.
+        const float cellX = x + 8.f;
+        const float cellY = slotsY + 8.f;
+        const float cellW = slotW - 16.f;
+        const float cellH = slotsH - nameH - 22.f;
+        const float portraitAspect =
+            static_cast<float>(GFX::kPortraitCellW) / static_cast<float>(GFX::kPortraitCellH);
+        float bayW = cellW;
+        float bayH = cellH;
+        if (cellW / std::max(1.f, cellH) > portraitAspect) {
+            bayH = cellH;
+            bayW = bayH * portraitAspect;   // pillarbox (left/right margins)
+        } else {
+            bayW = cellW;
+            bayH = bayW / portraitAspect;   // letterbox (top/bottom margins)
+        }
+        const float bayX = cellX + (cellW - bayW) * 0.5f;
+        const float bayY = cellY + (cellH - bayH) * 0.5f;
+
         auto* bay = roomPanel->addChild(std::make_unique<UI::Image>());
         bay->name = "slotBay";
         applyRect(bay, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
-            x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f);
+            bayX, bayY, bayW, bayH);
         bay->zOrder  = 1;
         bay->visible = false;
         slotBays_[i] = static_cast<UI::Image*>(bay);

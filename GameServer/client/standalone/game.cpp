@@ -8,6 +8,8 @@
 #include "../log.hpp"
 #include "../timer.hpp"
 #include "../particleImporter.hpp"
+#include "../ClientApp.hpp"
+#include "../sound/soundManager.hpp"
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Image.hpp"
@@ -2494,8 +2496,27 @@ void Game::update(Milliseconds deltaTime) {
 	editor_.refresh();
 
 	// 이벤트 처리
+	auto resolveSfxObj = [&](i32t id) -> Object* {
+		if (goblin_ && goblin_->getId() == id) return goblin_.get();
+		if (player_ && player_->getId() == id) return player_.get();
+		return nullptr;
+	};
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
+
+		// 전투 효과음(3D). 디스패치 로직과 독립적으로(추가만) 대상 위치에서 재생한다.
+		{
+			Object* sfxObj = nullptr;
+			const char* sfxName = nullptr;
+			switch (pEv->type) {
+			case EventType::Hit:    sfxName = "hit";    sfxObj = resolveSfxObj(static_cast<EvHit*>(pEv)->targetId);      break;
+			case EventType::Attack: sfxName = "attack"; sfxObj = resolveSfxObj(static_cast<EvAttack*>(pEv)->attackerId); break;
+			case EventType::Death:  sfxName = "death";  sfxObj = resolveSfxObj(static_cast<EvDeath*>(pEv)->victimId);    break;
+			default: break;
+			}
+			if (sfxObj && sfxName) INet::ClientApp::sound().playSfx3D(sfxName, sfxObj->renderState().pos);
+		}
+
 		switch (pEv->type) {
 		case EventType::Hit:
 			if (static_cast<EvHit*>(pEv)->targetId == goblin_->getId()) {
@@ -2909,6 +2930,11 @@ void Game::render() {
 	}
 	if (metalSphere_) metalSphere_->render(gfx_);
 	skybox_.render(gfx_);
+	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
+	{
+		const mu::Vec3 camEye = camera_.eye();
+		INet::ClientApp::sound().setListener(camEye, camera_.at() - camEye, mu::Vec3(0.f, 1.f, 0.f));
+	}
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 

@@ -61,6 +61,7 @@ void Button::onMouseDown(MouseButton btn, float localX, float localY) {
 void Button::onMouseUp(MouseButton btn, float localX, float localY) {
     if (btn == MouseButton::Left && state_ == State::Pressed) {
         state_ = State::Hovered;
+        if (sClickSfx) sClickSfx();
         if (onClick) onClick();
     }
 }
