@@ -2,6 +2,7 @@
 #include "terrainChunkManager.hpp"
 #include "gfx.hpp"
 #include "pbrPipeline.hpp"
+#include "BVPipeline.hpp"   // [TEMP DEBUG] prop BV visualization
 #include "physicsWorld.hpp"
 #include "threadPool.hpp"
 #include "errorHandling.hpp"   // setD3DName
@@ -357,7 +358,34 @@ void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& s
     const bool  useDeferred  = (gfx.renderPath() == GFX::RenderPath::Deferred);
     const float detailCullR2 = kDetailCullRadius * kDetailCullRadius;
 
+    // [TEMP DEBUG] draw the bounding volumes of collidable props (only those that HAVE a BV),
+    // in world space, matching the geometry ScatterCollider uses for collision.
+    // Set to false (or delete this block) to revert.
+    static constexpr bool kDebugDrawPropBVs = false;
+
     for (const auto& inst : slot.scatter) {
+        if constexpr (kDebugDrawPropBVs) {
+            const auto& rp = resolvedProtos_[inst.protoIdx];
+            if (rp.collidable && rp.model) {
+                for (const auto& node : rp.model->bvh.nodes) {
+                    if (!node.isLeaf()) continue;
+                    std::visit([&](auto&& s) {
+                        using S = std::decay_t<decltype(s)>;
+                        mu::Mat4x4 local;
+                        if constexpr (std::is_same_v<S, AABB>)
+                            local = mu::Mat4x4(mu::scale(s.size)) * mu::translate(s.center);
+                        else
+                            local = mu::Mat4x4(mu::scale(s.halfExtents * 2.f))
+                                  * mu::Mat4x4(s.orient) * mu::translate(s.center);
+                        gfx.addDrawEvent(BVPipeline::DrawEvent{
+                            .world   = local * inst.world,
+                            .bvModel = BVPipeline::BVModel::Box,
+                            .color   = mu::Vec4{ 1.f, 1.f, 0.f, 1.f } });
+                    }, node.shape);
+                }
+            }
+        }
+
         // Distance-cull dense details/grass around the player (trees are always drawn).
         if (hasCullCenter_
             && index_.scatterPrototypes[inst.protoIdx].kind != ScatterPrototype::Kind::TreeMesh) {
