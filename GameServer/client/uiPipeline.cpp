@@ -310,12 +310,22 @@ namespace UIPipeline {
 
 		u32t idxDrawcall = 0u;
 
+		// 이벤트별 시저(스크롤 영역 클리핑). 기본은 전체 화면 scissorRect_.
+		D3D12_RECT curScissor = scissorRect_;
+
 		// DrawEvent들을 하나씩 처리한다.
 		for ( const auto& drawEvent : drawEvents_ ) {
 			// PerDrawcallData 바인드
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 				cmdList, rootParamIdxPDD_, roomIdx_
 			);
+
+			const D3D12_RECT wantScissor = drawEvent.clip ? drawEvent.clipRect : scissorRect_;
+			if ( wantScissor.left != curScissor.left || wantScissor.top != curScissor.top
+				|| wantScissor.right != curScissor.right || wantScissor.bottom != curScissor.bottom ) {
+				cmdList->RSSetScissorRects( 1u, &wantScissor );
+				curScissor = wantScissor;
+			}
 
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.
@@ -535,6 +545,9 @@ namespace UIPipeline {
 			// PerFrameData 바인드
 			pResources_->perFrameData.bind( threadCmdList, rootParamIdxPFD_, roomIdx_ );
 
+			// 이벤트별 시저(스크롤 영역 클리핑). 기본은 전체 화면 scissorRect_.
+			D3D12_RECT curScissor = scissorRect_;
+
 			for ( auto idxDrawcall = firstInstanceIdx;
 				idxDrawcall < firstInstanceIdx + jobSize;
 				++idxDrawcall
@@ -547,6 +560,13 @@ namespace UIPipeline {
 				pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 					threadCmdList, rootParamIdxPDD_, roomIdx_
 				);
+
+				const D3D12_RECT wantScissor = drawEvent.clip ? drawEvent.clipRect : scissorRect_;
+				if ( wantScissor.left != curScissor.left || wantScissor.top != curScissor.top
+					|| wantScissor.right != curScissor.right || wantScissor.bottom != curScissor.bottom ) {
+					threadCmdList->RSSetScissorRects( 1u, &wantScissor );
+					curScissor = wantScissor;
+				}
 
 				auto perDrawcallData = UIShader::PerDrawcallData{
 					.material = UIShader::Material{

@@ -1054,6 +1054,30 @@ void GFX::addFrameData( const TrailPipeline::FrameData& frameData ) {
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
 	drawEventsUIPipeline_.push_back(drawEvent);
+	// 현재 활성 클립이 있으면 이 이벤트에 stamping(스크롤 영역 클리핑).
+	if (!uiClipStack_.empty()) {
+		auto& e = drawEventsUIPipeline_.back();
+		e.clip = true;
+		e.clipRect = uiClipStack_.back();
+	}
+}
+
+void GFX::pushUIClip(const RECT& rect) {
+	RECT c = rect;
+	if (!uiClipStack_.empty()) {
+		const RECT& t = uiClipStack_.back();
+		c.left   = std::max(c.left,   t.left);
+		c.top    = std::max(c.top,    t.top);
+		c.right  = std::min(c.right,  t.right);
+		c.bottom = std::min(c.bottom, t.bottom);
+	}
+	if (c.right  < c.left) c.right  = c.left;
+	if (c.bottom < c.top)  c.bottom = c.top;
+	uiClipStack_.push_back(c);
+}
+
+void GFX::popUIClip() {
+	if (!uiClipStack_.empty()) uiClipStack_.pop_back();
 }
 
 // 프레임 데이터를 입력한다.

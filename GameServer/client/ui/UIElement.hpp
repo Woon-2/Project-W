@@ -48,6 +48,9 @@ public:
     int      zOrder        = 0;
     bool     visible       = true;
     bool     interactive   = false;
+    // When true, descendants are clipped (GPU scissor) and hit-tested against this
+    // element's rect. Used by scrollable regions (see ScrollView).
+    bool     clipsChildren = false;
 
     // --- Hierarchy ---
     UIElement* parent() const { return parent_; }
@@ -74,6 +77,8 @@ public:
     virtual void onMouseDown(MouseButton btn, float localX, float localY) {}
     virtual void onMouseUp(MouseButton btn, float localX, float localY) {}
     virtual void onMouseMove(float localX, float localY) {}
+    // Mouse wheel. delta is in notches (>0 = wheel forward/up). Return true to consume.
+    virtual bool onMouseWheel(float delta) { return false; }
     virtual void onKeyDown(int vkCode) {}
     virtual void onKeyUp(int vkCode) {}
     // Character input (WM_CHAR), routed to the focused element by UIManager.

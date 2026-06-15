@@ -261,6 +261,10 @@ public:
 	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const UIPipeline::FrameData& frameData );
+	// UI 클리핑 영역 스택(스크롤 영역용). push 시 현재 top과 교집합을 취한다.
+	// 이후 제출되는 UIPipeline::DrawEvent에 클립이 stamping된다.
+	void pushUIClip( const RECT& rect );
+	void popUIClip();
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const TerrainPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
@@ -548,6 +552,7 @@ private:
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};
 	UIPipeline::FrameData frameDataUIPipeline_{};
+	std::vector<RECT> uiClipStack_{};   // UI 스크롤 영역 클리핑 스택
 	// Terrain Pipeline
 	std::vector<TerrainPipeline::DrawEvent> drawEventsTerrainPipeline_{};
 	TerrainPipeline::Resources resourcesTerrainPipeline_{};

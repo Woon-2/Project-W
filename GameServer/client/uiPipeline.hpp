@@ -32,6 +32,12 @@ namespace UIPipeline {
 		// uv' = uv * uvScaleBias.xy + uvScaleBias.zw (identity = full texture). 9-slice 시 슬라이스별 부분 UV.
 		XMFLOAT4 uvScaleBias = { 1.f, 1.f, 0.f, 0.f };
 
+		// Optional scissor clip in backbuffer pixels. When clip==true the draw is
+		// restricted to clipRect (used by scrollable UI regions). Stamped by GFX
+		// from its UI clip stack at submission time.
+		D3D12_RECT clipRect{};
+		bool       clip = false;
+
 		// 텍스처 포인터 기준으로 정렬 — 동일 텍스처 이벤트를 인접하게 배치해 향후 인스턴싱을 가능하게 한다.
 		// 주의: z-order는 DrawEvent에 저장되지 않으므로, updateGPUData에서 sort를 호출하면
 		//       renderTree가 보장한 zOrder 순서가 깨진다. 따라서 현재는 sort를 호출하지 않는다.

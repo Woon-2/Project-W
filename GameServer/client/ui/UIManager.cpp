@@ -178,6 +178,17 @@ bool UIManager::onWndMsg(UINT msg, WPARAM wParam, LPARAM lParam) {
         return false;
     }
 
+    case WM_MOUSEWHEEL: {
+        // Route to the hovered element, walking up to the first ancestor that
+        // consumes it (e.g. a ScrollView). Notches > 0 = wheel forward/up.
+        const float notches = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam))
+            / static_cast<float>(WHEEL_DELTA);
+        for (UIElement* e = hoveredElement_; e; e = e->parent()) {
+            if (e->onMouseWheel(notches)) return true;
+        }
+        return false;
+    }
+
     default:
         return false;
     }
@@ -203,9 +214,17 @@ UIElement* UIManager::hitTest(float x, float y) {
     std::ranges::sort(interactives, std::greater{}, &UIElement::zOrder);
 
     for (auto* elem : interactives) {
-        if (elem->resolvedRect().contains(x, y)) {
-            return elem;
+        if (!elem->resolvedRect().contains(x, y)) continue;
+
+        // Respect clipping ancestors (scroll viewports): a widget scrolled out of
+        // its clip rect must not receive hits even if its raw rect contains (x,y).
+        bool clipped = false;
+        for (UIElement* a = elem->parent(); a; a = a->parent()) {
+            if (a->clipsChildren && !a->resolvedRect().contains(x, y)) { clipped = true; break; }
         }
+        if (clipped) continue;
+
+        return elem;
     }
     return nullptr;
 }
