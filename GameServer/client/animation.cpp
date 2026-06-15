@@ -419,8 +419,6 @@ void AnimSystem::update(Seconds timeSlice) {
 			blender->onCalcFinal({});
 			blender->setStage({}, AnimBlender::Stage::committedFinal);
 			std::pop_heap(blenders_.begin(), std::prev(visibleEnd, i));
-
-			elapsed = HighResolutionClock::now() - tp;
 		}
 
 		cntProcessed += iteration;
@@ -428,12 +426,14 @@ void AnimSystem::update(Seconds timeSlice) {
 		elapsed = HighResolutionClock::now() - tp;
 	}
 
-	// jobSize_ 비례 제어
-	const float ratio = static_cast<float>(jobCnt) / 8.f;	// 목적: job의 개수가 8개에 근접하기
-	const float error = ratio - 1.f;
-
-	static constexpr float Kp = 0.1f;
-
-	float delta = jobSize_ * error * Kp;
-	jobSize_ = static_cast<std::size_t>(std::max(1.0f, jobSize_ + delta));
+	// --- jobSize_ 제어 로직 (시간 초과 기반 안전 장치 추가) ---
+    // 만약 타임 슬라이스를 초과해서 끝난 거라면, jobSize_가 너무 커서 정밀 제어가 안 된 것일 수 있음.
+    // 반대로 시간이 남았는데 jobCnt가 너무 많다면 jobSize_를 키워 오버헤드를 줄임.
+    if (elapsed >= timeSlice) {
+        // 시간이 부족한 상황: 배치가 너무 커서 시계 체크를 제때 못했을 수 있으므로 조금 줄임
+        jobSize_ = std::max(1ULL, static_cast<std::size_t>(jobSize_ * 0.85f));
+    } else if (cntProcessed == visibleCount && jobCnt > 8) {
+        // 시간이 충분하고 모든 블렌더를 처리했는데 Job 개수가 너무 많음 -> 배치 크기를 키움
+        jobSize_ = static_cast<std::size_t>(jobSize_ * 1.15f);
+    }
 }
