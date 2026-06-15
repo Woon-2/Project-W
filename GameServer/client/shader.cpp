@@ -387,6 +387,92 @@ ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D1
 	return ret;
 }
 
+// Alpha-tested (masked) static-mesh CSM shadow PSO for foliage. Adds a UV stream and a
+// pixel shader that samples the bindless albedo alpha and clips, so cutout casters drop a
+// silhouette shadow instead of a full quad. Two-sided (CULL_NONE) because foliage is thin.
+ComPtr<ID3D12PipelineState> createShadowMapCSMMaskedShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("shadowMapCSMMasked.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("shadowMapCSMMasked.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			// Two-sided: foliage cards are thin/open, so front-face culling (used by the
+			// opaque static shadow PSO as an acne hack on closed solids) would drop half
+			// the leaves. Render both sides so the cutout silhouette is complete.
+			.CullMode = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias = 1000,
+			.DepthBiasClamp = 0.01f,
+			.SlopeScaledDepthBias = 2.5f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+	psoDesc.NumRenderTargets = 0u;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+	setD3DName(ret.Get(), "ShadowMapCSMMaskedShader");
+	return ret;
+}
+
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 

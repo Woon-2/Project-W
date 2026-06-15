@@ -124,7 +124,11 @@ struct Resources {
 
     struct ShadowPass {
         StructuredBuffer    perInstanceData;   // t0
-        ConstantBufferArray perDrawcallData;   // b0
+        ConstantBufferArray perDrawcallData;   // b0 (opaque casters)
+        // b0 for alpha-tested (foliage) casters: carries bindless albedo + cutoff.
+        // Indexed by the same per-group slot as perDrawcallData (sparse; a group uses
+        // exactly one of the two arrays depending on its material's cAlphaCutoff).
+        ConstantBufferArray perDrawcallDataMasked;
         ConstantBufferArray perFrameData;      // b1: cascade-per-slot
     } shadowPass;
 
@@ -163,6 +167,7 @@ public:
         const ComPtr<ID3D12PipelineState>& gBufferShader,
         const ComPtr<ID3D12PipelineState>& indirectGBufferShader,
         const ComPtr<ID3D12PipelineState>& shadowShader,
+        const ComPtr<ID3D12PipelineState>& shadowMaskedShader,
         const ComPtr<ID3D12CommandQueue>& cmdQ,
         const D3D12_VIEWPORT& viewport,
         const D3D12_RECT& scissorRect,
@@ -251,6 +256,7 @@ private:
     ComPtr<ID3D12PipelineState> gBufferShader_ = nullptr;
     ComPtr<ID3D12PipelineState> indirectGBufferShader_ = nullptr;
     ComPtr<ID3D12PipelineState> shadowShader_  = nullptr;
+    ComPtr<ID3D12PipelineState> shadowMaskedShader_ = nullptr;  // foliage alpha-test shadow PSO
     ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
     D3D12_VIEWPORT    viewport_{};
     D3D12_RECT        scissorRect_{};

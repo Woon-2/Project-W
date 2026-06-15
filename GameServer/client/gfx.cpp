@@ -279,6 +279,7 @@ void GFX::init() {
 	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapSkinnedShader", createShadowMapSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapCSMShader", createShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapCSMMaskedShader", createShadowMapCSMMaskedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapSkinnedCSMShader", createShadowMapSkinnedCSMShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
@@ -682,6 +683,9 @@ void GFX::createSwapChain() {
 	);
 	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapCSMShader::PerDrawcallData), 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallData"
+	);
+	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallDataMasked = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapCSMMaskedShader::PerDrawcallData), 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallDataMasked"
 	);
 	resourcesPBRDeferredPipeline_.shadowPass.perFrameData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferred_Shadow_PerFrameData"
@@ -2120,6 +2124,7 @@ void GFX::render() {
 		shaders_.at("PBRDeferredGBufferShader"),
 		shaders_.at("PBRDeferredIndirectGBufferShader"),
 		shaders_.at("ShadowMapCSMShader"),
+		shaders_.at("ShadowMapCSMMaskedShader"),
 		cmdQ_, viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRDeferredPipeline_), std::move(occluderInfosPBRDeferred_),

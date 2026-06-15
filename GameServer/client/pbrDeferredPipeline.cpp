@@ -20,6 +20,21 @@ void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
     vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Position")]);
 }
 
+// Masked (foliage) shadow pass needs UV so the PS can sample the albedo alpha. Slot 0 =
+// Position, slot 1 = UV (matches createShadowMapCSMMaskedShader's input layout).
+void __layoutMeshIfNeededShadowMaskedPass(const Mesh& mesh) {
+    if (mesh.vbViewsByPipeline.contains("PBRDeferredPipeline_ShadowMasked")) return;
+    auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRDeferredPipeline_ShadowMasked");
+    auto& vbViews = pvbViews->second;
+    vbViews.reserve(2u);
+    DISPLAY_ERROR_STR(mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
+        "[GFX Error] PBRDeferredPipeline: " + mesh.name + "_VB_Position not found.", false);
+    DISPLAY_ERROR_STR(mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
+        "[GFX Error] PBRDeferredPipeline: " + mesh.name + "_VB_UV not found.", false);
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Position")]);
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_UV")]);
+}
+
 void __layoutMeshIfNeededGBufferPass(const Mesh& mesh) {
     if (mesh.vbViewsByPipeline.contains("PBRDeferredPipeline_GBuffer")) return;
     auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRDeferredPipeline_GBuffer");
@@ -44,6 +59,7 @@ void __layoutMeshIfNeededGBufferPass(const Mesh& mesh) {
 
 void layoutMeshIfNeeded(const Mesh& mesh) {
     __layoutMeshIfNeededShadowPass(mesh);
+    __layoutMeshIfNeededShadowMaskedPass(mesh);
     __layoutMeshIfNeededGBufferPass(mesh);
 }
 
@@ -65,6 +81,7 @@ Dispatcher::Dispatcher(
     const ComPtr<ID3D12PipelineState>& gBufferShader,
     const ComPtr<ID3D12PipelineState>& indirectGBufferShader,
     const ComPtr<ID3D12PipelineState>& shadowShader,
+    const ComPtr<ID3D12PipelineState>& shadowMaskedShader,
     const ComPtr<ID3D12CommandQueue>& cmdQ,
     const D3D12_VIEWPORT& viewport,
     const D3D12_RECT& scissorRect,
@@ -86,7 +103,7 @@ Dispatcher::Dispatcher(
     prefixSumShader_(prefixSumShader), hiZCompactShader_(hiZCompactShader),
     hiZCommandShader_(hiZCommandShader), occluderShader_(occluderShader),
     gBufferShader_(gBufferShader), indirectGBufferShader_(indirectGBufferShader),
-    shadowShader_(shadowShader),
+    shadowShader_(shadowShader), shadowMaskedShader_(shadowMaskedShader),
     cmdQ_(cmdQ), viewport_(viewport), scissorRect_(scissorRect),
     rtvGB_{}, dsvGB_(SharedResources::GBuffer::gBufferData[roomIdx].dsvHandle),
     pFence_(pFence), pResources_(pResources),
@@ -252,6 +269,15 @@ void Dispatcher::shadowDraw() {
     DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
     pResources_->shadowPass.perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
 
+    // Bind the shared bindless texture/sampler pools so the masked (foliage) shadow PS can
+    // sample the albedo alpha. Harmless for the opaque PSO, which ignores them.
+    pTexPool_->bind(cmdList, rootParamIdxTexPool_);
+    pTexArrayPool_->bind(cmdList, rootParamIdxTexArrayPool_);
+    pSamPool_->bind(cmdList, rootParamIdxSamPool_);
+
+    // Track the bound PSO so we only switch at opaque<->masked boundaries (foliage is rare).
+    ID3D12PipelineState* curPso = shadowShader_.Get();   // set above
+
     for (u32t ci = 0u; ci < cascadeCount; ++ci) {
         const auto& slice = csmData.cascades[ci];
         DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(0u, nullptr, false, &slice.dsv), false);
@@ -272,14 +298,38 @@ void Dispatcher::shadowDraw() {
             auto& de   = *gFirst;
             auto gLast = std::upper_bound(gFirst, shadowEvents_.end(), de);
 
-            pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
-            auto pdd = ShadowMapCSMShader::PerDrawcallData{
-                .firstInstanceOffset = static_cast<u32t>(gFirst - shadowEvents_.begin())
-            };
-            pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
-
             layoutMeshIfNeeded(*de.mesh);
-            auto& vbViews = de.mesh->vbViewsByPipeline.at("PBRDeferredPipeline_Shadow");
+
+            // Foliage (cAlphaCutoff > 0) goes through the masked PSO so the cutout shape is
+            // honoured in the shadow; everything else keeps the fast opaque depth-only path.
+            const bool masked = de.material && de.material->constantAlphaCutoff > 0.f;
+            const char* vbKey  = masked ? "PBRDeferredPipeline_ShadowMasked" : "PBRDeferredPipeline_Shadow";
+
+            if (masked) {
+                if (curPso != shadowMaskedShader_.Get()) {
+                    DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowMaskedShader_.Get()), false);
+                    curPso = shadowMaskedShader_.Get();
+                }
+                auto pdd = ShadowMapCSMMaskedShader::PerDrawcallData{
+                    .firstInstanceOffset = static_cast<u32t>(gFirst - shadowEvents_.begin()),
+                    .idxAlbedo           = de.material->mapAlbedo.idxSrv,
+                    .cAlphaCutoff        = de.material->constantAlphaCutoff
+                };
+                pResources_->shadowPass.perDrawcallDataMasked.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
+                pResources_->shadowPass.perDrawcallDataMasked.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
+            } else {
+                if (curPso != shadowShader_.Get()) {
+                    DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
+                    curPso = shadowShader_.Get();
+                }
+                auto pdd = ShadowMapCSMShader::PerDrawcallData{
+                    .firstInstanceOffset = static_cast<u32t>(gFirst - shadowEvents_.begin())
+                };
+                pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
+                pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
+            }
+
+            auto& vbViews = de.mesh->vbViewsByPipeline.at(vbKey);
             DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, static_cast<UINT>(vbViews.size()), vbViews.data()), false);
             DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&de.subMesh->ibView), false);
 
@@ -334,10 +384,21 @@ void Dispatcher::shadowDrawMT() {
     for (std::size_t k = 0u; k + 1u < instancingGroups.size(); ++k) {
         const auto& de = *instancingGroups[k];
         layoutMeshIfNeeded(*de.mesh);
-        auto pdd = ShadowMapCSMShader::PerDrawcallData{
-            .firstInstanceOffset = static_cast<u32t>(instancingGroups[k] - shadowEvents_.begin())
-        };
-        pResources_->shadowPass.perDrawcallData.cbuffers[k].stage(roomIdx_, &pdd, 1u);
+        const u32t firstInst = static_cast<u32t>(instancingGroups[k] - shadowEvents_.begin());
+        // Foliage groups stage into the masked b0 array (with bindless albedo + cutoff);
+        // opaque groups stage into the plain b0 array. Slot k is shared (sparse) — a group
+        // uses exactly one array, and addJobShadowDraw picks the matching one by material.
+        if (de.material && de.material->constantAlphaCutoff > 0.f) {
+            auto pdd = ShadowMapCSMMaskedShader::PerDrawcallData{
+                .firstInstanceOffset = firstInst,
+                .idxAlbedo           = de.material->mapAlbedo.idxSrv,
+                .cAlphaCutoff        = de.material->constantAlphaCutoff
+            };
+            pResources_->shadowPass.perDrawcallDataMasked.cbuffers[k].stage(roomIdx_, &pdd, 1u);
+        } else {
+            auto pdd = ShadowMapCSMShader::PerDrawcallData{ .firstInstanceOffset = firstInst };
+            pResources_->shadowPass.perDrawcallData.cbuffers[k].stage(roomIdx_, &pdd, 1u);
+        }
     }
 
     auto currCmdCtx = cmdCtxs.begin();
@@ -805,6 +866,13 @@ void Dispatcher::addJobShadowDraw(
         pResources_->shadowPass.perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
         pResources_->shadowPass.perFrameData.cbuffers[cascadeIdx].bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 
+        // Bindless pools for the masked (foliage) shadow PS; harmless for the opaque PSO.
+        pTexPool_->bind(threadCmdList, rootParamIdxTexPool_);
+        pTexArrayPool_->bind(threadCmdList, rootParamIdxTexArrayPool_);
+        pSamPool_->bind(threadCmdList, rootParamIdxSamPool_);
+
+        ID3D12PipelineState* curPso = shadowShader_.Get();   // set above
+
         std::size_t idxDC = firstDrawcallIdx;
         auto pGroup = pItFirst;
 
@@ -813,10 +881,26 @@ void Dispatcher::addJobShadowDraw(
             auto gLast  = *(pGroup + 1);
             const auto& de = *gFirst;
 
-            pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(
-                threadCmdList, rootParamIdxPDD_, roomIdx_);
+            const bool masked = de.material && de.material->constantAlphaCutoff > 0.f;
+            const char* vbKey  = masked ? "PBRDeferredPipeline_ShadowMasked" : "PBRDeferredPipeline_Shadow";
 
-            auto& vbViews = de.mesh->vbViewsByPipeline.at("PBRDeferredPipeline_Shadow");
+            if (masked) {
+                if (curPso != shadowMaskedShader_.Get()) {
+                    DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shadowMaskedShader_.Get()), false);
+                    curPso = shadowMaskedShader_.Get();
+                }
+                pResources_->shadowPass.perDrawcallDataMasked.cbuffers[idxDC].bind(
+                    threadCmdList, rootParamIdxPDD_, roomIdx_);
+            } else {
+                if (curPso != shadowShader_.Get()) {
+                    DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shadowShader_.Get()), false);
+                    curPso = shadowShader_.Get();
+                }
+                pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(
+                    threadCmdList, rootParamIdxPDD_, roomIdx_);
+            }
+
+            auto& vbViews = de.mesh->vbViewsByPipeline.at(vbKey);
             DISPLAY_ERROR_DX_VOID(threadCmdList->IASetVertexBuffers(
                 0u, static_cast<UINT>(vbViews.size()), vbViews.data()), false);
             DISPLAY_ERROR_DX_VOID(threadCmdList->IASetIndexBuffer(&de.subMesh->ibView), false);
