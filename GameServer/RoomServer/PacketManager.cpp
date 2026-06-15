@@ -272,6 +272,28 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcBarrierPacket(bool active, co
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcHidePacket(const std::vector<uint32>& npcIds) {
+	const uint16 count = static_cast<uint16>(npcIds.size());
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcHidePacket) + sizeof(SNpcHideInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SNpcHidePacket>();
+
+	auto entries = bw.reserve<SNpcHideInfo>(count);
+	for (uint16 i = 0; i < count; ++i) {
+		entries[i].npcId = static_cast<uint16>(npcIds[i]);
+	}
+
+	pkt->dataOffset = static_cast<uint16>(reinterpret_cast<uint64>(entries) - reinterpret_cast<uint64>(pkt));
+	pkt->npcCount   = count;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_NpcHide;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SNpcAttackPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );

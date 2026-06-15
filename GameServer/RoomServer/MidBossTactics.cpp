@@ -2317,7 +2317,8 @@ void GrandBaumMidBossTactic::updateSnakeAmbush( Seconds dt, Room& room, PlatoonL
         if ( !snakeWaveSpawned_ &&
              ( ( !originalSnakeSquad || originalSnakeSquad->areMembersAtSlots() ) ||
                snakeRetreatTimer_ >= SNAKE_RETREAT_MAX_TIME ) ) {
-            spawnSnakeWave( room, leader, originalSnakeSquad );
+            spawnSnakeWave( room, leader, originalSnakeSquad );   // 웨이브 cfg 추출이 끝난 뒤
+            despawnOriginalSnakeSquad( room );                    // 원본 뱀을 전장에서 퇴장(숨김)
             snakeAmbushStage_ = SnakeAmbushStage::WaveActive;
         }
         return;
@@ -2452,6 +2453,24 @@ void GrandBaumMidBossTactic::cleanupSnakeWave( Room& room ) {
     snakeWaveNpcIds_.clear();
     snakeWaveSquadId_ = -1;
     snakeWaveSpawned_ = false;
+}
+
+// 후퇴 완료한 원본 뱀을 전장에서 퇴장(숨김)시킨다. 서버 상태는 사망(hp0+물리제거)으로 두되 클라엔
+// 시체 없이 즉시 숨김(S_NpcHide). 살아있던 뱀만 숨기고(이미 죽은 뱀은 시체로 유지), 복귀는
+// finishShieldWall→reviveOriginalSnakeSquad가 hp<=0 분기로 일괄 부활시킨다.
+void GrandBaumMidBossTactic::despawnOriginalSnakeSquad( Room& room ) {
+    std::vector<uint32> hiddenIds;
+    for ( uint32 memberId : originalSnakeRoster_ ) {
+        TacticalNpc* npc = room.findTacticalNpcById( memberId );
+        if ( !npc || npc->hp() <= 0 ) {
+            continue;
+        }
+        room.despawnTacticalNpcHidden( memberId );
+        hiddenIds.push_back( memberId );
+    }
+    if ( !hiddenIds.empty() ) {
+        room.broadcast( PacketManager::makeSNpcHidePacket( hiddenIds ) );
+    }
 }
 
 // 후퇴했던(또는 죽었던) 원본 뱀을 외곽에서 복귀시켜 squad에 재등록하고 evasion을 재개한다.

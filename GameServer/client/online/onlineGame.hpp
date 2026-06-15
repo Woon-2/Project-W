@@ -80,6 +80,11 @@ public:
 	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
 	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
 
+	// 서버가 지정한 NPC들을 즉시 숨김(비표시) 처리. 사망과 달리 시체/래그돌 없이 화면에서 제거하며,
+	// 복귀는 onNpcRespawn이 hidden을 해제한다. PacketManager가 S_NpcHide 수신 시 호출.
+	// id 기반 조회라 향후 전용 NPC 타입이 분리돼도 이 조회만 통합하면 그대로 동작한다.
+	void hideNpcs(const std::vector<uint16>& npcIds);
+
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);

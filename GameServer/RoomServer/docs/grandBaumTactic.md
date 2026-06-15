@@ -26,9 +26,15 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 
 ### 뱀 매복 4단계 (`SnakeAmbushStage`)
 
-`Evasion`(원본 뱀 개별 회피·산개) → `RetreatingOriginal`(원본 뱀 외곽 후퇴) →
+`Evasion`(원본 뱀 개별 회피·산개) → `RetreatingOriginal`(원본 뱀 외곽 후퇴 →
+외곽 도착/타임아웃 시 웨이브 소환 직후 **퇴장(숨김)**) →
 `WaveActive`(증원 웨이브 = 원본수×10, 최대 60, 4의 배수 / `DistributedEngage`) →
 `ReturningOriginal`(웨이브 전멸 시 종료 + 원본 뱀 부활/복귀).
+
+**원본 뱀 퇴장(숨김)**: 후퇴만 시키면 원본 뱀이 외곽에 정지한 채 웨이브 내내 플레이어에게 노출되므로,
+`despawnOriginalSnakeSquad`가 후퇴 완료한 원본 뱀을 서버 상태상 사망(hp0+물리제거, 객체는 시체로
+유지 → roster 부활 가능)으로 전환하고 클라엔 `S_NpcHide`로 **시체/죽는 연출 없이 즉시 숨김**.
+복귀는 `reviveOriginalSnakeSquad`(`hp<=0` 분기 → `reviveTacticalNpc`→`S_NpcRespawn`)가 hidden 해제.
 
 ## 클라-서버 핵심 과제
 
@@ -54,8 +60,14 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 `removeTacticalSquadById` / `broadcastTacticalNpcSpawn`(클라 통지 `S_NpcSpawnBatch`) /
 `reviveTacticalNpc`(부활 시 물리 재등록 + `S_NpcRespawn`).
 `tacticalNpcs_`는 `unique_ptr` 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
-(분대/NPC 순회 이전)에 즉시 push/erase해도 안전. 디스폰 패킷이 없어, 살아있는 웨이브 강제 정리는
-`setHp(0)+S_Hit`로 대체한다.
+(분대/NPC 순회 이전)에 즉시 push/erase해도 안전. 살아있는 웨이브 강제 정리는 `setHp(0)+S_Hit`로 대체한다.
+
+### 5. NPC 숨김 (원본 뱀 퇴장)
+신규 패킷 `S_NpcHide{ npcId[] }`. `Room::despawnTacticalNpcHidden`이 서버 상태를 사망(hp0+물리제거,
+객체 유지)으로 두고, 호출부(`despawnOriginalSnakeSquad`)가 살아있던 id를 묶어 `S_NpcHide` broadcast.
+클라(`Object::hidden_`, 공통 베이스)는 사망(`isDead_`/시체/래그돌)과 별개로 **렌더/업데이트/HP바에서
+완전 제외**(`Game::hideNpcs`). 복귀는 `S_NpcRespawn`이 `hidden_`을 해제(`Game::onNpcRespawn`).
+`hidden_`은 타입 독립이라 전용 NPC 타입 도입 시 `hideNpcs`의 id 조회만 통합하면 됨.
 
 ## 주요 파일
 

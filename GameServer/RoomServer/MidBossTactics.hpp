@@ -255,6 +255,8 @@ private:
     void         issueSnakeWaveEngage( Room& room, TacticalSquad* waveSquad );
     void         finishShieldWall( Room& room, PlatoonLeader& leader );
     void         cleanupSnakeWave( Room& room );
+    // 후퇴 완료한 원본 뱀을 전장에서 퇴장(숨김)시킨다. 웨이브 동안 노출 방지, 종료 시 reviveOriginalSnakeSquad로 복귀.
+    void         despawnOriginalSnakeSquad( Room& room );
     void         captureOriginalSnakeRoster( Room& room, TacticalSquad* originalSnakeSquad );
     void         reviveOriginalSnakeSquad( Room& room, PlatoonLeader& leader );
     bool         shouldPreserveOriginalSnakes() const;

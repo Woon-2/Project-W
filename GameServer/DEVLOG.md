@@ -1200,3 +1200,98 @@ ShieldWall 튜닝·방패벽 차단의 인게임 거동 검증은 디버그 토�
 `SHIELD_WALL_FORM_KNOCK_MAX=6s`로 형성 비정상 지연 시 영구 락 방지. `enterPhase(ShieldWall/Engage)`에서
 `shieldWallFormed_`/`shieldWallFormTimer_` 리셋. **클라/프로토콜 변경 0.**
 **검증:** RoomServer Debug/x64 빌드 통과(경고·오류 0). 인게임(형성 전 재진입 차단·형성 후 카운터플레이 유지)은 후속.
+
+---
+
+### 2026.06.15 ~ 06.16
+## [mod, fix] 그랜드밤 방패벽 — 슬라임 ↔ 뱀 물리 충돌 제거 (충돌 레이어 분리)
+## [feat] 그랜드밤 방패벽 — 후퇴 원본 뱀 퇴장(숨김)/복귀 + `S_NpcHide`
+
+**수정 파일:** `RoomServer/rigidBody.hpp`, `RoomServer/Room.{hpp,cpp}`, `RoomServer/MidBossTactics.{hpp,cpp}`,
+`RoomServer/PacketManager.{hpp,cpp}`, `ServerEngine/protocol.hpp`, `client/object.{hpp,cpp}`,
+`client/online/onlineGame.{hpp,cpp}`, `client/PacketManager.{hpp,cpp}`
+
+---
+
+### [1] 슬라임 ↔ 뱀 물리 충돌 제거 (충돌 레이어 분리)
+
+방패벽 발동 중 동적 소환된 증원 뱀 웨이브가 슬라임 링을 거의 직선으로 **관통하며 진형을 밀어** 무너뜨리던
+문제. 슬라임과 뱀이 서로 물리적으로 밀지 않도록 충돌 레이어(비트마스크)를 분리.
+
+**원인:** 충돌 필터는 비트마스크 기반 — 쌍 (a,b)는 `(a.category & b.mask) != 0 && (b.category & a.mask) != 0`
+일 때만 충돌(`rigidBody.hpp`). 전술 NPC는 카테고리가 기본값(전체 비트 1)이라, 한쪽 마스크에서 비트를
+빼도 상대 카테고리에 다른 비트가 남아 충돌이 안 끊긴다. → **양쪽에 고유 카테고리 비트**를 부여해야 한다.
+
+**수정:**
+
+- `CollisionLayer`에 비트 2종 추가(기존 `Player=1<<0`, `Boss=1<<1`):
+  ```cpp
+  constexpr uint32_t Slime = 1u << 2;  // 방패벽 슬라임 링(블로커)
+  constexpr uint32_t Snake = 1u << 3;  // 증원 뱀 웨이브
+  ```
+- 방패벽 슬라임(블로커): `category=Slime`, `mask=~(Boss | Snake)` (`Room::setShieldWallBlockers`).
+  플레이어 차단(하드 블로커)·슬라임끼리·지형 충돌은 유지하고, 뱀만 통과시킨다.
+- 웨이브 뱀: `category=Snake`, `mask=~(Player | Boss | Slime)` (`Room::spawnTacticalWaveNpc`).
+  뱀끼리·지형 충돌은 유지(겹침 방지·지면 안착), 플레이어/보스/슬라임은 통과.
+- 블로커 해제/원복 시(`set/clearShieldWallBlockers`) 마스크뿐 아니라 **카테고리도 기본값(`0xFFFFFFFF`)**
+  으로 되돌려 일반 NPC 충돌로 복귀.
+
+뱀 ↔ 슬라임 충돌만 제거되고 나머지 쌍(슬라임↔플레이어/슬라임/지형/보스, 뱀↔뱀/지형/플레이어/보스)과
+하드 블로커·게임 로직(뱀이 플레이어 돌진·웨이브 전멸 시 방패벽 종료)은 전부 보존된다.
+
+---
+
+### [2] 후퇴 원본 뱀 퇴장(숨김)/복귀 + `S_NpcHide`
+
+방패벽 발동 시 평소 `updateSnakeEvasion`으로 플레이어를 피해 산개하던 **원본 뱀 부대(squad index 3)** 가
+회피를 멈추고 `issueOriginalSnakeRetreat`의 `FormationHold`로 링 외곽(`SNAKE_OUTER_RADIUS`=26m)에 정지 →
+증원 웨이브가 진행되는 `WaveActive` 내내 그 자리에 서서 **플레이어에게 공격당할 수 있게 노출**되던 문제.
+후퇴한 원본 뱀을 웨이브 동안 전장에서 퇴장(시체·죽는 연출 없이 숨김)시켰다가 방패벽 종료 시 복귀시킨다.
+
+**서버 — 사망 상태로 전환하되 객체는 시체로 유지:**
+
+후퇴 완료 시점(`updateSnakeAmbush`의 `RetreatingOriginal` 분기에서 `spawnSnakeWave` 직후)에
+`despawnOriginalSnakeSquad`가 `originalSnakeRoster_`의 살아있는 뱀을 퇴장 처리. 신규
+`Room::despawnTacticalNpcHidden`:
+
+```cpp
+void Room::despawnTacticalNpcHidden(uint32_t id) {
+    TacticalNpc* npc = findTacticalNpcById(id);
+    if (!npc || npc->hp() <= 0) return;
+    npc->setHp(0);
+    physicsWorld_.unregisterBody(&npc->body());   // 정상 사망과 동일 — 물리 명시 제거
+    npcBodyOwner_.erase(&npc->body());
+}
+```
+
+- **함정:** 정상 사망은 `npc->update()`가 `result.justDied`를 반환하는 프레임에만 물리 바디를 제거
+  (`Room.cpp` tactical NPC 루프). `setHp(0)`만 하면 `justDied`가 안 켜져 **물리 바디가 남고**, 부활 시
+  `reviveTacticalNpc`가 재등록하며 **이중 등록**된다 → 디스폰 시 `unregisterBody`를 **명시적으로** 호출.
+- 객체(`tacticalNpcs_`)는 시체로 유지해야 roster 기반 부활이 가능하므로 `removeTacticalNpcById`
+  (객체까지 제거)는 쓰지 않는다.
+- 복귀는 기존 인프라 그대로: `finishShieldWall`→`reviveOriginalSnakeSquad`의 `hp<=0` 분기 →
+  `reviveTacticalNpc`(reviveAt + 물리 재등록 + `S_NpcRespawn`).
+
+**신규 패킷 `S_NpcHide` (사망 `S_Hit`와 분리):**
+
+```cpp
+struct SNpcHideInfo { uint16 npcId; };
+struct SNpcHidePacket : public PacketHeader { uint16 dataOffset; uint16 npcCount; /* DataList */ };
+```
+
+`despawnOriginalSnakeSquad`가 실제로 숨긴 id들을 묶어 `broadcast(makeSNpcHidePacket(ids))`로 일괄 통지
+(`S_NpcBarrier`의 id-list 직렬화 미러). 사망(시체+래그돌)이 아니라 **즉시 비표시**로 표현하기 위한 별도 경로.
+
+**클라 — 타입 독립 `hidden_` 플래그:**
+
+- `Object`(공통 베이스)에 `hidden_` 추가(`setHidden`/`hidden`). 사망 `isDead_`와 **별개** — 시체가 아니라
+  "존재하지 않는 것처럼" 완전 제외.
+- `Object::update()`/`render()` 시작에서 `if (hidden_) return;`. 고블린 HP바 루프에서도 hidden 제외.
+- `Game::hideNpcs(ids)`: `S_NpcHide` 수신 핸들러가 호출, id로 NPC 조회 후 `setHidden(true)`(+활성 래그돌 해제).
+- `Game::onNpcRespawn`: 기존 처리에 `setHidden(false)` 추가 → 복귀 시 재표시.
+- **타입 독립 설계:** `hidden_`이 공통 베이스에 있어 향후 전용 뱀 NPC가 goblin 모델에서 분리돼도 그대로
+  동작하며, 이전 비용은 `hideNpcs`의 id 조회 통합 정도로 최소화된다.
+
+**검증:** 전체 솔루션(ServerEngine/RoomServer/LobbyServer/client) Debug/x64 빌드 통과(신규 경고·오류 0).
+인게임 실검증(후퇴 뱀 즉시 사라짐·웨이브 중 외곽 노출 없음·전멸 후 재등장·회피 재개)은 `Arena_GrandBaum`
+트리거 확보 후 후속.

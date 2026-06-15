@@ -197,7 +197,7 @@ void Room::init(const Level* levelData) {
 // 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
 // (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. GrandBaum/Isis는 Hobgoblin
 //  레벨에 WallXxx 마커가 없어 후방벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.)
-#define HOBGOBLIN_DEBUG_TACTIC 0
+#define HOBGOBLIN_DEBUG_TACTIC 1
 
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
@@ -1631,14 +1631,20 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 // ShieldWall 중 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환한다. 평소 trooper는 Player를
 // 통과(~(Player|Boss))하지만, 여기서 Player 충돌을 다시 켜(~Boss) 링이 벽처럼 막히게 한다.
 void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
-	// 이전 ids 마스크 원복(broadcast 없이) — 매 틱 살아있는 슬라임 ids 갱신 대응.
+	// 이전 ids 충돌설정 원복(broadcast 없이) — 매 틱 살아있는 슬라임 ids 갱신 대응.
 	for (uint32_t id : shieldWallBlockerIds_) {
-		if (TacticalNpc* npc = findTacticalNpcById(id))
+		if (TacticalNpc* npc = findTacticalNpcById(id)) {
+			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+		}
 	}
+	// 블로커: Slime 카테고리 부여 + Player 충돌 재활성(~Boss). 추가로 증원 뱀(Snake)을 mask에서
+	// 제외해 뱀이 링을 통과해도 진형이 물리적으로 밀리지 않게 한다.
 	for (uint32_t id : blockerIds) {
-		if (TacticalNpc* npc = findTacticalNpcById(id))
-			npc->body().setCollisionMask(~CollisionLayer::Boss);
+		if (TacticalNpc* npc = findTacticalNpcById(id)) {
+			npc->body().setCollisionCategory(CollisionLayer::Slime);
+			npc->body().setCollisionMask(~(CollisionLayer::Boss | CollisionLayer::Snake));
+		}
 	}
 	shieldWallBlockerIds_ = blockerIds;
 
@@ -1653,8 +1659,10 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 
 void Room::clearShieldWallBlockers() {
 	for (uint32_t id : shieldWallBlockerIds_) {
-		if (TacticalNpc* npc = findTacticalNpcById(id))
+		if (TacticalNpc* npc = findTacticalNpcById(id)) {
+			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+		}
 	}
 	if (shieldWallBarrierOn_) {
 		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
@@ -1702,8 +1710,11 @@ TacticalNpc* Room::spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& c
 	base.setPos(mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z()));
 	auto npc = std::make_unique<TacticalNpc>(std::move(base), cfg);
 	registerTacticalNpcBody(*npc);
-	// 평소 trooper처럼 플레이어/보스를 통과(경로 차단 방지).
-	npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+	// 그랜드밤 뱀 웨이브 전용 스포너. Snake 카테고리 부여 후 플레이어/보스 통과(경로 차단 방지)에
+	// 더해 방패벽 슬라임(Slime)도 mask에서 제외 → 링을 통과해도 진형을 물리적으로 밀지 않는다.
+	// (추후 다른 종류 웨이브에 재사용한다면 호출부에서 충돌 설정을 분기할 것.)
+	npc->body().setCollisionCategory(CollisionLayer::Snake);
+	npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime));
 	npc->setSquadId(squadId);
 
 	TacticalNpc* raw = npc.get();
@@ -1774,4 +1785,16 @@ void Room::reviveTacticalNpc(uint32_t id, mu::Vec3 pos) {
 	npc->body().snapToCurrent();
 
 	broadcast(PacketManager::makeSNpcRespawnPacket(static_cast<uint16>(id), npc->hp(), pos.getXmf()));
+}
+
+void Room::despawnTacticalNpcHidden(uint32_t id) {
+	TacticalNpc* npc = findTacticalNpcById(id);
+	if (!npc || npc->hp() <= 0) return;   // 이미 죽은 뱀은 그대로(reviveOriginalSnakeSquad가 부활 처리)
+
+	// 정상 사망과 동일 상태로 전환: hp 0 + 물리 바디 제거(객체는 시체로 유지 → roster 기반 부활 가능).
+	// setHp(0)만 하면 justDied가 안 켜져 물리가 남고 부활 시 이중 등록되므로, 여기서 명시적으로 제거한다.
+	npc->setHp(0);
+	physicsWorld_.unregisterBody(&npc->body());
+	npcBodyOwner_.erase(&npc->body());
+	// 클라 숨김 통지(S_NpcHide)는 호출부에서 살아있던 id들을 묶어 한 번에 broadcast한다.
 }

@@ -152,6 +152,9 @@ public:
 	void broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds);
 	// 죽은 전술 NPC 부활: 상태 복구(reviveAt) + 사망 시 제거됐던 물리 바디 재등록 + 클라 통지(S_NpcRespawn).
 	void MU_CALLCONV reviveTacticalNpc(uint32_t id, mu::Vec3 pos);
+	// 전술 NPC를 서버 상태상 사망(hp 0 + 물리 제거, 객체는 시체로 유지)으로 전환해 '퇴장'시킨다.
+	// 클라 통지는 호출부에서 묶어 S_NpcHide로 보낸다(시체 없이 숨김). 복귀는 reviveTacticalNpc.
+	void despawnTacticalNpcHidden(uint32_t id);
 
 private:
 	int32 id_;

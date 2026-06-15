@@ -16,6 +16,7 @@ public:
 	static void handleSNpcMoveBatchPacket(byte* buffer, int32 len);
 	static void handleSNpcSpawnBatchPacket(byte* buffer, int32 len);
 	static void handleSNpcBarrierPacket(byte* buffer, int32 len);
+	static void handleSNpcHidePacket(byte* buffer, int32 len);
 	static void handleSNpcAttackPacket(byte* buffer, int32 len);
 	static void handleSPlayerAttackPacket(byte* buffer, int32 len);
 	static void handleSHitPacket(byte* buffer, int32 len);

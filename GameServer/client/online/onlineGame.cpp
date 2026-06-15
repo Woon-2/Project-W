@@ -2170,6 +2170,18 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 	}
 }
 
+void Game::hideNpcs(const std::vector<uint16>& npcIds) {
+	for (uint16 id : npcIds) {
+		auto it = idGoblinMap_.find(id);
+		if (it == idGoblinMap_.end() || !it->second) continue;
+
+		auto& goblin = it->second;
+		goblin->setHidden(true);
+		if (goblin->ragdoll().isActive())
+			goblin->ragdoll().deactivate(physicsWorld_);
+	}
+}
+
 // 점 p에서 선분 [a,b]까지의 XZ 평면 최근접점(Y=0). 표준 사영 + [0,1] 클램프.
 static mu::Vec3 closestPointOnSegmentXZ(mu::Vec3 p, mu::Vec3 a, mu::Vec3 b) {
 	const float abx = b.x() - a.x();
@@ -2398,6 +2410,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	}
 
 	npc->setHp( newHp );
+	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
 	if (npc->ragdoll().isActive())
@@ -2808,7 +2821,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 		const float dtSec = std::chrono::duration<float>(deltaTime).count();
 		for (auto& [id, entry] : goblinHpBars_) {
-			if (!entry.goblin || entry.goblin->hp() <= 0 || entry.goblin->maxHp() <= 0) {
+			if (!entry.goblin || entry.goblin->hidden() || entry.goblin->hp() <= 0 || entry.goblin->maxHp() <= 0) {
 				entry.hpBar->visible = false;
 				entry.hpBarVisibleSeconds = 0.f;
 				continue;

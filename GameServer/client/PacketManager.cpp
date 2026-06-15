@@ -45,6 +45,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSNpcBarrierPacket(buffer, len);
 		break;
 
+	case PacketType::S_NpcHide:
+		handleSNpcHidePacket(buffer, len);
+		break;
+
 	case PacketType::S_NpcAttack:
 		handleSNpcAttackPacket( buffer, len );
 		break;
@@ -225,6 +229,19 @@ void PacketManager::handleSNpcBarrierPacket(byte* buffer, int32 len) {
 	}
 
 	INet::ClientApp::onlineGame()->setNpcBarrier(pkt->active != 0, ids);
+}
+
+void PacketManager::handleSNpcHidePacket(byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<SNpcHidePacket*>(buffer);
+	auto list = pkt->getList();
+
+	std::vector<uint16> ids;
+	ids.reserve(list.count());
+	for (uint16 i = 0; i < list.count(); ++i) {
+		ids.push_back(list[i].npcId);
+	}
+
+	INet::ClientApp::onlineGame()->hideNpcs(ids);
 }
 
 void PacketManager::handleSNpcAttackPacket( byte* buffer, int32 len ) {

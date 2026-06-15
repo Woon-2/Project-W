@@ -33,6 +33,7 @@ enum class PacketType : uint16 {
 	S_Hit,
 
 	S_NpcRespawn,
+	S_NpcHide,
 
 	C_SkillStart,
 	S_SkillStart,
@@ -252,6 +253,24 @@ struct SNpcRespawnPacket : public PacketHeader {
 	uint16 npcId;
 	int32 newHp;
 	DirectX::XMFLOAT3 spawnPos;
+};
+
+// 지정한 NPC들을 클라에서 즉시 '숨김'(비표시) 처리한다. 사망(S_Hit→시체/래그돌)과 달리
+// 죽는 연출 없이 화면에서 제거만 하며, 복귀는 기존 S_NpcRespawn이 hidden을 해제해 재등장시킨다.
+// (그랜드밤 방패벽: 후퇴한 원본 뱀 부대를 웨이브 동안 전장에서 퇴장시키는 용도.)
+struct SNpcHideInfo {
+	uint16 npcId;
+};
+
+struct SNpcHidePacket : public PacketHeader {
+	uint16 dataOffset;
+	uint16 npcCount;
+
+	using NpcHideList = DataList<SNpcHideInfo>;
+	NpcHideList getList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return NpcHideList(reinterpret_cast<SNpcHideInfo*>(dataStart), npcCount);
+	}
 };
 
 struct CSkillStartPacket : public PacketHeader {

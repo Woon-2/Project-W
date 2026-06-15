@@ -25,6 +25,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos);
 	static std::shared_ptr<SendBuffer> makeSNpcSpawnBatchPacket(const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSNpcBarrierPacket(bool active, const std::vector<uint32>& npcIds);
+	static std::shared_ptr<SendBuffer> makeSNpcHidePacket(const std::vector<uint32>& npcIds);
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);
 	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
 	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 targetId, int32 newHp);

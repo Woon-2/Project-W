@@ -17,6 +17,8 @@ enum class MotionType { Kinematic, Dynamic, Static };
 namespace CollisionLayer {
     constexpr uint32_t Player = 1u << 0;
     constexpr uint32_t Boss   = 1u << 1;
+    constexpr uint32_t Slime  = 1u << 2;  // 그랜드밤 방패벽 슬라임 링(블로커). 증원 뱀과 물리 충돌 제외.
+    constexpr uint32_t Snake  = 1u << 3;  // 그랜드밤 증원 뱀 웨이브. 방패벽 슬라임 링을 통과(밀지 않음).
 }
 
 // Kinematic state snapshot used for interpolation.
