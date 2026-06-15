@@ -5,6 +5,7 @@
 #include "UIManager.hpp"
 #include "widgets/Button.hpp"
 #include "widgets/Label.hpp"
+#include "widgets/ScrollView.hpp"
 #include "../gfx.hpp"
 
 #include <functional>
@@ -86,10 +87,10 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     const float rowX         = screenW * 0.23f;
     const float contentRight = screenW * 0.88f;
     const float rowW         = contentRight - rowX;
-    const float settingsY    = screenH * 0.14f;
+    const float settingsY    = screenH * 0.10f;
     const float rowH         = std::max(44.f, screenH * 0.052f);
     const float rowGap       = 7.f;
-    const float groupGap     = screenH * 0.06f;
+    const float groupGap     = screenH * 0.04f;
     const float nameW        = rowW * 0.43f;
     const float controlX     = rowX + nameW;
     const float controlW     = rowW - nameW;
@@ -97,19 +98,38 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     addLabel(scrim, L"설정", titleX, settingsY - 58.f, 42.f, rowW, 58.f,
         settingsInk, TextHAlign::Leading, 2);
 
+    // Scrollable content region between the fixed title and the fixed close button.
+    // Windowed (smaller) resolutions can't fit every row, so the rows live inside a
+    // ScrollView that clips + wheel-scrolls; fullscreen simply never needs to scroll.
+    const float viewTop    = settingsY;
+    const float viewBottom = screenH - 100.f;
+    const float viewH      = std::max(120.f, viewBottom - viewTop);
+    const float contentPad = 6.f;
+
+    auto* scrollView = static_cast<ScrollView*>(scrim->addChild(std::make_unique<ScrollView>()));
+    scrollView->name    = "settingsScroll";
+    scrollView->anchor  = Anchors::TopLeft;
+    scrollView->pivot   = Pivots::TopLeft;
+    scrollView->offsetX = DimValue::px(0.f);
+    scrollView->offsetY = DimValue::px(viewTop);
+    scrollView->width   = DimValue::px(screenW);
+    scrollView->height  = DimValue::px(viewH);
+    scrollView->zOrder  = 20;
+    UIElement* host = scrollView->content();
+
     auto makeDivider = [&](float y) {
-        addSolid(scrim, "settingsDivider", groupX, y, contentRight - groupX, 2.f, settingsLine, 1);
+        addSolid(host, "settingsDivider", groupX, y, contentRight - groupX, 2.f, settingsLine, 1);
     };
 
     auto makeGroupTitle = [&](const std::wstring& title, float y) {
-        addLabel(scrim, title, groupX, y, 26.f, contentRight - groupX, 36.f,
+        addLabel(host, title, groupX, y, 26.f, contentRight - groupX, 36.f,
             settingsInk, TextHAlign::Leading, 2);
         makeDivider(y + 42.f);
     };
 
     auto makeSettingRow = [&](const std::wstring& name, float y) {
-        addSolid(scrim, "settingsRowBg", rowX, y, rowW, rowH, settingsRow, 1);
-        addLabel(scrim, name, rowX + 24.f, y, 19.f, nameW - 32.f, rowH,
+        addSolid(host, "settingsRowBg", rowX, y, rowW, rowH, settingsRow, 1);
+        addLabel(host, name, rowX + 24.f, y, 19.f, nameW - 32.f, rowH,
             settingsInk, TextHAlign::Leading, 3);
     };
 
@@ -118,9 +138,9 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
                                  std::function<void()> onLeft, std::function<void()> onRight,
                                  Button** leftOut, Button** rightOut) {
         const float halfW = (w - 8.f) * 0.5f;
-        auto* leftBtn = addButton(scrim, left, x, y + 7.f, halfW, h - 14.f,
+        auto* leftBtn = addButton(host, left, x, y + 7.f, halfW, h - 14.f,
             settingsInactive, settingsAccent, settingsAccent, 17.f, std::move(onLeft), settingsButtonText);
-        auto* rightBtn = addButton(scrim, right, x + halfW + 8.f, y + 7.f, halfW, h - 14.f,
+        auto* rightBtn = addButton(host, right, x + halfW + 8.f, y + 7.f, halfW, h - 14.f,
             settingsInactive, settingsAccent, settingsAccent, 17.f, std::move(onRight), settingsButtonText);
         leftBtn->zOrder = 22;
         rightBtn->zOrder = 22;
@@ -129,13 +149,36 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     };
 
     auto makeArrowButton = [&](float x, float y, const std::wstring& text, std::function<void()> onClick) {
-        auto* btn = addButton(scrim, text, x, y + 6.f, 46.f, rowH - 12.f,
+        auto* btn = addButton(host, text, x, y + 6.f, 46.f, rowH - 12.f,
             settingsInactive, settingsAccent, settingsAccent, 22.f, std::move(onClick), settingsButtonText);
         btn->zOrder = 22;
         return btn;
     };
 
-    float groupY = settingsY;
+    // A < > stepper row with a track+fill bar and a percent label (0..100). Used by
+    // the volume controls; mirrors the monster-damage-opacity row pattern.
+    auto makeStepperRow = [&](const std::wstring& name, float y, int step,
+                              std::function<int()> get, std::function<void(int)> set,
+                              Button** prevOut, Button** nextOut, Button** fillOut, Label** labelOut) {
+        makeSettingRow(name, y);
+        *prevOut = makeArrowButton(controlX + 16.f, y, L"<", [this, get, set, step]() {
+            set(std::max(0, get() - step));
+            refreshPreview();
+        });
+        *nextOut = makeArrowButton(controlX + controlW - 62.f, y, L">", [this, get, set, step]() {
+            set(std::min(100, get() + step));
+            refreshPreview();
+        });
+        addSolid(host, "settingsStepperTrack",
+            controlX + 78.f, y + rowH - 11.f, controlW - 156.f, 3.f, settingsLine, 2);
+        volumeFillMaxWidth_ = controlW - 156.f;
+        *fillOut = addSolid(host, "settingsStepperFill",
+            controlX + 78.f, y + rowH - 12.f, volumeFillMaxWidth_, 5.f, settingsAccent, 3);
+        *labelOut = addLabel(host, L"", controlX + 72.f, y, 20.f,
+            controlW - 144.f, rowH * 0.60f, settingsInk, TextHAlign::Center, 3);
+    };
+
+    float groupY = contentPad;
     makeGroupTitle(L"화면", groupY);
     float rowY = groupY + 56.f;
     makeSettingRow(L"화면 모드", rowY);
@@ -155,9 +198,9 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         settings_->resolutionIndex = std::min(lastIdx, settings_->resolutionIndex + 1);
         refreshPreview();
     });
-    resolutionValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
+    resolutionValueLabel_ = addLabel(host, L"", controlX + 72.f, rowY, 20.f,
         controlW - 144.f, rowH, settingsInk, TextHAlign::Center, 3);
-    addSolid(scrim, "settingsResolutionLine",
+    addSolid(host, "settingsResolutionLine",
         controlX + 78.f, rowY + rowH - 9.f, controlW - 156.f, 2.f, settingsLine, 2);
     rowY += rowH + rowGap;
     makeSettingRow(L"수직 동기화", rowY);
@@ -186,19 +229,34 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         settings_->monsterDamageOpacity = std::min(100, settings_->monsterDamageOpacity + 5);
         refreshPreview();
     });
-    addSolid(scrim, "settingsMonsterOpacityTrack",
+    addSolid(host, "settingsMonsterOpacityTrack",
         controlX + 78.f, rowY + rowH - 11.f, controlW - 156.f, 3.f, settingsLine, 2);
     monsterOpacityFillMaxWidth_ = controlW - 156.f;
-    monsterOpacityFill_ = addSolid(scrim, "settingsMonsterOpacityFill",
+    monsterOpacityFill_ = addSolid(host, "settingsMonsterOpacityFill",
         controlX + 78.f, rowY + rowH - 12.f, monsterOpacityFillMaxWidth_, 5.f, settingsAccent, 3);
-    monsterOpacityValueLabel_ = addLabel(scrim, L"", controlX + 72.f, rowY, 20.f,
+    monsterOpacityValueLabel_ = addLabel(host, L"", controlX + 72.f, rowY, 20.f,
         controlW - 144.f, rowH * 0.60f, settingsInk, TextHAlign::Center, 3);
+
+    groupY = rowY + rowH + groupGap;
+    makeGroupTitle(L"사운드", groupY);
+    rowY = groupY + 56.f;
+    makeStepperRow(L"마스터 볼륨", rowY, 5,
+        [this]() { return settings_->masterVolume; }, [this](int v) { settings_->masterVolume = v; },
+        &masterVolPrev_, &masterVolNext_, &masterVolFill_, &masterVolLabel_);
+    rowY += rowH + rowGap;
+    makeStepperRow(L"배경음 (BGM)", rowY, 5,
+        [this]() { return settings_->bgmVolume; }, [this](int v) { settings_->bgmVolume = v; },
+        &bgmVolPrev_, &bgmVolNext_, &bgmVolFill_, &bgmVolLabel_);
+    rowY += rowH + rowGap;
+    makeStepperRow(L"효과음 (SFX)", rowY, 5,
+        [this]() { return settings_->sfxVolume; }, [this](int v) { settings_->sfxVolume = v; },
+        &sfxVolPrev_, &sfxVolNext_, &sfxVolFill_, &sfxVolLabel_);
 
     groupY = rowY + rowH + groupGap;
     makeGroupTitle(L"게임", groupY);
     rowY = groupY + 56.f;
     makeSettingRow(L"게임 종료", rowY);
-    quitGameButton_ = addButton(scrim, L"종료하기",
+    quitGameButton_ = addButton(host, L"종료하기",
         controlX + controlW - 190.f, rowY + 7.f, 166.f, rowH - 14.f,
         settingsInactive, settingsAccent, settingsAccent, 17.f,
         [this]() {
@@ -206,6 +264,10 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
         },
         settingsButtonText);
     quitGameButton_->zOrder = 22;
+
+    // Finalize the scroll metrics now that all rows are placed.
+    scrollView->viewportHeight = viewH;
+    scrollView->contentHeight  = rowY + rowH + contentPad;
 
     // Close button (bottom-right). Sibling of the scrim so it draws on top.
     const XMFLOAT4 ink = { 0.090f, 0.125f, 0.200f, 1.f };
@@ -304,6 +366,18 @@ void SettingsPanel::refreshPreview() {
         const float t = static_cast<float>(settings_->monsterDamageOpacity) / 100.f;
         monsterOpacityFill_->width = DimValue::px(std::max(0.f, monsterOpacityFillMaxWidth_ * t));
     }
+
+    auto paintStepper = [&](Button* prev, Button* next, Button* fill, Label* label, int value) {
+        paintButton(prev, false, value > 0);
+        paintButton(next, false, value < 100);
+        if (label) label->setText(std::to_wstring(value) + L"%");
+        if (fill) {
+            fill->width = DimValue::px(std::max(0.f, volumeFillMaxWidth_ * (static_cast<float>(value) / 100.f)));
+        }
+    };
+    paintStepper(masterVolPrev_, masterVolNext_, masterVolFill_, masterVolLabel_, settings_->masterVolume);
+    paintStepper(bgmVolPrev_,    bgmVolNext_,    bgmVolFill_,    bgmVolLabel_,    settings_->bgmVolume);
+    paintStepper(sfxVolPrev_,    sfxVolNext_,    sfxVolFill_,    sfxVolLabel_,    settings_->sfxVolume);
 }
 
 }   // namespace UI

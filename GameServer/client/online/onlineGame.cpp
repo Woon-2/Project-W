@@ -7,6 +7,8 @@
 #include "SendBuffer.hpp"
 #include "../PacketManager.hpp"
 #include "../ClientApp.hpp"
+#include "../sound/soundManager.hpp"
+#include "../ui/widgets/Button.hpp"
 #include "../skill/skillCompiler.hpp"
 
 extern HWND ghWnd;
@@ -2254,9 +2256,10 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 // 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
 // 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
 void Game::bindZoneHandlers() {
-	// 예시: 특정 구역 진입 시 카메라/사운드 연출을 트리거하는 자리.
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [this](Zone&){ /* BGM 전환 */ });
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [this](Zone&){ /* BGM 복귀 */ });
+	// 예시: 특정 구역 진입/이탈 시 BGM을 전환한다. Unity 태그가 정의되면 아래처럼 1줄로 연결한다.
+	// (카탈로그에 해당 트랙을 추가해야 소리난다. 미정의 태그는 로컬 판정에서 no-op.)
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [](Zone&){ INet::ClientApp::sound().playBgm("forest"); });
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
 }
 
 // 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
@@ -2734,6 +2737,16 @@ void Game::update(Milliseconds deltaTime) {
 
 void Game::render() {
 	gfx_.setVsync(settings_.vsync);
+
+	// 설정 볼륨(0~100%)을 오디오 버스에 매 프레임 적용(setVsync와 동일한 폴링 방식).
+	// 창 비활성 시 마스터를 0으로 내려 음소거한다. UI 버스는 효과음 볼륨을 따른다.
+	extern bool gWindowActive;
+	auto& snd = INet::ClientApp::sound();
+	snd.setMasterVolume(gWindowActive ? settings_.masterVolume * 0.01f : 0.f);
+	snd.setBusVolume(SoundManager::Bus::Bgm, settings_.bgmVolume * 0.01f);
+	snd.setBusVolume(SoundManager::Bus::Sfx, settings_.sfxVolume * 0.01f);
+	snd.setBusVolume(SoundManager::Bus::Ui,  settings_.sfxVolume * 0.01f);
+
 	switch (scene_) {
 	case Scene::Lobby:  renderLobby();  break;
 	case Scene::InGame: renderInGame(); break;
@@ -2900,6 +2913,14 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				}
 			}
 
+			// 전투 효과음(3D, 대상의 월드 위치에서 재생). 카탈로그에 파일이 없으면 1회 경고만.
+			switch (pEv->type) {
+			case EventType::Hit:    INet::ClientApp::sound().playSfx3D("hit",    obj->renderState().pos); break;
+			case EventType::Death:  INet::ClientApp::sound().playSfx3D("death",  obj->renderState().pos); break;
+			case EventType::Attack: INet::ClientApp::sound().playSfx3D("attack", obj->renderState().pos); break;
+			default: break;
+			}
+
 			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
 
 			// 로컬 플레이어 사망 시 게임 레벨 플래그를 세운다. (standalone game.cpp의 playerDead_ 처리와 대응)
@@ -2965,6 +2986,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	clientZoneSystem_.update(player_->pos());
 
 	camera_.update(deltaTime);
+	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
+	{
+		const mu::Vec3 camEye = camera_.eye();
+		INet::ClientApp::sound().setListener(camEye, camera_.at() - camEye, mu::Vec3(0.f, 1.f, 0.f));
+	}
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -3388,6 +3414,12 @@ void Game::enterLobby() {
 	refreshLobbyUI();
 	settingsOpenPrev_ = settingsPanel_.isOpen();
 	applyCursorPolicy();
+
+	// 모든 버튼 공용 클릭 효과음 훅을 1회 연결(UI 레이어와 사운드 백엔드 디커플링).
+	UI::Button::sClickSfx = []() { INet::ClientApp::sound().playSfx("ui_click"); };
+
+	// 로비 BGM 재생(이미 로비 트랙이면 no-op). 파일이 없으면 1회 경고만 남는다.
+	INet::ClientApp::sound().playBgm("lobby");
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
 	startInGameAssetLoad();
@@ -3840,6 +3872,9 @@ void Game::enterInGame() {
 	scene_ = Scene::InGame;
 	settingsOpenPrev_ = settingsPanel_.isOpen();
 	applyCursorPolicy();
+
+	// 인게임 BGM으로 크로스페이드.
+	INet::ClientApp::sound().playBgm("ingame");
 
 	// 플레이어/오브젝트 생성은 서버의 S_Enter 패킷이 담당한다.
 	// (패킷은 InGameScene의 SleepEx(alertable)에서 처리되므로, 씬 전환 후 첫 프레임부터 수신된다.)

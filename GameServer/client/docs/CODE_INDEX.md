@@ -21,6 +21,7 @@
 11. [UI 시스템](#11-ui-시스템)
 12. [스킬 에디터 (standalone)](#12-스킬-에디터-standalone)
 13. [지면 연계 스킬 / 파티클](#13-지면-연계-스킬--파티클-terrain-interaction)
+14. [사운드 시스템](#14-사운드-시스템)
 
 ---
 
@@ -1082,6 +1083,53 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 
 > 서버 미러: `RoomServer/skill/{skillTypes,skillSystem,skillCompiler}.*`, `Room::bindGroundQueries`.
 > 레거시 제거: `onlineGame.cpp`의 `SwordEffect::ArrowRain/RedEnergyExplosion` 하드코딩 지면 스냅 경로 삭제.
+
+---
+
+## 14. 사운드 시스템
+
+**백엔드:** miniaudio (단일 헤더, `client/sound/miniaudio.h` — 외부 참조, 수정 금지)
+**엔진 추상화:** `client/sound/soundManager.hpp` / `soundManager.cpp`
+**카탈로그:** `client/sound/soundCatalog.hpp` / `soundCatalog.cpp`
+**자산 폴더:** `resources/audio/bgm/*.mp3`, `resources/audio/sfx/*.wav`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `SoundManager` 클래스 | `sound/soundManager.hpp` | 백엔드를 pimpl로 은닉. init/shutdown/update, BGM, SFX(2D/3D), 리스너, 버스 볼륨 |
+| `SoundManager::Bus` enum | `sound/soundManager.hpp` | Bgm / Sfx / Ui — master 하위 sound group |
+| `SoundManager::Impl` | `sound/soundManager.cpp` | `ma_engine` + 버스 그룹 + BGM 2슬롯(크로스페이드) + SFX voice 풀(32) + warnOnce |
+| `playBgm/stopBgm` | `sound/soundManager.cpp` | 스트리밍 BGM, 페이드/크로스페이드 |
+| `playSfx/playSfx3D` | `sound/soundManager.cpp` | voice 풀 기반 one-shot. 3D는 월드 위치 spatialization |
+| `setListener` | `sound/soundManager.cpp` | 카메라 eye/forward/up → miniaudio 리스너 (좌-손 패닝 핸디드니스는 Stage4 튜닝 대상) |
+| `miniaudio_impl.cpp` | `sound/miniaudio_impl.cpp` | `MINIAUDIO_IMPLEMENTATION` 전용 TU. **PCH NotUsing** (vcxproj), `MA_NO_ENCODING` |
+| `findSound(name)` | `sound/soundCatalog.cpp` | 논리이름→{경로,버스,loop,stream,기본볼륨} 테이블 조회 |
+| 소유/접근 | `ClientApp.cpp` `init/release/update`, `ClientApp::sound()` | 프로세스 전역 단일 소유, init 1회/매 프레임 update tick |
+| BGM 씬 연결 | `online/onlineGame.cpp` `enterLobby`("lobby") / `enterInGame`("ingame") | 씬 전환 시 크로스페이드 |
+| UI 클릭음 훅 | `ui/widgets/Button.hpp` `sClickSfx`(정적), `online/onlineGame.cpp` `enterLobby`에서 1회 바인딩 | UI 레이어 ↔ 사운드 백엔드 디커플링 |
+| 전투 SFX(3D) | `online/onlineGame.cpp` 이벤트 디스패치 루프, `standalone/game.cpp` 이벤트 루프 | Hit/Death/Attack를 대상 `renderState().pos`에서 재생 |
+| 3D 리스너 갱신 | `online/onlineGame.cpp` `camera_.update` 직후, `standalone/game.cpp` `camera_.updateGFX` 직전 | 매 프레임 카메라 추종 |
+| 볼륨 설정값 | `ui/settingsPanel.hpp` `GameSettings` masterVolume/bgmVolume/sfxVolume(%) | 영속 설정 |
+| 볼륨 설정 UI | `ui/settingsPanel.cpp` "사운드" 그룹(makeStepperRow ×3) | 투명도 행과 동일 스텝퍼 패턴 |
+| 볼륨 적용 | `online/onlineGame.cpp` `render()` | 매 프레임 폴링 → setMasterVolume/setBusVolume. UI 버스=SFX 볼륨 |
+| 포커스 뮤트 | `main.cpp` `gWindowActive`+`WM_ACTIVATEAPP`, `onlineGame.cpp` `render()` 게이팅 | 창 비활성 시 master=0 |
+| SFX 디듀프 | `sound/soundManager.cpp` `sfxAllowed` (kSfxDedupeCooldownSec=35ms) | 동일 SFX 버스트 throttle |
+| 존 BGM 예시 | `online/onlineGame.cpp` `bindZoneHandlers()` | 태그 정의 시 `playBgm(...)` 1줄 연결 (데이터 의존) |
+
+### UI 스크롤/클리핑 (설정 패널 창모드 오버플로 대응)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| GPU 시저 클리핑 | `UIElement::clipsChildren` + `GFX::pushUIClip/popUIClip`(clip 스택, 교집합) + `gfx.cpp:addDrawEvent(UIPipeline)` stamping | clipsChildren 요소의 하위를 시저로 클립 |
+| 이벤트별 시저 | `uiPipeline.cpp` 단일/멀티스레드 드로우 루프 | `DrawEvent.clip/clipRect` 따라 `RSSetScissorRects` 전환 |
+| 렌더/히트 클립 | `UIElement::renderTree`(push/pop), `UIManager::hitTest`(clip 조상 밖 거부) | 스크롤 아웃된 위젯은 렌더·입력에서 제외 |
+| 마우스 휠 | `UIElement::onMouseWheel`(virtual bool) + `UIManager::onWndMsg`(WM_MOUSEWHEEL → hovered 조상 체인) | 휠 입력 라우팅 |
+| `ScrollView` 위젯 | `ui/widgets/ScrollView.{hpp,cpp}` | clipsChildren 뷰포트 + content() 호스트 + 휠 스크롤(contentHeight/viewportHeight) |
+| 설정 패널 스크롤 | `ui/settingsPanel.cpp` | 제목/닫기 고정, 행들은 ScrollView content로. 창모드 오버플로 해결 |
+
+> **동시성:** 모든 SoundManager 호출은 게임 스레드(update/render)에서만. 네트워크/IOCP 스레드에서 직접 호출 금지(이벤트 post로 우회).
+> **디바이스 실패:** init 실패 시 enabled=false로 모든 호출이 안전한 no-op. 파일 누락 시 1회 경고만.
+> **Stage 4 완료:** 설정 볼륨(마스터/BGM/SFX, 스크롤 가능한 패널), 포커스 상실 뮤트, 동일-프레임 SFX 디듀프. 존 BGM은 예시 제공(실제 존 태그 정의 시 연결).
+> **남은 튜닝:** 좌-손 좌표계 패닝 핸디드니스 실측(좌/우 반대면 `setListener` 축 반전). 설정값 디스크 영속화 미구현(현재 세션 한정).
 
 ---
 

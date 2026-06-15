@@ -33,6 +33,11 @@ public:
 
     std::function<void()> onClick;
 
+    // Optional click feedback hook shared by all buttons. The game wires this to
+    // the sound system once at startup; the UI layer stays decoupled from the
+    // audio backend. No-op while unset.
+    static inline std::function<void()> sClickSfx;
+
     void onRender(const RenderContext& rc) override;
     void onMouseEnter() override;
     void onMouseLeave() override;

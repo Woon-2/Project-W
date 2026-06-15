@@ -197,6 +197,12 @@
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="ClientApp.cpp" />
+    <ClCompile Include="sound\soundManager.cpp" />
+    <ClCompile Include="sound\soundCatalog.cpp" />
+    <ClCompile Include="sound\miniaudio_impl.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="light.cpp" />
     <ClCompile Include="log.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -277,6 +283,7 @@
     <ClCompile Include="ui\widgets\ProgressBar.cpp" />
     <ClCompile Include="ui\widgets\Button.cpp" />
     <ClCompile Include="ui\widgets\Slider.cpp" />
+    <ClCompile Include="ui\widgets\ScrollView.cpp" />
     <ClCompile Include="ui\widgets\Dropdown.cpp" />
     <ClCompile Include="ui\widgets\TextInput.cpp" />
     <ClCompile Include="ui\widgets\KillCountWidget.cpp" />
@@ -288,6 +295,9 @@
     <ClInclude Include="activeRagdoll.hpp" />
     <ClInclude Include="animation.hpp" />
     <ClInclude Include="AssetManager.hpp" />
+    <ClInclude Include="sound\soundManager.hpp" />
+    <ClInclude Include="sound\soundCatalog.hpp" />
+    <ClInclude Include="sound\miniaudio.h" />
     <ClInclude Include="basicPlayerHpUI.hpp" />
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
@@ -409,6 +419,7 @@
     <ClInclude Include="ui\widgets\ProgressBar.hpp" />
     <ClInclude Include="ui\widgets\Button.hpp" />
     <ClInclude Include="ui\widgets\Slider.hpp" />
+    <ClInclude Include="ui\widgets\ScrollView.hpp" />
     <ClInclude Include="ui\widgets\Dropdown.hpp" />
     <ClInclude Include="ui\widgets\TextInput.hpp" />
     <ClInclude Include="ui\widgets\KillCountWidget.hpp" />

@@ -2,12 +2,17 @@
 #include "ClientApp.hpp"
 #include "standalone/game.hpp"
 #include "online/onlineGame.hpp"
+#include "sound/soundManager.hpp"
 
 extern bool gClose;
 
 namespace INet {
 
 void ClientApp::init() {
+	// 프로세스 전역 오디오 엔진을 1회 연다. 실패해도 객체는 유지되어 모든 호출이 안전한 no-op이 된다.
+	sound_ = std::make_unique<SoundManager>();
+	sound_->init();
+
 	serverSession_ = std::make_unique<ServerSession>(::serverIp, lobbyServerPort);
 
 	// std::exit() 경로 보호. 에러 매크로 등이 프레임 도중 std::exit를 부르면 정적
@@ -59,10 +64,17 @@ void ClientApp::release() {
 	game_.reset();
 	serverSession_.reset();
 	retiredSession_.reset();
+	// 게임 파괴 이후(잔여 SFX 트리거가 더 없는 시점) 오디오 엔진을 정리한다.
+	sound_.reset();
 }
 
 void ClientApp::update(Milliseconds deltaTime) {
 	game_->update(deltaTime);
+	if (sound_) sound_->update(Seconds(deltaTime).count());
+}
+
+SoundManager& ClientApp::sound() {
+	return *sound_;
 }
 
 void ClientApp::render() {
@@ -88,6 +100,7 @@ void ClientApp::reconnectToRoomServer(const std::string& ip, uint16 port) {
 }
 
 std::unique_ptr<IGame> ClientApp::game_ = nullptr;
+std::unique_ptr<SoundManager> ClientApp::sound_ = nullptr;
 std::unique_ptr<ServerSession> ClientApp::serverSession_ = nullptr;
 std::unique_ptr<ServerSession> ClientApp::retiredSession_ = nullptr;
 

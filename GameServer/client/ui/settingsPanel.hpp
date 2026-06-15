@@ -34,6 +34,9 @@ struct GameSettings {
     bool allyDamageVisible    = true;
     int  resolutionIndex      = 0;    // index into the runtime windowed-resolution list (0 = smallest/default)
     int  monsterDamageOpacity = 100;  // percent, [0..100]
+    int  masterVolume         = 80;   // percent, [0..100]
+    int  bgmVolume            = 5;    // percent, [0..100]
+    int  sfxVolume            = 100;  // percent, [0..100]
 };
 
 namespace UI {
@@ -80,9 +83,25 @@ private:
     Button*    monsterOpacityNextButton_ = nullptr;
     Button*    monsterOpacityFill_ = nullptr;
     Label*     monsterOpacityValueLabel_ = nullptr;
+
+    // Volume steppers (master / BGM / SFX), same widget pattern as opacity.
+    Button*    masterVolPrev_ = nullptr;
+    Button*    masterVolNext_ = nullptr;
+    Button*    masterVolFill_ = nullptr;
+    Label*     masterVolLabel_ = nullptr;
+    Button*    bgmVolPrev_ = nullptr;
+    Button*    bgmVolNext_ = nullptr;
+    Button*    bgmVolFill_ = nullptr;
+    Label*     bgmVolLabel_ = nullptr;
+    Button*    sfxVolPrev_ = nullptr;
+    Button*    sfxVolNext_ = nullptr;
+    Button*    sfxVolFill_ = nullptr;
+    Label*     sfxVolLabel_ = nullptr;
+
     Button*    quitGameButton_ = nullptr;
 
     float        monsterOpacityFillMaxWidth_ = 0.f;
+    float        volumeFillMaxWidth_ = 0.f;
     std::vector<Resolution> resolutions_;   // monitor-filtered windowed-resolution choices
     std::function<void()> onQuitGame_;
     bool         open_ = false;
