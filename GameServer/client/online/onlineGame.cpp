@@ -3331,6 +3331,7 @@ void Game::renderInGame() {
 	gfx_.addFrameData( frameDataPBRDeferredSkinned );
 
 	if (!chunkManager_.empty()) {
+		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
 		chunkManager_.submitDrawEvents(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
@@ -3759,6 +3760,7 @@ void Game::renderWaitingRoom() {
 	skybox_.render(gfx_);
 
 	if (!chunkManager_.empty()) {
+		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
 		chunkManager_.submitDrawEvents(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });

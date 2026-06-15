@@ -48,6 +48,16 @@ cbuffer PerDrawcallData : register(b0) {
     uint firstInstanceOffset;
 };
 
+// Indirect (Hi-Z occlusion) path only: the command signature supplies the per-group
+// instance offset as a root constant (b0, space1), and gVisibleIndices remaps the
+// compacted draw instance back to the original perInstanceData slot.
+#ifdef HiZCull
+cbuffer FirstInstanceOffset : register(b0, space1) {
+    uint indirectFirstInstanceOffset;
+}
+StructuredBuffer<uint> gVisibleIndices : register(t3);
+#endif
+
 // Full PerFrameData layout — must match PBRShader::PerFrameData so that
 // pbrLighting.hlsli (included below) compiles successfully.
 cbuffer PerFrameData : register(b1) {
@@ -83,7 +93,11 @@ VSOutput VSMain(
 ) {
     VSOutput ret;
 
+#ifdef HiZCull
+    uint idx = gVisibleIndices[idxInst + indirectFirstInstanceOffset];
+#else
     uint idx = idxInst + firstInstanceOffset;
+#endif
     ret.pos        = mul(float4(position, 1.0f), gInstances[idx].wvp);
     ret.posV       = mul(float4(position, 1.0f), gInstances[idx].wv).xyz;
     ret.posW       = mul(float4(position, 1.0f), gInstances[idx].world).xyz;

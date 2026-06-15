@@ -3,6 +3,7 @@
 
 #include "terrain.hpp"
 #include "object.hpp"      // TerrainObject
+#include "frustumCull.hpp" // per-instance scatter VFC
 
 #include <unordered_map>
 #include <unordered_set>
@@ -38,6 +39,16 @@ public:
 
     // Submits a render draw event (+ Hi-Z occluder) for every ready chunk.
     void submitDrawEvents(GFX& gfx);
+
+    // Camera frustum + eye position for per-instance scatter culling. Call once per frame
+    // before submitDrawEvents(). The frustum drives BVH-prop view-frustum culling; the eye
+    // position selects near-camera BVH props as Hi-Z occluders. (Distinct from the player
+    // position passed to update(), which anchors foliage distance culling.)
+    void setCullCamera(const Frustum& frustum, mu::Vec3 eyePos) {
+        frustum_     = frustum;
+        cameraPos_   = eyePos;
+        hasFrustum_  = true;
+    }
 
     // World-space height/normal routed to the chunk containing (x,z).
     // Returns 0 / +Y when no loaded chunk covers the point.
@@ -193,6 +204,14 @@ private:
     static constexpr float                 kDetailCullRadius = 80.f;
     mu::Vec3                               cullCenter_{};
     bool                                   hasCullCenter_ = false;
+
+    // Per-instance VFC (BVH props) + Hi-Z occluder selection state, set by setCullCamera().
+    // Near-camera BVH props (within kPropOccluderRadius of the camera eye) are submitted as
+    // Hi-Z occluders so they occlude farther BVH props (and characters) behind them.
+    static constexpr float                 kPropOccluderRadius = 40.f;
+    Frustum                                frustum_{};
+    mu::Vec3                               cameraPos_{};
+    bool                                   hasFrustum_ = false;
 
     std::unordered_map<int64_t, LoadedChunk>  chunks_;
     std::unordered_map<int64_t, const ChunkIndexEntry*> indexByCoord_;

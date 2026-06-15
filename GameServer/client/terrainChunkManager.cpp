@@ -356,7 +356,10 @@ void TerrainChunkManager::registerChunkScatterCollider(LoadedChunk& slot) {
 void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const {
     if (slot.scatter.empty()) return;
     const bool  useDeferred  = (gfx.renderPath() == GFX::RenderPath::Deferred);
+    // GPU Hi-Z occlusion for BVH props is only available on the deferred path with culling on.
+    const bool  hiZForProps  = useDeferred && gfx.isHiZCullEnabled();
     const float detailCullR2 = kDetailCullRadius * kDetailCullRadius;
+    const float occluderR2   = kPropOccluderRadius * kPropOccluderRadius;
 
     // [TEMP DEBUG] draw the bounding volumes of collidable props (only those that HAVE a BV),
     // in world space, matching the geometry ScatterCollider uses for collision.
@@ -386,21 +389,47 @@ void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& s
             }
         }
 
-        // Distance-cull dense details/grass around the player (trees are always drawn).
-        if (hasCullCenter_
-            && index_.scatterPrototypes[inst.protoIdx].kind != ScatterPrototype::Kind::TreeMesh) {
-            const float dx = inst.worldAABB.center.x() - cullCenter_.x();
-            const float dz = inst.worldAABB.center.z() - cullCenter_.z();
-            if (dx * dx + dz * dz > detailCullR2) continue;
+        const auto& proto  = resolvedProtos_[inst.protoIdx];
+        const bool  hasBVH = proto.collidable;   // model && !model->bvh.empty()
+
+        // Culling policy by BVH presence:
+        //   no BVH  (grass/flowers/bushes) → distance cull around the player only.
+        //   has BVH (trees/mesh props)     → per-instance VFC; survivors go through the
+        //                                    GPU Hi-Z occlusion path (when available), and
+        //                                    near-camera ones additionally act as occluders.
+        bool occludee = false;
+        if (!hasBVH) {
+            if (hasCullCenter_) {
+                const float dx = inst.worldAABB.center.x() - cullCenter_.x();
+                const float dz = inst.worldAABB.center.z() - cullCenter_.z();
+                if (dx * dx + dz * dz > detailCullR2) continue;
+            }
+        } else {
+            if (hasFrustum_ && !intersects(frustum_, inst.worldAABB)) continue;
+
+            if (hiZForProps) {
+                occludee = true;
+
+                const float dxc = inst.worldAABB.center.x() - cameraPos_.x();
+                const float dyc = inst.worldAABB.center.y() - cameraPos_.y();
+                const float dzc = inst.worldAABB.center.z() - cameraPos_.z();
+                if (dxc * dxc + dyc * dyc + dzc * dzc < occluderR2) {
+                    for (const auto& part : proto.parts) {
+                        gfx.addOccluder(PBRDeferredPipeline::OccluderInfo{
+                            .mesh = part.mesh, .subMesh = part.subMesh,
+                            .world = part.meshXform * inst.world });
+                    }
+                }
+            }
         }
 
-        const auto& proto = resolvedProtos_[inst.protoIdx];
         for (const auto& part : proto.parts) {
             const mu::Mat4x4 world = part.meshXform * inst.world;
             if (useDeferred) {
                 gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{
                     .world = world, .mesh = part.mesh, .subMesh = part.subMesh,
-                    .material = part.material, .viewFrustumCulled = false, .shadowCulled = false });
+                    .material = part.material, .viewFrustumCulled = false,
+                    .shadowCulled = false, .occludeeCandidate = occludee });
             } else {
                 gfx.addDrawEvent(PBRPipeline::DrawEvent{
                     .world = world, .mesh = part.mesh, .subMesh = part.subMesh,

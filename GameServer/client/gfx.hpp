@@ -281,6 +281,8 @@ public:
 	void addOccluder(const TerrainPipeline::OccluderInfo& occluderInfo);
 	// Hi-z occlusion culling에 사용할 occluder의 정보를 입력한다.
 	void addOccluder(const TerrainDeferredPipeline::OccluderInfo& occluderInfo);
+	// 정적 prop occluder(근거리 BVH prop)를 Hi-Z source depth에 기록하기 위해 입력한다.
+	void addOccluder(const PBRDeferredPipeline::OccluderInfo& occluderInfo);
 
 	// ===== 로비 대기실 슬롯 포트레이트 (오프스크린 RT → UI 합성) =====
 	// 슬롯 수 / 셀 해상도(세로형). 포트레이트 카메라 aspect = kPortraitCellW / kPortraitCellH.
@@ -582,6 +584,7 @@ private:
 	// Hi-z Occluder Pass resources
 	std::vector<TerrainPipeline::OccluderInfo> occluderInfosTerrain_{};
 	std::vector<TerrainDeferredPipeline::OccluderInfo> occluderInfosTerrainDeferred_{};
+	std::vector<PBRDeferredPipeline::OccluderInfo> occluderInfosPBRDeferred_{};
 
 	// Font
 	Font font_{};

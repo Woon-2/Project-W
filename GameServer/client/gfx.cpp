@@ -306,6 +306,7 @@ void GFX::init() {
 	shaders_.try_emplace("PBRSkinnedShaderCSMDebug", createPBRSkinnedShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShaderCSMDebug", createTerrainShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredGBufferShader",        createPBRDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRDeferredIndirectGBufferShader", createPBRDeferredIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredSkinnedGBufferShader", createPBRDeferredSkinnedGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredSkinnedIndirectGBufferShader", createPBRDeferredSkinnedIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
@@ -697,6 +698,62 @@ void GFX::createSwapChain() {
 	resourcesPBRDeferredPipeline_.gBufferPass.perFrameData.init(
 		device_.Get(), sizeof(PBRDeferredGBufferShader::PerFrameData), backBuffers_.size(), "PBRDeferred_GBuffer_PerFrameData"
 	);
+	// PBR Deferred Pipeline — Hi-Z occluder pass (near-camera collidable props) ----
+	{
+		constexpr auto kMaxStaticHiZ = PBRDeferredPipeline::Resources::HiZPass::MAX_HIZ_INSTANCES;
+		resourcesPBRDeferredPipeline_.occluderPass.perDrawcallData = createConstantBufferArray(
+			device_.Get(), sizeof(HiZOccluderShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferred_Occluder_PerDrawcallData"
+		);
+		resourcesPBRDeferredPipeline_.occluderPass.perInstanceData.init(
+			device_.Get(), sizeof(HiZOccluderShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_Occluder_PerInstanceData"
+		);
+		// PBR Deferred Pipeline — Hi-Z occlusion cull + indirect draw (BVH props) ----
+		resourcesPBRDeferredPipeline_.hiZPass.groupOffsets.init(
+			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_GroupOffset"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.indirectCmd.init(
+			device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_IndirectCommand"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataClear.init(
+			device_.Get(), sizeof(HiZClearShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataClear"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataCommand.init(
+			device_.Get(), sizeof(HiZCommandShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataCommand"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataCompact.init(
+			device_.Get(), sizeof(HiZCompactShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataCompact"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataCull.init(
+			device_.Get(), sizeof(HiZCullShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataCull"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perGroupCnt.init(
+			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupCnt"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perGroupData.init(
+			device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupData"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perInstanceDataCompact.init(
+			device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_PerInstanceDataCompact"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.perInstanceDataCull.init(
+			device_.Get(), sizeof(HiZCullShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_PerInstanceDataCull"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.visibleFlags.init(
+			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_VisibleFlags"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.visibleIndices.init(
+			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_VisibleIndices"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.cullScratch.init(
+			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_CullScratch"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.gBufferPerInstanceData.init(
+			device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_GBufferPerInstanceData"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.gBufferPerDrawcallData = createConstantBufferArray(
+			device_.Get(), sizeof(PBRDeferredGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferred_HiZ_GBufferPerDrawcallData"
+		);
+	}
 	// PBR Deferred Skinned Pipeline ----
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.groupOffsets.init(
 		device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_GroupOffset"
@@ -1130,6 +1187,11 @@ void GFX::addOccluder(const TerrainPipeline::OccluderInfo& occluderInfo) {
 // Hi-z occlusion culling에 사용할 occluder의 정보를 입력한다.
 void GFX::addOccluder(const TerrainDeferredPipeline::OccluderInfo& occluderInfo) {
 	occluderInfosTerrainDeferred_.push_back(occluderInfo);
+}
+
+// 정적 prop occluder(근거리 BVH prop)를 Hi-Z source depth에 기록하기 위해 입력한다.
+void GFX::addOccluder(const PBRDeferredPipeline::OccluderInfo& occluderInfo) {
+	occluderInfosPBRDeferred_.push_back(occluderInfo);
 }
 
 void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request) {
@@ -2024,11 +2086,20 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
 		rootSigs_.at("DefaultRootSignature"),
+		cmdSig_,
+		shaders_.at("HiZClearShader"),
+		shaders_.at("HiZCullShader"),
+		shaders_.at("PrefixSumShader"),
+		shaders_.at("HiZCompactShader"),
+		shaders_.at("HiZCommandShader"),
+		shaders_.at("HiZOccluderShader"),
 		shaders_.at("PBRDeferredGBufferShader"),
+		shaders_.at("PBRDeferredIndirectGBufferShader"),
 		shaders_.at("ShadowMapCSMShader"),
 		cmdQ_, viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredPipeline_, threadPool_, &cmdListPool_,
-		std::move(drawEventsPBRDeferredPipeline_), std::move(lightDataPBRDeferredPipeline_),
+		std::move(drawEventsPBRDeferredPipeline_), std::move(occluderInfosPBRDeferred_),
+		std::move(lightDataPBRDeferredPipeline_),
 		mainDirectionalLightPBRDeferredPipeline_, cameraDataPBRDeferredPipeline_,
 		frameDataPBRDeferredPipeline_,
 		frameIdx_ % backBuffers_.size()
@@ -2112,7 +2183,10 @@ void GFX::render() {
 
 		if (hiZCullEnabled_) {
 			// --- Occluder pass ---
+			// Terrain + near-camera collidable props write depth into the shared Hi-Z
+			// source before the pyramid is built, so both occlude all Hi-Z candidates.
 			terrainDeferredDispatcher.occluderPass();
+			pbrDeferredDispatcher.occluderPass();
 
 			// --- Hi-Z map build pass ---
 			{
@@ -2206,6 +2280,7 @@ void GFX::render() {
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxHiZ));
 
 				pbrDeferredSkinnedDispatcher.hiZPass();
+				pbrDeferredDispatcher.hiZPass();
 			}
 		}
 
@@ -2221,18 +2296,22 @@ void GFX::render() {
 		}
 
 		// --- GBuffer passes ---
+		// PBRDeferred always draws its direct (non-occludee) events; occludee-candidate
+		// props are drawn via the Hi-Z indirect path when culling is enabled.
 		if (!threadPool_) {
 			pbrDeferredDispatcher.gBufferPass();
-			if (hiZCullEnabled_)
+			if (hiZCullEnabled_) {
+				pbrDeferredDispatcher.gBufferIndirectPass();
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPass();
-			else
+			} else
 				pbrDeferredSkinnedDispatcher.gBufferPass();
 			terrainDeferredDispatcher.gBufferPass();
 		} else {
 			pbrDeferredDispatcher.gBufferPassMT();
-			if (hiZCullEnabled_)
+			if (hiZCullEnabled_) {
+				pbrDeferredDispatcher.gBufferIndirectPassMT();
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPassMT();
-			else
+			} else
 				pbrDeferredSkinnedDispatcher.gBufferPassMT();
 			terrainDeferredDispatcher.gBufferPassMT();
 		}

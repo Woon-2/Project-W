@@ -73,12 +73,26 @@ Detail Density Scale`. 트리는 `treeInstances`(개별)라 그대로 정확.
 - 인스턴스는 무거운 `Object`가 아니라 `gfx.addDrawEvent(...)`로 직접 emit한다(1만 개 풀 대응).
 - 같은 prototype 인스턴스는 같은 mesh/material을 가리키므로 chunk 경계를 넘어 전역적으로 배칭된다.
 - 렌더 경로는 `gfx.renderPath()`를 따라 PBRDeferred/PBR 중 선택(object.cpp 미러).
-- **거리 컬링(필수)**: `perInstanceData` StructuredBuffer는 **DrawEvent(=인스턴스)당 1칸**이고 고정 용량이라(초과 시
-  `ShaderInputBuffer::stage`가 통째로 스킵→해당 패스 렌더 실패), 디테일/풀은 `submitScatterDrawEvents`에서
-  **플레이어 반경 `kDetailCullRadius`(80m) 안만 emit**한다(Unity Detail Distance와 동일 개념). 트리는 랜드마크라 전부 emit.
-  cullCenter는 `update(playerWorldPos)`에서 갱신. 이로써 칠한 총량과 무관하게 매 프레임 emit 수가 근거리로 한정된다.
-- **버퍼 용량**: 안전마진으로 PBRDeferred shadow/gBuffer `perInstanceData` = 32,768, forward PBR = 16,384 (gfx.cpp).
-  거리 컬링이 1차 방어, 용량 상향이 2차 방어.
+
+### 컬링 정책 (BVH 유무 기준, 2026-06-15)
+
+`submitScatterDrawEvents`는 prototype의 **BVH 유무**(`ResolvedScatterProto::collidable = model && !model->bvh.empty()`)로
+인스턴스별 컬링 방식을 가른다. (이전엔 `Kind != TreeMesh`로 갈라 트리는 컬링이 아예 없었음.)
+
+1. **BVH 없음**(풀/꽃/덤불·빌보드) → **distance culling만**. 플레이어 반경 `kDetailCullRadius`(80m) 밖이면 skip.
+   `perInstanceData` StructuredBuffer는 인스턴스당 1칸 고정 용량이라(초과 시 `ShaderInputBuffer::stage`가 통째로 스킵→패스 렌더 실패)
+   근거리 한정 emit이 필수다. cullCenter는 `update(playerWorldPos)`에서 갱신.
+2. **BVH 있음**(트리/메시 프롭) → **per-instance VFC**(`frustumCull.hpp::intersects(frustum_, inst.worldAABB)`) 먼저.
+   - 프러스텀 밖이면 skip(트리도 이제 화면 밖이면 안 그림 — 기존엔 항상 emit).
+   - 프러스텀 통과 + **Deferred & Hi-Z 켜짐**이면 `DrawEvent.occludeeCandidate=true`로 emit → 정적 파이프라인의
+     **GPU Hi-Z occlusion cull + indirect draw** 경로로 들어가 가려진 인스턴스가 GBuffer에서 제외된다.
+   - 그중 **카메라 eye 반경 `kPropOccluderRadius`(40m)** 안의 인스턴스는 추가로 `gfx.addOccluder(PBRDeferredPipeline::OccluderInfo)`로
+     occluder 등록 → Hi-Z source depth에 깊이를 그려 그 뒤의 prop/캐릭터를 가린다.
+   - Hi-Z 꺼짐/forward 경로면 `occludeeCandidate=false`로 direct emit(VFC만 적용).
+- 카메라 프러스텀/eye는 `setCullCamera(extractFrustum(view*proj), eye)`로 매 프레임 submit 직전에 주입(player 위치인
+  cullCenter와 구분). 정적 Hi-Z 경로 상세는 `graphicsArchitecture.md` 및 [[hi-z-occlusion-culling]] 참조.
+- **버퍼 용량**: PBRDeferred shadow/gBuffer `perInstanceData` = 32,768, forward PBR = 16,384, 정적 Hi-Z 버퍼 = 65,536 (gfx.cpp).
+  VFC/거리 컬링이 1차 방어, 용량 상향이 2차 방어.
 
 ### 폴리지 알파 컷아웃
 나뭇잎·풀은 alpha test가 필요하다. 신규 PSO 대신:
@@ -121,8 +135,8 @@ Detail Density Scale`. 트리는 `treeInstances`(개별)라 그대로 정확.
 현재 구현은 "시각 일치 + 인스턴싱"이 우선이라 아래는 **의도적으로 단순화**했고, 데이터/구조는 확장이 쉽도록 남겨 두었다.
 
 1. **렌더 LOD 전환** — `ModelExtractor`는 트리/식생 프리팹의 **LOD0만** 추출한다(LODGroup의 LOD1+ 렌더러는 노드만 남기고 메시/재질 skip). 거리별 LOD 전환·임포스터·페이드는 미구현. 향후 prototype에 LOD 메시 배열을 담고 `submitScatterDrawEvents`에서 거리로 mesh/subMesh를 골라 emit하면 된다(자동 인스턴싱은 그대로 재사용).
-2. **트리 거리/임포스터 컬링** — 디테일/풀만 `kDetailCullRadius`로 거리 컬링하고 **트리는 항상 emit**한다(랜드마크). 트리 수가 매우 많아지면 `perInstanceData` 용량(32768)을 넘길 수 있으니, 그 전에 트리도 LOD/임포스터 + 거리 컬을 도입해야 한다. (지금은 `worldAABB` 상주로 인스턴스 단위 컬 준비만 됨.)
-3. **인스턴스 단위 frustum 컬링** — 현재는 chunk 단위 frustum(hop 범위) + 디테일 거리 컬만. `ScatterInstanceResolved::worldAABB`가 이미 있으므로 view frustum 교차로 per-instance 컬을 추가하는 비용은 작다.
+2. **트리 임포스터/LOD** — BVH 프롭(트리)은 이제 VFC + Hi-Z occlusion으로 화면 밖/가려진 것이 제외되지만, 보이는 원거리 트리는 여전히 LOD0 풀메시다. 거리 LOD/임포스터·페이드는 미구현. (정적 Hi-Z 버퍼 용량 65,536으로 상향됨.)
+3. **인스턴스 단위 frustum 컬링** — ✅ 구현됨(2026-06-15). BVH 프롭은 `frustumCull.hpp::intersects(frustum_, inst.worldAABB)`로 per-instance VFC. BVH 없는 식생은 거리 컬만(VFC/Hi-Z 비대상). 위 "컬링 정책" 참조.
 4. **머티리얼 알파 모드(불투명 vs 컷아웃)** — 지금은 scatter 프롭 **모든** 머티리얼에 `kFoliageAlphaCutoff`(0.33)를 일괄 적용한다. 불투명 줄기(albedo a≈1)는 무해하지만 의미상 부정확하다. 향후 `ModelExtractor`에서 Unity 머티리얼의 surface type / `_Cutoff` / `_ALPHATEST_ON`을 읽어 **per-material cutoff**를 추출하면, 줄기는 0(불투명), 잎은 실제 컷오프값으로 분리된다. (`Material::constantAlphaCutoff`가 이미 per-material 필드라 받을 준비는 됨.)
 5. **그림자 알파 컷아웃** — 그림자 패스는 position-only라 잎/풀 그림자가 solid 실루엣. alpha-test 그림자 변형 PSO로 개선 가능.
 6. **카메라 추종 빌보드 / 바람** — 빌보드는 고정 cross-quad(카메라 추종 X), 바람 애니메이션 없음. 정점 셰이더 빌보딩·wind 노이즈로 확장 가능.

@@ -5,6 +5,7 @@
 #include "sharedResources.hpp"
 
 class RootSig;
+class CmdSig;
 
 struct Mesh;
 struct SubMesh;
@@ -61,6 +62,10 @@ struct DrawEvent {
     const Material* material;
     bool viewFrustumCulled = false;
     bool shadowCulled      = false;
+    // When set, this event is routed through the GPU Hi-Z occlusion-cull + indirect
+    // draw path instead of the direct GBuffer draw. Scatter props with a BVH set this
+    // (after passing per-instance VFC) when Hi-Z culling is enabled. Excluded from sort.
+    bool occludeeCandidate = false;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -74,7 +79,49 @@ struct DrawEvent {
     }
 };
 
+// A near-camera static prop instance drawn (depth-only, position-only) into the shared
+// Hi-Z source depth so it occludes other Hi-Z candidates. Reuses HiZOccluderShader.
+struct OccluderInfo {
+    const Mesh*    mesh    = nullptr;
+    const SubMesh* subMesh = nullptr;
+    mu::Mat4x4     world   = {};
+};
+
 struct Resources {
+    // Hi-Z occluder pass: near-camera collidable props rendered depth-only into the
+    // shared Hi-Z source depth (alongside terrain occluders).
+    struct OccluderPass {
+        StructuredBuffer    perInstanceData;   // t0 (HiZOccluderShader::PerInstanceData)
+        ConstantBufferArray perDrawcallData;   // b0
+    } occluderPass;
+
+    // Hi-Z occlusion-cull + indirect draw for occludee-candidate events (BVH props).
+    // Reuses the same compute shaders / command signature as the skinned pipeline.
+    // No CPU visibility feedback ring: static props need no anim/physics skip, so the
+    // cull shader's per-instance feedback write lands in a throwaway scratch buffer.
+    struct HiZPass {
+        static constexpr u32t MAX_HIZ_INSTANCES = 65'536u;
+
+        StructuredBuffer perInstanceDataCull;      // t0
+        StructuredBuffer perInstanceDataCompact;   // t0
+        ConstantBuffer   perFrameDataClear;        // b1
+        ConstantBuffer   perFrameDataCull;         // b1
+        ConstantBuffer   perFrameDataCompact;      // b1
+        ConstantBuffer   perFrameDataCommand;      // b1
+        RWStructuredBuffer perGroupCnt;            // t3, u1
+        RWStructuredBuffer groupOffsets;           // t3, u1
+        RWStructuredBuffer visibleFlags;           // t4, u2
+        RWStructuredBuffer perGroupData;           // t5, u3
+        RWStructuredBuffer visibleIndices;         // u1 (compact) / t3 (indirect draw SRV)
+        RWStructuredBuffer indirectCmd;            // u0, space1
+        RWStructuredBuffer cullScratch;            // u3 (cull feedback sink, no readback)
+
+        // GBuffer instance/drawcall data for the indirect draw (occludee events only;
+        // disjoint from gBufferPass which serves the direct, non-occludee draws).
+        StructuredBuffer    gBufferPerInstanceData;   // t0
+        ConstantBufferArray gBufferPerDrawcallData;   // b0
+    } hiZPass;
+
     struct ShadowPass {
         StructuredBuffer    perInstanceData;   // t0
         ConstantBufferArray perDrawcallData;   // b0
@@ -106,7 +153,15 @@ public:
         DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
         DescriptorPool* pCmpSamPool, DescriptorPool* pDsvPool,
         const std::shared_ptr<RootSig>& rootSig,
+        const std::shared_ptr<CmdSig>& cmdSig,
+        const ComPtr<ID3D12PipelineState>& hiZClearShader,
+        const ComPtr<ID3D12PipelineState>& hiZCullShader,
+        const ComPtr<ID3D12PipelineState>& prefixSumShader,
+        const ComPtr<ID3D12PipelineState>& hiZCompactShader,
+        const ComPtr<ID3D12PipelineState>& hiZCommandShader,
+        const ComPtr<ID3D12PipelineState>& occluderShader,
         const ComPtr<ID3D12PipelineState>& gBufferShader,
+        const ComPtr<ID3D12PipelineState>& indirectGBufferShader,
         const ComPtr<ID3D12PipelineState>& shadowShader,
         const ComPtr<ID3D12CommandQueue>& cmdQ,
         const D3D12_VIEWPORT& viewport,
@@ -115,6 +170,7 @@ public:
         Resources* pResources, ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
+        std::vector<OccluderInfo>&& occluderInfos,
         std::vector<LightData>&& lightData,
         const LightData& mainDirectionalLightData,
         const CameraData& cameraData, const FrameData& frameData,
@@ -122,12 +178,22 @@ public:
     );
 
     void sortDrawEvents();
+    void occluderPass();
+    void hiZPass();
     void shadowPass();
     void shadowPassMT();
     void gBufferPass();
     void gBufferPassMT();
+    void gBufferIndirectPass();
+    void gBufferIndirectPassMT();
 
 private:
+    void occluderUpdate();
+    void occluderDraw();
+
+    void hiZPassUpdate();
+    void hiZPassCompute();
+
     void shadowUpdate();
     void shadowUpdateMT();
     void shadowDraw();
@@ -137,6 +203,13 @@ private:
     void gBufferUpdateMT();
     void gBufferDraw();
     void gBufferDrawMT();
+
+    void gBufferIndirectUpdate();
+    void gBufferIndirectDraw();
+
+    // Stage gBuffer perFrameData + lightData (shared by the direct and indirect draws,
+    // so it is staged even when one of the two event sets is empty).
+    void stageGBufferFrameAndLights();
 
     void MU_CALLCONV addJobGBufferUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
         const DrawEvent* pFirst, const DrawEvent* pLast,
@@ -168,7 +241,15 @@ private:
     DescriptorPool* pCmpSamPool_  = nullptr;
     DescriptorPool* pDsvPool_     = nullptr;
     std::shared_ptr<RootSig> rootSig_ = nullptr;
+    std::shared_ptr<CmdSig>  cmdSig_  = nullptr;
+    ComPtr<ID3D12PipelineState> hiZClearShader_   = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCullShader_    = nullptr;
+    ComPtr<ID3D12PipelineState> prefixSumShader_  = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCompactShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCommandShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> occluderShader_   = nullptr;
     ComPtr<ID3D12PipelineState> gBufferShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> indirectGBufferShader_ = nullptr;
     ComPtr<ID3D12PipelineState> shadowShader_  = nullptr;
     ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
     D3D12_VIEWPORT    viewport_{};
@@ -180,8 +261,11 @@ private:
     CommandListPool*  cmdListPool_  = nullptr;
     Resources*        pResources_   = nullptr;
     std::vector<DrawEvent> drawEvents_{};
-    std::vector<DrawEvent> gBufferEvents_{};
+    std::vector<DrawEvent> gBufferEvents_{};   // direct (non-occludee) draws
+    std::vector<DrawEvent> hiZEvents_{};       // occludee candidates → indirect Hi-Z draw
     std::vector<DrawEvent> shadowEvents_{};
+    std::vector<u32t>      instanceGroups_{};  // group boundaries within hiZEvents_
+    std::vector<OccluderInfo> occluderInfos_{};
     std::vector<LightData> lightData_{};
     LightData  mainDirectionalLightData_{};
     CameraData cameraData_{};
@@ -197,6 +281,15 @@ private:
     UINT rootParamIdxTexCubePool_{};
     UINT rootParamIdxSamPool_{};
     UINT rootParamIdxCmpSamPool_{};
+    UINT rootParamIdxFirstInstOffset_{};
+    UINT rootParamIdxSrcCnts0_{};
+    UINT rootParamIdxSrcCnts1_{};
+    UINT rootParamIdxPerGroupData_{};
+    UINT rootParamIdxDestCnts0_{};
+    UINT rootParamIdxDestCnts1_{};
+    UINT rootParamIdxOutPerGroupData_{};
+    UINT rootParamIdxIndirectCmd_{};
+    UINT rootParamIdxHiZMap_{};
 
     std::size_t jobSizeUpdate_ = 120u;
     std::size_t jobSizeDraw_   = 200u;
