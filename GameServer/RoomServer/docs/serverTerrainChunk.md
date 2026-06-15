@@ -48,8 +48,9 @@ heightfield 데이터는 룸 수와 무관하게 1벌만 존재한다.
 | `worldOffset(col,row)` = `(col·sizeX, 0, row·sizeZ)` | 동일 | |
 | `chunkCoordAtWorld` / `heightAtWorld` / `normalAtWorld` | 동일 | 월드 라우팅 → 해당 chunk hf 로컬 질의 |
 | `TerrainChunkManager` (streaming) | **load-all 변종**(동명) | `init`/`heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`empty`/`chunkCount`/`forEachChunk`. 스트리밍·GPU·카메라 API 없음 |
-| `PhysicsWorld::TerrainEntry/TerrainHandle/registerTerrain/unregisterTerrain` | 동일 | slot 재사용 |
-| `TerrainCollider` (collision.*) | **무수정** | 이미 클라와 동일. testVertex가 `terrainBody_->pos()`를 origin으로 로컬 reject |
+| `PhysicsWorld::worldColliders_`(SlotVector)/`TerrainHandle`/`registerTerrain`/`unregisterTerrain` | 동일 | terrain+scatter 공용 slot registry |
+| `TerrainCollider` (collision.*) | `WorldCollider` 서브클래스로 일반화 | 클라와 동일. testVertex가 `terrainBody_->pos()`를 origin으로 로컬 reject |
+| `ScatterCollider` (collision.*) | 신규(클라 미러) | 정적 prop 충돌(몬스터 권위). `staticDepenetration.hpp` 헤더 전용 포팅. 상세: `client/docs/scatterSystem.md` |
 
 > 신규: `loadChunkHeightField(entry, terrainDir)` — 클라의 `buildChunkCpu` 중 height 파싱 부분만 추출한 CPU 전용 로더.
 
@@ -59,7 +60,7 @@ heightfield 데이터는 룸 수와 무관하게 1벌만 존재한다.
 |------|------|
 | `terrain.hpp`/`terrain.cpp` | `ChunkIndexEntry`/`ChunkIndex`/`parseChunkIndex`/`loadChunkHeightField`/`TerrainChunkManager` 추가. 단일 경로(`parseManifest`/`parseMeta`/`TerrainManifest`/`TerrainMeta`/`loadTerrainHeightFieldFromFiles`) 제거 |
 | `object.hpp` | `TerrainObject`: `TerrainHeightField` 소유 → `const TerrainHeightField*` 참조(+`setHeightField`) |
-| `physicsWorld.hpp`/`.cpp` | 단일 `terrainCollider_` → `vector<TerrainEntry> terrains_` + `freeTerrainSlots_`. `registerTerrain`→`TerrainHandle` 반환, `unregisterTerrain(handle)`. `generateContacts` terrain 루프를 `for(terrains_)` + `kPad=4` XZ reject |
+| `physicsWorld.hpp`/`.cpp` | 단일 `terrainCollider_` → `SlotVector<unique_ptr<WorldCollider>> worldColliders_`(terrain+scatter 공용). `registerTerrain`→`TerrainHandle`, `unregisterTerrain(handle)`, `registerScatter`/`unregisterScatter` 추가. `generateContacts`가 Dynamic body마다 `worldColliders_` 순회 + `footprintReject`(kPad=4) |
 | `Level.hpp` | `TerrainChunkManager terrainChunks` 멤버 추가(Level이 소유) |
 | `AssetManager.cpp` | `loadAssets()`에서 level 로드 후 `level_.terrainChunks.init("../resources/terrains/")` |
 | `RoomManager`/`roomServerMain` | **변경 없음** — 기존 `const Level*` 공유 그대로 |

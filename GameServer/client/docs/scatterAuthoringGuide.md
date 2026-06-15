@@ -32,7 +32,7 @@ Unity Terrain에 **Paint Tree / Paint Detail**로 그린 식생을 우리 게임
 3. **Object Name**에 이름을 정한다. ⚠️ **이 이름을 기억**해 둘 것 — 3단계에서 똑같이 입력해야 매핑된다.
    - 권장: 공백 없는 식별자 (예: `Tree_Oak`, `Rock_01`, `Bush_A`).
 4. (선택, 충돌용) 프리팹 루트에 **MultiBoundingVolume** 컴포넌트를 붙여 충돌 박스를 작성하면 `Model::bvh`가 추출된다.
-   - 지금은 렌더만 하므로 없어도 화면엔 나온다. **향후 나무/바위 충돌**을 붙이려면 이 단계가 필요(자세히는 scatterSystem.md "충돌 대비").
+   - 렌더만 필요하면 없어도 화면엔 나오지만, **나무/바위 충돌**(구현됨)에는 이 단계가 필수다(자세히는 scatterSystem.md "충돌(Physics)" 절). 서버 충돌까지 쓰려면 `<name>Server.bin`도 재추출.
 5. **Export as binary (.bin)** → 출력된 `.bin`을 `../resources/models/props/{Object Name}.bin` 으로 배치.
    - 즉 `Object Name`이 `Tree_Oak`이면 파일은 `../resources/models/props/Tree_Oak.bin`.
 6. 모델이 참조하는 **텍스처들**도 기존 모델(플레이어/고블린) 추출과 동일하게 엔진의 텍스처 경로에 배치.
@@ -129,5 +129,6 @@ Unity Terrain에 **Paint Tree / Paint Detail**로 그린 식생을 우리 게임
 
 - 컷오프 임계값은 `TerrainChunkManager::kFoliageAlphaCutoff`(0.33). 잎/풀이 과도하게 깎이거나 덜 깎이면 이 값을 조정 후 재빌드.
 - 빌보드는 **고정 십자 quad**(카메라 추종 회전 미구현).
-- **충돌은 미구현**(렌더만). 나무/바위 충돌이 필요하면 1단계의 MultiBoundingVolume을 작성해 두면, 추후 `ScatterCollider` 도입 시 그대로 활용된다.
-- 서버(`RoomServer`)는 산포 데이터를 무시하지만(렌더 전용), 같은 `chunks_index.bin`을 읽으므로 v2/v3 포맷이어도 정상 동작한다(read-and-discard, 버전별 분기).
+- **충돌은 구현됨**(`ScatterCollider`): 1단계 `MultiBoundingVolume`로 작성한 BV가 prop 모델 BVH로 추출되어 정적 충돌(플레이어/몬스터·카메라 차단)에 사용된다. 충돌이 필요한 prop은 BV를 반드시 작성하고, 서버용 `<name>Server.bin`(BV-only)을 재추출할 것. 상세: `docs/scatterSystem.md` 충돌 절.
+- 빌보드(디테일/풀)는 BV를 추출하지 않아 비충돌이다(렌더 전용). 충돌은 트리/바위 같은 메시 prop만.
+- 서버(`RoomServer`)도 같은 `chunks_index.bin`을 읽어 산포 인스턴스를 **저장**(몬스터-prop 충돌 권위). v2/v3 포맷 모두 정상 동작(버전별 분기).

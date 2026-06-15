@@ -33,13 +33,15 @@
 | `RigidBody` | `MotionType`: Dynamic / Kinematic / Static |
 | `SAPBroadPhase` | Sweep and Prune 브로드 페이즈 |
 | `ContactConstraint` | Baumgarte bias + Coulomb 마찰 |
-| `TerrainCollider` | 높이 필드 기반 지형 충돌 |
+| `WorldCollider`(추상) | 정적 환경 충돌 베이스. `TerrainCollider`(지형 높이필드) + `ScatterCollider`(정적 prop) |
+| `ScatterCollider` | scatter prop(나무/바위) 정적 충돌 — **몬스터-prop 권위**. `<name>Server.bin` BVH 필요 |
 | `BVH` / `BVHNode` | 충돌 볼륨(리프는 AABB 또는 OBB); 뼈 인덱스와 `damageCoeff` 보유 |
 
 **엔티티별 MotionType:**
 - 플레이어(서버): Kinematic — 클라이언트 위치 패킷을 직접 적용
 - 고블린: Dynamic — AI가 `setLinearVel()` 로 이동 제어, 물리는 중력·충돌 담당
-- 지형: Static (`TerrainCollider` 별도)
+- 지형/scatter prop: Static — `WorldCollider`(BroadPhase 우회, Dynamic body만 질의). Dynamic만 질의하므로
+  **몬스터(Dynamic)-prop 충돌은 서버, 플레이어(Kinematic)-prop 충돌은 클라**가 담당(권위 자동 분리).
 
 **래그돌(Ragdoll) — 서버에 없음:**
 서버에는 `Ragdoll` 클래스가 존재하지 않으며 앞으로도 추가 예정이 없다. 고블린 사망 시 서버에서는 `Dead` 상태 전환과 물리 비활성화만 처리한다. 래그돌 바디 충돌은 클라이언트가 자체 물리로 처리하며 서버가 인지할 필요가 없다. 관련 시각적 결과(래그돌 포즈 등)는 클라이언트-only 연산이다.

@@ -38,7 +38,7 @@ prop 프리팹     ──(ModelExtractor.cs)─────▶  ../resources/mod
 > 엔진은 Unity 쿼터니언 (x,y,z,w)을 `mu::NQuat(x,y,z,w).mat4()`로 그대로 사용한다(zone/marker Orient와 동일 규약).
 
 작성: `client/unityScripts/TerrainExtractor.cs::WriteIndex`
-읽기: `client/terrain.cpp::parseChunkIndex`, `RoomServer/terrain.cpp::parseChunkIndex`(read-and-discard)
+읽기: `client/terrain.cpp::parseChunkIndex`, `RoomServer/terrain.cpp::parseChunkIndex`(scatter 인스턴스 저장 — 몬스터-prop 충돌)
 
 > 포맷 변경 시 `chunks_index.bin` **전체 재추출 필수**. 서버는 scatter를 쓰지 않으므로 정렬 유지를 위해 읽고 버린다.
 
@@ -126,7 +126,8 @@ Detail Density Scale`. 트리는 `treeInstances`(개별)라 그대로 정확.
 4. **머티리얼 알파 모드(불투명 vs 컷아웃)** — 지금은 scatter 프롭 **모든** 머티리얼에 `kFoliageAlphaCutoff`(0.33)를 일괄 적용한다. 불투명 줄기(albedo a≈1)는 무해하지만 의미상 부정확하다. 향후 `ModelExtractor`에서 Unity 머티리얼의 surface type / `_Cutoff` / `_ALPHATEST_ON`을 읽어 **per-material cutoff**를 추출하면, 줄기는 0(불투명), 잎은 실제 컷오프값으로 분리된다. (`Material::constantAlphaCutoff`가 이미 per-material 필드라 받을 준비는 됨.)
 5. **그림자 알파 컷아웃** — 그림자 패스는 position-only라 잎/풀 그림자가 solid 실루엣. alpha-test 그림자 변형 PSO로 개선 가능.
 6. **카메라 추종 빌보드 / 바람** — 빌보드는 고정 cross-quad(카메라 추종 X), 바람 애니메이션 없음. 정점 셰이더 빌보딩·wind 노이즈로 확장 가능.
-7. **충돌(ScatterCollider)** — 위 "충돌 대비" 절 참고. 인스턴스 world 행렬·worldAABB·model BVH가 chunk에 상주해 있어 등록 경로만 추가하면 된다.
+
+(충돌은 구현 완료 — 위 "충돌(Physics)" 절 참조.)
 
 ## 핵심 파일
 - Unity: `client/unityScripts/TerrainExtractor.cs`(인덱스/산포 추출), `ModelExtractor.cs`(프롭 `.bin` 추출 — LOD0-only, `FindAlbedoTexture` 견고 albedo)
@@ -134,7 +135,7 @@ Detail Density Scale`. 트리는 `treeInstances`(개별)라 그대로 정확.
 - chunk 통합: `client/terrainChunkManager.hpp/.cpp`(loadScatterAssets/resolveChunkScatter/submitScatterDrawEvents, billboardMesh_/propModels_/resolvedProtos_, `kDetailCullRadius`)
 - 머티리얼/셰이더: `client/mesh.hpp`(constantAlphaCutoff), `shader.hpp`, `pbr.hlsl`, `pbrDeferred.hlsl`, `pbrPipeline.cpp`, `pbrDeferredPipeline.cpp`
 - 인스턴스 버퍼 용량: `client/gfx.cpp`(perInstanceData PBRDeferred 32768 / forward 16384)
-- 서버 정렬: `RoomServer/terrain.cpp`(read-and-discard, v3 분기)
+- 서버 정렬: `RoomServer/terrain.cpp`(scatter 인스턴스 저장 + `loadPropBVHs`, v3 분기)
 
 ## 검증 체크리스트
 1. Unity에서 Scan Prototypes → 이름 지정 → Export. `chunks_index.bin`(v3)에 ScatterPrototypes/Scatter 기록 + scatter_*.png 출력. PNG→DDS 변환.

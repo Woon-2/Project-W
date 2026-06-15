@@ -1,8 +1,9 @@
 ### 물리 아키텍처 (Phase 1–8 완료)
 
 연관 파일: `rigidBody.hpp/cpp`, `physicsWorld.hpp/cpp`, `constraint.hpp`,
-`contactConstraint.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`, `object.hpp/cpp`,
-`jointConstraint.hpp/cpp`, `ragdollDef.hpp/cpp`, `ragdoll.hpp/cpp`, `activeRagdoll.hpp/cpp`
+`contactConstraint.hpp/cpp`, `staticDepenetration.hpp/cpp`, `broadPhase.hpp/cpp`,
+`collision.hpp/cpp`, `object.hpp/cpp`, `jointConstraint.hpp/cpp`, `ragdollDef.hpp/cpp`,
+`ragdoll.hpp/cpp`, `activeRagdoll.hpp/cpp`, `../common/slotVector.hpp`, `../common/scatterTransform.hpp`
 
 ---
 
@@ -13,10 +14,9 @@ PhysicsWorld
  ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백, collisionGroup, collisionMask }
  ├─ SAPBroadPhase broadPhase_      // X축 Sort-and-Sweep, O(n log n) — 일반 body-body 충돌
  ├─ SAPBroadPhase cameraBroadPhase_// 카메라 장애물 전용 독립 broad phase
- ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
- ├─ const TerrainHeightField* terrainHF_  // queryCameraArm 지형 샘플링용
- ├─ std::vector<ContactConstraint> // 매 step 재생성 (Dynamic-Dynamic + Terrain)
- ├─ std::vector<StaticContact>     // 매 step 재생성 (Static-Dynamic/Static-Kinematic depenetration)
+ ├─ SlotVector<unique_ptr<WorldCollider>> worldColliders_ // 정적 환경 충돌(지형 + scatter prop), BroadPhase 우회
+ ├─ std::vector<ContactConstraint> // 매 step 재생성 (Dynamic-Dynamic + Terrain support)
+ ├─ std::vector<StaticContact>     // 매 step 재생성 (Static depenetration: broad-phase static body + scatter prop)
  ├─ std::vector<unique_ptr<Constraint>> jointConstraints_  // 소유 joint (독립 사용)
  └─ std::vector<Constraint*>       jointRefs_              // 비소유 ref (Ragdoll용)
 
@@ -70,8 +70,9 @@ step(dt)
         │   │   └─ 법선을 static→movable로 정규화 (res.normal B→A; movable==b면 부호 반전, degenerate 시 center-to-center)
         │   ├─ Dynamic-Dynamic: ContactConstraint 생성 (법선 = res.normal; degenerate 시 center-to-center fallback)
         │   │   └─ cc->setExternalAccels(gravA, gravB): Dynamic=gravity_, Static=(0,0,0)
-        │   └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact (기존 경로 유지)
-        │       └─ cc->setExternalAccels(gravity_, {0,0,0})
+        │   └─ WorldCollider 순회: Dynamic body마다 worldColliders_(지형·scatter) 질의 → ContactSink
+        │       ├─ TerrainCollider → 지형 support ContactConstraint (cc->setExternalAccels(gravity_, {0,0,0}))
+        │       └─ ScatterCollider → prop push-out StaticContact (staticContacts_에 append)
         ├─ solveConstraints(subDt)
         │   ├─ prepare(subDt) : rA/rB, tangent frame, effMass, Baumgarte bias 계산
         │   │                  + joint warmstart (accImpulse 이전 값 재적용)
@@ -83,7 +84,7 @@ step(dt)
         │   │   └─ joint solvePosition() — split impulse (pseudoBias/pseudoAccImpulse)
         │   └─ warmstart 저장 (accImpulse)
         ├─ applyPseudoVelocity(subDt) — split impulse 결과를 위치에 적분
-        └─ resolveStaticPenetration(staticContacts_, moved) — static 침투 해소 (마지막, 위치 최종 결정권)
+        └─ resolveStaticPenetration(staticContacts_, moved) — static 침투 해소 (broad-phase static body + scatter prop; 마지막, 위치 최종 결정권)
             └─ 직접 이동한 body만 onRebuildBVH 재호출 (dirty set; 다음 sub-step narrow phase가 보정 위치를 봄)
 ```
 
@@ -364,9 +365,11 @@ applyPseudoVelocity 이후)에 `resolveStaticPenetration()`이 일괄 해소한�
 **순서 근거:** dynamic-dynamic solver 이후 마지막에 실행 → static 벽이 위치의 최종 결정권을 가져,
 다른 dynamic body에 눌린 body도 벽 밖으로 나간다.
 
-**적용 범위:** broad phase에 RigidBody로 등록된 일반 static body(거점 등)만. **Terrain은 검증된 기존
-`TerrainCollider` 경로(split-impulse only, Baumgarte off)를 그대로 유지** — 지형은 height-field 정점
-샘플링+강제 Y-up 법선이라 경로가 다르고, 가장 눈에 띄는 지면 동작의 회귀 위험을 피한다.
+**적용 범위:** (1) broad phase에 RigidBody로 등록된 일반 static body(거점 등), (2) `ScatterCollider`가
+생성하는 scatter prop(나무/바위) contact. 둘 다 `StaticContact`로 모여 같은 경로로 해소된다(회전 없음·분리속도
+주입 없음 → 정적 장애물에 정확). **Terrain은 검증된 기존 `TerrainCollider` 경로(split-impulse only, Baumgarte
+off)를 그대로 유지** — 지형은 height-field 정점 샘플링+강제 Y-up 법선이라 경로가 다르고, 가장 눈에 띄는 지면
+동작의 회귀 위험을 피한다.
 
 ---
 
@@ -586,19 +589,54 @@ player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 
 ---
 
-## 충돌체 추상화 (현재)
+## 충돌체 추상화: WorldCollider (정적 환경)
 
-별도 Collider 인터페이스 없이 두 경로로 충돌을 처리한다.
+충돌은 세 경로로 처리한다.
 
-- **Body-Body**: `RigidBody::worldBVH_` dual-tree DFS (기존)
-- **Body-Terrain**: `TerrainCollider`가 `TerrainHeightField`를 직접 조회 (Phase 4 추가)
-  - Terrain body는 BroadPhase에 등록하지 않음; `PhysicsWorld::generateContacts()`에서 별도 패스로 처리
+- **Body-Body**: `RigidBody::worldBVH_` dual-tree DFS. `broadPhase_`로 쌍을 좁힌 뒤 narrow phase.
+- **Body-정적환경**: `WorldCollider` 추상 클래스(`collision.hpp`). broad phase를 우회하고
+  `generateContacts()`에서 **Dynamic body마다** 등록된 모든 collider를 순회한다(`footprintReject()`
+  빠른 거부 → narrow phase). `PhysicsWorld`는 이들을 `SlotVector<unique_ptr<WorldCollider>> worldColliders_`
+  하나로 소유한다(지형·scatter 공용 registry; unregister는 tombstone을 남겨 다음 register가 재사용 —
+  `common/slotVector.hpp`).
+
+**WorldCollider 가상 인터페이스:**
+| 메서드 | 역할 |
+|--------|------|
+| `footprintReject(bodyPos, pad)` | footprint 밖 body 빠른 거부(narrow phase 스킵) |
+| `generateContacts(dyn, sink)` | Dynamic body 하나의 contact를 `ContactSink`에 append |
+| `queryArm(pivot, dir, armLen, spherePad)` | 카메라 스프링 암 occlusion(기본=차단 없음, 클라 전용) |
+
+`ContactSink`는 출력 버퍼 묶음(`{ ContactConstraint 목록*, StaticContact 목록*, gravity, subDtSec }`)이라
+각 collider가 **자기 의미의 contact**를 담는다: 지형=support `ContactConstraint`, scatter=push-out `StaticContact`.
+
+**Dynamic body만 질의 → 권위 자동 분리:** WorldCollider는 Dynamic body에 대해서만 호출된다. 클라에서는
+로컬 플레이어/래그돌만 Dynamic(원격 플레이어·고블린은 Kinematic), 서버에서는 몬스터만 Dynamic(플레이어는
+Kinematic)이므로 분기 없이 **플레이어-prop=클라, 몬스터-prop=서버**가 성립한다. 상세: `docs/scatterSystem.md`.
+
+### transformShapeRigid / makeWorldBVH (`collision.hpp/cpp`)
+비본 강체 world-BVH 변환 공유 헬퍼. AABB shape는 orient가 항등이면 world AABB 유지(저비용), 회전이 있으면
+**world OBB로 정확 변환**(축정렬 모델 박스를 yaw된 인스턴스에서도 정확히 표현). `Object::rebuildBodyBVH()`
+비본 경로와 `ScatterCollider`가 공유 → 회전된 static Object(예: 회전 거점)의 충돌 박스도 정확히 회전한다.
+
+### ScatterCollider : WorldCollider
+chunk당 1개의 정적 prop(나무/바위) 콜라이더. prop은 움직이지 않으므로 collidable 인스턴스의 model-space BVH를
+`makeWorldBVH()`로 **생성 시 1회 world BVH 베이크**(이후 재빌드 없음)하고, 내장 XZ uniform grid로 body/ray
+근처 인스턴스만 조회한다(밀집 수목에서도 per-body 비용 억제).
+- `generateContacts`: grid 후보 → `collides(dyn.worldBVH, inst.worldBVH)` → hit 시 push-out `StaticContact`
+  (법선 static→movable). `step()` 말미 `resolveStaticPenetration`이 일괄 해소.
+- `queryArm`: grid 후보 → `RaycastBVH(inst.worldBVH, armRay)` → 나무/바위가 카메라 암을 차단.
+- **결정론(위치 동기화 불변식):** 클라/서버가 `common/scatterTransform.hpp::makeScatterWorld` + 동일 ground-snap
+  + 동일 BVH 소스를 써 prop 충돌 형상이 일치한다. 서버 미러는 `RoomServer/collision.*`(+ 헤더 전용
+  `RoomServer/staticDepenetration.hpp`). collidable prop은 `<name>Server.bin`(BV-only) 재추출 필요(없으면 비충돌 skip).
+
+청크 활성/해제 시 등록 경로는 `docs/scatterSystem.md`(클라) / `docs/serverTerrainChunk.md`(서버) 참조.
 
 ---
 
-## TerrainCollider
+## TerrainCollider : WorldCollider
 
-`collision.hpp/cpp`에 정의. `collision.hpp`는 `TerrainHeightField`를 forward-declare하고,
+`collision.hpp/cpp`에 정의(위 WorldCollider 추상의 height-field 구현). `collision.hpp`는 `TerrainHeightField`를 forward-declare하고,
 `collision.cpp`가 `terrain.hpp`를 include해서 완전 타입을 사용한다.
 
 **알고리즘:**
@@ -661,15 +699,14 @@ PhysicsWorld::queryCameraArm(pivot, desiredEye, spherePad) → allowedArmLength:
   armDir = normalize(desiredEye - pivot)
   allowed = armLen
 
-  [지형 N=6 샘플링]
-    origin = terrainCollider_->terrainBody()->pos()
-    for i in 1..6:
-      t = i / 6.f
-      p = pivot + armDir * (t * armLen)
-      groundY = origin.y + terrainHF_->getHeightAt(p.x-origin.x, p.z-origin.z)
-        // getHeightAt() 내부에서 이미 * sizeY 처리 → 외부에서 추가 곱셈 불필요
-      if p.y < groundY + kCameraMinGroundClearance(0.3f):
-        allowed = min(allowed, (t - 1/6.f) * armLen); break
+  [정적 환경: worldColliders_ 순회]
+    for wc in worldColliders_:
+      allowed = min(allowed, wc.queryArm(pivot, armDir, armLen, spherePad))
+    // TerrainCollider::queryArm — 지형 N=6 샘플:
+    //   origin = terrainBody()->pos();  groundY = origin.y + hf->getHeightAt(p.x-origin.x, p.z-origin.z)
+    //   (getHeightAt 내부에서 *sizeY 처리됨) p.y < groundY + kCameraMinGroundClearance
+    //   (0.15f, collision.cpp 상수) 인 첫 샘플에서 암 단축 → break
+    // ScatterCollider::queryArm — grid 후보 인스턴스마다 RaycastBVH(나무/바위가 암 차단)
 
   [장애물 broad phase]
     armAABB = AABB enclosing [pivot, desiredEye] expanded by spherePad
@@ -733,7 +770,8 @@ while stack not empty:
 physicsWorld_.registerCameraObstacle(&obj.body());
 // 해제
 physicsWorld_.unregisterCameraObstacle(&obj.body());
-// 현재 지형은 queryCameraArm 내부에서 terrainHF_ 직접 샘플링, 별도 등록 불필요
+// 지형/scatter prop은 WorldCollider(registerTerrain/registerScatter)로 등록되어
+// queryCameraArm의 worldColliders_ 순회에서 자동으로 암을 차단(별도 카메라 등록 불필요)
 ```
 
 Camera와 PhysicsWorld 연결:

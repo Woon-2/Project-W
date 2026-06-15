@@ -277,13 +277,15 @@ per-thread CommandContext + 풀 뮤텍스화로 GPU 마감도 병렬화 가능.
 ## 7. 물리 다중 지형 (`physicsWorld.*`, `collision.*`)
 
 - 단일 `terrainCollider_`/`terrainHF_` → **collider 컬렉션** + `TerrainHandle`(register 반환/unregister 입력).
-  `unordered_map<int64 pack(col,row), TerrainEntry>`(collider + worldXZ AABB + col/row).
+  최종 구현은 `SlotVector<unique_ptr<WorldCollider>> worldColliders_`(지형·scatter prop 공용 registry,
+  tombstone 재사용 — `common/slotVector.hpp`). 상세: `physicsArchitecture.md` "충돌체 추상화: WorldCollider".
 - `generateContacts()`: Dynamic body마다 **월드 XZ로 겹치는 청크만** 라우팅(보통 1, 경계 2~4). uniform grid →
   `col=floor(x/sizeX)` O(1) 후보. 전체 M 순회 회피.
 - `queryCameraArm()`: 6 샘플마다 속한 청크 heightField로 높이 조회.
 - PhysicsWorld는 **grid 셀 크기(sizeX/Z)만** 보유. populated origin/연속 범위 가정 없음 — 미등록 (col,row)는
   지형 contact 없음(공중/구멍).
-- `TerrainCollider`는 단일 청크 기준 유지(변경 최소; 필요 시 worldAABB 노출).
+- `TerrainCollider`는 단일 청크 기준 유지(자기 `terrainBody->pos()` origin으로 self-reject). 이후 `WorldCollider`
+  추상의 서브클래스로 일반화되어 `ScatterCollider`(정적 prop)와 등록·질의 경로를 공유한다.
 
 ---
 
@@ -379,8 +381,9 @@ per-thread CommandContext + 풀 뮤텍스화로 GPU 마감도 병렬화 가능.
 - **`terrainChunkManager.{hpp,cpp}`** (신규, 영문 주석): §5 의 `TerrainChunkManager` 전체.
 - **`GFX`**: `recordTerrainResourceLoad(recorder, wait)` 추가(ResourceLoading 컨텍스트 + LoadFence 재사용).
   접근자 `bindlessTexPool()`(splat 디스크립터 free용), `device()` 추가. `<functional>` include.
-- **`PhysicsWorld`**: 단일 `terrainCollider_`/`terrainHF_` → `std::vector<TerrainEntry{collider, hf}>` +
-  `freeTerrainSlots_`. `registerTerrain(...) → TerrainHandle`(슬롯 인덱스), `unregisterTerrain(handle)`(tombstone 재사용).
+- **`PhysicsWorld`**: 단일 `terrainCollider_`/`terrainHF_` → `SlotVector<unique_ptr<WorldCollider>> worldColliders_`
+  (terrain+scatter 공용; 초기엔 `vector<TerrainEntry>`+`freeTerrainSlots_`였다가 `WorldCollider` 일반화로 통합).
+  `registerTerrain(...) → TerrainHandle`(슬롯), `unregisterTerrain(handle)`(tombstone 재사용).
 
 ### 14.2 계획과 달라진 결정
 - **Uploading 상태/펜스-값 추적 제거**: 계획(§5.2/§6 Stage 3)의 fence-게이팅 대신, 메인에서 프레임당 소수 청크만

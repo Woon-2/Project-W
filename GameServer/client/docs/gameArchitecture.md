@@ -96,7 +96,7 @@
 - `correction = clamp(0.5 × penetration × stiffness, maxSpeed × dt)`. 완전 겹침은 `getId()` 비교로 결정론적 방향(양쪽 클라 반대 방향).
 - `setCurrPos`로 **curr만 갱신**(렌더 보간 prev 보존). velocity에는 분리 변위를 주입하지 않음(원격 dead-reckoning·애니메이션 안정성). 정지 중 밀려나도 전파되도록 적용 시 `moveChange_ = true`.
 
-**hard contact 차단:** 충돌 레이어(`kLayerPlayer`/`kPlayerCollisionMask`)로 플레이어-플레이어 쌍을 `generateContacts` 필터에서 제외. 지형 충돌은 `TerrainCollider`가 Dynamic만 순회하므로 영향 없음.
+**hard contact 차단:** 충돌 레이어(`kLayerPlayer`/`kPlayerCollisionMask`)로 플레이어-플레이어 쌍을 `generateContacts` 필터에서 제외. 정적 환경 충돌(지형·scatter prop)은 `WorldCollider`가 Dynamic body만 순회하므로 영향 없음.
 
 **서버 (경량 검증):** `Room::move`는 클라가 보낸 분리 결과를 신뢰하되, 직전 위치 대비 수평 변위가 허용치(≈7m)를 넘으면 클램프(안티-텔레포트). 겹침 강제 해소·보정 명령은 하지 않는다. 서버 플레이어는 `Kinematic`이라 reciprocity 불필요 — 클라 결과 저장만으로 정합.
 
