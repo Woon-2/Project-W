@@ -703,7 +703,7 @@ void Game::setupStage() {
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(132.f), mu::Degree(0.f)));
 	dirLight_.color = mu::Vec3(0.9f, 0.86f, 0.66f);
-	dirLight_.intensity = 8.f;
+	dirLight_.intensity = 6.6f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
