@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스킬 HUD 초안 비교</title>
+<style>
+  :root{
+    --bg:#0c0e13; --panel:#151922; --line:#2a3140; --txt:#e7ecf3; --dim:#8b95a7;
+    --accent:#5db4ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI","Malgun Gothic",sans-serif;line-height:1.5}
+  header{padding:22px 28px 14px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:rgba(12,14,19,.92);backdrop-filter:blur(6px);z-index:50}
+  header h1{margin:0 0 4px;font-size:20px}
+  header p{margin:0;color:var(--dim);font-size:13px}
+
+  /* ---- 전역 컨트롤 ---- */
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:14px}
+  .ctrl{display:flex;flex-direction:column;gap:5px}
+  .ctrl label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .tabs{display:flex;gap:6px}
+  .tab{padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    color:var(--dim);cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+  .tab.active{color:#fff;border-color:var(--accent);background:#16314a;box-shadow:0 0 0 1px var(--accent) inset}
+  .controls input[type=range]{width:160px;accent-color:var(--accent)}
+  .pill{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    color:var(--txt);cursor:pointer;font-size:13px;user-select:none}
+  .pill:hover{border-color:var(--accent)}
+  .pill.on{color:#fff;border-color:var(--accent);background:#16314a}
+  .hintbar{margin-top:12px;font-size:12.5px;color:var(--dim)}
+  .hintbar b{color:var(--accent)}
+  .kbd{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:5px;background:#1b212c;color:#cfd7e3;font-size:11px;margin:0 2px}
+
+  /* ---- 콘셉트 그리드 ---- */
+  main{padding:26px 28px 80px;display:grid;gap:26px;
+    grid-template-columns:repeat(auto-fill,minmax(440px,1fr))}
+  .concept{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+  .concept .cap{padding:13px 16px;border-bottom:1px solid var(--line)}
+  .concept .cap h2{margin:0 0 3px;font-size:15px}
+  .concept .cap .tag{display:inline-block;font-size:11px;color:var(--accent);
+    border:1px solid #2c5377;border-radius:6px;padding:1px 7px;margin-bottom:5px}
+  .concept .cap p{margin:0;font-size:12px;color:var(--dim)}
+
+  /* 게임 화면 시뮬레이션 (16:9, 우하단 HUD 앵커) */
+  .screen{position:relative;aspect-ratio:16/9;
+    background:
+      radial-gradient(120% 80% at 30% 20%,#243042 0%,#10161f 55%,#0a0d13 100%);
+    overflow:hidden}
+  .screen::before{content:"게임 화면";position:absolute;top:10px;left:12px;
+    font-size:11px;color:#41506a;letter-spacing:.1em}
+  /* 좌상단 미니 HP 바(분위기용) */
+  .hpfake{position:absolute;top:30px;left:12px;width:150px}
+  .hpfake .nm{font-size:10px;color:#9fb0c7;margin-bottom:3px}
+  .hpfake .bar{height:7px;border-radius:4px;background:#0c1118;border:1px solid #2a3647;overflow:hidden}
+  .hpfake .bar i{display:block;height:100%;width:72%;
+    background:linear-gradient(90deg,#7ee27a,#3fae5c)}
+  .hud{position:absolute;right:18px;bottom:16px}
+
+  /* ---- 스킬 아이콘 공통 (차오름 연출) ---- */
+  .ico{position:relative;border-radius:12px;overflow:hidden;flex:none;
+    border:1px solid #38425a;background:#070a0f}
+  .ico .base,.ico .fill{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .ico .base{filter:brightness(.32) saturate(.25);opacity:.6}            /* 미충전: 어둡고 탁함 */
+  .ico .fillwrap{position:absolute;inset:0;overflow:hidden}
+  .ico .fill{filter:brightness(1.05) saturate(1.15);
+    -webkit-mask-image:linear-gradient(to top,#000 0%,#000 88%,transparent 100%);
+            mask-image:linear-gradient(to top,#000 0%,#000 88%,transparent 100%)}
+  .ico .wave{position:absolute;left:0;right:0;height:14px;pointer-events:none;
+    background:linear-gradient(to top,rgba(120,200,255,.0),rgba(150,215,255,.85));
+    box-shadow:0 0 12px 2px rgba(120,200,255,.7);opacity:.9}
+  .ico .grad{position:absolute;inset:0;
+    background:linear-gradient(to top,rgba(0,0,0,.45),rgba(0,0,0,0) 60%)}
+  .ico .name{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-size:9.5px;
+    color:#dfe7f2;text-align:center;text-shadow:0 1px 2px #000;
+    background:linear-gradient(to top,rgba(0,0,0,.7),transparent);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* 충전 완료 스택 배지 */
+  .ico .stack{position:absolute;top:-7px;right:-7px;min-width:22px;height:22px;padding:0 5px;
+    border-radius:11px;background:linear-gradient(180deg,#ffd86b,#f5a623);color:#3a2700;
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;
+    border:1px solid #fff3cf;box-shadow:0 0 10px rgba(255,190,70,.8)}
+  /* 진행도 텍스트 */
+  .ico .cnt{position:absolute;top:4px;left:5px;font-size:10px;font-weight:700;
+    color:#cfe4ff;text-shadow:0 1px 3px #000}
+  /* 쿨다운 스윕 */
+  .ico .cd{position:absolute;inset:0;border-radius:inherit;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:18px;text-shadow:0 1px 4px #000}
+  /* READY 글로우 */
+  .ico.ready{box-shadow:0 0 14px 2px rgba(255,200,90,.45)}
+  .ico.ready .name{color:#ffe8b0}
+  /* 선택 링 */
+  .ico.sel{border-color:var(--accent);
+    box-shadow:0 0 0 2px var(--accent),0 0 22px 3px rgba(93,180,255,.55)}
+  .ico.sel.ready{box-shadow:0 0 0 2px #ffd36b,0 0 22px 4px rgba(255,200,90,.6)}
+
+  .reqpips{display:flex;gap:3px;justify-content:center;margin-top:5px}
+  .reqpips i{width:6px;height:6px;border-radius:50%;background:#39455c}
+  .reqpips i.on{background:var(--accent);box-shadow:0 0 5px var(--accent)}
+  .reqpips i.full{background:#f5a623;box-shadow:0 0 6px #f5a623}
+
+  .basicchip{display:flex;align-items:center;gap:7px;margin-top:9px;
+    padding:5px 9px;border:1px solid #2c3445;border-radius:9px;background:rgba(8,11,16,.6)}
+  .basicchip img{width:26px;height:26px;border-radius:6px;object-fit:cover}
+  .basicchip .t{font-size:10px;color:var(--dim)}
+  .basicchip .t b{color:#dfe7f2;display:block;font-size:11px}
+  .lmb{font-size:9px;border:1px solid #2c3445;border-radius:4px;padding:1px 5px;color:#9fb0c7}
+
+  .flash{animation:flash .5s ease}
+  @keyframes flash{0%{filter:brightness(2.4)}100%{filter:none}}
+
+  footer{padding:18px 28px 50px;color:var(--dim);font-size:12px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <h1>스킬 HUD 초안 비교 — 5종 레이아웃</h1>
+  <p>우하단 스킬 표시 · 마우스 휠 선택 · charge point 차오름 연출. 아래 컨트롤로 모든 초안이 동시에 반응합니다.</p>
+  <div class="controls">
+    <div class="ctrl">
+      <label>무기</label>
+      <div class="tabs" id="weaponTabs">
+        <div class="tab active" data-w="sword">검</div>
+        <div class="tab" data-w="bow">활</div>
+        <div class="tab" data-w="wand">완드</div>
+        <div class="tab" data-w="spear">창</div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>선택 스킬의 충전(charge)</label>
+      <input type="range" id="charge" min="0" max="100" value="55">
+    </div>
+    <div class="ctrl">
+      <label>스택 추가(처치 보상)</label>
+      <div style="display:flex;gap:6px">
+        <span class="pill" id="killBtn">+ 처치 보상</span>
+        <span class="pill" id="resetBtn">초기화</span>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>쿨다운</label>
+      <span class="pill" id="cdBtn">쿨다운 표시</span>
+    </div>
+  </div>
+  <div class="hintbar">
+    조작: <span class="kbd">휠 ▲▼</span> 스킬 선택 · <span class="kbd">휠 클릭</span> 사용 · <span class="kbd">좌클릭</span> 기본 공격 &nbsp;|&nbsp;
+    데모에서 <b>아무 화면 위에서 마우스 휠</b>을 굴리면 선택이 바뀌고, <b>화면 클릭</b>은 사용(휠 클릭)을 흉내냅니다.
+  </div>
+</header>
+
+<main id="grid"></main>
+
+<footer>
+  각 초안은 동일한 상태(무기·선택·충전·스택·쿨다운)를 공유합니다. 마음에 드는 번호(A~E)를 알려주시면 그 방향으로 실제 HUD를 구현하겠습니다.<br>
+  아이콘은 <code>resources/UI/*.dds</code> 실제 리소스를 PNG로 변환해 사용했습니다.
+</footer>
+
+<script>
+/* ===================== 데이터 ===================== */
+const WEAPONS = {
+  sword:{ ko:"검",  basic:{id:"sword_slash", icon:"assets/katana.png"},
+    skills:[
+      {id:"slash_wave",  ko:"슬래시 웨이브", icon:"assets/slash_wave.png",  req:3},
+      {id:"slash_7",     ko:"세븐 슬래시",   icon:"assets/slash_7.png",     req:5},
+      {id:"slash_combo", ko:"슬래시 콤보",   icon:"assets/slash_combo.png", req:8},
+    ]},
+  bow:{ ko:"활", basic:{id:"arrow", icon:"assets/heavy-arrow.png"},
+    skills:[
+      {id:"arrow_volley",          ko:"애로우 볼리",   icon:"assets/arrow_volley.png",          req:3},
+      {id:"arrow_rain",            ko:"애로우 레인",   icon:"assets/arrow_rain.png",            req:5},
+      {id:"energy_explosion_arrow",ko:"에너지 폭발 화살",icon:"assets/energy_explosion_arrow.png",req:9},
+    ]},
+  wand:{ ko:"완드", basic:{id:"spikes", icon:"assets/crystal-wand.png"},
+    skills:[
+      {id:"crystals_front_attack",ko:"크리스탈 전방 공격",icon:"assets/crystals_front_attack.png",req:4},
+      {id:"crystals_cross_fade",  ko:"크리스탈 크로스",   icon:"assets/crystals_cross_fade.png",  req:6},
+      {id:"red_energy_explosion", ko:"붉은 에너지 폭발",  icon:"assets/red_energy_explosion.png", req:10},
+    ]},
+  spear:{ ko:"창", basic:{id:"piercing", icon:"assets/spear-hook.png"},
+    skills:[
+      {id:"piercing_slash",       ko:"관통 베기",     icon:"assets/piercing_slash.png",       req:3},
+      {id:"piercing_circle_slash",ko:"관통 회전베기", icon:"assets/piercing_circle_slash.png",req:6},
+      {id:"piercing_multi",       ko:"다중 관통",     icon:"assets/piercing_multi.png",       req:8},
+    ]},
+};
+
+/* 각 스킬의 누적 charge(스택 가능, 상한 없음). 무기별로 독립 보관 */
+const cur = {};
+for(const w in WEAPONS){ cur[w] = WEAPONS[w].skills.map(()=>0); }
+cur.sword = [2,5,1]; // 데모 초기값: 0번 진행중, 1번 1스택 완료, 2번 살짝
+
+let state = { weapon:"sword", sel:0, showCD:false, cdFrac:0.45 };
+
+function info(w,i){
+  const sk = WEAPONS[w].skills[i];
+  const c  = cur[w][i];
+  const stacks = Math.floor(c/sk.req);
+  const ready  = stacks>=1;
+  const fill   = ready ? ((c % sk.req)/sk.req) : (c/sk.req); // 다음 스택까지 진행
+  return {sk,c,stacks,ready,fill};
+}
+
+/* ===================== 아이콘 렌더 ===================== */
+function iconNode(w,i,size,{showName=true,isSel=false,showCD=false}={}){
+  const {sk,stacks,ready,fill} = info(w,i);
+  const el = document.createElement("div");
+  el.className = "ico"+(isSel?" sel":"")+(ready?" ready":"");
+  el.style.width = size+"px"; el.style.height = size+"px";
+  const revealTop = (1-(ready?Math.max(fill,0.06):fill))*100; // 채워진 높이만큼 아래에서 노출
+  el.innerHTML = `
+    <img class="base" src="${sk.icon}">
+    <div class="fillwrap" style="clip-path:inset(${ready?0:revealTop}% 0 0 0)">
+      <img class="fill" src="${sk.icon}">
+    </div>
+    ${ready?"":`<div class="wave" style="top:calc(${revealTop}% - 7px)"></div>`}
+    <div class="grad"></div>
+    ${showName?`<div class="name">${sk.ko}</div>`:""}
+    <div class="cnt">${cur[w][i]}/${sk.req}</div>
+    ${stacks>=1?`<div class="stack">×${stacks}</div>`:""}
+    ${showCD&&isSel?`<div class="cd" style="background:conic-gradient(rgba(0,0,0,.72) ${state.cdFrac*360}deg, rgba(0,0,0,0) 0)">${Math.ceil(state.cdFrac*6)}</div>`:""}
+  `;
+  return el;
+}
+function reqPips(w,i){
+  const {sk,stacks,fill,ready} = info(w,i);
+  const wrap=document.createElement("div"); wrap.className="reqpips";
+  const lit = ready?sk.req:Math.round(fill*sk.req);
+  for(let k=0;k<sk.req;k++){
+    const p=document.createElement("i");
+    if(ready) p.classList.add("full"); else if(k<lit) p.classList.add("on");
+    wrap.appendChild(p);
+  }
+  return wrap;
+}
+function basicChip(w){
+  const b=WEAPONS[w].basic;
+  const d=document.createElement("div"); d.className="basicchip";
+  d.innerHTML=`<img src="${b.icon}"><div class="t"><b>${b.id}</b>기본 공격</div><span class="lmb">L-CLICK</span>`;
+  return d;
+}
+
+/* ===================== 5개 콘셉트 ===================== */
+const CONCEPTS = [
+  {id:"A", tag:"세로 타워", title:"A. 세로 스택 (선택 강조)",
+   desc:"3스킬을 세로로 쌓고 선택된 것만 크게·돌출. 휠 ▲▼ 방향과 직관적으로 일치.",
+   render:(hud,w)=>{
+     const wrap=document.createElement("div");
+     wrap.style.cssText="display:flex;flex-direction:column;align-items:flex-end;gap:9px";
+     WEAPONS[w].skills.forEach((_,i)=>{
+       const isSel=i===state.sel;
+       const node=iconNode(w,i,isSel?86:56,{isSel,showCD:state.showCD});
+       node.style.marginRight=isSel?"0":"14px";
+       node.style.opacity=isSel?"1":".82";
+       wrap.appendChild(node);
+     });
+     hud.appendChild(wrap);
+     hud.appendChild(basicChip(w));
+   }},
+
+  {id:"B", tag:"가로 캐러셀", title:"B. 캐러셀 (커버플로우)",
+   desc:"선택 스킬을 가운데 크게, 좌우로 이전/다음을 작게 미리보기. 휠로 회전하는 느낌.",
+   render:(hud,w)=>{
+     const row=document.createElement("div");
+     row.style.cssText="display:flex;align-items:center;gap:10px";
+     const n=WEAPONS[w].skills.length;
+     const order=[(state.sel-1+n)%n, state.sel, (state.sel+1)%n];
+     order.forEach((i,pos)=>{
+       const isSel=pos===1;
+       const node=iconNode(w,i,isSel?92:54,{isSel,showName:isSel,showCD:state.showCD});
+       node.style.opacity=isSel?"1":".5";
+       node.style.transform=isSel?"translateY(-6px)":"scale(.92)";
+       row.appendChild(node);
+     });
+     hud.appendChild(row);
+     const bc=basicChip(w); bc.style.marginLeft="auto"; bc.style.marginTop="10px"; hud.appendChild(bc);
+   }},
+
+  {id:"C", tag:"방사형", title:"C. 방사형 부채 (라디얼)",
+   desc:"우하단 코너에서 부채꼴로 펼침. 선택 항목이 위로 떠오르며 강조. 라디얼 메뉴 감성.",
+   render:(hud,w)=>{
+     const stage=document.createElement("div");
+     stage.style.cssText="position:relative;width:230px;height:170px";
+     const cx=210, cy=150, R=120;
+     const angs=[-150,-120,-90]; // 부채 펼침 각
+     WEAPONS[w].skills.forEach((_,i)=>{
+       const isSel=i===state.sel;
+       const sz=isSel?84:58;
+       const a=angs[i]*Math.PI/180;
+       const r=isSel?R+12:R;
+       const x=cx+Math.cos(a)*r - sz/2;
+       const y=cy+Math.sin(a)*r - sz/2;
+       const node=iconNode(w,i,sz,{isSel,showName:false,showCD:state.showCD});
+       node.style.position="absolute"; node.style.left=x+"px"; node.style.top=y+"px";
+       node.style.opacity=isSel?"1":".7";
+       stage.appendChild(node);
+     });
+     hud.appendChild(stage);
+     const bc=basicChip(w); bc.style.position="absolute"; bc.style.right="0"; bc.style.bottom="-6px";
+     hud.style.position="relative"; hud.appendChild(bc);
+   }},
+
+  {id:"D", tag:"액션 바", title:"D. 액션 바 (MMO 친숙형)",
+   desc:"동일 크기 3슬롯 가로 바. 선택 슬롯만 링+상승. 기본 공격 슬롯을 맨 왼쪽에 동렬 배치.",
+   render:(hud,w)=>{
+     const row=document.createElement("div");
+     row.style.cssText="display:flex;align-items:flex-end;gap:8px";
+     // 기본공격 슬롯
+     const b=WEAPONS[w].basic;
+     const bslot=document.createElement("div");
+     bslot.className="ico"; bslot.style.cssText="width:54px;height:54px;border-color:#4a5468";
+     bslot.innerHTML=`<img class="fill" src="${b.icon}" style="filter:brightness(.9)"><div class="grad"></div>
+       <div class="name">기본</div><div class="cnt" style="color:#9fb0c7">LMB</div>`;
+     row.appendChild(bslot);
+     const sep=document.createElement("div"); sep.style.cssText="width:1px;height:42px;background:#2c3445;margin:0 2px"; row.appendChild(sep);
+     WEAPONS[w].skills.forEach((_,i)=>{
+       const isSel=i===state.sel;
+       const node=iconNode(w,i,isSel?68:60,{isSel,showName:false,showCD:state.showCD});
+       node.style.transform=isSel?"translateY(-8px)":"";
+       const cell=document.createElement("div");
+       cell.style.cssText="display:flex;flex-direction:column;align-items:center;gap:4px";
+       cell.appendChild(node); cell.appendChild(reqPips(w,i));
+       row.appendChild(cell);
+     });
+     hud.appendChild(row);
+   }},
+
+  {id:"E", tag:"단일 포커스", title:"E. 단일 포커스 + 인디케이터",
+   desc:"선택 스킬 하나만 크게 표시. 위쪽 세그먼트로 3개 중 현재 위치 표시. 화면 점유 최소.",
+   render:(hud,w)=>{
+     const col=document.createElement("div");
+     col.style.cssText="display:flex;flex-direction:column;align-items:center;gap:8px";
+     // 세그먼트 인디케이터
+     const seg=document.createElement("div");
+     seg.style.cssText="display:flex;gap:6px";
+     WEAPONS[w].skills.forEach((_,i)=>{
+       const s=document.createElement("div");
+       const on=i===state.sel;
+       s.style.cssText=`width:${on?34:18}px;height:6px;border-radius:3px;transition:.15s;
+         background:${on?"var(--accent)":"#3a4458"};box-shadow:${on?"0 0 8px var(--accent)":"none"}`;
+       seg.appendChild(s);
+     });
+     col.appendChild(seg);
+     col.appendChild(iconNode(w,state.sel,110,{isSel:true,showCD:state.showCD}));
+     col.appendChild(reqPips(w,state.sel));
+     hud.appendChild(col);
+     const bc=basicChip(w); bc.style.marginTop="10px"; hud.appendChild(bc);
+   }},
+];
+
+/* ===================== 빌드 & 이벤트 ===================== */
+const grid=document.getElementById("grid");
+function build(){
+  grid.innerHTML="";
+  CONCEPTS.forEach(c=>{
+    const card=document.createElement("div"); card.className="concept";
+    card.innerHTML=`<div class="cap"><div class="tag">${c.tag}</div>
+      <h2>${c.title}</h2><p>${c.desc}</p></div>`;
+    const screen=document.createElement("div"); screen.className="screen";
+    screen.innerHTML=`<div class="hpfake"><div class="nm">아군 파티원</div>
+      <div class="bar"><i></i></div></div>`;
+    const hud=document.createElement("div"); hud.className="hud";
+    c.render(hud,state.weapon);
+    screen.appendChild(hud);
+    // 화면 단위 인터랙션
+    screen.addEventListener("wheel",e=>{
+      e.preventDefault();
+      const n=WEAPONS[state.weapon].skills.length;
+      state.sel=(state.sel+(e.deltaY>0?1:-1)+n)%n;
+      document.getElementById("charge").value=Math.round(info(state.weapon,state.sel).fill*100);
+      build();
+    },{passive:false});
+    screen.addEventListener("click",()=>useSkill(hud));
+    card.appendChild(screen);
+    grid.appendChild(card);
+  });
+}
+function useSkill(){
+  const {ready}=info(state.weapon,state.sel);
+  if(ready){ cur[state.weapon][state.sel]-=WEAPONS[state.weapon].skills[state.sel].req; build();
+    document.querySelectorAll(".ico.sel").forEach(n=>{n.classList.add("flash");});
+  } else {
+    document.querySelectorAll(".ico.sel").forEach(n=>{n.style.animation="shake .3s";
+      setTimeout(()=>n.style.animation="",300);});
+  }
+}
+
+document.getElementById("weaponTabs").addEventListener("click",e=>{
+  const t=e.target.closest(".tab"); if(!t)return;
+  document.querySelectorAll("#weaponTabs .tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active"); state.weapon=t.dataset.w; state.sel=0;
+  document.getElementById("charge").value=Math.round(info(state.weapon,0).fill*100);
+  build();
+});
+document.getElementById("charge").addEventListener("input",e=>{
+  const i=state.sel, sk=WEAPONS[state.weapon].skills[i];
+  const stacks=Math.floor(cur[state.weapon][i]/sk.req);
+  cur[state.weapon][i]=stacks*sk.req + (e.target.value/100)*sk.req; // 진행도만 조정
+  build();
+});
+document.getElementById("killBtn").addEventListener("click",()=>{
+  const reward=2; cur[state.weapon][state.sel]+=reward; // 선택 스킬만 충전
+  document.getElementById("charge").value=Math.round(info(state.weapon,state.sel).fill*100);
+  build();
+});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  cur[state.weapon]=WEAPONS[state.weapon].skills.map(()=>0);
+  document.getElementById("charge").value=0; build();
+});
+document.getElementById("cdBtn").addEventListener("click",e=>{
+  state.showCD=!state.showCD; e.target.classList.toggle("on",state.showCD); build();
+});
+
+const shake=document.createElement("style");
+shake.textContent="@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}";
+document.head.appendChild(shake);
+
+build();
+</script>
+</body>
+</html>

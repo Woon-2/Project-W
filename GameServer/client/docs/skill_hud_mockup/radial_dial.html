@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C형 — 방사형 다이얼 (회전 휠)</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141821; --line:#283040; --txt:#e8edf4; --dim:#8b95a7;
+    --acc:#8fd0ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI","Malgun Gothic",sans-serif;line-height:1.5}
+  header{padding:20px 26px 14px;border-bottom:1px solid var(--line)}
+  header h1{margin:0 0 3px;font-size:19px}
+  header p{margin:0;color:var(--dim);font-size:13px}
+  .controls{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-top:16px}
+  .ctrl{display:flex;flex-direction:column;gap:6px}
+  .ctrl label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .tabs,.seg{display:flex;gap:6px}
+  .tab,.pill{padding:6px 13px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    color:var(--dim);cursor:pointer;font-size:13px;font-weight:600;transition:.15s;user-select:none}
+  .tab.active,.pill.on{color:#fff;border-color:var(--acc);background:#16314a;box-shadow:0 0 0 1px var(--acc) inset}
+  .pill{color:var(--txt)} .pill:hover{border-color:var(--acc)}
+  input[type=range]{width:170px;accent-color:var(--acc)}
+  .hint{margin-top:12px;font-size:12.5px;color:var(--dim)}
+  .hint b{color:var(--acc)}
+  .kbd{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:5px;background:#1b212c;color:#cfd7e3;font-size:11px;margin:0 2px}
+
+  .stage-wrap{padding:24px 26px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+  .screen{position:relative;flex:1 1 640px;min-width:520px;aspect-ratio:16/9;border-radius:14px;
+    overflow:hidden;border:1px solid var(--line);
+    background:radial-gradient(120% 80% at 32% 18%,#26334a 0%,#101722 52%,#0a0e15 100%);
+    cursor:pointer}
+  .screen::before{content:"게임 화면 — 화면 위에서 휠 ▲▼ 로 다이얼 회전, 클릭=사용";
+    position:absolute;top:10px;left:14px;font-size:11px;color:#46566f;letter-spacing:.04em}
+  .hpfake{position:absolute;top:32px;left:14px;width:160px}
+  .hpfake .nm{font-size:10px;color:#9fb0c7;margin-bottom:3px}
+  .hpfake .bar{height:7px;border-radius:4px;background:#0c1118;border:1px solid #2a3647;overflow:hidden}
+  .hpfake .bar i{display:block;height:100%;width:72%;background:linear-gradient(90deg,#7ee27a,#3fae5c)}
+
+  /* ---- 회전 다이얼 휠 ----
+     pivot(.dial) 을 중심으로 .wheel 전체가 회전한다.
+     아이콘 3개는 120° 간격 고정 배치(꼭대기/좌하/우하) → 선택은 항상 꼭대기 중앙. */
+  .dial{position:absolute;right:128px;bottom:104px;width:0;height:0}
+  .wheel{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;
+    transition:transform .52s cubic-bezier(.34,1.02,.38,1)}
+  .ico{position:absolute;left:0;top:0;width:92px;height:92px;transform-origin:50% 50%;
+    transition:transform .52s cubic-bezier(.34,1.02,.38,1),opacity .3s ease}
+  .ico .frame{position:absolute;inset:0;border-radius:16px;overflow:hidden;
+    border:1px solid #3a455c;background:#05070b;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  .ico svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .ico .bs{transition:filter .3s,opacity .3s}
+  .ico .gl{stroke:var(--acc);stroke-width:2.4;filter:drop-shadow(0 0 4px var(--acc));opacity:.92}
+  .ico .grad{position:absolute;inset:0;border-radius:16px;
+    background:linear-gradient(to top,rgba(0,0,0,.4),rgba(0,0,0,0) 55%)}
+  .ico .name{position:absolute;left:0;right:0;bottom:0;padding:4px 6px 5px;font-size:10px;text-align:center;
+    color:#dfe7f2;text-shadow:0 1px 3px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background:linear-gradient(to top,rgba(0,0,0,.72),transparent);opacity:0;transition:opacity .25s}
+  .ico.sel .name{opacity:1}
+  .ico .rim{position:absolute;inset:-3px;border-radius:19px;pointer-events:none;opacity:0;transition:opacity .25s}
+  .ico.sel .rim{opacity:1;box-shadow:0 0 0 2px var(--acc),0 0 26px 4px color-mix(in srgb,var(--acc) 55%,transparent)}
+  .ico.ready .frame{border-color:#ffd273}
+  .ico.ready.sel .rim{box-shadow:0 0 0 2px #ffd273,0 0 28px 5px rgba(255,200,90,.6)}
+  .ico.one .frame{animation:breathe 1.8s ease-in-out infinite}
+  @keyframes breathe{0%,100%{box-shadow:0 6px 18px rgba(0,0,0,.5),0 0 0 0 rgba(255,210,115,0)}
+    50%{box-shadow:0 6px 18px rgba(0,0,0,.5),0 0 16px 2px rgba(255,210,115,.5)}}
+  .ico .badge{position:absolute;top:-9px;right:-9px;min-width:26px;height:26px;padding:0 6px;
+    border-radius:13px;background:linear-gradient(180deg,#ffe08a,#f5a623);color:#3a2600;
+    font-size:14px;font-weight:800;display:none;align-items:center;justify-content:center;
+    border:1.5px solid #fff3cf;box-shadow:0 0 12px rgba(255,190,70,.85);z-index:6}
+  .ico.deny .frame{animation:shake .3s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .ico.flash .frame{animation:useflash .5s ease}
+  @keyframes useflash{0%{filter:brightness(2.6)}100%{filter:none}}
+
+  .basicchip{position:absolute;right:18px;bottom:16px;display:flex;align-items:center;gap:8px;
+    padding:6px 10px;border:1px solid #2c3445;border-radius:10px;background:rgba(8,11,16,.66);backdrop-filter:blur(2px)}
+  .basicchip .bimg{width:30px;height:30px;border-radius:7px;overflow:hidden;flex:none}
+  .basicchip .bimg img{width:100%;height:100%;object-fit:cover}
+  .basicchip .t{font-size:10px;color:var(--dim)} .basicchip .t b{color:#e6edf6;display:block;font-size:11px}
+  .basicchip .lmb{font-size:9px;border:1px solid #2c3445;border-radius:4px;padding:1px 5px;color:#9fb0c7}
+
+  .notes{flex:0 0 300px;font-size:13px;color:#c4ccd9}
+  .notes h3{font-size:13px;margin:0 0 8px;color:#fff}
+  .notes .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--panel)}
+  .notes b{color:var(--acc)} .notes ul{margin:8px 0 0;padding-left:18px}
+</style>
+</head>
+<body>
+<header>
+  <h1>C형 — 방사형 다이얼 (회전 휠 + 일렁이는 충전)</h1>
+  <p>휠을 굴리면 세 아이콘이 <b style="color:#8fd0ff">통째로 회전</b>(멈추는 아이콘 없음) · 선택 스킬은 항상 꼭대기 중앙 · 충전은 파도처럼 일렁입니다.</p>
+  <div class="controls">
+    <div class="ctrl">
+      <label>무기</label>
+      <div class="tabs" id="weaponTabs">
+        <div class="tab active" data-w="sword">검</div>
+        <div class="tab" data-w="bow">활</div>
+        <div class="tab" data-w="wand">완드</div>
+        <div class="tab" data-w="spear">창</div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>선택 스킬 충전(다음 스택까지)</label>
+      <input type="range" id="charge" min="0" max="99" value="55">
+    </div>
+    <div class="ctrl">
+      <label>처치 보상</label>
+      <div class="seg"><span class="pill" id="killBtn">+ 선택 스킬 충전</span>
+        <span class="pill" id="resetBtn">초기화</span></div>
+    </div>
+    <div class="ctrl">
+      <label>충전 완료 후 연출 방식</label>
+      <div class="seg">
+        <span class="pill on" data-v="reglow" id="vReglow">글로우 재충전</span>
+        <span class="pill" data-v="hue" id="vHue">색 단계</span>
+      </div>
+    </div>
+  </div>
+  <div class="hint">
+    조작: <span class="kbd">휠 ▲▼</span> 선택(다이얼 회전) · <span class="kbd">휠 클릭</span> 사용 · <span class="kbd">좌클릭</span> 기본 공격 &nbsp;|&nbsp;
+    데모: 화면 위 <b>휠=회전</b>, <b>클릭=사용</b>(스택 있으면 1개 소모).
+  </div>
+</header>
+
+<div class="stage-wrap">
+  <div class="screen" id="screen">
+    <div class="hpfake"><div class="nm">아군 파티원</div><div class="bar"><i></i></div></div>
+    <div class="dial" id="dial"></div>
+    <div class="basicchip" id="basic"></div>
+  </div>
+  <div class="notes">
+    <div class="card">
+      <h3>회전 다이얼(120° 휠)</h3>
+      휠을 굴리면 세 아이콘이 <b>호를 그리며 통째로 회전</b>합니다. 선택 스킬은 항상 <b>꼭대기 중앙·확대</b>,
+      나머지 둘은 좌하·우하로 <b>대칭</b> 미리보기. 멈추거나 순간이동하는 아이콘이 없습니다.
+    </div>
+    <div class="card">
+      <h3>일렁이는 충전</h3>
+      충전량은 <b>액체 표면(파도)</b>으로 표현되며 두 사인파가 겹쳐 <b>가만히 있어도 계속 출렁</b>입니다(직선 경계 X).
+    </div>
+    <div class="card">
+      <h3>충전 완료 후에도 계속</h3>
+      1스택이 차도 멈추지 않고 <b>다음 스택을 향해</b> 다시 차오릅니다. 표현 방식 2종을 토글로 비교하세요.
+      <ul>
+        <li><b>글로우 재충전</b>: 아이콘이 완전히 밝아진 위로 다음 스택용 빛의 밀물이 차오름</li>
+        <li><b>색 단계</b>: 스택마다 색이 바뀌며 바닥부터 새로 차오름</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>숫자 없는 정보 전달</h3>
+      진행 숫자는 없음. <b>차오름 정도</b> + <b>×2 / ×3 배지</b>(사용 가능 개수)로만 읽습니다.
+      1스택은 배지 대신 <b>황금 테두리 + 숨쉬는 글로우</b>.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== 데이터 ===================== */
+const WEAPONS = {
+  sword:{ basic:{id:"sword_slash", icon:"assets/katana.png"}, skills:[
+    {id:"slash_wave",  ko:"슬래시 웨이브", icon:"assets/slash_wave.png",  req:3},
+    {id:"slash_7",     ko:"세븐 슬래시",   icon:"assets/slash_7.png",     req:5},
+    {id:"slash_combo", ko:"슬래시 콤보",   icon:"assets/slash_combo.png", req:8}]},
+  bow:{ basic:{id:"arrow", icon:"assets/heavy-arrow.png"}, skills:[
+    {id:"arrow_volley",           ko:"애로우 볼리",     icon:"assets/arrow_volley.png",           req:3},
+    {id:"arrow_rain",             ko:"애로우 레인",     icon:"assets/arrow_rain.png",             req:5},
+    {id:"energy_explosion_arrow", ko:"에너지 폭발 화살",icon:"assets/energy_explosion_arrow.png", req:9}]},
+  wand:{ basic:{id:"spikes", icon:"assets/crystal-wand.png"}, skills:[
+    {id:"crystals_front_attack", ko:"크리스탈 전방",  icon:"assets/crystals_front_attack.png", req:4},
+    {id:"crystals_cross_fade",   ko:"크리스탈 크로스",icon:"assets/crystals_cross_fade.png",   req:6},
+    {id:"red_energy_explosion",  ko:"붉은 에너지 폭발",icon:"assets/red_energy_explosion.png", req:10}]},
+  spear:{ basic:{id:"piercing", icon:"assets/spear-hook.png"}, skills:[
+    {id:"piercing_slash",        ko:"관통 베기",    icon:"assets/piercing_slash.png",        req:3},
+    {id:"piercing_circle_slash", ko:"관통 회전베기",icon:"assets/piercing_circle_slash.png", req:6},
+    {id:"piercing_multi",        ko:"다중 관통",    icon:"assets/piercing_multi.png",        req:8}]},
+};
+const ACCENT = {sword:"#8fd0ff", bow:"#8ef08a", wand:"#c08cff", spear:"#ffc46b"};
+
+const cur = {};
+for(const w in WEAPONS) cur[w]=WEAPONS[w].skills.map(()=>0);
+cur.sword=[2,5,1];  // 데모 초기값: 0번 진행중 / 1번 1스택+ / 2번 약간
+
+let state={weapon:"sword", sel:0, variant:"reglow"};
+const N=3, R=96;                 // 휠 반지름
+const BASE=[-90,30,150];         // 아이콘 i 의 고정 각도(꼭대기/우하/좌하)
+let rot=0, live=[], uid=0;
+
+function stackInfo(w,i){ const sk=WEAPONS[w].skills[i], c=cur[w][i];
+  const stacks=Math.floor(c/sk.req), nf=(c-stacks*sk.req)/sk.req; return {sk,c,stacks,nf}; }
+
+/* ===================== 빌드 ===================== */
+function build(){
+  const dial=document.getElementById("dial"); dial.innerHTML=""; live=[];
+  const w=state.weapon;
+  document.documentElement.style.setProperty("--acc", ACCENT[w]);
+  const wheel=document.createElement("div"); wheel.className="wheel"; wheel.id="wheel";
+  WEAPONS[w].skills.forEach((sk,i)=>{
+    const id=++uid;
+    const rad=BASE[i]*Math.PI/180;
+    const ico=document.createElement("div"); ico.className="ico";
+    ico.style.left=(Math.cos(rad)*R)+"px";
+    ico.style.top =(Math.sin(rad)*R)+"px";
+    ico.innerHTML=`
+      <div class="frame">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs><mask id="m${id}"><path id="p${id}" fill="#fff"></path></mask></defs>
+          <image class="bs" href="${sk.icon}" x="-4" y="-4" width="108" height="108" preserveAspectRatio="xMidYMid slice"></image>
+          <image class="fl" href="${sk.icon}" x="-4" y="-4" width="108" height="108" preserveAspectRatio="xMidYMid slice" mask="url(#m${id})"></image>
+          <path id="g${id}" class="gl" fill="none"></path>
+        </svg>
+        <div class="grad"></div>
+        <div class="name">${sk.ko}</div>
+      </div>
+      <div class="rim"></div>
+      <div class="badge">×2</div>`;
+    wheel.appendChild(ico);
+    live.push({i,ico,
+      pathEl:ico.querySelector("#p"+id), glowEl:ico.querySelector("#g"+id),
+      bs:ico.querySelector(".bs"), fl:ico.querySelector(".fl"),
+      badge:ico.querySelector(".badge")});
+  });
+  dial.appendChild(wheel);
+  const b=WEAPONS[w].basic;
+  document.getElementById("basic").innerHTML=
+    `<div class="bimg"><img src="${b.icon}"></div>
+     <div class="t"><b>${b.id}</b>기본 공격</div><span class="lmb">L-CLICK</span>`;
+  rot = -state.sel*120;
+  spin(true); refreshStacks();
+}
+
+/* ===================== 회전 ===================== */
+function spin(instant){
+  const wheel=document.getElementById("wheel");
+  if(instant){ wheel.style.transition="none"; live.forEach(o=>o.ico.style.transition="none"); }
+  wheel.style.transform=`rotate(${rot}deg)`;
+  live.forEach(o=>{
+    const center=o.i===state.sel;
+    const s=center?1.2:0.76;
+    o.ico.style.transform=`translate(-50%,-50%) rotate(${-rot}deg) scale(${s})`;
+    o.ico.style.opacity=center?"1":"0.6";
+    o.ico.style.zIndex=center?5:1;
+    o.ico.classList.toggle("sel",center);
+  });
+  if(instant){ void wheel.offsetWidth; wheel.style.transition=""; live.forEach(o=>o.ico.style.transition=""); }
+}
+
+/* ===================== 스택/변형 ===================== */
+function refreshStacks(){
+  const w=state.weapon;
+  live.forEach(o=>{
+    const {stacks}=stackInfo(w,o.i);
+    o.ico.classList.toggle("ready",stacks>=1);
+    o.ico.classList.toggle("one",stacks===1);
+    o.badge.textContent="×"+stacks;
+    o.badge.style.display = stacks>=2 ? "flex":"none";
+    if(state.variant==="hue"){
+      o.bs.style.filter="brightness(.30) saturate(.25)"; o.bs.style.opacity="0.6";
+      o.fl.style.filter=`brightness(1.12) saturate(1.3) hue-rotate(${(stacks%3)*118}deg)`;
+    } else {
+      const ready=stacks>=1;
+      o.bs.style.filter= ready?"brightness(1) saturate(1.05)":"brightness(.30) saturate(.25)";
+      o.bs.style.opacity= ready?"1":"0.6";
+      o.fl.style.filter= ready?"brightness(1.55) saturate(1.35)":"brightness(1.12) saturate(1.25)";
+    }
+  });
+}
+
+/* ===================== 파도 애니메이션 ===================== */
+function surfaceY(x,level,ph){
+  const base=(1-level)*100;
+  return base - 2.0 + 3.4*Math.sin(x*0.13 + ph) + 1.7*Math.sin(x*0.30 - ph*1.35);
+}
+function fillPath(level,ph){
+  let d=`M-4,104 L-4,${surfaceY(-4,level,ph).toFixed(2)}`;
+  for(let x=0;x<=104;x+=4) d+=` L${x},${surfaceY(x,level,ph).toFixed(2)}`;
+  return d+` L104,104 Z`;
+}
+function linePath(level,ph){
+  let d=`M-4,${surfaceY(-4,level,ph).toFixed(2)}`;
+  for(let x=0;x<=104;x+=4) d+=` L${x},${surfaceY(x,level,ph).toFixed(2)}`;
+  return d;
+}
+let t0=performance.now();
+function tick(now){
+  const w=state.weapon, tt=(now-t0)/1000;
+  live.forEach((o,k)=>{
+    const {nf}=stackInfo(w,o.i);
+    const ph=tt*1.7 + k*1.9;
+    o.pathEl.setAttribute("d", fillPath(nf,ph));
+    o.glowEl.setAttribute("d", linePath(nf,ph));
+  });
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ===================== 인터랙션 ===================== */
+const screen=document.getElementById("screen");
+screen.addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(e.deltaY>0){ state.sel=(state.sel+1)%N; rot-=120; }   // 아래로: 다음, 휠 시계방향
+  else          { state.sel=(state.sel+N-1)%N; rot+=120; } // 위로: 이전
+  document.getElementById("charge").value=Math.round(stackInfo(state.weapon,state.sel).nf*99);
+  spin(false); refreshStacks();
+},{passive:false});
+screen.addEventListener("click",()=>{
+  const {stacks,sk}=stackInfo(state.weapon,state.sel);
+  const o=live.find(x=>x.i===state.sel);
+  if(stacks>=1){ cur[state.weapon][state.sel]-=sk.req;
+    o.ico.classList.remove("flash"); void o.ico.offsetWidth; o.ico.classList.add("flash");
+    document.getElementById("charge").value=Math.round(stackInfo(state.weapon,state.sel).nf*99);
+    refreshStacks();
+  } else { o.ico.classList.remove("deny"); void o.ico.offsetWidth; o.ico.classList.add("deny"); }
+});
+
+document.getElementById("weaponTabs").addEventListener("click",e=>{
+  const t=e.target.closest(".tab"); if(!t)return;
+  document.querySelectorAll("#weaponTabs .tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active"); state.weapon=t.dataset.w; state.sel=0;
+  document.getElementById("charge").value=Math.round(stackInfo(state.weapon,0).nf*99);
+  build();
+});
+document.getElementById("charge").addEventListener("input",e=>{
+  const i=state.sel, sk=WEAPONS[state.weapon].skills[i];
+  const stacks=Math.floor(cur[state.weapon][i]/sk.req);
+  cur[state.weapon][i]=stacks*sk.req + (e.target.value/99)*sk.req*0.999;
+  refreshStacks();
+});
+document.getElementById("killBtn").addEventListener("click",()=>{
+  cur[state.weapon][state.sel]+=2;
+  document.getElementById("charge").value=Math.round(stackInfo(state.weapon,state.sel).nf*99);
+  refreshStacks();
+});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  cur[state.weapon]=WEAPONS[state.weapon].skills.map(()=>0);
+  document.getElementById("charge").value=0; refreshStacks();
+});
+function setVariant(v){ state.variant=v;
+  document.getElementById("vReglow").classList.toggle("on",v==="reglow");
+  document.getElementById("vHue").classList.toggle("on",v==="hue"); refreshStacks(); }
+document.getElementById("vReglow").addEventListener("click",()=>setVariant("reglow"));
+document.getElementById("vHue").addEventListener("click",()=>setVariant("hue"));
+
+build();
+</script>
+</body>
+</html>
