@@ -44,6 +44,11 @@ public:
         HWND                    hwnd        = nullptr;
         // Terrain height query (x,z)->y; used to drop the test dummy onto the ground.
         std::function<float(float, float)> terrainHeightAt;
+        // Drains in-flight GPU work. Must be called before destroying UI widgets at
+        // runtime: Labels own GPU text textures, and freeing one still referenced by an
+        // in-flight command list is a use-after-free → device removed (TDR) → crash
+        // (Release only; Debug's timing hides it). See rebuildSkillDropdown().
+        std::function<void()> flushGpu;
     };
 
     void init(const InitRefs& refs);
@@ -98,6 +103,7 @@ private:
     std::shared_ptr<Goblin> goblin_;
     HWND                  hwnd_        = nullptr;
     std::function<float(float, float)> terrainHeightAt_;
+    std::function<void()> flushGpu_;   // drains GPU before destroying UI widgets (see InitRefs::flushGpu)
 
     // --- selection state ---
     CharacterKind            casterKind_ = CharacterKind::Player;

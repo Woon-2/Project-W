@@ -688,6 +688,21 @@ void Game::setupStage() {
 
 	readTailTag(ifs, "Level");
 
+	// 에디터용 고블린은 PlayerStart 기준으로 스폰한다 (PlayerStart만이 시작 지형 청크 위에 있는
+	// 유일한 신뢰 가능 기준 위치 — 레거시 GoblinSpawner는 원점 근처라 청크 밖이다).
+	// 플레이어 앞 4m에 두되, 에디터 초기화의 positionDummyInFront가 곧 지형 높이에 맞춰 재배치한다.
+	if (player_) {
+		Object gobObj{};
+		gobObj.setPos(player_->pos() + player_->forward() * 4.f);
+		gobObj.setOrient(player_->orient());
+		gobObj.setScale(mu::Vec3(1.f, 1.f, 1.f));
+		goblin_ = std::make_shared<Goblin>(std::move(gobObj));
+		configureGoblin(*goblin_);
+		physicsWorld_.registerBody(&goblin_->body(),
+			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
+		goblin_->body().setUserData(goblin_.get());
+	}
+
 	// 이후 레벨에서 사용하는 스카이박스 정보들을 읽어들일 수 있지만
 	// 스카이박스 재질을 하나만 사용하므로 굳이 읽지 않는다.
 
@@ -837,6 +852,9 @@ void Game::setupStage() {
 	editorRefs.goblin      = goblin_;
 	editorRefs.hwnd        = ghWnd;
 	editorRefs.terrainHeightAt = groundSampler_.heightAt;
+	// UI 위젯(스킬 드롭다운) 재구성 시 GPU가 in-flight로 참조 중인 텍스트 텍스처를 해제하지 않도록
+	// 파괴 직전 제출된 GPU 작업을 드레인한다 (device-removed/TDR 크래시 방지, Release 전용 버그였음).
+	editorRefs.flushGpu = [this]{ gfx_.drainGpu(); };
 	editor_.init(editorRefs);
 }
 
@@ -2289,39 +2307,10 @@ void Game::importNode(std::ifstream& ifs) {
 		}
 	}
 	else if (type == "GoblinSpawner") {
-		const float baseX = object.pos().x();
-		const float baseY = object.pos().y();
-		const float baseZ = object.pos().z();
-
-		goblin_ = std::make_shared<Goblin>(std::move(object));
-		importGoblinSpawner(ifs, *goblin_);
-		physicsWorld_.registerBody(&goblin_->body(),
-			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
-		goblin_->body().setUserData(goblin_.get());
-
-		auto urd = std::uniform_real_distribution<float>(-80.f, 80.f);
-
-		for (std::size_t i = 0; i < 1u; ++i) {
-			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
-			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
-				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 80.f, urd(gRandomEngine) )
-			);
-			g->setOrient(DirectX::XMLoadFloat4(&worldR));
-			g->setScale(DirectX::XMLoadFloat3(&worldS));
-
-			g->setModel(assetManager_.modelGoblin());
-			g->setAnimBlender(animSystem_, assetManager_);
-			g->setHp(90);
-			g->setMaxHp(90);
-			g->setId(1);
-			setupMonsterBody(g->body(), 40.f);
-			g->enableBVRendering();
-
-			physicsWorld_.registerBody(&g->body(),
-				[p = g.get()]() { p->rebuildBodyBVH(); }
-			);
-			g->body().setUserData(g.get());
-		}
+		// 레거시 노드: 무시한다. 이 스포너는 원점 근처라 시작 지형 청크[(5000,5000)~(5200,5200)] 밖이며,
+		// 청크 밖에는 지형 콜라이더가 없어 여기서 스폰한 고블린은 무한 낙하 → 좌표가 Inf/NaN으로 발산 →
+		// release 빌드에서 broad-phase·솔버·렌더로 NaN이 전파돼 크래시한다.
+		// 에디터용 고블린은 setupStage에서 PlayerStart(유일하게 청크 위에 있는 기준) 기준으로 스폰한다.
 	}
 	else if (type == "Terrain") {
 		// Terrain is now streamed by TerrainChunkManager (chunks_index.bin).
@@ -2372,7 +2361,7 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	//player.equip(std::move(rifle));
 }
 
-void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
+void Game::configureGoblin(Goblin& goblin) {
 	goblin.setModel(assetManager_.modelGoblin());
 	goblin.setAnimBlender(animSystem_, assetManager_);
 	goblin.setHp(90);

@@ -44,6 +44,7 @@ void Controller::init(const InitRefs& refs) {
     goblin_      = refs.goblin;
     hwnd_        = refs.hwnd;
     terrainHeightAt_ = refs.terrainHeightAt;
+    flushGpu_    = refs.flushGpu;
 
     if (player_) { playerSpawnPos_ = player_->pos(); playerSpawnOrient_ = player_->orient(); }
     if (goblin_) { goblinSpawnPos_ = goblin_->pos(); goblinSpawnOrient_ = goblin_->orient(); }
@@ -227,7 +228,16 @@ void Controller::selectCharacter(int idx) {
 
 void Controller::rebuildSkillDropdown(const std::vector<std::string>& items) {
     auto* root = uiManager_->root();
-    if (skillDropdown_) { root->removeChild(skillDropdown_); skillDropdown_ = nullptr; }
+    if (skillDropdown_) {
+        // The old dropdown's Labels own GPU text textures. removeChild() destroys them
+        // immediately, but a prior frame's command list (submitted before this input was
+        // processed) may still be reading those textures on the GPU. Freeing them now is a
+        // GPU use-after-free → device removed (TDR) → crash that only shows in Release.
+        // Drain submitted GPU work first so nothing in flight references these widgets.
+        if (flushGpu_) flushGpu_();
+        root->removeChild(skillDropdown_);
+        skillDropdown_ = nullptr;
+    }
 
     skillDropdown_ = static_cast<UI::Dropdown*>(
         root->addChild(std::make_unique<UI::Dropdown>()));

@@ -82,7 +82,7 @@ private:
 	void importNode(std::ifstream& ifs);
 	void importCube(std::ifstream& ifs, Cube& cube);
 	void importPlayerStart(std::ifstream& ifs, Player& player);
-	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
+	void configureGoblin(Goblin& goblin);
 
 	// Physics test object debug tools (keys 1-5, K, R, comma, period, M, V, I, P)
 	void spawnTestObject(int kind);   // 1=pendulum 2=doublePendulum 3=hingeDoor 4=coneTwistArm 5=coneTwistChain
