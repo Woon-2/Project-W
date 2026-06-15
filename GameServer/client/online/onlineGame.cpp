@@ -3371,8 +3371,10 @@ void Game::renderInGame() {
 	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
 	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
 
-	uiManager_.render(gfx_);
-
+	// Skill dial + combo are in-game HUD and must sit BELOW the settings panel,
+	// which is an overlay mounted on uiManager_. UI draw order = submission order,
+	// so submit the dial first; uiManager_.render() (below) then draws the panel's
+	// scrim/popup on top when it is open.
 	skillDial_.render(gfx_,
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
@@ -3385,10 +3387,12 @@ void Game::renderInGame() {
 		const float frac = (comboWindowMs_ > 0.f)
 			? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
 		DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
-			sw - 130.f, sh - 150.f - 132.f, 34.f + frac * 12.f, sh,
+			sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
 			static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
 			DigitAtlas::Align::Center);
 	}
+
+	uiManager_.render(gfx_);
 
 	static const auto uiT0 = std::chrono::steady_clock::now();
 	const float uiTimeSec = std::chrono::duration<float>(

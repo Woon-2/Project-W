@@ -11,11 +11,14 @@ namespace {
     constexpr float kPi       = 3.14159265358979323846f;
     constexpr float kTopDeg   = 90.f;    // selected slot sits at the top of the wheel
     constexpr float kStepDeg  = 120.f;   // 3 slots evenly spaced -> symmetric, no teleport
-    constexpr float kRadius   = 95.f;
-    constexpr float kMarginX  = 130.f;   // wheel pivot offset from the right edge
-    constexpr float kMarginY  = 150.f;   // wheel pivot offset from the bottom edge
-    constexpr float kSelSize  = 96.f;
-    constexpr float kSideSize = 70.f;
+    constexpr float kRadius   = 62.f;    // slot ring radius (icons sit on the donut band)
+    constexpr float kMarginX  = 96.f;    // wheel pivot offset from the right edge
+    constexpr float kMarginY  = 96.f;    // wheel pivot offset from the bottom edge
+    constexpr float kSelSize  = 60.f;
+    constexpr float kSideSize = 44.f;
+
+    constexpr float kRingPad  = 30.f;    // donut outer edge extends this far past kRadius
+    constexpr float kRingHole = 0.42f;   // donut inner radius fraction (see ui.hlsl mode 3)
 
     inline mu::Mat4x4 quadWorld(float cx, float cy, float size) {
         const float h = size * 0.5f;
@@ -91,6 +94,21 @@ void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
     const float pivotX = screenW - kMarginX;
     const float pivotY = kMarginY;   // bottom-origin pixel space (matches UI shader)
 
+    // Semi-transparent gray donut the icons sit on. Procedural (ui.hlsl mode 3):
+    // no texture is sampled, so any valid texture pointer satisfies the pipeline.
+    const Texture* anyTex = digitAtlas_ ? digitAtlas_ : basicIcon_;
+    for (int i = 0; !anyTex && i < kSlots; ++i) anyTex = slotIcon_[i];
+    if (anyTex) {
+        const float ringSize = (kRadius + kRingPad) * 2.f;
+        gfx.addDrawEvent(UIPipeline::DrawEvent{
+            .world      = quadWorld(pivotX, pivotY, ringSize),
+            .pTex       = anyTex,
+            .colorMul   = XMFLOAT4{ 0.13f, 0.14f, 0.17f, 0.46f },   // translucent gray
+            .fillAmount = kRingHole,
+            .effectMode = 3.f,
+        });
+    }
+
     struct IconDraw { float cx, cy, size, fill; int mode; bool selected; int slot; };
     IconDraw draws[kSlots];
 
@@ -139,12 +157,13 @@ void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
         }
     }
 
-    // Basic-attack chip (weapon icon) anchored to the corner.
+    // Basic-attack chip (weapon icon, left-click) nested in the donut hole at the
+    // dial center.
     if (basicIcon_) {
         gfx.addDrawEvent(UIPipeline::DrawEvent{
-            .world    = quadWorld(screenW - 44.f, 44.f, 52.f),
+            .world    = quadWorld(pivotX, pivotY, kSideSize * 0.95f),
             .pTex     = basicIcon_,
-            .colorMul = XMFLOAT4{ 0.92f, 0.92f, 0.92f, 0.95f },
+            .colorMul = XMFLOAT4{ 0.95f, 0.95f, 0.95f, 0.97f },
         });
     }
 }

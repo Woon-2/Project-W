@@ -60,10 +60,14 @@ energy_explosion_arrow), 완드(spikes + crystals_front_attack/crystals_cross_fa
 
 ## 5. 클라이언트 (client)
 
-- HUD(`ui/skillDialHUD.{hpp,cpp}`): 120° 회전 휠(선택은 꼭대기 중앙). 충전은 UIPipeline의 effect-mode로
+- HUD(`ui/skillDialHUD.{hpp,cpp}`): 우하단 **소형** 120° 회전 휠(선택은 꼭대기 중앙). 3 아이콘은 **반투명
+  회색 도넛**(effectMode 3, 절차적·텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름) 위에 120° 간격으로 놓인다.
+  크기/도넛 상수는 `.cpp` 상단(`kRadius/kSelSize/kSideSize/kRingPad/kRingHole`). 충전은 effect-mode로
   **아래서부터 일렁이는 액체**(`ui.hlsl` PS, `Material.cRoughness`=fill / `cMetallic`=mode / `PerFrameData.time`).
   mode 1=충전(어두운 base+밝은 fill), 2=준비(밝은 base+다음 스택 글로우 tide). 스택 ×N(≥2) 배지는 DigitAtlas.
   0→1 전이 시 scale pop + `skill_ready` 사운드.
+- z-order: 다이얼+콤보는 `renderInGame`에서 `uiManager_.render` **이전**에 제출 → 설정 패널(`settingsPanel_`,
+  uiManager 오버레이)이 항상 다이얼 위에 그려진다(UI는 제출 순서 = 그리기 순서).
 - 아이콘(`AssetManager`): 12 스킬 아이콘 명시 멤버 + `skillIconByAssetName()`. 무기 아이콘은 기존 멤버.
 - 입력(`onlineGame.cpp processInputGame`/`receiveWndMsg`): 휠 = 선택(다이얼 회전 + `C_SelectSkill`),
   휠클릭 = 선택 스킬 사용(자체 게이트 후 `castSkillByName` + 예측 쿨), 좌클릭 = 기본 공격(스킬 시전).

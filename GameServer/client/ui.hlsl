@@ -63,11 +63,26 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET
 {
-    float4 tex = sampleBindless(material.idxAlbedo, input.uv);
-
     // material.cMetallic is repurposed as the UI effect mode:
-    //   0 = normal UI draw, 1 = skill charging, 2 = skill ready (see uiPipeline.cpp).
+    //   0 = normal UI draw, 1 = skill charging, 2 = skill ready, 3 = ring backdrop.
     float mode = material.cMetallic;
+
+    // mode 3: procedural semi-transparent ring (donut) for the skill-dial backdrop.
+    // No texture is sampled; cAlbedo is the gray tint+alpha, cRoughness the inner
+    // radius fraction (the donut hole). The icons are drawn on top of this band.
+    if (mode > 2.5f)
+    {
+        float2 p = input.uv - 0.5f;
+        float d = length(p) * 2.0f;                    // 0 center .. 1 quad edge
+        float inner = saturate(material.cRoughness);   // donut hole radius
+        const float outer = 0.97f;
+        const float aa = 0.03f;
+        float ring = smoothstep(inner - aa, inner + aa, d)
+                   - smoothstep(outer - aa, outer + aa, d);
+        return float4(material.cAlbedo.rgb, material.cAlbedo.a * saturate(ring));
+    }
+
+    float4 tex = sampleBindless(material.idxAlbedo, input.uv);
     if (mode < 0.5f)
         return tex * material.cAlbedo;
 
