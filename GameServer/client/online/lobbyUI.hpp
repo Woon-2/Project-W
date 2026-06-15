@@ -94,6 +94,10 @@ private:
 
     Callbacks callbacks_{};
 
+    // Cached GFX for build-time text measurement (set in loadTextures, used to
+    // word-wrap the story column). Stable across rebuilds (same GFX instance).
+    GFX* gfx_ = nullptr;
+
     // --- Lobby UI textures (loaded on the main thread, owned here) ---
     std::unordered_map<std::string, Texture> lobbyTexHashMap_{};
     Texture lobbyBgTex_{};
@@ -127,6 +131,16 @@ private:
     UI::Label*     startGameLabel_  = nullptr;
     UI::Button*    waitMessageBg_   = nullptr;
     UI::Label*     hostStatusLabel_ = nullptr;
+
+    // --- Story panel (waiting room, right column). Static text read from a file.
+    // Scroll is not implemented yet; the body text sits under its own content node
+    // so a future scroll view can wrap/clip it without touching the layout above. ---
+    UI::Button*    storyPanelBg_     = nullptr;
+    UI::Label*     storyTitleLabel_  = nullptr;
+    UI::UIElement* storyContentRoot_ = nullptr;
+    // One Label per text line: a single Label cannot exceed the 256px font bitmap
+    // height, so the body is stacked as single-line labels inside storyContentRoot_.
+    std::vector<UI::Label*> storyLineLabels_{};
 
     // --- Loading overlay ---
     UI::UIElement*   loadingRoot_      = nullptr;

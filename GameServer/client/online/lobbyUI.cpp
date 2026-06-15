@@ -10,7 +10,118 @@
 
 namespace Online {
 
+namespace {
+
+// Self-contained UTF-8 -> UTF-16 decoder. The Windows NLS path (MultiByteToWideChar)
+// is unavailable here because pch.hpp defines NONLS, so winnls.h (CP_UTF8 and the
+// NLS prototypes) is excluded. Invalid byte sequences are skipped defensively.
+std::wstring utf8ToWide(const std::string& bytes) {
+    std::wstring out;
+    out.reserve(bytes.size());
+    const std::size_t n = bytes.size();
+    std::size_t i = 0;
+    while (i < n) {
+        const unsigned char c = static_cast<unsigned char>(bytes[i]);
+        char32_t cp = 0;
+        int extra = 0;
+        if (c < 0x80)              { cp = c;        extra = 0; }
+        else if ((c >> 5) == 0x06) { cp = c & 0x1F; extra = 1; }
+        else if ((c >> 4) == 0x0E) { cp = c & 0x0F; extra = 2; }
+        else if ((c >> 3) == 0x1E) { cp = c & 0x07; extra = 3; }
+        else                       { ++i; continue; }   // stray continuation/invalid lead
+
+        if (i + static_cast<std::size_t>(extra) >= n) break;
+        bool ok = true;
+        for (int k = 1; k <= extra; ++k) {
+            const unsigned char cc = static_cast<unsigned char>(bytes[i + k]);
+            if ((cc >> 6) != 0x02) { ok = false; break; }
+            cp = (cp << 6) | (cc & 0x3F);
+        }
+        if (!ok) { ++i; continue; }
+        i += static_cast<std::size_t>(extra) + 1;
+
+        if (cp <= 0xFFFF) {
+            out.push_back(static_cast<wchar_t>(cp));
+        } else {
+            cp -= 0x10000;
+            out.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
+            out.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
+        }
+    }
+    return out;
+}
+
+// Loads a UTF-8 (optionally BOM-prefixed) text file as a wide string for label
+// rendering. Returns empty on failure. CRLF is normalized to LF so DirectWrite
+// sees clean hard line breaks; the file is expected to be pre-wrapped to the
+// story column width (auto word-wrap happens at the global font bitmap, not the
+// label rect).
+std::wstring loadStoryTextUtf8(const std::filesystem::path& path) {
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs) return std::wstring();
+
+    ifs.seekg(0, std::ios::end);
+    const std::streamoff size = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+    if (size <= 0) return std::wstring();
+
+    std::string bytes(static_cast<std::size_t>(size), '\0');
+    ifs.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+
+    if (bytes.size() >= 3 &&
+        static_cast<unsigned char>(bytes[0]) == 0xEF &&
+        static_cast<unsigned char>(bytes[1]) == 0xBB &&
+        static_cast<unsigned char>(bytes[2]) == 0xBF) {
+        bytes.erase(0, 3);
+    }
+    bytes.erase(std::remove(bytes.begin(), bytes.end(), '\r'), bytes.end());
+    if (bytes.empty()) return std::wstring();
+
+    return utf8ToWide(bytes);
+}
+
+// Greedy word/character wrap so one source line fits maxWidthPx. DirectWrite's own
+// wrapping happens at the global 1024px font bitmap (not the narrow label rect), so
+// long lines clip instead of wrapping; we pre-break them here using the real
+// measured width. Prefers breaking at the last space; falls back to per-character
+// breaks for space-less runs (e.g. Korean). maxWidthPx is in physical pixels and the
+// font must be sized in the same (uiScale-applied) space as measureText expects.
+std::vector<std::wstring> wrapToWidth(GFX* gfx, FontHandle* font,
+                                      const std::wstring& line, float maxWidthPx) {
+    std::vector<std::wstring> out;
+    if (!gfx || !font || maxWidthPx <= 1.f) { out.push_back(line); return out; }
+
+    auto widthOf = [&](const std::wstring& s) -> int {
+        if (s.empty()) return 0;
+        int w = 0, h = 0;
+        gfx->measureText(font, s.c_str(), static_cast<DWORD>(s.size()), 1.0e6f, 1.0e6f, &w, &h);
+        return w;
+    };
+
+    std::wstring cur;
+    for (const wchar_t ch : line) {
+        std::wstring trial = cur;
+        trial.push_back(ch);
+        if (!cur.empty() && static_cast<float>(widthOf(trial)) > maxWidthPx) {
+            const std::size_t sp = cur.find_last_of(L' ');
+            if (sp != std::wstring::npos && sp > 0) {
+                out.push_back(cur.substr(0, sp));   // break after the last whole word
+                cur = cur.substr(sp + 1);
+            } else {
+                out.push_back(cur);                 // space-less run: hard character break
+                cur.clear();
+            }
+        }
+        cur.push_back(ch);
+    }
+    out.push_back(cur);   // remainder (empty string preserved for blank source lines)
+    return out;
+}
+
+}   // namespace
+
 void LobbyUI::loadTextures(GFX& gfx) {
+    gfx_ = &gfx;   // cached for build-time text measurement (story word-wrap)
     gfx.addRequestTextureLoad(RequestTextureLoad{
         .name            = "LobbyBg",
         .texturePath     = "../resources/UI/ui_lobby_bg.dds",
@@ -82,9 +193,19 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     const float screenH = uiManager.layoutHeight();
     const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
     const float mainPanelH = 500.f;
-    // The waiting room is a wide squad-stage layout over the 3D map.
-    const float roomPanelW = std::min(1120.f, std::max(640.f, screenW - 40.f));
-    const float roomPanelH = std::min(700.f,  std::max(460.f, screenH - 40.f));
+
+    // The waiting room is a wide squad-stage layout over the 3D map. It fills the
+    // whole screen (full-bleed) instead of the centered 4:3 safe area, so wide
+    // resolutions have no empty side bands. We size it from the framework's
+    // layout-space screen extent (screenWidth/uiScale) rather than the fixed
+    // 1024x768 base, so it tracks the real resolution on every rebuild. The panel
+    // is centered (Anchors::Center), and since the safe area is itself centered,
+    // a full-width panel lands flush against both screen edges.
+    const float fullLayoutW = uiManager.screenWidth()  / uiManager.uiScale();
+    const float fullLayoutH = uiManager.screenHeight() / uiManager.uiScale();
+    const float roomMargin  = 24.f;   // small inset from the physical screen edges
+    const float roomPanelW  = std::max(640.f, fullLayoutW - 2.f * roomMargin);
+    const float roomPanelH  = std::max(460.f, fullLayoutH - 2.f * roomMargin);
 
     const XMFLOAT4 skyBlue     = { 0.529f, 0.808f, 0.980f, 1.f };
     const XMFLOAT4 ink         = { 0.090f, 0.125f, 0.200f, 1.f };
@@ -341,12 +462,17 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     fadeBtn(styleSecondary(makeButton(roomPanel, L"방 나가기", leaveX, toolbarY, leaveW, toolbarH,
         surfaceSoft, primarySoft, primarySoft, 18.f, [this]() { if (callbacks_.onLeaveRoom) callbacks_.onLeaveRoom(); }, buttonInk)));
 
-    // Squad stage: 4 horizontal slots
-    const float slotsY    = toolbarY + toolbarH + 16.f;
-    const float debugH    = 40.f;
-    const float slotsH    = roomPanelH - slotsY - debugH - 14.f;
-    const float slotW     = (innerW - 3.f * gap) / 4.f;
-    const float nameH     = 56.f;
+    // Squad stage (left ~60% of the panel width) + story panel (right ~40%),
+    // split across innerW with one gap between the two blocks.
+    const float slotsY     = toolbarY + toolbarH + 16.f;
+    const float debugH     = 40.f;
+    const float slotsH     = roomPanelH - slotsY - debugH - 14.f;
+    const float storyGap   = gap;                       // separation between squad block and story
+    const float squadAreaW = innerW * 0.6f;             // 4 player slots packed into this width
+    const float storyW     = innerW * 0.4f - storyGap;  // story panel
+    const float storyX     = pad + squadAreaW + storyGap;
+    const float slotW      = (squadAreaW - 3.f * gap) / 4.f;
+    const float nameH      = 56.f;
     const XMFLOAT4 slotPanelCol    = { 0.09f, 0.13f, 0.20f, 0.16f };  // character backdrop (near opaque)
     const XMFLOAT4 slotNameplateCol= { 0.05f, 0.08f, 0.13f, 0.78f };  // nameplate background
 
@@ -391,6 +517,89 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
         slotNameBorders_[i][3] = makeSolid(roomPanel, "nameBorderR", bx + bw - bt, by, bt, bh, borderCol, 2);
         for (auto* edge : slotNameBorders_[i]) {
             if (edge) edge->visible = false;
+        }
+    }
+
+    // ---- Story panel (right column): static text read from a file ----
+    // Scroll is out of scope for now; the body text lives under its own content
+    // node so a scroll view can later wrap/clip it. The file is pre-wrapped to the
+    // column width (auto word-wrap happens at the 1024px font bitmap, not the rect).
+    {
+        // The panel art (ui_panel_frame) is a cream/yellow frame, so the text is
+        // dark for contrast. The solid fallback (used only if the texture fails to
+        // load) is also light so the dark text stays readable either way.
+        const XMFLOAT4 storyBgCol    = { 0.93f, 0.90f, 0.82f, 0.92f };
+        const XMFLOAT4 storyTitleCol = { 0.12f, 0.10f, 0.08f, 1.f };
+        const XMFLOAT4 storyBodyCol  = { 0.16f, 0.14f, 0.11f, 1.f };
+        const float    storyPadX     = 16.f;
+        const float    storyTitleH   = 28.f;
+
+        storyPanelBg_ = makeSolid(roomPanel, "storyPanelBg", storyX, slotsY, storyW, slotsH, storyBgCol, 0);
+        if (lobbyPanelTex_.res) {
+            storyPanelBg_->texNormal      = &lobbyPanelTex_;
+            storyPanelBg_->sliceUvBorderX = 0.30f; storyPanelBg_->sliceUvBorderY = 0.30f;
+            storyPanelBg_->sliceCornerX   = 22.f;  storyPanelBg_->sliceCornerY   = 22.f;
+            storyPanelBg_->texTint        = { 1.f, 1.f, 1.f, 0.90f };
+        }
+
+        storyTitleLabel_ = makeLabel(roomPanel, L"스토리", storyX + storyPadX, slotsY + 12.f, 18.f,
+            storyW - 2.f * storyPadX, storyTitleH, storyTitleCol, UI::TextHAlign::Leading, 2);
+
+        const float bodyX = storyX + storyPadX;
+        const float bodyY = slotsY + 12.f + storyTitleH + 8.f;
+        const float bodyW = storyW - 2.f * storyPadX;
+        const float bodyH = slotsH - (bodyY - slotsY) - storyPadX;
+
+        // Content viewport node (future scroll clip region). zOrder must beat the
+        // panel background: renderTree sorts siblings by zOrder with an UNSTABLE sort,
+        // so a content node left at the default 0 can be drawn behind storyPanelBg_
+        // (also 0) and the cream panel then covers the text. Put it above the panel.
+        storyContentRoot_ = roomPanel->addChild(std::make_unique<UI::UIElement>());
+        storyContentRoot_->name   = "storyContentRoot";
+        storyContentRoot_->zOrder = 2;
+        applyRect(storyContentRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft, bodyX, bodyY, bodyW, bodyH);
+
+        std::wstring story = loadStoryTextUtf8(L"../resources/story/intro.txt");
+        if (story.empty()) {
+            story = L"이야기를 불러오지 못했습니다.";
+        }
+
+        // Stack one single-line Label per display line. A single Label cannot exceed
+        // the 256px font bitmap (CreateBitmapFromText then fails and nothing draws),
+        // so the body is never one tall multi-line label. Each source line is first
+        // word-wrapped to the column width, then each resulting display line gets a
+        // label. measureText/createFont work in physical pixels, so the font size and
+        // wrap width are scaled by uiScale.
+        const float bodyFontSize = 15.f;
+        const float lineH        = 22.f;   // layout-space line pitch (> font size for leading)
+        const int   maxLines     = std::max(1, static_cast<int>(bodyH / lineH));
+        const float uiScale      = uiManager.uiScale();
+        FontHandle  bodyFont     = gfx_ ? gfx_->createFont(bodyFontSize * uiScale) : FontHandle{};
+        const float wrapWidthPx  = bodyW * uiScale;
+
+        storyLineLabels_.clear();
+        std::size_t start = 0;
+        int  row  = 0;
+        bool done = false;
+        while (!done && row < maxLines) {
+            const std::size_t nl = story.find(L'\n', start);
+            const std::wstring srcLine = (nl == std::wstring::npos)
+                ? story.substr(start)
+                : story.substr(start, nl - start);
+            if (nl == std::wstring::npos) done = true; else start = nl + 1;
+
+            const std::vector<std::wstring> displayLines =
+                gfx_ ? wrapToWidth(gfx_, &bodyFont, srcLine, wrapWidthPx)
+                     : std::vector<std::wstring>{ srcLine };
+
+            for (const auto& disp : displayLines) {
+                if (row >= maxLines) break;
+                auto* lineLabel = makeLabel(storyContentRoot_, disp, 0.f, static_cast<float>(row) * lineH,
+                    bodyFontSize, bodyW, lineH, storyBodyCol, UI::TextHAlign::Leading, 2);
+                lineLabel->setTextVAlign(UI::TextVAlign::Center);
+                storyLineLabels_.push_back(lineLabel);
+                ++row;
+            }
         }
     }
 
