@@ -1986,11 +1986,11 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillObjectById_.assign(256, nullptr);
 		player_->setFaction(Faction::Players);
 		skillObjectById_[player_->getId()] = player_.get();
-		// Register goblins that arrived before setupPlayer() was called.
-		for (auto& [gobId, goblin] : idGoblinMap_) {
-			auto sid = static_cast<size_t>(gobId);
+		// Register all monsters that arrived before setupPlayer() was called.
+		for (auto& [id, monster] : idMonsterMap_) {
+			auto sid = static_cast<size_t>(id);
 			if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
-			skillObjectById_[sid] = goblin.get();
+			skillObjectById_[sid] = monster;
 		}
 
 		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
@@ -2198,7 +2198,118 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	}
 
 	goblins_.push_back(goblin);
-	idGoblinMap_[goblinInfo.objectId] = goblin;
+	idGoblinMap_[goblinInfo.objectId]    = goblin;
+	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
+}
+
+void Game::createSnake(const ObjectInfo& info) {
+	auto snake = std::make_shared<Snake>();
+
+	snake->setId(info.objectId);
+	snake->setPos(DirectX::XMLoadFloat3(&info.pos));
+	snake->setOrient(DirectX::XMLoadFloat4(&info.orient));
+	snake->setScale(DirectX::XMLoadFloat3(&info.scale));
+	snake->setModel(assetManager_.modelSnake());
+	snake->setAnimBlender(animSystem_, assetManager_);
+
+	if (snake->model() && snake->model()->ragdollDef) {
+		snake->ragdoll().build(
+			snake->model()->skeleton,
+			*snake->model()->ragdollDef,
+			physicsWorld_
+		);
+	}
+
+	snake->setHp(info.hp);
+	snake->setMaxHp(info.maxHp);
+	snake->setFaction(Faction::Monsters);
+	snake->enableBVRendering();
+
+	snake->body().setMotionType(MotionType::Kinematic);
+	snake->body().setMass(40.f);
+	snake->body().setLinearDamping(0.f);
+	snake->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		snakeHpBars_[info.objectId] = { snake.get(), bar, 2.5f };
+	}
+
+	snake->setRenderObjectId(nextRenderObjId_++);
+
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(info.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = snake.get();
+	}
+
+	snakes_.push_back(snake);
+	idSnakeMap_[info.objectId]    = snake;
+	idMonsterMap_[info.objectId]  = snake.get();
+}
+
+void Game::createMushroom(const ObjectInfo& info) {
+	auto mushroom = std::make_shared<Mushroom>();
+
+	mushroom->setId(info.objectId);
+	mushroom->setPos(DirectX::XMLoadFloat3(&info.pos));
+	mushroom->setOrient(DirectX::XMLoadFloat4(&info.orient));
+	mushroom->setScale(DirectX::XMLoadFloat3(&info.scale));
+	mushroom->setModel(assetManager_.modelMushroom());
+	mushroom->setAnimBlender(animSystem_, assetManager_);
+
+	if (mushroom->model() && mushroom->model()->ragdollDef) {
+		mushroom->ragdoll().build(
+			mushroom->model()->skeleton,
+			*mushroom->model()->ragdollDef,
+			physicsWorld_
+		);
+	}
+
+	mushroom->setHp(info.hp);
+	mushroom->setMaxHp(info.maxHp);
+	mushroom->setFaction(Faction::Monsters);
+	mushroom->enableBVRendering();
+
+	mushroom->body().setMotionType(MotionType::Kinematic);
+	mushroom->body().setMass(50.f);
+	mushroom->body().setLinearDamping(0.f);
+	mushroom->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		mushroomHpBars_[info.objectId] = { mushroom.get(), bar, 2.5f };
+	}
+
+	mushroom->setRenderObjectId(nextRenderObjId_++);
+
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(info.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = mushroom.get();
+	}
+
+	mushrooms_.push_back(mushroom);
+	idMushroomMap_[info.objectId]   = mushroom;
+	idMonsterMap_[info.objectId]    = mushroom.get();
 }
 
 void Game::createStronghold(const ObjectInfo& info) {
@@ -2584,41 +2695,27 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 }
 
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
-	auto goblinIt = idGoblinMap_.find(npcId);
-	auto goblin = goblinIt != idGoblinMap_.end() ? goblinIt->second : nullptr;
-
-	DISPLAY_ERROR_STR(goblin != nullptr,
-		"[Game Error] Game::moveGoblin: 이동하려는 고블린이 존재하지 않습니다.\n",
-		false
-	);
-
-	if (goblin == nullptr) {
+	auto it = idMonsterMap_.find(npcId);
+	if (it == idMonsterMap_.end()) {
+		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
+	Monster* monster = it->second;
 
-	if (goblin->isDead()) {
-		return;
-	}
+	if (monster->isDead()) return;
 
-	goblin->body().advanceState();
-	goblin->setCurrPos(DirectX::XMLoadFloat3(&pos));
-	goblin->setOrient(DirectX::XMLoadFloat4(&orient));
-	goblin->setVelocity(DirectX::XMLoadFloat3(&velocity));
+	monster->body().advanceState();
+	monster->setCurrPos(DirectX::XMLoadFloat3(&pos));
+	monster->setOrient(DirectX::XMLoadFloat4(&orient));
+	monster->setVelocity(DirectX::XMLoadFloat3(&velocity));
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
-	auto npcIt = idGoblinMap_.find( npcId );
-	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
-
-	DISPLAY_ERROR_STR( npc != nullptr,
-		"[Game Error] Game::onNpcAttack: 공격하는 NPC가 존재하지 않습니다.\n",
+	DISPLAY_ERROR_STR( idMonsterMap_.count(npcId) > 0,
+		"[Game Error] Game::onNpcAttack: NPC not found.\n",
 		false
 	);
-
-	if ( npc == nullptr ) {
-		return;
-	}
-
+	if (idMonsterMap_.count(npcId) == 0) return;
 	holdEvent( eventList_, EvAttack( npcId ) );
 }
 
@@ -2627,8 +2724,12 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 }
 
 void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
-	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(고블린/거점 공통).
+	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(모든 몬스터·거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = snakeHpBars_.find( targetId ); barIt != snakeHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = mushroomHpBars_.find( targetId ); barIt != mushroomHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() )
 		it->second.hpBarVisibleSeconds = 5.f;
@@ -2643,20 +2744,15 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
-	auto npcIt = idGoblinMap_.find( npcId );
-	auto npc = npcIt != idGoblinMap_.end() ? npcIt->second : nullptr;
-
-	DISPLAY_ERROR_STR( npc != nullptr,
-		"[Game Error] Game::onNpcRespawn: 리스폰하는 NPC가 존재하지 않습니다.\n",
+	auto it = idMonsterMap_.find(npcId);
+	DISPLAY_ERROR_STR( it != idMonsterMap_.end(),
+		"[Game Error] Game::onNpcRespawn: NPC not found.\n",
 		false
 	);
+	if (it == idMonsterMap_.end()) return;
 
-	if ( npc == nullptr ) {
-		return;
-	}
-
+	Monster* npc = it->second;
 	npc->setHp( newHp );
-	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
 	if (npc->ragdoll().isActive())
 		npc->ragdoll().deactivate(physicsWorld_);
@@ -2678,9 +2774,9 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 }
 
 void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
-	// Store hit velocity on goblin before applyHit so ragdoll activation can use it.
+	// Store hit velocity on any monster before applyHit so ragdoll activation can use it.
 	if (newHp <= 0) {
-		if (auto it = idGoblinMap_.find(targetId); it != idGoblinMap_.end()) {
+		if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end()) {
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
@@ -2698,8 +2794,8 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 				target = player_.get();
 			else if (auto it = idPlayerMap_.find(targetId); it != idPlayerMap_.end())
 				target = it->second.get();
-			else if (auto it = idGoblinMap_.find(targetId); it != idGoblinMap_.end())
-				target = it->second.get();
+			else if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end())
+				target = it->second;
 
 			if (target)
 				skillVfxById_[vfxId]->play(target->pos());
@@ -2847,9 +2943,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& p : otherPlayers_) {
 		p->rebuildBodyBVH();
 	}
-	for (auto& g : goblins_) {
-		g->rebuildBodyBVH();
-	}
+	for (auto& g : goblins_)   g->rebuildBodyBVH();
+	for (auto& s : snakes_)    s->rebuildBodyBVH();
+	for (auto& m : mushrooms_) m->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -2868,10 +2964,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			if (player_ && player_->getId() == id) return player_.get();
 			if (auto it = idPlayerMap_.find(static_cast<uint16>(id)); it != idPlayerMap_.end())
 				return it->second.get();
-			if (auto it = idGoblinMap_.find(static_cast<uint16>(id)); it != idGoblinMap_.end())
-				return it->second.get();
+			if (auto it = idMonsterMap_.find(static_cast<uint16>(id)); it != idMonsterMap_.end())
+				return it->second;
 			if (auto it = strongholdHpBars_.find(static_cast<uint16>(id)); it != strongholdHpBars_.end())
-				return it->second.obj;   // Stronghold* upcast → Object*
+				return it->second.obj;
 			return nullptr;
 		};
 
@@ -2970,9 +3066,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		obj->update( deltaTime, tNet );
 	}
 
-	for (auto& goblin : goblins_) {
-		goblin->update(deltaTime, tPhysicInterpolation);
-	}
+	for (auto& goblin   : goblins_)   goblin->update(deltaTime, tPhysicInterpolation);
+	for (auto& snake    : snakes_)    snake->update(deltaTime, tPhysicInterpolation);
+	for (auto& mushroom : mushrooms_) mushroom->update(deltaTime, tPhysicInterpolation);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3003,7 +3099,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
 	{
-		auto activateRagdollIfPending = [&](Goblin& g) {
+		auto activateRagdollIfPending = [&](Monster& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
 			Ragdoll& rd = g.ragdoll();
@@ -3041,7 +3137,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Goblin& g) {
+		auto syncRagdollToAnim = [&](Monster& g) {
 			Ragdoll& rd = g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
@@ -3052,10 +3148,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			g.rebuildBodyBVH();
 		};
 
-		for (auto& goblin : goblins_) {
-			activateRagdollIfPending(*goblin);
-			syncRagdollToAnim(*goblin);
-		}
+		for (auto& goblin   : goblins_)   { activateRagdollIfPending(*goblin);   syncRagdollToAnim(*goblin); }
+		for (auto& snake    : snakes_)    { activateRagdollIfPending(*snake);    syncRagdollToAnim(*snake); }
+		for (auto& mushroom : mushrooms_) { activateRagdollIfPending(*mushroom); syncRagdollToAnim(*mushroom); }
 	}
 
 	// HP 바 위치 및 값 갱신
@@ -3136,6 +3231,41 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				);
 			}
 		}
+
+		auto updateMonsterHpBar = [&](std::unordered_map<uint16, MonsterHpEntry>& bars) {
+			for (auto& [id, entry] : bars) {
+				if (!entry.monster || entry.monster->hp() <= 0) {
+					entry.hpBar->visible = false;
+					entry.hpBarVisibleSeconds = 0.f;
+					continue;
+				}
+				entry.hpBarVisibleSeconds = std::max(0.f, entry.hpBarVisibleSeconds - dtSec);
+				if (entry.hpBarVisibleSeconds <= 0.f) {
+					entry.hpBar->visible = false;
+					continue;
+				}
+				const mu::Vec3 barWorldPos = entry.monster->renderState().pos
+					+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+				float sx{}, sy{};
+				const bool onScreen = worldToScreen(
+					barWorldPos,
+					camera_.view(), camera_.proj(),
+					uiManager_.screenWidth(), uiManager_.screenHeight(),
+					sx, sy
+				);
+				entry.hpBar->visible = onScreen;
+				if (onScreen) {
+					entry.hpBar->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(sx) - kBarHalfWidth);
+					entry.hpBar->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(sy));
+					entry.hpBar->setProgress(
+						static_cast<float>(entry.monster->hp()) /
+						static_cast<float>(std::max(1, entry.monster->maxHp()))
+					);
+				}
+			}
+		};
+		updateMonsterHpBar(snakeHpBars_);
+		updateMonsterHpBar(mushroomHpBars_);
 
 		for (auto& [id, entry] : strongholdHpBars_) {
 			if (!entry.obj || entry.obj->isDead() || entry.obj->maxHp() <= 0) {
@@ -3304,9 +3434,9 @@ void Game::renderInGame() {
 		obj->render( gfx_ );
 	}
 
-	for (auto& goblin : goblins_) {
-		goblin->render(gfx_);
-	}
+	for (auto& goblin   : goblins_)   goblin->render(gfx_);
+	for (auto& snake    : snakes_)    snake->render(gfx_);
+	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
 
 	for (auto& sh : strongholds_) {
 		if (sh->isDead()) continue;   // hide destroyed structure (isDead set by EvDeath)
@@ -4424,9 +4554,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
-	entities.reserve(otherPlayers_.size() + goblins_.size());
+	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
-	std::ranges::copy(goblins_, std::back_inserter(entities));
+	std::ranges::copy(goblins_,      std::back_inserter(entities));
+	std::ranges::copy(snakes_,       std::back_inserter(entities));
+	std::ranges::copy(mushrooms_,    std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -4496,11 +4628,13 @@ void Game::applyHiZCulling() {
 			if (auto* blender = p->animBlender())
 				blender->setCulled(p->isFrustumCulled());
 		}
-		for (auto& g : goblins_) {
-			g->setHiZCulled(false);
-			if (auto* blender = g->animBlender())
-				blender->setCulled(g->isFrustumCulled());
-		}
+		auto resetHiZ = [&](const std::shared_ptr<Monster>& m) {
+			m->setHiZCulled(false);
+			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+		};
+		for (auto& g : goblins_)   resetHiZ(g);
+		for (auto& s : snakes_)    resetHiZ(s);
+		for (auto& m : mushrooms_) resetHiZ(m);
 		return;
 	}
 
@@ -4510,10 +4644,10 @@ void Game::applyHiZCulling() {
 		if (auto* blender = entt->animBlender())
 			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
 	};
-	for (auto& g : goblins_)
-		applyToEntity(g);
-	for (auto& p : otherPlayers_)
-		applyToEntity(p);
+	for (auto& g : goblins_)   applyToEntity(g);
+	for (auto& s : snakes_)    applyToEntity(s);
+	for (auto& m : mushrooms_) applyToEntity(m);
+	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 
 // 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.

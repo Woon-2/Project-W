@@ -6,6 +6,8 @@
 #include "GameSession.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
+#include "snake.hpp"
+#include "mushroom.hpp"
 #include "stronghold.hpp"
 #include "zone.hpp"
 #include "NpcGroup.hpp"
@@ -37,6 +39,12 @@ public:
 		}
 		for (const auto& g : goblins_) {
 			IdPool::push(g.getId());
+		}
+		for (const auto& s : snakes_) {
+			IdPool::push(s.getId());
+		}
+		for (const auto& m : mushrooms_) {
+			IdPool::push(m.getId());
 		}
 
 		// Unregister tactical NPC bodies before unique_ptrs are destroyed
@@ -99,7 +107,9 @@ public:
 
 	// Accessors used by ZoneSystem to gather faction-filtered candidates and to
 	// resolve object ids on Leave events.
-	std::vector<Goblin>& goblins() { return goblins_; }
+	std::vector<Goblin>&   goblins()   { return goblins_; }
+	std::vector<Snake>&    snakes()    { return snakes_; }
+	std::vector<Mushroom>& mushrooms() { return mushrooms_; }
 	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
 	// 전술 NPC 대형 이동 시 회피할 "큰 장애물"(플레이어 + 생존 중인 보스) 위치를 radius 내에서 append.
@@ -142,14 +152,16 @@ private:
 	void registerObject(Object* obj);
 	void unregisterObject(Object* obj);
 
-	void setupGoblin(Goblin& g, const Level& level);
+	void setupGoblin   (Goblin&    g, const Level& level);
+	void setupSnake    (Snake&     s, const Level& level);
+	void setupMushroom (Mushroom&  m, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
-	void updateGoblinAI(Milliseconds dt);
+	void updateMonsterAI(Milliseconds dt);
 	void updateTacticalAI(Milliseconds dt);
 	void updatePlayerAnimations(Milliseconds dt);
 	void updateSkillSystem(Milliseconds dt);
@@ -170,9 +182,11 @@ private:
 	void rebuildNpcNeighbors();
 	bool MU_CALLCONV isNearAnyPlayer(mu::Vec3 p) const;
 
-	std::vector<Cube>   cubes_;
-	std::vector<Player> playerStarts_;
-	std::vector<Goblin> goblins_;
+	std::vector<Cube>     cubes_;
+	std::vector<Player>   playerStarts_;
+	std::vector<Goblin>   goblins_;
+	std::vector<Snake>    snakes_;
+	std::vector<Mushroom> mushrooms_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;

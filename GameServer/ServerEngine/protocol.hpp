@@ -67,6 +67,8 @@ enum class ObjectType : uint16 {
 	Goblin,
 	Ground,
 	Stronghold,
+	Snake,
+	Mushroom,
 };
 
 enum class PlayerWeaponType : uint8 {

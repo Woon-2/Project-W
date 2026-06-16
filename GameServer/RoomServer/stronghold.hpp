@@ -7,10 +7,12 @@
 
 class Room;
 class Goblin;
+class Snake;
+class Mushroom;
 
-// A stronghold: a damageable static structure that also maintains a fixed pool
-// of monsters around it at the configured population (the "fixed pool revive"
-// model). The structure participates in combat as a normal damageable Object
+// A stronghold: a damageable static structure that also maintains fixed monster
+// pools around it at the configured population (the "fixed pool revive" model).
+// The structure participates in combat as a normal damageable Object
 // (Faction::Monsters, canReceiveDamage, Static collider) so player skills can
 // destroy it; while destroyed it stops reviving its garrison, and rebuilds after
 // a delay.
@@ -18,14 +20,28 @@ class Stronghold : public Object {
 public:
     Stronghold() = default;
 
-    // Bind this stronghold to its config, shared NpcGroup id, and its contiguous
-    // range [poolStart, poolStart+poolCount) inside the room's goblin pool.
-    void configure(const StrongholdDef& def, int groupId, int poolStart, int poolCount);
+    // Per-type pool tracking inside the owning Room's monster vectors.
+    struct MonsterPool {
+        int     start           = 0;
+        int     count           = 0;
+        int     maxPerWave      = 1;
+        Seconds respawnInterval { 5.f };
+        Seconds respawnTimer    { 0.f };
+    };
 
-    // Revive dead monsters in the pool range, up to maxPerWave per respawn
-    // interval (no revival while destroyed). Appends revived monster ids so the
-    // room can broadcast S_NpcRespawn for them.
-    void updatePopulation(Seconds dt, std::vector<Goblin>& pool, Room& room,
+    // Bind this stronghold to its config, NpcGroup id, and per-type pool ranges.
+    void configure(const StrongholdDef& def, int groupId,
+                   int goblinStart, int goblinCount,
+                   int snakeStart,  int snakeCount,
+                   int mushroomStart, int mushroomCount);
+
+    // Revive dead monsters in all pool ranges, up to maxPerWave per type per
+    // respawn interval (no revival while destroyed).
+    void updatePopulation(Seconds dt,
+                          std::vector<Goblin>&   goblins,
+                          std::vector<Snake>&    snakes,
+                          std::vector<Mushroom>& mushrooms,
+                          Room& room,
                           std::vector<uint32>& outRevivedIds);
 
     // Drive the structure destruction/rebuild timeline. Returns true when the
@@ -41,14 +57,11 @@ private:
     mu::Vec3 randomSpawnPos(Room& room) const;
 
     StrongholdDef def_{};
-    int groupId_   = -1;
-    int poolStart_ = 0;
-    int poolCount_ = 0;
+    int groupId_ = -1;
 
-    // Resolved Goblin population parameters (only Goblin is implemented for now).
-    int     goblinMaxPerWave_      = 1;
-    Seconds goblinRespawnInterval_{ 5.f };
-    Seconds goblinRespawnTimer_   { 0.f };
+    MonsterPool goblinPool_;
+    MonsterPool snakePool_;
+    MonsterPool mushroomPool_;
 
     int     strongholdMaxHp_ = 1000;
     bool    destroyed_       = false;

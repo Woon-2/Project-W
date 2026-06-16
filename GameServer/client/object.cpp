@@ -267,17 +267,24 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	}
 }
 
-void AnimBlenderGoblin::init(const AssetManager& assetManager) {
-	setSkeleton(assetManager.modelGoblin()->skeleton);
+void MonsterAnimBlender::init(const Model* model,
+                              const std::vector<std::shared_ptr<AnimClip>>& anims,
+                              std::string_view clipPrefix)
+{
+	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
-	for (auto& clip : assetManager.goblinAnimations()) {
+	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
-	}
+
+	std::string p(clipPrefix);
+	clipIdle_   = p + "_Idle";
+	clipWalk_   = p + "_Walk";
+	clipAttack_ = p + "_Attack";
+	clipHit_    = p + "_Hit";
+	clipDeath_  = p + "_Death";
 }
 
-// pOwner의 물리 정보에 따라
-// 애니메이션 블렌딩 상태를 갱신한다.
-void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
+void MonsterAnimBlender::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	setOwnerPos(pOwner->pos());
 
@@ -288,43 +295,29 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// walk 애니메이션의 가중치는 tWalk, idle 애니메이션의 가중치는 1 - tWalk이 된다.
 	const auto walkThreshold = 0.06f;
 
-	// 객체의 속력 구하기
 	const auto speed = pOwner->velocity().len();
 
-	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
-	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk 목표값 구하기
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
 	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// 지수 감쇠로 tWalk를 부드럽게 보간한다 (시상수 0.12s → 전환의 63%가 ~120ms 내 완료)
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
-
-	// tIdle 구하기
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle 애니메이션들은 그냥 계속 돌린다.
-	// 딱히 멈추지 않아도 부자연스럽진 않다.
 	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Goblin_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) {
-		animTimeIdle_ -= durationIdle;
-	}
+	const auto durationIdle = targetClip(clipIdle_)->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
 
 	if (tWalk_ > 0.f) {
 		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Goblin_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) {
-			animTimeWalk_ -= durationWalk;
-		}
+		const auto durationWalk = targetClip(clipWalk_)->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
 	}
 
 	if (cooldownAttack_ > 0ms) {
-		const auto durationAttack = targetClip("Goblin_Attack")->duration;
+		const auto durationAttack = targetClip(clipAttack_)->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
-
 		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
-
 		cooldownAttack_ -= deltaTime;
 	}
 	else {
@@ -337,14 +330,10 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
-
-		if (cooldownDeath_ > 0ms) {
+		if (cooldownDeath_ > 0ms)
 			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
-		}
-		else {
+		else
 			tDeath_ = 1.f;
-		}
-
 		cooldownDeath_ -= deltaTime;
 	}
 	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
@@ -352,86 +341,73 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
 	// tHit_으로 보간하게 된다.
 	else if (cooldownHit_ > 0ms) {
-		// 2배속 재생
-		animTimeHit_ += deltaTime * 2.f;
-		
+		animTimeHit_ += deltaTime * 2.f;   // 2배속 재생
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
-
 		cooldownHit_ -= deltaTime;
 	}
 	else {
 		animTimeHit_ = 0s;
 		tHit_ = 0.f;
 	}
-
 }
 
-void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
-	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
+void MonsterAnimBlender::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames(clipIdle_,   animTimeIdle_);
+	updateFrames(clipWalk_,   animTimeWalk_);
+	updateFrames(clipAttack_, animTimeAttack_);
+	updateFrames(clipHit_,    animTimeHit_);
+	updateFrames(clipDeath_,  animTimeDeath_);
 
-	// 개별 애니메이션의 프레임을 업데이트한다.
-	updateFrames("Goblin_Idle", animTimeIdle_);
-	updateFrames("Goblin_Walk", animTimeWalk_);
-	updateFrames("Goblin_Attack", animTimeAttack_);
-	updateFrames("Goblin_Hit", animTimeHit_);
-	updateFrames("Goblin_Death", animTimeDeath_);
-
-	auto& localXforms = localXformData();
-	auto& framesIdle = curFrames("Goblin_Idle");
-	auto& framesWalk = curFrames("Goblin_Walk");
-	auto& framesAttack = curFrames("Goblin_Attack");
-	auto& framesHit = curFrames("Goblin_Hit");
-	auto& framesDeath = curFrames("Goblin_Death");
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames(clipIdle_);
+	auto& framesWalk   = curFrames(clipWalk_);
+	auto& framesAttack = curFrames(clipAttack_);
+	auto& framesHit    = curFrames(clipHit_);
+	auto& framesDeath  = curFrames(clipDeath_);
 
 	if (mode_ == Mode::Baked) {
 		// death는 우선도가 가장 높음
 		if (tDeath_ > 0.01f) {
-			auto& deathClip = targetClip("Goblin_Death");
-			finalBakedClipId_ = deathClip->id;
+			auto& deathClip = targetClip(clipDeath_);
+			finalBakedClipId_    = deathClip->id;
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
 		// 그 다음 공격 애니메이션 우선도 높게 주기
 		else if (tAttack_ > 0.01f) {
-			auto& attackClip = targetClip("Goblin_Attack");
-			finalBakedClipId_ = attackClip->id;
+			auto& attackClip = targetClip(clipAttack_);
+			finalBakedClipId_    = attackClip->id;
 			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
 		else {
 			// baked animation에는 hit 제외시킴
-			float weights[] = { tIdle_, tWalk_ };
+			float   weights[]   = { tIdle_, tWalk_ };
 			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
 			const AnimClip* clips[] = {
-				targetClip("Goblin_Idle").get(),
-				targetClip("Goblin_Walk").get()
+				targetClip(clipIdle_).get(),
+				targetClip(clipWalk_).get()
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
-			finalBakedClipId_ = clips[i]->id;
+			finalBakedClipId_    = clips[i]->id;
 			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
 		}
-		// std::ranges::max_element()
-
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
-		// 애니메이션의 프레임들을 블렌딩한다.
 		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 			WeightedAnimFrame frames[] = {
 				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			// attack animation 보간
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-			// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
-			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-			// death animation 보간
-			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
 		}
 		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 	}
 }
 
-void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<AnimBlenderGoblin*>(pVoidOwner);
+void MonsterAnimBlender::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<MonsterAnimBlender*>(pVoidOwner);
 
 	switch (event->type) {
 	case EventType::Hit:
@@ -976,8 +952,8 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	}
 }
 
-void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<Goblin*>(pVoidOwner);
+void Monster::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Monster*>(pVoidOwner);
 	switch (event->type) {
 	case EventType::Hit:
 		if (pOwner) {
@@ -1036,6 +1012,27 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	default:
 		break;
 	}
+}
+
+void Goblin::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<MonsterAnimBlender>();
+	blender->init(assetManager.modelGoblin(), assetManager.goblinAnimations(), "Goblin");
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
+void Snake::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<MonsterAnimBlender>();
+	blender->init(assetManager.modelSnake(), assetManager.snakeAnimations(), "Snake");
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
+void Mushroom::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<MonsterAnimBlender>();
+	blender->init(assetManager.modelMushroom(), assetManager.mushroomAnimations(), "Mushroom");
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
 }
 
 // 거점 이벤트 처리: 고블린 핸들러에서 AnimBlender 포워딩·래그돌만 제거한 형태.

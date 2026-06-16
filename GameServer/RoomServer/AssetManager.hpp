@@ -14,14 +14,18 @@ public:
 
 	void loadAssets();
 
-	const Model* modelCube()   const { return &modelCube_; }
-	const Model* modelPlayer() const { return &modelPlayer_; }
-	const Model* modelGoblin() const { return &modelGoblin_; }
+	const Model* modelCube()     const { return &modelCube_; }
+	const Model* modelPlayer()   const { return &modelPlayer_; }
+	const Model* modelGoblin()   const { return &modelGoblin_; }
+	const Model* modelSnake()    const { return &modelSnake_; }
+	const Model* modelMushroom() const { return &modelMushroom_; }
 
 	const Level* level() const { return &level_; }
 
-	const std::vector<ServerAnimClip>& playerAnimations() const { return playerAnimations_; }
-	const std::vector<ServerAnimClip>& goblinAnimations() const { return goblinAnimations_; }
+	const std::vector<ServerAnimClip>& playerAnimations()   const { return playerAnimations_; }
+	const std::vector<ServerAnimClip>& goblinAnimations()   const { return goblinAnimations_; }
+	const std::vector<ServerAnimClip>& snakeAnimations()    const { return snakeAnimations_; }
+	const std::vector<ServerAnimClip>& mushroomAnimations() const { return mushroomAnimations_; }
 
 	// 부팅 시 1회 컴파일되어 전 룸이 공유하는 읽기 전용 스킬 레지스트리.
 	const std::vector<SkillAsset>& skillAssets() const { return skillAssets_; }
@@ -39,11 +43,15 @@ private:
 	Model modelCube_;
 	Model modelPlayer_;
 	Model modelGoblin_;
+	Model modelSnake_;
+	Model modelMushroom_;
 
 	Level level_;
 
 	std::vector<ServerAnimClip> playerAnimations_;
 	std::vector<ServerAnimClip> goblinAnimations_;
+	std::vector<ServerAnimClip> snakeAnimations_;
+	std::vector<ServerAnimClip> mushroomAnimations_;
 
 	std::vector<SkillAsset> skillAssets_;   // 전 룸 공유(부팅 1회 컴파일, 읽기 전용)
 	ChargeConfig            chargeConfig_;  // 전 룸 공유(부팅 1회 로드, 읽기 전용)

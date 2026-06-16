@@ -163,7 +163,9 @@
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
     <ClCompile Include="MidBossTactics.cpp" />
+    <ClCompile Include="mushroom.cpp" />
     <ClCompile Include="PlatoonLeader.cpp" />
+    <ClCompile Include="snake.cpp" />
     <ClCompile Include="TacticalGoblin.cpp" />
     <ClCompile Include="TacticalNpc.cpp" />
     <ClCompile Include="TacticalSquad.cpp" />
@@ -214,7 +216,9 @@
     <ClInclude Include="goblin.hpp" />
     <ClInclude Include="IMidBossTactic.hpp" />
     <ClInclude Include="MidBossTactics.hpp" />
+    <ClInclude Include="mushroom.hpp" />
     <ClInclude Include="PlatoonLeader.hpp" />
+    <ClInclude Include="snake.hpp" />
     <ClInclude Include="TacticalGoblin.hpp" />
     <ClInclude Include="TacticalNpc.hpp" />
     <ClInclude Include="TacticalSquad.hpp" />

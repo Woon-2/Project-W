@@ -11,7 +11,9 @@ static ObjectType parseObjectType(const std::string& s) {
     if (s == "Goblin")     return ObjectType::Goblin;
     if (s == "Ground")     return ObjectType::Ground;
     if (s == "Stronghold") return ObjectType::Stronghold;
-    return ObjectType::Goblin;  // unknown names default to the only monster type
+    if (s == "Snake")      return ObjectType::Snake;
+    if (s == "Mushroom")   return ObjectType::Mushroom;
+    return ObjectType::Goblin;
 }
 
 void ChargeConfig::load(const std::filesystem::path& luaPath) {

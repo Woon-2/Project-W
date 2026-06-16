@@ -73,6 +73,8 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+	void createSnake(const ObjectInfo& info);
+	void createMushroom(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -257,8 +259,14 @@ private:
 
 	std::shared_ptr<Cube> ground_{};
 	TerrainChunkManager chunkManager_{};
-	std::vector<std::shared_ptr<Goblin>> goblins_{};
-	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
+	std::vector<std::shared_ptr<Goblin>>   goblins_{};
+	std::vector<std::shared_ptr<Snake>>    snakes_{};
+	std::vector<std::shared_ptr<Mushroom>> mushrooms_{};
+	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
+	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
+	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
+	// Non-owning unified monster lookup (all monster types).
+	std::unordered_map<uint16, Monster*> idMonsterMap_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -386,9 +394,18 @@ private:
 		Goblin*          goblin;               // non-owning; lifetime owned by shared_ptr in goblins_
 		UI::ProgressBar* hpBar;                // owned by uiManager_
 		float            worldYOffset;
-		float            hpBarVisibleSeconds = 0.f; // 피격 후 HP바 표시 잔여 시간 (초)
+		float            hpBarVisibleSeconds = 0.f;
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
+
+	struct MonsterHpEntry {
+		Monster*         monster;              // non-owning; lifetime owned by typed shared_ptr vectors
+		UI::ProgressBar* hpBar;                // owned by uiManager_
+		float            worldYOffset;
+		float            hpBarVisibleSeconds = 0.f;
+	};
+	std::unordered_map<uint16, MonsterHpEntry> snakeHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> mushroomHpBars_{};
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_

@@ -86,8 +86,12 @@ public:
 	const ps::MatPiercingSlash& piercingCircleSlashMaterial() const { return piercingCircleSlashMaterial_; }
 	const Mesh*    meshVfxProjectile02()   const { return &meshVfxProjectile02_; }
 	const Mesh*    meshVfxSlash01HD()      const { return &meshVfxSlash01HD_; }
-	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
-	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
+	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations()   const { return playerAnimations_; }
+	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations()   const { return goblinAnimations_; }
+	const std::vector<std::shared_ptr<AnimClip>>& snakeAnimations()    const { return snakeAnimations_; }
+	const std::vector<std::shared_ptr<AnimClip>>& mushroomAnimations() const { return mushroomAnimations_; }
+	const Model* modelSnake()    const { return &modelSnake_; }
+	const Model* modelMushroom() const { return &modelMushroom_; }
 
 private:
 	void setupBakedAnimationIds();
@@ -95,9 +99,13 @@ private:
 	std::unordered_map<std::string, Texture> texHashMap_{};
 	std::vector<std::shared_ptr<AnimClip>> playerAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> goblinAnimations_{};
+	std::vector<std::shared_ptr<AnimClip>> snakeAnimations_{};
+	std::vector<std::shared_ptr<AnimClip>> mushroomAnimations_{};
 	Model modelCube_{};
 	Model modelPlayer_{};
 	Model modelGoblin_{};
+	Model modelSnake_{};
+	Model modelMushroom_{};
 	Skybox skyboxMaterial_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};

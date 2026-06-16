@@ -61,16 +61,19 @@ private:
 	bool dead_ = false;
 };
 
-class AnimBlenderGoblin : public AnimBlender {
+// Generic monster animation blender. Supports the 5-clip set
+// (Idle, Walk, Attack, Hit, Death) shared by all monster types.
+// Clip prefix (e.g. "Goblin", "Snake", "Mushroom") is supplied at init time.
+class MonsterAnimBlender : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
 	public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
 
-	void init(const AssetManager& assetManager);
-	// pOwner의 물리 정보에 따라
-	// 애니메이션 블렌딩 상태를 갱신한다.
+	void init(const Model* model,
+	          const std::vector<std::shared_ptr<AnimClip>>& anims,
+	          std::string_view clipPrefix);
 	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
@@ -79,6 +82,12 @@ public:
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
+
+	std::string clipIdle_{};
+	std::string clipWalk_{};
+	std::string clipAttack_{};
+	std::string clipHit_{};
+	std::string clipDeath_{};
 
 	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
@@ -102,6 +111,9 @@ private:
 	float tDeath_ = 0.f;
 	bool dead_ = false;
 };
+
+// Backward-compat alias: Goblin continues to use MonsterAnimBlender.
+using AnimBlenderGoblin = MonsterAnimBlender;
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
@@ -343,11 +355,12 @@ private:
 	EventBus eventBus_{};
 };
 
-class Goblin : public Object {
+// Common base for all monster types: holds ragdoll state and the shared
+// EventBus that handles Hit / Death / Attack / Respawn events uniformly.
+class Monster : public Object {
 public:
-	Goblin() = default;
-	Goblin(Object&& base)
-		: Object(std::move(base)) {}
+	Monster() = default;
+	Monster(Object&& base) : Object(std::move(base)) {}
 
 	class EventBus : public IEventBus {
 	public:
@@ -355,13 +368,6 @@ public:
 	};
 
 	IEventBus* eventBus() override { return &eventBus_; }
-
-	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
-		renderState_.animBlender = std::make_unique<AnimBlenderGoblin>();
-		static_cast<AnimBlenderGoblin*>(renderState_.animBlender.get())->init(assetManager);
-
-		animSystem.trackAnimBlender(renderState_.animBlender.get());
-	}
 
 	Ragdoll& ragdoll() { return ragdoll_; }
 
@@ -371,11 +377,35 @@ public:
 	mu::Vec3 ragdollInitVelocity() const { return ragdollInitVelocity_; }
 	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) { ragdollInitVelocity_ = v; }
 
-private:
+protected:
 	EventBus eventBus_{};
 	Ragdoll  ragdoll_{};
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
+};
+
+class Goblin : public Monster {
+public:
+	Goblin() = default;
+	Goblin(Object&& base) : Monster(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
+class Snake : public Monster {
+public:
+	Snake() = default;
+	Snake(Object&& base) : Monster(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
+class Mushroom : public Monster {
+public:
+	Mushroom() = default;
+	Mushroom(Object&& base) : Monster(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };
 
 // 거점(Stronghold): 데미지를 받는 정적 구조물. 고블린/플레이어처럼 EventBus로

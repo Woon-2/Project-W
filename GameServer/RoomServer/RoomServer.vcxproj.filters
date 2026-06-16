@@ -55,6 +55,12 @@
     <Filter Include="contents\tacticalNpc\tactical">
       <UniqueIdentifier>{57395ede-88e6-4c05-bacd-e3a1705a9160}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents\Npc\snake">
+      <UniqueIdentifier>{210619b5-af8c-43df-b06d-3554f7bb15b4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\mushroom">
+      <UniqueIdentifier>{ddd567da-93a8-40b9-b544-7ae37270d79c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -154,6 +160,16 @@
     </ClCompile>
     <ClCompile Include="MidBossTactics.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClCompile>
+    <ClCompile Include="chargeConfig.cpp" />
+    <ClCompile Include="stronghold.cpp" />
+    <ClCompile Include="zone.cpp" />
+    <ClCompile Include="..\common\simpleJson.cpp" />
+    <ClCompile Include="snake.cpp">
+      <Filter>contents\Npc\snake</Filter>
+    </ClCompile>
+    <ClCompile Include="mushroom.cpp">
+      <Filter>contents\Npc\mushroom</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -264,6 +280,19 @@
     </ClInclude>
     <ClInclude Include="MidBossTactics.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClInclude>
+    <ClInclude Include="chargeConfig.hpp" />
+    <ClInclude Include="skill\skillLoadout.hpp" />
+    <ClInclude Include="strongholdDef.hpp" />
+    <ClInclude Include="stronghold.hpp" />
+    <ClInclude Include="zone.hpp" />
+    <ClInclude Include="..\common\zoneDef.hpp" />
+    <ClInclude Include="..\common\markerDef.hpp" />
+    <ClInclude Include="snake.hpp">
+      <Filter>contents\Npc\snake</Filter>
+    </ClInclude>
+    <ClInclude Include="mushroom.hpp">
+      <Filter>contents\Npc\mushroom</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

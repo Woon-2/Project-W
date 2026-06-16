@@ -1,6 +1,8 @@
 #include "rspch.hpp"
 #include "stronghold.hpp"
 #include "goblin.hpp"
+#include "snake.hpp"
+#include "mushroom.hpp"
 #include "Room.hpp"
 #include <algorithm>
 #include <cmath>
@@ -8,19 +10,33 @@
 
 static thread_local std::mt19937 s_strongholdRng{ std::random_device{}() };
 
-void Stronghold::configure(const StrongholdDef& def, int groupId, int poolStart, int poolCount) {
+void Stronghold::configure(const StrongholdDef& def, int groupId,
+                           int goblinStart, int goblinCount,
+                           int snakeStart,  int snakeCount,
+                           int mushroomStart, int mushroomCount)
+{
     def_             = def;
     groupId_         = groupId;
-    poolStart_       = poolStart;
-    poolCount_       = poolCount;
     strongholdMaxHp_ = def.maxHp;
 
-    // Resolve the Goblin population entry (only Goblin is implemented for now).
+    goblinPool_.start   = goblinStart;
+    goblinPool_.count   = goblinCount;
+    snakePool_.start    = snakeStart;
+    snakePool_.count    = snakeCount;
+    mushroomPool_.start = mushroomStart;
+    mushroomPool_.count = mushroomCount;
+
     for (const auto& pop : def.populations) {
-        if (pop.type == ObjectType::Goblin) {
-            goblinMaxPerWave_      = std::max(1, pop.maxPerWave);
-            goblinRespawnInterval_ = pop.respawnInterval;
-            break;
+        MonsterPool* pool = nullptr;
+        switch (pop.type) {
+        case ObjectType::Goblin:   pool = &goblinPool_;   break;
+        case ObjectType::Snake:    pool = &snakePool_;    break;
+        case ObjectType::Mushroom: pool = &mushroomPool_; break;
+        default: break;
+        }
+        if (pool) {
+            pool->maxPerWave      = std::max(1, pop.maxPerWave);
+            pool->respawnInterval = pop.respawnInterval;
         }
     }
 }
@@ -37,23 +53,34 @@ mu::Vec3 Stronghold::randomSpawnPos(Room& room) const {
     return mu::Vec3(x, y, z);
 }
 
-void Stronghold::updatePopulation(Seconds dt, std::vector<Goblin>& pool, Room& room,
-                                  std::vector<uint32>& outRevivedIds) {
+void Stronghold::updatePopulation(Seconds dt,
+                                  std::vector<Goblin>&   goblins,
+                                  std::vector<Snake>&    snakes,
+                                  std::vector<Mushroom>& mushrooms,
+                                  Room& room,
+                                  std::vector<uint32>&   outRevivedIds)
+{
     if (destroyed_) return;
 
-    goblinRespawnTimer_ += dt;
-    if (goblinRespawnTimer_ < goblinRespawnInterval_) return;
-    goblinRespawnTimer_ = Seconds{ 0.f };
+    auto tryRevive = [&](MonsterPool& pool, auto& vec) {
+        if (pool.count == 0) return;
+        pool.respawnTimer += dt;
+        if (pool.respawnTimer < pool.respawnInterval) return;
+        pool.respawnTimer = Seconds{ 0.f };
+        int revived = 0;
+        const int end = pool.start + pool.count;
+        for (int i = pool.start; i < end && revived < pool.maxPerWave; ++i) {
+            auto& m = vec[static_cast<size_t>(i)];
+            if (m.hp() > 0) continue;
+            m.reviveAt(randomSpawnPos(room));
+            outRevivedIds.push_back(m.getId());
+            ++revived;
+        }
+    };
 
-    int revived = 0;
-    const int end = poolStart_ + poolCount_;
-    for (int i = poolStart_; i < end && revived < goblinMaxPerWave_; ++i) {
-        Goblin& g = pool[static_cast<size_t>(i)];
-        if (g.hp() > 0) continue;   // alive, keep
-        g.reviveAt(randomSpawnPos(room));
-        outRevivedIds.push_back(g.getId());
-        ++revived;
-    }
+    tryRevive(goblinPool_,   goblins);
+    tryRevive(snakePool_,    snakes);
+    tryRevive(mushroomPool_, mushrooms);
 }
 
 bool Stronghold::updateStructure(Seconds dt) {
