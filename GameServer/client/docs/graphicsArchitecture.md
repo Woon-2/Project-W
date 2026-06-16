@@ -161,6 +161,13 @@ Light::updateCSMCascades()
 **주의사항:**
 - GBuffer DSV와 backbuffer DSV는 별개 리소스 — Deferred path에서 geometry pass는 GBuffer DSV 사용, depth 복사 없이 Forward 패스를 이어 실행하면 깊이가 초기화된 상태로 모든 Forward 오브젝트가 GBuffer 위에 그려짐
 - `PBRDeferredSkinnedPipeline`의 Lighting pass는 직접 담당하지 않음 — `PBRDeferredPipeline`의 Lighting pass가 정적/스킨드 GBuffer를 모두 처리
+- **GGX NDF 0/0 → NaN (검은 사각형 원인, 해결됨):** `pbrLighting.hlsli::distribute()`는 roughness→0
+  이고 NH→1(정반사 정렬)이면 `denom→0` → `D = a2/denom = 0/0 = NaN`(극소 roughness면 거대값→
+  R16G16B16A16F Inf). 이 1픽셀이 SceneColorHDR에 박히면 bloom이 사각 영역 전체로 NaN을 번지게 하고
+  ACES `saturate(NaN)=0`으로 **간헐적 검은 2D 사각형**(정반사 하이라이트 근처)이 된다. 메인 렌더링에서만
+  보이고 디버그 뷰에선 안 보임(bloom/ACES를 거치는 건 메인 경로뿐). **수정:** `distribute()`에
+  `roughness=max(roughness,0.045f)` + `nom/max(denom,1e-7f)`. 방어선으로 bloom `srcTap()`도 입력 sanitize.
+  (전 렌더 경로의 bloom·SceneColor·deferred lighting 버퍼는 모두 per-room이라 트리플버퍼 race는 원인이 아니었음.)
 
 #### HDR + IBL + Bloom 파이프라인
 
@@ -207,6 +214,11 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   dst(큰밉)=RT(이전 내용 보존하며 가산). 마지막에 mip0→SRV(resolve 합성용). SceneColorHDR는 PSR 유지.
 - resolve에서 `color += bloom_mip0 * bloomIntensity`(exposure/ACES 앞). 노브: `GFX::bloomThreshold_`(1.0)/`bloomIntensity_`(0.08).
 - 디버그 모드(`gBufferDebugMode_≠0`)에서는 bloom 스킵.
+- **입력 sanitize (NaN/Inf 방어):** `bloom.hlsl::srcTap()`이 모든 탭을 `max(c,0)`+`min(c,64000)`+
+  `select(isnan(c),0,c)`로 정규화한다. SceneColorHDR에 NaN/Inf가 1픽셀이라도 박히면 `softThreshold`의
+  `Inf/Inf` 등으로 NaN이 밉체인 전체로 번지고, resolve의 ACES `saturate(NaN)=0` → **검은 사각형**이 된다.
+  진입 지점에서 막아 라이팅이 비정상값을 흘려도 bloom은 NaN/Inf를 산출하지 않는다(근본 수정과 별개 방어선).
+  근본 원인은 GGX NDF `distribute()`의 0/0 — Deferred Shading 주의사항 참조.
 
 **주의사항:**
 - **디스크립터 풀 사이징:** bloom은 per-room×밉수(최대 6) RTV를 소비한다. `rtvPool_`/`rtvHeap_`는 64

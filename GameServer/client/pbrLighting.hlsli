@@ -152,6 +152,12 @@ float3 fresnel(float3 F0, float HV) {
 // @param NH: Normal 벡터와 Halfway 벡터의 내적
 // @param roughness: 미세면의 거칠기
 float distribute(float NH, float roughness) {
+	// roughness 하한 클램프: roughness→0 이고 NH→1(정반사 정렬)이면 denom→0 →
+	// D = a2/denom = 0/0 = NaN (또는 극소 roughness에서 거대값 → R16G16B16A16F Inf)이
+	// 되어 SceneColorHDR에 박히고, bloom의 softThreshold(Inf/Inf 등)가 이를 사각 영역
+	// 전체로 퍼뜨려 resolve의 ACES saturate(NaN)=0 → 검은 사각형이 된다.
+	// 하한 클램프(a2>0 보장) + denom 0-가드로 원천 차단한다.
+	roughness = max(roughness, 0.045f);
 	float a = roughness * roughness;
 	float a2 = a*a;
 
@@ -159,7 +165,7 @@ float distribute(float NH, float roughness) {
 	float denom = NH * NH * (a2 - 1.f) + 1.f;
 	denom = PI * denom * denom;
 
-	return nom / denom;
+	return nom / max(denom, 1e-7f);
 }
 
 // 미세면의 자체 그림자 계수를 계산할 때 쓰이는,

@@ -30,7 +30,15 @@ VSOutput VSMain(uint vertexID : SV_VertexID) {
 }
 
 float3 srcTap(float2 uv) {
-    return sampleBindless(idxSrc, uv).rgb;
+    float3 c = sampleBindless(idxSrc, uv).rgb;
+    // bloom 체인에 NaN/Inf/음수가 들어오면 softThreshold의 Inf/Inf 등으로 NaN이
+    // 사각 영역 전체로 번지고, resolve의 ACES saturate(NaN)=0 → 검은 사각형이 된다.
+    // 진입 지점에서 유한·비음수로 강제해, 라이팅이 비정상값을 흘려도 bloom은 절대
+    // NaN/Inf를 산출하지 않도록 한다.
+    c = max(c, 0.0f);          // 음수(및 -Inf) 제거
+    c = min(c, 64000.0f);      // +Inf 및 거대 유한값을 half-float 안전 상한으로 클램프
+    c = select(isnan(c), float3(0.0f, 0.0f, 0.0f), c);   // 잔여 NaN → 0
+    return c;
 }
 
 // 13-tap downsample filter (Call of Duty / Jimenez). t = source texel size.
