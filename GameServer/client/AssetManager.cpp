@@ -103,6 +103,16 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelGoblin_
 	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/snake/snake.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelSnake_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/mushroom/mushroom.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelMushroom_
+	} );
 
 	//gfx.addRequestTextureLoad( RequestTextureLoad{
 	//	.name = "PlayerHpLine",
@@ -644,16 +654,23 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		gSharedLog << "[SwordSlash2 Material] Warning: ../resources/effects/SwordSlash2.json 로드 실패. 기본값을 사용합니다.\n";
 	}
 
-	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
+	auto tmpGoblinAnims   = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
+	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim", gfx);
+	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
+	snakeAnimations_.reserve(tmpSnakeAnims.size());
+	mushroomAnimations_.reserve(tmpMushroomAnims.size());
 
 	// 공용 리소스(gfx.initSharedResources)는 호출부에서 미리 초기화되어 있어야 한다.
 	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
 	gfx.loadRequestedAssets();
 
-	for (auto& clip : tmpGoblinAnims) {
+	for (auto& clip : tmpGoblinAnims)
 		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
-	}
+	for (auto& clip : tmpSnakeAnims)
+		snakeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpMushroomAnims)
+		mushroomAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 
 	// Re-runs player ids (harmless) and assigns goblin baked-anim ids.
 	setupBakedAnimationIds();
@@ -785,6 +802,12 @@ void AssetManager::setupBakedAnimationIds() {
 	}
 
 	for (auto& clip : goblinAnimations_) {
+		clip->id = clip->bakedSamples.idxSrv.idxResource;
+	}
+	for (auto& clip : snakeAnimations_) {
+		clip->id = clip->bakedSamples.idxSrv.idxResource;
+	}
+	for (auto& clip : mushroomAnimations_) {
 		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
 }

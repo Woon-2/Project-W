@@ -324,7 +324,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 클래스 | 위치 |
 |--------|------|
 | `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
-| `AnimBlenderGoblin` | `object.hpp #64-108` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `MonsterAnimBlender` (구 `AnimBlenderGoblin`) | `object.hpp #67-113` — clipPrefix("Goblin"/"Snake"/"Mushroom")로 파라미터화; `using AnimBlenderGoblin = MonsterAnimBlender` alias 유지 |
 | `AnimBlenderAnubis` | `object.hpp #100-140` |
 | `AnimBlenderBat` | `object.hpp #142-182` |
 | `AnimBlenderBomber` | `object.hpp #184-???` |
@@ -389,7 +389,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|
 | `Cube` | `object.hpp #591` |
 | `Player` | `object.hpp #600` |
-| `Goblin` | `object.hpp #624` |
+| `Monster` (base) | `object.hpp #360` — ragdoll 공유 필드·`EventBus` 포함 |
+| `Goblin` | `object.hpp #387` : `Monster` |
+| `Snake` | `object.hpp #395` : `Monster` |
+| `Mushroom` | `object.hpp #403` : `Monster` |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
 | `Bomber` | `object.hpp #696` |

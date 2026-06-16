@@ -14,8 +14,8 @@ using UnityEngine;
 // the terrain height field, so the authored Y is only a reference.
 public class StrongholdMarker : MonoBehaviour
 {
-    // Must match the engine's ObjectType enum (Player=0, Goblin=1, Ground=2, Stronghold=3).
-    public enum MonsterType { Goblin = 1 }
+    // Must match the engine's ObjectType enum (Player=0, Goblin=1, Ground=2, Stronghold=3, Snake=4, Mushroom=5).
+    public enum MonsterType { Goblin = 1, Snake = 4, Mushroom = 5 }
 
     [System.Serializable]
     public struct Population

@@ -11,6 +11,8 @@
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
 #include "MidBossTactics.hpp"
+#include "snake.hpp"
+#include "mushroom.hpp"
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -57,7 +59,7 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
-	g.setCanReceiveDamage(true);   // skill system targets require this (default ctor leaves it false)
+	g.setCanReceiveDamage(true);
 	g.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Goblin));
 	g.body().setMotionType(MotionType::Dynamic);
 	g.body().setMass(70.f);
@@ -66,6 +68,46 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.body().setRestitution(0.0f);
 	g.body().setUprightStiffness(4000.f);
 	g.body().enableMotor(true);
+}
+
+void Room::setupSnake(Snake& s, const Level& level) {
+	const auto& anims = level.assetManager->snakeAnimations();
+	s.setModel(level.assetManager->modelSnake());
+	s.animController().registerClip("Idle",   findServerAnimClip(anims, "Snake_Idle"));
+	s.animController().registerClip("Walk",   findServerAnimClip(anims, "Snake_Walk"));
+	s.animController().registerClip("Attack", findServerAnimClip(anims, "Snake_Attack"));
+	s.animController().registerClip("Die",    findServerAnimClip(anims, "Snake_Death"));
+	s.animController().switchClip("Idle");
+	s.applySnakeConfig();
+	s.setCanReceiveDamage(true);
+	s.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Snake));
+	s.body().setMotionType(MotionType::Dynamic);
+	s.body().setMass(50.f);
+	s.body().setLinearDamping(0.1f);
+	s.body().setAngularDamping(25.f);
+	s.body().setRestitution(0.0f);
+	s.body().setUprightStiffness(4000.f);
+	s.body().enableMotor(true);
+}
+
+void Room::setupMushroom(Mushroom& m, const Level& level) {
+	const auto& anims = level.assetManager->mushroomAnimations();
+	m.setModel(level.assetManager->modelMushroom());
+	m.animController().registerClip("Idle",   findServerAnimClip(anims, "Mushroom_Idle"));
+	m.animController().registerClip("Walk",   findServerAnimClip(anims, "Mushroom_Walk"));
+	m.animController().registerClip("Attack", findServerAnimClip(anims, "Mushroom_Attack"));
+	m.animController().registerClip("Die",    findServerAnimClip(anims, "Mushroom_Death"));
+	m.animController().switchClip("Idle");
+	m.applyMushroomConfig();
+	m.setCanReceiveDamage(true);
+	m.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Mushroom));
+	m.body().setMotionType(MotionType::Dynamic);
+	m.body().setMass(80.f);
+	m.body().setLinearDamping(0.1f);
+	m.body().setAngularDamping(25.f);
+	m.body().setRestitution(0.0f);
+	m.body().setUprightStiffness(4000.f);
+	m.body().enableMotor(true);
 }
 
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
@@ -108,17 +150,23 @@ void Room::init(const Level* levelData) {
 		physicsWorld_.registerBody(&c.body(), [&c]() { c.rebuildBodyBVH(); });
 	}
 
-	// ── Strongholds drive monster spawning. Build a fixed goblin pool (sized to
+	// ── Strongholds drive monster spawning. Build per-type monster pools (sized to
 	//    the sum of per-stronghold target counts) plus one Stronghold structure
 	//    per definition. Pools are pre-sized so registerBody/registerObject can
 	//    take stable addresses (no reallocation after registration).
 	const auto& sdefs = worldTerrain_->strongholds();
 
-	int totalGoblins = 0;
-	for (const auto& sd : sdefs)
-		for (const auto& pop : sd.populations)
-			if (pop.type == ObjectType::Goblin) totalGoblins += pop.targetCount;
+	int totalGoblins = 0, totalSnakes = 0, totalMushrooms = 0;
+	for (const auto& sd : sdefs) {
+		for (const auto& pop : sd.populations) {
+			if (pop.type == ObjectType::Goblin)   totalGoblins   += pop.targetCount;
+			if (pop.type == ObjectType::Snake)     totalSnakes    += pop.targetCount;
+			if (pop.type == ObjectType::Mushroom)  totalMushrooms += pop.targetCount;
+		}
+	}
 	goblins_.reserve(static_cast<size_t>(totalGoblins));
+	snakes_.reserve(static_cast<size_t>(totalSnakes));
+	mushrooms_.reserve(static_cast<size_t>(totalMushrooms));
 	strongholds_.reserve(sdefs.size());
 
 	for (const auto& sd : sdefs) {
@@ -126,39 +174,54 @@ void Room::init(const Level* levelData) {
 		npcGroups_.emplace_back(
 			std::make_unique<NpcGroup>(groupId, sd.center, sd.activityRadius));
 
-		int goblinCount = 0;
-		for (const auto& pop : sd.populations)
-			if (pop.type == ObjectType::Goblin) goblinCount += pop.targetCount;
-
-		const int poolStart = static_cast<int>(goblins_.size());
-		for (int i = 0; i < goblinCount; ++i) {
-			Goblin g{};
-			setupGoblin(g, *levelData);
-			const mu::Vec3 pos = randomSpawnInDisc(sd.center, sd.spawnRadius);
-			g.setId(IdPool::pop());
-			g.setFaction(Faction::Monsters);
-			g.setPos(pos);
-			g.setSpawnPos(pos);                              // leash home = spawn point
-			g.setActivityZone(sd.center, sd.activityRadius); // roam radius = stronghold area
-			g.setGroupId(groupId);
-			goblins_.push_back(std::move(g));
+		int goblinCount = 0, snakeCount = 0, mushroomCount = 0;
+		for (const auto& pop : sd.populations) {
+			if (pop.type == ObjectType::Goblin)   goblinCount   += pop.targetCount;
+			if (pop.type == ObjectType::Snake)     snakeCount    += pop.targetCount;
+			if (pop.type == ObjectType::Mushroom)  mushroomCount += pop.targetCount;
 		}
 
+		const int goblinStart   = static_cast<int>(goblins_.size());
+		const int snakeStart    = static_cast<int>(snakes_.size());
+		const int mushroomStart = static_cast<int>(mushrooms_.size());
+
+		auto spawnMonster = [&](auto& pool, auto setupFn) {
+			auto& m = pool.emplace_back();
+			setupFn(m, *levelData);
+			const mu::Vec3 pos = randomSpawnInDisc(sd.center, sd.spawnRadius);
+			m.setId(IdPool::pop());
+			m.setFaction(Faction::Monsters);
+			m.setPos(pos);
+			m.setSpawnPos(pos);
+			m.setActivityZone(sd.center, sd.activityRadius);
+			m.setGroupId(groupId);
+		};
+
+		for (int i = 0; i < goblinCount;   ++i) spawnMonster(goblins_,   [this](Goblin&   g, const Level& l) { setupGoblin(g, l);   });
+		for (int i = 0; i < snakeCount;    ++i) spawnMonster(snakes_,    [this](Snake&    s, const Level& l) { setupSnake(s, l);    });
+		for (int i = 0; i < mushroomCount; ++i) spawnMonster(mushrooms_, [this](Mushroom& m, const Level& l) { setupMushroom(m, l); });
+
 		Stronghold sh{};
-		sh.setId(IdPool::pop());                 // required: registerObject indexes objectById_ by id
+		sh.setId(IdPool::pop());
 		setupStronghold(sh, sd, *levelData);
-		sh.configure(sd, groupId, poolStart, goblinCount);
+		sh.configure(sd, groupId,
+		             goblinStart,   goblinCount,
+		             snakeStart,    snakeCount,
+		             mushroomStart, mushroomCount);
 		strongholds_.push_back(std::move(sh));
 	}
 
-	// Register all goblins after the pool is fully built (no reallocation risk).
-	npcBroad_.setFatMargin(NPC_SEPARATION_FAT_MARGIN);   // separation neighbor broad phase
-	for (auto& g : goblins_) {
-		g.body().snapToCurrent();
-		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
-		registerObject(&g);
-		npcBodyOwner_[&g.body()] = &g;   // SAP 쌍(RigidBody*) → NPC 역참조
-	}
+	// Register all monsters after pools are fully built (no reallocation risk).
+	npcBroad_.setFatMargin(NPC_SEPARATION_FAT_MARGIN);
+	auto registerMonster = [&](auto& m) {
+		m.body().snapToCurrent();
+		physicsWorld_.registerBody(&m.body(), [&m]() { m.rebuildBodyBVH(); });
+		registerObject(&m);
+		npcBodyOwner_[&m.body()] = &m;
+	};
+	for (auto& g : goblins_)   registerMonster(g);
+	for (auto& s : snakes_)    registerMonster(s);
+	for (auto& m : mushrooms_) registerMonster(m);
 
 	// Strongholds are damageable static structures (collidable obstacles).
 	for (auto& sh : strongholds_) {
@@ -513,7 +576,7 @@ void Room::update() {
 	rebuildLivingPlayersCache();   // NPC 분리력 컬링이 최신 플레이어 위치를 쓰도록 AI보다 먼저
 	rebuildNpcNeighbors();         // ① 플레이어 근접 컬링 → ② SAP로 이웃 인접 리스트 구축
 	zoneSystem_.update(*this, dtSec);
-	updateGoblinAI(dt);
+	updateMonsterAI(dt);
 	updateTacticalAI(dt);
 
 	updatePlayerAnimations(dt);
@@ -524,18 +587,17 @@ void Room::update() {
 	});
 }
 
-void Room::updateGoblinAI(Milliseconds dt) {
+void Room::updateMonsterAI(Milliseconds dt) {
 	if (sessions_.empty()) return;
 
 	// 경과 시간 누적, NpcGroup 기억 만료 정리, 활동 영역 밖 플레이어 메모리 정리
 	elapsedMs_ += dt;
-	updateComboExpiry();   // resets combos whose window elapsed (sends S_ComboState 0)
+	updateComboExpiry();
 	for (auto& grp : npcGroups_) {
 		grp->update(elapsedMs_);
 		grp->clearMemoryIfPlayerOutside(*this);
 	}
 
-	// livingPlayersCache_는 Room::update()에서 이미 이번 프레임용으로 갱신됨.
 	rebuildAggroCount();
 
 	uint64 serverNow = static_cast<uint64>(
@@ -544,32 +606,36 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		).count()
 	);
 
-	// Goblin의 angular velocity 고정 (물리 solver 누적 방지)
-	for (auto& goblin : goblins_)
-		goblin.body().setOmega(mu::Vec3{});
+	// Angular velocity 고정 (물리 solver 누적 방지)
+	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
+	for (auto& s : snakes_)    s.body().setOmega(mu::Vec3{});
+	for (auto& m : mushrooms_) m.body().setOmega(mu::Vec3{});
 
 	std::vector<SNpcMoveInfo> moveInfos;
-	moveInfos.reserve(goblins_.size());
+	moveInfos.reserve(goblins_.size() + snakes_.size() + mushrooms_.size());
 
-	for (auto& goblin : goblins_) {
-		goblin.recordSnapshot(serverNow);
-
-		auto result = goblin.update(dt, *this);
-
-		if (goblin.hp() > 0) {
-			moveInfos.push_back({
-				static_cast<uint16>(goblin.getId()),
-				goblin.pos().getXmf(),
-				goblin.orient().getXmf(),
-				goblin.linearVel().getXmf()
-			});
+	auto tickPool = [&](auto& pool) {
+		for (auto& npc : pool) {
+			npc.recordSnapshot(serverNow);
+			auto result = npc.update(dt, *this);
+			if (npc.hp() > 0) {
+				moveInfos.push_back({
+					static_cast<uint16>(npc.getId()),
+					npc.pos().getXmf(),
+					npc.orient().getXmf(),
+					npc.linearVel().getXmf()
+				});
+			}
+			if (result.hit) {
+				broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc.getId())));
+				broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(npc.getId()), result.hit->targetId, result.hit->newHp));
+			}
 		}
+	};
 
-		if (result.hit) {
-			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), result.hit->targetId, result.hit->newHp));
-		}
-	}
+	tickPool(goblins_);
+	tickPool(snakes_);
+	tickPool(mushrooms_);
 
 	// ── Strongholds: structure destruction/rebuild + population maintenance ──
 	const Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
@@ -581,7 +647,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 				sh.hp(),
 				sh.isDestroyed() ? uint8(1) : uint8(0)));
 		}
-		sh.updatePopulation(dtSec, goblins_, *this, revivedIds);
+		sh.updatePopulation(dtSec, goblins_, snakes_, mushrooms_, *this, revivedIds);
 	}
 	for (uint32 id : revivedIds) {
 		Object* o = (id < objectById_.size()) ? objectById_[id] : nullptr;
@@ -614,15 +680,20 @@ void Room::rebuildLivingPlayersCache() {
 
 void Room::rebuildAggroCount() {
 	aggroCount_.clear();
-	for (const auto& g : goblins_) {
-		if (g.hp() <= 0) continue;
-		NpcState s = g.getState();
-		if (s == NpcState::Chase        ||
-		    s == NpcState::AttackWindup  ||
-		    s == NpcState::AttackRecover ||
-		    s == NpcState::Reposition)
-			aggroCount_[g.getTargetId()]++;
-	}
+	auto countPool = [&](const auto& pool) {
+		for (const auto& npc : pool) {
+			if (npc.hp() <= 0) continue;
+			NpcState s = npc.getState();
+			if (s == NpcState::Chase        ||
+			    s == NpcState::AttackWindup  ||
+			    s == NpcState::AttackRecover ||
+			    s == NpcState::Reposition)
+				aggroCount_[npc.getTargetId()]++;
+		}
+	};
+	countPool(goblins_);
+	countPool(snakes_);
+	countPool(mushrooms_);
 }
 
 bool MU_CALLCONV Room::isNearAnyPlayer(mu::Vec3 p) const {
@@ -644,6 +715,8 @@ void Room::rebuildNpcNeighbors() {
 			npcBroad_.add(&o->body());
 	};
 	for (auto& g : goblins_)      consider(&g);
+	for (auto& s : snakes_)       consider(&s);
+	for (auto& m : mushrooms_)    consider(&m);
 	for (auto& n : tacticalNpcs_) consider(n.get());
 	if (platoonLeader_)           consider(platoonLeader_.get());
 
@@ -763,6 +836,30 @@ void Room::enter(GameSession* session) {
 			.pos = g.pos().getXmf(),
 			.orient = g.orient().getXmf(),
 			.scale = g.scale().getXmf(),
+		});
+	}
+	for (const auto& s : snakes_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Snake,
+			.objectId = static_cast<uint16>(s.getId()),
+			.materialSetIdx = 0,
+			.hp = s.hp(),
+			.maxHp = s.maxHp(),
+			.pos = s.pos().getXmf(),
+			.orient = s.orient().getXmf(),
+			.scale = s.scale().getXmf(),
+		});
+	}
+	for (const auto& m : mushrooms_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Mushroom,
+			.objectId = static_cast<uint16>(m.getId()),
+			.materialSetIdx = 0,
+			.hp = m.hp(),
+			.maxHp = m.maxHp(),
+			.pos = m.pos().getXmf(),
+			.orient = m.orient().getXmf(),
+			.scale = m.scale().getXmf(),
 		});
 	}
 

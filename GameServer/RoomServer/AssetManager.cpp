@@ -3,12 +3,16 @@
 #include "skill/skillCompiler.hpp"
 
 void AssetManager::loadAssets() {
-    modelCube_   = loadModelFromFile("../resources/models/cube/cubeServer.bin");
-    modelPlayer_ = loadModelFromFile("../resources/models/player/playerServer.bin");
-    modelGoblin_ = loadModelFromFile("../resources/models/goblin/goblinServer.bin");
+    modelCube_     = loadModelFromFile("../resources/models/cube/cubeServer.bin");
+    modelPlayer_   = loadModelFromFile("../resources/models/player/playerServer.bin");
+    modelGoblin_   = loadModelFromFile("../resources/models/goblin/goblinServer.bin");
+    modelSnake_    = loadModelFromFile("../resources/models/snake/snakeServer.bin");
+    modelMushroom_ = loadModelFromFile("../resources/models/mushroom/mushroomServer.bin");
 
-    playerAnimations_ = loadServerAnimClipsFromFile("../resources/animations/playerAnimations.anim");
-    goblinAnimations_ = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
+    playerAnimations_   = loadServerAnimClipsFromFile("../resources/animations/playerAnimations.anim");
+    goblinAnimations_   = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
+    snakeAnimations_    = loadServerAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim");
+    mushroomAnimations_ = loadServerAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim");
 
     level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
     level_.terrainChunks.init("../resources/terrains/");

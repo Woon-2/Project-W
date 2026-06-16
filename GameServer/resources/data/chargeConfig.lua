@@ -8,7 +8,9 @@ return {
     -- Charge points granted per kill, keyed by ObjectType name. Bosses can
     -- override this per-spawn on the server.
     monsters = {
-        Goblin = 10,
+        Goblin   = 10,
+        Snake    = 10,
+        Mushroom = 10,
     },
 
     -- A player must have dealt damage to the monster within this window (ms)

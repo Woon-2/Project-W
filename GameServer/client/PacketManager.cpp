@@ -159,6 +159,14 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createGoblin(objInfo);
 			break;
 
+		case ObjectType::Snake:
+			game->createSnake(objInfo);
+			break;
+
+		case ObjectType::Mushroom:
+			game->createMushroom(objInfo);
+			break;
+
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
 			break;
@@ -232,6 +240,14 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 		switch (objInfo.type) {
 		case ObjectType::Goblin:
 			game->createGoblin(objInfo);
+			break;
+
+		case ObjectType::Snake:
+			game->createSnake(objInfo);
+			break;
+
+		case ObjectType::Mushroom:
+			game->createMushroom(objInfo);
 			break;
 
 		default:
