@@ -156,6 +156,8 @@
     <ClInclude Include="BufferReader.hpp" />
     <ClInclude Include="BufferWriter.hpp" />
     <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="DBConnection.hpp" />
+    <ClInclude Include="DBConnectionPool.hpp" />
     <ClInclude Include="JobQueuePool.hpp" />
     <ClInclude Include="globalTLS.hpp" />
     <ClInclude Include="IdPool.hpp" />
@@ -179,6 +181,8 @@
     <ClInclude Include="types.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DBConnection.cpp" />
+    <ClCompile Include="DBConnectionPool.cpp" />
     <ClCompile Include="JobQueuePool.cpp" />
     <ClCompile Include="globalTLS.cpp" />
     <ClCompile Include="IdPool.cpp" />

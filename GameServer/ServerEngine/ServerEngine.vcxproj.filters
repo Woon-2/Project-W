@@ -43,6 +43,9 @@
     <Filter Include="utils\Global">
       <UniqueIdentifier>{949455c9-b918-41a7-a67f-9c849f12a739}</UniqueIdentifier>
     </Filter>
+    <Filter Include="DB">
+      <UniqueIdentifier>{03d2debd-830d-426f-8de1-23c89ff802ad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sepch.hpp">
@@ -117,6 +120,12 @@
     <ClInclude Include="JobQueuePool.hpp">
       <Filter>utils\Job</Filter>
     </ClInclude>
+    <ClInclude Include="DBConnection.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DBConnectionPool.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sepch.cpp">
@@ -148,6 +157,12 @@
     </ClCompile>
     <ClCompile Include="JobQueuePool.cpp">
       <Filter>utils\Job</Filter>
+    </ClCompile>
+    <ClCompile Include="DBConnection.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="DBConnectionPool.cpp">
+      <Filter>DB</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
