@@ -19,6 +19,8 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+// Alpha-tested (masked) static-mesh CSM shadow PSO for foliage (Position+UV, CULL_NONE, clip PS).
+ComPtr<ID3D12PipelineState> createShadowMapCSMMaskedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -626,6 +628,19 @@ struct PerFrameData {
 	XMUINT3    _pfd0;
 };
 }	// namespace ShadowMapCSMShader
+
+// ShadowMapCSMMaskedShader — Matches shadowMapCSMMasked.hlsl (foliage alpha-test shadow).
+// PerInstanceData / PerFrameData are identical to ShadowMapCSMShader; only the per-drawcall
+// data carries the bindless albedo + cutoff. firstInstanceOffset stays at offset 0.
+namespace ShadowMapCSMMaskedShader {
+struct PerDrawcallData {
+	u32t          firstInstanceOffset;
+	XMUINT3       _pad0;
+	BindlessIndex idxAlbedo;     // maps to HLSL int4 (range/index/arraySlice/sampler)
+	float         cAlphaCutoff;
+	XMFLOAT3      _pad1;
+};
+}	// namespace ShadowMapCSMMaskedShader
 
 // ShadowMapSkinnedShader
 namespace ShadowMapSkinnedShader {

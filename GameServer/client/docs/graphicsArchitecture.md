@@ -110,6 +110,20 @@ Light::updateCSMCascades()
 - MT shadow draw latch count = `cascadeCount * jobCnt` (cascadeCount만이면 버그)
 - `cascadeNormalOffsets`의 rawNdotl은 **saturate 금지** — back-lit 감지에 음수 값이 필요
 
+#### Alpha-tested (masked) foliage shadows
+
+기본 그림자 패스는 PS 없는 depth-only라 알파를 무시 → 나뭇잎/풀 등 alpha-cutout 객체가
+**사각형 그림자**를 드리운다. 해결: cutout 캐스터만 별도 masked PSO로 분기(업계 표준).
+
+- 셰이더: `shadowMapCSMMasked.hlsl` — Position+UV VS + bindless albedo.a 샘플 후 `clip(a - cAlphaCutoff)` PS.
+  공용 `DefaultRootSig`(모든 셰이더 공유, bindless 텍스처/샘플러 풀 포함)를 사용해 그림자 패스에서도
+  bindless 샘플링이 가능. PSO: `createShadowMapCSMMaskedShader`(`shader.cpp`), `CULL_NONE`(얇은 foliage 양면).
+- 분기: `PBRDeferredPipeline::shadowDraw/shadowDrawMT`가 그룹별 `material->constantAlphaCutoff > 0`이면
+  masked PSO + `"PBRDeferredPipeline_ShadowMasked"`(Position+UV) VB + 텍스처/샘플러 풀 바인딩 +
+  `perDrawcallDataMasked`(b0: firstInstanceOffset@0 + idxAlbedo + cutoff). 나머지는 기존 고속 depth-only 경로 유지.
+- 적용 범위: **정적 deferred 메시(PBRDeferred)만**. 스킨드/지형 foliage가 생기면 동일 패턴으로 변형 추가 필요.
+- 전제: foliage 머티리얼이 `constantAlphaCutoff > 0`(`mesh.hpp`)이어야 분기됨(아니면 무동작).
+
 #### Deferred Shading (PBRDeferredPipeline / PBRDeferredSkinnedPipeline)
 
 **파일:**
