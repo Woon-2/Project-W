@@ -85,6 +85,11 @@ public:
 	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
 	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
 
+	// 서버가 지정한 NPC들을 즉시 숨김(비표시) 처리. 사망과 달리 시체/래그돌 없이 화면에서 제거하며,
+	// 복귀는 onNpcRespawn이 hidden을 해제한다. PacketManager가 S_NpcHide 수신 시 호출.
+	// id 기반 조회라 향후 전용 NPC 타입이 분리돼도 이 조회만 통합하면 그대로 동작한다.
+	void hideNpcs(const std::vector<uint16>& npcIds);
+
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1);
@@ -98,6 +103,7 @@ public:
 	void onSkillSelect( uint16 playerId, uint8 slot );
 	void onSkillUseReject( uint8 slot );
 	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
+	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -454,6 +460,13 @@ private:
 	uint16                   hostId_ = 0;
 	uint16                   myId_   = 0;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
+
+	// GrandBaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
+	// 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다(processInputGame).
+	float    knockbackTimer_         = 0.f;   // 남은 강제 이동 시간(s)
+	float    knockbackSpeed_         = 0.f;
+	mu::Vec3 knockbackDir_           = {};
+	float    postKnockbackLockTimer_ = 0.f;   // 넉백 후 입력잠금 남은 시간(s)
 
 	// S_GameStart 핸드오프 요청(onGameStart가 적재, LobbyScene이 에셋 로드 후 실행).
 	bool        pendingHandoff_ = false;

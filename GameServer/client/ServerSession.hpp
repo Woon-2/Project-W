@@ -50,6 +50,9 @@ public:
 		connected_ = false;
 		SocketUtils::closeSocket(sock_);
 	}
+	// 종료용: 소켓을 닫아 pending recv/send를 취소시킨 뒤, 취소 완료 APC를 alertable wait로 전부
+	// 드레인한다. 반드시 세션 파괴 전에 호출해야 overlapped가 안전히 정리되고 WSACleanup이 안전하다.
+	void closeAndDrain();
 	void addSendBuffer(const std::shared_ptr<SendBuffer>& sendBuffer) { pendingSendBuffers_.push_back(sendBuffer); }
 	void send();
 
@@ -82,6 +85,11 @@ private:
 	std::vector<std::shared_ptr<SendBuffer>> pendingSendBuffers_;
 
 	Online::Game* game_;
+
+	// 진행 중(미완료) overlapped I/O 개수. completion-routine APC는 메인 스레드에서만 처리되므로
+	// 단일 스레드 카운터로 충분. 종료 시 closeAndDrain()이 0이 될 때까지 alertable wait로 취소 완료
+	// APC를 드레인한 뒤 세션(=recvOver_/sendOver_)을 파괴해야 WSACleanup 경합을 막는다.
+	int32 pendingIo_{ 0 };
 };
 
 #endif // server_session_hpp

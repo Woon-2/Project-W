@@ -16,6 +16,7 @@ public:
 	static void handleSNpcMoveBatchPacket(byte* buffer, int32 len);
 	static void handleSNpcSpawnBatchPacket(byte* buffer, int32 len);
 	static void handleSNpcBarrierPacket(byte* buffer, int32 len);
+	static void handleSNpcHidePacket(byte* buffer, int32 len);
 	static void handleSNpcAttackPacket(byte* buffer, int32 len);
 	static void handleSPlayerAttackPacket(byte* buffer, int32 len);
 	static void handleSHitPacket(byte* buffer, int32 len);
@@ -29,6 +30,7 @@ public:
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 	static void handleSZoneStatePacket( byte* buffer, int32 len );
+	static void handleSPlayerKnockbackPacket( byte* buffer, int32 len );
 
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );

@@ -167,6 +167,25 @@ std::shared_ptr<SendBuffer> PacketManager::makeSMovePacket(uint16 playerId, Dire
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSPlayerKnockbackPacket(uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SPlayerKnockbackPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SPlayerKnockbackPacket>();
+	pkt->playerId   = playerId;
+	pkt->dirX       = dirX;
+	pkt->dirZ       = dirZ;
+	pkt->speed      = speed;
+	pkt->knockMs    = knockMs;
+	pkt->postLockMs = postLockMs;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_PlayerKnockback;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -261,6 +280,28 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcBarrierPacket(bool active, co
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_NpcBarrier;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcHidePacket(const std::vector<uint32>& npcIds) {
+	const uint16 count = static_cast<uint16>(npcIds.size());
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcHidePacket) + sizeof(SNpcHideInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SNpcHidePacket>();
+
+	auto entries = bw.reserve<SNpcHideInfo>(count);
+	for (uint16 i = 0; i < count; ++i) {
+		entries[i].npcId = static_cast<uint16>(npcIds[i]);
+	}
+
+	pkt->dataOffset = static_cast<uint16>(reinterpret_cast<uint64>(entries) - reinterpret_cast<uint64>(pkt));
+	pkt->npcCount   = count;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_NpcHide;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

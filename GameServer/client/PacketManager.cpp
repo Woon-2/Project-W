@@ -45,6 +45,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSNpcBarrierPacket(buffer, len);
 		break;
 
+	case PacketType::S_NpcHide:
+		handleSNpcHidePacket(buffer, len);
+		break;
+
 	case PacketType::S_NpcAttack:
 		handleSNpcAttackPacket( buffer, len );
 		break;
@@ -95,6 +99,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 
 	case PacketType::S_ZoneState:
 		handleSZoneStatePacket( buffer, len );
+		break;
+
+	case PacketType::S_PlayerKnockback:
+		handleSPlayerKnockbackPacket( buffer, len );
 		break;
 
 	case PacketType::S_CreateRoom:
@@ -246,6 +254,19 @@ void PacketManager::handleSNpcBarrierPacket(byte* buffer, int32 len) {
 	INet::ClientApp::onlineGame()->setNpcBarrier(pkt->active != 0, ids);
 }
 
+void PacketManager::handleSNpcHidePacket(byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<SNpcHidePacket*>(buffer);
+	auto list = pkt->getList();
+
+	std::vector<uint16> ids;
+	ids.reserve(list.count());
+	for (uint16 i = 0; i < list.count(); ++i) {
+		ids.push_back(list[i].npcId);
+	}
+
+	INet::ClientApp::onlineGame()->hideNpcs(ids);
+}
+
 void PacketManager::handleSNpcAttackPacket( byte* buffer, int32 len ) {
 	auto sNpcAtkPkt = reinterpret_cast<SNpcAttackPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onNpcAttack( sNpcAtkPkt->npcId );
@@ -309,6 +330,11 @@ void PacketManager::handleSStrongholdStatePacket( byte* buffer, int32 len ) {
 void PacketManager::handleSZoneStatePacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SZoneStatePacket*>(buffer);
 	INet::ClientApp::onlineGame()->onZoneState( pkt->zoneId, pkt->state );
+}
+
+void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SPlayerKnockbackPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onPlayerKnockback( pkt->playerId, pkt->dirX, pkt->dirZ, pkt->speed, pkt->knockMs, pkt->postLockMs );
 }
 
 void PacketManager::handleSCreateRoomPacket( byte* buffer, int32 len ) {

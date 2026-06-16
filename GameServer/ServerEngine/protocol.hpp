@@ -33,6 +33,7 @@ enum class PacketType : uint16 {
 	S_Hit,
 
 	S_NpcRespawn,
+	S_NpcHide,
 
 	C_SkillStart,
 	S_SkillStart,
@@ -49,6 +50,8 @@ enum class PacketType : uint16 {
 	S_StrongholdState,
 
 	S_ZoneState,
+
+	S_PlayerKnockback,
 
 	// Lobby
 	C_CreateRoom,
@@ -166,6 +169,18 @@ struct SMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 velocity;
 };
 
+// 서버→클라 강제 넉백 명령(GrandBaum ShieldWall). 플레이어 이동은 클라 권한이므로 서버가 위치를
+// 강제할 수 없다 → 클라가 이 명령을 받아 로컬에서 knockMs 동안 dir·speed로 밀려나고, 이어
+// postLockMs 동안 입력을 잠근다(그 위치를 계속 C_Move로 서버에 반영).
+struct SPlayerKnockbackPacket : public PacketHeader {
+	uint16 playerId;
+	float  dirX;
+	float  dirZ;
+	float  speed;
+	uint16 knockMs;      // 넉백(강제 이동) 지속(ms)
+	uint16 postLockMs;   // 넉백 후 입력잠금(ms)
+};
+
 struct CMouseMovePacket : public PacketHeader {
 	float yawRadian;
 };
@@ -254,6 +269,24 @@ struct SNpcRespawnPacket : public PacketHeader {
 	uint16 npcId;
 	int32 newHp;
 	DirectX::XMFLOAT3 spawnPos;
+};
+
+// 지정한 NPC들을 클라에서 즉시 '숨김'(비표시) 처리한다. 사망(S_Hit→시체/래그돌)과 달리
+// 죽는 연출 없이 화면에서 제거만 하며, 복귀는 기존 S_NpcRespawn이 hidden을 해제해 재등장시킨다.
+// (그랜드밤 방패벽: 후퇴한 원본 뱀 부대를 웨이브 동안 전장에서 퇴장시키는 용도.)
+struct SNpcHideInfo {
+	uint16 npcId;
+};
+
+struct SNpcHidePacket : public PacketHeader {
+	uint16 dataOffset;
+	uint16 npcCount;
+
+	using NpcHideList = DataList<SNpcHideInfo>;
+	NpcHideList getList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return NpcHideList(reinterpret_cast<SNpcHideInfo*>(dataStart), npcCount);
+	}
 };
 
 struct CSkillStartPacket : public PacketHeader {

@@ -256,6 +256,10 @@ public:
 		isDead_ = dead;
 	}
 	bool isDead() const { return isDead_; }
+	// Hidden: removed from view/update entirely (not a corpse). Driven by S_NpcHide; cleared on respawn.
+	// Type-agnostic so it transfers as-is when dedicated NPC types replace the shared goblin model.
+	void setHidden(bool v) { hidden_ = v; }
+	bool hidden() const    { return hidden_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }
 	i32t maxHp() const    { return maxHp_; }
 
@@ -293,6 +297,7 @@ protected:
 
 	i32t hp_{};
 	bool isDead_ = false;
+	bool hidden_ = false;
 	i32t maxHp_{};
 	Faction faction_ = Faction::Neutral;
 	bool barrierActive_ = false;

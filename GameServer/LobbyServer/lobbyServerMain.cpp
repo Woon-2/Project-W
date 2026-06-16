@@ -1,5 +1,6 @@
-#include "lspch.hpp"
+﻿#include "lspch.hpp"
 #include "LobbyServer.hpp"
+#include "SendBuffer.hpp"
 
 int main() {
 	SocketUtils::init();
@@ -28,6 +29,9 @@ int main() {
 		t.join();
 	}
 
+	// 종료 순서 규약(shutdownSequence.md): 워커 join 후 SendBufferManager → MemoryManager → SocketUtils.
+	// 현재는 위 루프가 무한이라 도달하지 않지만, 정상 종료 도입 시 이 순서를 유지할 것.
+	SendBufferManager::release();
 	MemoryManager::release();
 	SocketUtils::release();
 }

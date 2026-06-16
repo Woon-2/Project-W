@@ -26,6 +26,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos);
 	static std::shared_ptr<SendBuffer> makeSNpcSpawnBatchPacket(const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSNpcBarrierPacket(bool active, const std::vector<uint32>& npcIds);
+	static std::shared_ptr<SendBuffer> makeSNpcHidePacket(const std::vector<uint32>& npcIds);
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);
 	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
 	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 attackerId, uint16 targetId, int32 newHp);
@@ -33,6 +34,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSStrongholdStatePacket(uint16 strongholdId, int32 hp, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSZoneStatePacket(uint16 zoneId, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed);
+	static std::shared_ptr<SendBuffer> makeSPlayerKnockbackPacket(uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity);
 	static std::shared_ptr<SendBuffer> makeSSkillSelectPacket(uint16 playerId, uint8 slot);
 	static std::shared_ptr<SendBuffer> makeSSkillChargePacket(uint16 playerId, uint8 slot, float charge);

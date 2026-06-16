@@ -485,6 +485,7 @@ void Object::setModel(const Model* pModel){
 // @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 //		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
+	if (hidden_) return;   // hidden NPC: skip interpolation/anim entirely (S_NpcHide; restored on respawn)
 	const auto& prev = body_.prev();
 	const auto& curr = body_.curr();
 	const auto t = tPhysicInterpolation;
@@ -567,6 +568,7 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 }
 
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
+	if (hidden_) return;   // hidden NPC: not drawn (no corpse). Cleared on respawn.
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
 		const bool useDeferred  = (gfx.renderPath() == GFX::RenderPath::Deferred);

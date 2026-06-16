@@ -44,6 +44,9 @@ void MemoryManager::release() {
 		delete pool;
 	}
 	pools_.clear();
+	// release 이후의 allocate/deallocate는 use-after-free이므로,
+	// 조용히 깨진 풀을 만지는 대신 null 접근으로 즉시 드러나게 한다.
+	poolTable_.fill(nullptr);
 }
 
 void* MemoryManager::allocate(int32 size) {
@@ -55,6 +58,7 @@ void* MemoryManager::allocate(int32 size) {
 		header = reinterpret_cast<MemoryHeader*>(malloc(allocSize));
 	}
 	else {
+		ASSERT_CRASH(poolTable_[allocSize] != nullptr);	// release() 이후 호출 감지
 		header = poolTable_[allocSize]->pop();
 	}
 
@@ -72,6 +76,7 @@ void MemoryManager::deallocate(void* ptr) {
 		free(header);
 	}
 	else {
+		ASSERT_CRASH(poolTable_[allocSize] != nullptr);	// release() 이후 호출 감지
 		poolTable_[allocSize]->push(header);
 	}
 }

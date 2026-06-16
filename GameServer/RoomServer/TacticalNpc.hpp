@@ -112,6 +112,7 @@ public:
     // Room::tryReserveTacticalAttackSlot에서 후보를 거를 때 호출하므로 public.
     bool MU_CALLCONV isEligibleForAttackReservation( uint32 targetId, mu::Vec3 targetPos ) const;
     float             getAttackDamage()      const { return attackDamage_; }
+    int32             maxHp()                const { return static_cast<int32>(maxHp_); }
     float             getSeparationRadius()  const { return separationRadius_; }
     TacticalNpcConfig getConfig()            const;
     bool              isAtSlot()             const;
@@ -136,6 +137,10 @@ protected:
     void MU_CALLCONV applyBlockerAvoidance( Room& room, mu::Vec3& slotDir, float distToSlot );
     // 이웃 전술 NPC(peer) 회피로 이동 방향을 보정. 정면(head-on) 교착은 일관된 측면(veer-right) bias로 해소.
     void MU_CALLCONV applyPeerSeparation( Room& room, mu::Vec3& moveDir, float radius );
+    // 슬롯 안착 래치 갱신(히스테리시스). inner 진입 시 안착, outer 이탈 시 해제. true면 안착(모터 제동 유지).
+    bool MU_CALLCONV updateSlotSettled( float distToSlot );
+    // 안착 처리: 모터 정지 + 잔여 XZ 속도 감쇠로 솔버 유발 미세 진동을 흡수(Y는 중력 보존).
+    void MU_CALLCONV settleAtSlot();
     void updatePressureWait ( Seconds dt, Room& room );
     void updateDead         ( Room& room );
 
@@ -187,6 +192,7 @@ protected:
     float separationWeight_{ 0.5f };
 
     float speedMult_{ 1.f };
+    bool  slotSettled_{ false };   // 슬롯 안착 래치(히스테리시스): true면 모터 제동 유지(떨림 방지)
     Seconds windupTimer_{};
     Seconds recoverTimer_{};
     Seconds pressureWaitTimer_{};
@@ -212,8 +218,15 @@ protected:
 
     static constexpr float TACTICAL_SPEED_MULT                        = 3.0f;
     // 슬롯(HoldSlot) 도착 감속: 이 반경 안에서 거리비례로 감속해 오버슈트 진동을 막고 안착시킨다.
-    static constexpr float TACTICAL_SLOT_ARRIVE_SLOW_RADIUS           = 3.0f;
-    static constexpr float TACTICAL_SLOT_ARRIVE_MIN_SCALE             = 0.15f;
+    // 안착 래치(아래)가 오버슈트를 흡수하므로 전속 구간을 넓히고 최저 속도를 올려 자리 찾기를 빠르게 한다.
+    static constexpr float TACTICAL_SLOT_ARRIVE_SLOW_RADIUS           = 1.5f;
+    static constexpr float TACTICAL_SLOT_ARRIVE_MIN_SCALE             = 0.35f;
+    // 슬롯 안착 래치(히스테리시스): inner 안으로 들어오면 안착(settled)→모터 제동 유지, outer 밖으로
+    // 밀려나야 래치 해제→재접근. 밀집 Dynamic 대형의 솔버 평형 변위에 모터가 재당김하는 한계 진동 방지.
+    static constexpr float TACTICAL_SLOT_SETTLE_RADIUS_MULT           = 0.25f;
+    static constexpr float TACTICAL_SLOT_UNSETTLE_RADIUS_MULT         = 0.7f;
+    // 안착 중 잔여 XZ 속도 감쇠 계수(솔버가 주입한 미세 속도를 흡수, Y는 중력 보존).
+    static constexpr float TACTICAL_SLOT_SETTLE_VEL_DAMP              = 0.3f;
     // 슬롯 "도착" 판정 거리 배율(separationRadius_ 기준). 밀집 Dynamic 대형은 NPC끼리 물리적으로
     // 막혀 슬롯 2~3.5m에서 멈추므로, 도착 판정을 그만큼 넓혀 대형 완성(allMembersArrived)이 성립하게 한다.
     static constexpr float TACTICAL_SLOT_ARRIVE_MULT                  = 1.5f;

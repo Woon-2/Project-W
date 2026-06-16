@@ -49,8 +49,11 @@ void ServerSession::registerRecv() {
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSARecv failed with error: " << error << '\n';
 			connected_ = false;
+			return;
 		}
 	}
+	// 성공(즉시 완료) 또는 WSA_IO_PENDING — 어느 경우든 completion routine APC가 큐잉되므로 카운트.
+	++pendingIo_;
 }
 
 void ServerSession::registerSend() {
@@ -83,8 +86,11 @@ void ServerSession::registerSend() {
 			sendOver_.sendBuffers.clear();
 			sending_ = false;
 			connected_ = false;
+			return;
 		}
 	}
+	// 성공/PENDING — completion routine APC가 큐잉되므로 미완료 I/O로 카운트.
+	++pendingIo_;
 }
 
 void ServerSession::processRecv(int32 numBytes) {
@@ -146,12 +152,16 @@ void ServerSession::processSend(int32 numBytes) {
 }
 
 void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPWSAOVERLAPPED overlapped, DWORD flags) {
-	if (gClose) {
-		return;
-	}
-
 	auto overEx = reinterpret_cast<OverlappedEx*>(overlapped);
 	auto session = overEx->owner;
+
+	// 이 완료 1건(취소 완료 포함)을 소비하므로 미완료 카운트를 먼저 감소시킨다 — closeAndDrain의
+	// 드레인 루프가 끝나려면 gClose 여부와 무관하게 항상 감소해야 한다.
+	--session->pendingIo_;
+
+	if (gClose) {
+		return;   // 종료 중: 추가 winsock/세션 상태 변경 금지(카운트만 정리)
+	}
 
 	if (error != 0) {
 		std::cout << "I/O operation failed with error: " << error << '\n';
@@ -177,5 +187,16 @@ void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPW
 	default:
 		std::cout << "Unknown I/O operation completed.\n";
 		break;
+	}
+}
+
+void ServerSession::closeAndDrain() {
+	close();   // closesocket → pending recv/send 취소 유발
+
+	// 취소된 overlapped의 완료 APC를 alertable wait로 전부 배달·소진한다. 이 드레인이 끝나야
+	// recvOver_/sendOver_가 안전히 파괴되고, 이후 WSACleanup이 미완료 I/O와 경합하지 않는다.
+	// 무한 대기 방지를 위해 상한 가드(약 200ms)를 둔다.
+	for (int32 guard = 0; pendingIo_ > 0 && guard < 200; ++guard) {
+		SleepEx(1, TRUE);   // alertable: completionCallback APC 실행 → pendingIo_--
 	}
 }
