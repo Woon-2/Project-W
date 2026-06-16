@@ -26,13 +26,7 @@ public:
 	static bool connectToServer() { return serverSession_->connect(); }
 	// S_GameStart 핸드오프: 로비 세션을 은퇴시키고 RoomServer로 새 세션을 맺는다.
 	static void reconnectToRoomServer(const std::string& ip, uint16 port);
-	static void release() {
-		game_.reset();                                         // 게임/워커 먼저(추가 send 차단)
-		if (serverSession_)  serverSession_->closeAndDrain();  // 소켓 닫고 잔여 완료 APC 드레인
-		if (retiredSession_) retiredSession_->closeAndDrain();
-		serverSession_.reset();                                // 이제 overlapped 안전 파괴
-		retiredSession_.reset();
-	}
+	static void release();
 	// Online 모드가 아닐 땐 사용하지 않도록 한다.
 	static void addSendBuffer(const std::shared_ptr<SendBuffer>& sendBuffer) { serverSession_->addSendBuffer(sendBuffer); }
 	// Online 모드가 아닐 땐 사용하지 않도록 한다.
