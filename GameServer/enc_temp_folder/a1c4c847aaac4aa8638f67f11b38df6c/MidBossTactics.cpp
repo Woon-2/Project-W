@@ -2439,7 +2439,7 @@ void GrandBaumMidBossTactic::cleanupSnakeWave( Room& room ) {
         TacticalNpc* npc = room.findTacticalNpcById( npcId );
         if ( npc && npc->hp() > 0 ) {
             npc->setHp( 0 );
-            room.broadcast( PacketManager::makeSHitPacket( static_cast<uint16>( npcId ), 0, 0 ) );
+            room.broadcast( PacketManager::makeSHitPacket( static_cast<uint16>( npcId ), 0 ) );
         }
     }
 
