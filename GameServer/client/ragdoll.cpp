@@ -412,9 +412,18 @@ void Ragdoll::deactivate(PhysicsWorld& world)
 // ---------------------------------------------------------------------------
 // Ragdoll::buildPassengers
 //
-// Walk the skeleton hierarchy and, for each non-ragdoll bone that descends from
-// a ragdoll bone, capture a relative transform so it can be driven rigidly by
-// its nearest ragdoll ancestor in syncToFinalXforms().
+// Bind every non-ragdoll bone rigidly to a ragdoll body so the whole skeleton
+// follows the physics simulation.  A bone left unbound keeps its death-pose
+// finalXforms; since the owning Object's world matrix is also frozen while the
+// ragdoll is active, such a bone stays fixed in world space — anchoring the mesh
+// at a fixed point and stretching it when the rest of the ragdoll moves.
+//
+// Two passes:
+//   1) buildPassengersDFS — bones that DESCEND from a ragdoll bone bind to their
+//      nearest ragdoll ancestor (preserves intra-limb rigidity).
+//   2) Orphan pass — bones with NO ragdoll ancestor (above/beside the bodies in
+//      the hierarchy, e.g. a central hub bone) bind to the nearest ragdoll body
+//      found by an undirected skeleton walk (parent + children).
 //
 // Row-vector convention: passenger = relativeXform * ancestor
 // => relativeXform = passenger / ancestor = passenger * inv(ancestor)
@@ -424,8 +433,68 @@ void Ragdoll::buildPassengers(const Skeleton& skel,
                                const std::vector<mu::Mat4x4>& finalXforms)
 {
     passengers_.clear();
-    if (!skel.pRoot) return;
+    if (!skel.pRoot || !skel.bones) return;
+
+    // Pass 1: ancestor-based binding for descendants of ragdoll bodies.
     buildPassengersDFS(skel.pRoot, -1, finalXforms);
+
+    // Pass 2: attach orphan bones (no ragdoll ancestor) to their nearest body.
+    const std::vector<Bone>& bones = *skel.bones;
+    const int n = static_cast<int>(bones.size());
+    if (n == 0) return;
+
+    // Child -> parent map (Bone stores only its children).
+    std::vector<int> parent(n, -1);
+    for (const Bone& b : bones)
+        for (const Bone* c : b.children)
+            if (c->boneIdx >= 0 && c->boneIdx < n)
+                parent[c->boneIdx] = b.boneIdx;
+
+    // Multi-source BFS from every ragdoll body over the undirected skeleton graph
+    // to find each bone's nearest ragdoll body (by hop count).
+    std::vector<int> nearestBody(n, -1);
+    std::vector<int> queue;
+    queue.reserve(n);
+    for (const RagdollBone& rb : bones_) {
+        if (rb.boneIdx >= 0 && rb.boneIdx < n && nearestBody[rb.boneIdx] < 0) {
+            nearestBody[rb.boneIdx] = rb.boneIdx;
+            queue.push_back(rb.boneIdx);
+        }
+    }
+    for (std::size_t head = 0; head < queue.size(); ++head) {
+        const int cur = queue[head];
+        const int src = nearestBody[cur];
+        auto visit = [&](int nb) {
+            if (nb >= 0 && nb < n && nearestBody[nb] < 0) {
+                nearestBody[nb] = src;
+                queue.push_back(nb);
+            }
+        };
+        visit(parent[cur]);
+        for (const Bone* c : bones[cur].children)
+            visit(c->boneIdx);
+    }
+
+    // Mark bones already driven (ragdoll bodies + Pass-1 passengers).
+    std::vector<bool> bound(n, false);
+    for (const RagdollBone& rb : bones_)
+        if (rb.boneIdx >= 0 && rb.boneIdx < n) bound[rb.boneIdx] = true;
+    for (const PassengerBone& pb : passengers_)
+        if (pb.boneIdx >= 0 && pb.boneIdx < n) bound[pb.boneIdx] = true;
+
+    // Bind each remaining orphan bone to its nearest ragdoll body.
+    const int fx = static_cast<int>(finalXforms.size());
+    for (int i = 0; i < n; ++i) {
+        if (bound[i]) continue;
+        const int anc = nearestBody[i];
+        if (anc < 0) continue;               // no ragdoll bodies at all
+        if (i >= fx || anc >= fx) continue;  // finalXforms bounds guard
+        PassengerBone pb;
+        pb.boneIdx         = i;
+        pb.ancestorBoneIdx = anc;
+        pb.relativeXform   = finalXforms[i] / finalXforms[anc];
+        passengers_.push_back(pb);
+    }
 }
 
 void Ragdoll::buildPassengersDFS(const Bone* bone, int currentAncestorIdx,

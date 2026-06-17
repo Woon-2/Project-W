@@ -294,6 +294,18 @@ finalXforms[boneIdx] = bone.toLocal * (boneWorldMat / renderState_.world);
 // boneWorldMat: orient=body->orient(), translation=bone origin (캡슐 중심 - orient.rotate(capsuleOffset))
 ```
 
+**Passenger 본 커버리지 불변식 (필수):**
+래그돌 활성 시 메인 `body_`가 unregister되어 `renderState_.world`가 사망 위치에 동결된다.
+따라서 ragdoll body가 없는 본의 `finalXforms`를 갱신하지 않으면 그 본은 **월드 공간에 고정**되어,
+스킨 메시가 고정점에 앵커된 채 나머지 ragdoll이 움직이면 **늘어난다(stretch)**.
+→ `buildPassengers`는 **비-body 본 전부**를 어떤 ragdoll body에 강체 바인딩해야 한다:
+- Pass 1 (`buildPassengersDFS`): ragdoll body의 **자손** 본 → 최근접 조상 body.
+- Pass 2 (고아 본): ragdoll 조상이 없는 본(body들보다 계층상 위/옆, 예: 중심 허브 본) →
+  스켈레톤 무방향 그래프(parent+children) 다중 소스 BFS로 찾은 **최근접 body**.
+
+휴머노이드(Hips가 루트 body)는 루트 위 본에 스킨 버텍스가 없어 우연히 동작했으나,
+버섯처럼 중심 허브(`MushroomPelvis`)에 body가 없는 스켈레톤에서 동결/늘어남이 드러났다 (2026-06-18 수정).
+
 ---
 
 ## ActiveRagdollController 설계 (Phase 8)

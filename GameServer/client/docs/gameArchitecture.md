@@ -230,6 +230,8 @@ skillSystem_.update()
 
 activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이유: finalXformData가 최신 포즈로 확정된 후 seed해야 올바른 초기 래그돌 자세가 된다.
 
+`buildPassengers`는 ragdoll body가 없는 **모든** 본을 어떤 body에 강체 바인딩한다(자손은 조상 body, 조상 없는 본은 무방향 BFS로 최근접 body). 바인딩 누락 시 그 본은 동결된 objectWorldMat 때문에 월드에 고정되어 메시가 늘어남 — 상세: `physicsArchitecture.md` "Passenger 본 커버리지 불변식".
+
 매 프레임 `syncRagdollToAnim`: ragdoll 물리 결과를 finalXformData에 덮어써 렌더링에 반영.
 
 **Ragdoll 물리 파라미터:** Unity Inspector에서 뼈별로 설정 → `ModelExtractor.cs` 익스포트 → `.bin` 파일에 포함 → `importRagdollConfig(mesh.cpp)`로 `BoneBoxDef`에 로드.

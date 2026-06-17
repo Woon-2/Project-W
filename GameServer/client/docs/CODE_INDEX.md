@@ -158,6 +158,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
 | `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |
 | `Ragdoll::syncToPose()` | `ragdoll.cpp` | body pos/orient → AnimFrame pose (DFS) |
+| `Ragdoll::syncToFinalXforms()` | `ragdoll.cpp` | body transform → finalXforms 덮어씀 + passenger 본 재구성 |
+| `Ragdoll::buildPassengers()` | `ragdoll.cpp` | 비-body 본 → 최근접 ragdoll body에 강체 바인딩 (DFS 조상 + 고아 본 BFS 2-pass) |
 | `Ragdoll::activate()` | `ragdoll.cpp` | Kinematic → Dynamic |
 | `Ragdoll::deactivate()` | `ragdoll.cpp` | Dynamic → Kinematic |
 | `ActiveRagdollController` class | `activeRagdoll.hpp #25` | PD 토크 컨트롤러, 피격 반응 포함 |
