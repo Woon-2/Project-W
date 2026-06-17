@@ -263,9 +263,10 @@ void Room::init(const Level* levelData) {
 // tick; lambdas defined here have full access to Room internals.
 // [디버그] Arena_Hobgoblin 진입 시 띄울 전술 전투 선택. 0=Goblin(정식) / 1=GrandBaum / 2=Isis.
 // 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
-// (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. GrandBaum/Isis는 Hobgoblin
-//  레벨에 WallXxx 마커가 없어 후방벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.)
-#define HOBGOBLIN_DEBUG_TACTIC 0
+// (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. 이제 각 보스는 전용 zone
+//  (Arena_Grandbaum/Arena_Isys)과 마커(Wall*/*Spawner)가 레벨에 저작돼 있어 정식 플레이는 매크로
+//  없이 해당 아레나 진입만으로 트리거된다. 이 매크로는 한 자리에서 세 전술을 비교하는 디버그용.)
+#define HOBGOBLIN_DEBUG_TACTIC 1
 
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
@@ -281,13 +282,13 @@ void Room::bindZoneHandlers() {
 #endif
 		});
 
-	zoneSystem_.on("Arena_GrandBaum", ZoneEvent::Enter,
+	zoneSystem_.on("Arena_Grandbaum", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaGrandBaumEnter(zone, playerId);
 		});
 
-	// 정식 Isis zone(레벨에 "Arena_Isis" 마커 저작 후 작동).
-	zoneSystem_.on("Arena_Isis", ZoneEvent::Enter,
+	// 정식 Isis zone(레벨 zone tag는 "Arena_Isys" 철자).
+	zoneSystem_.on("Arena_Isys", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaIsisEnter(zone, playerId);
 		});
@@ -302,7 +303,7 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	if (!worldTerrain_) return;
 
 	// Rear walls: build a Static collider from each named "Wall" marker.
-	// 동시에 Wall 위치를 누적해 BossSpawn 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	// 동시에 Wall 위치를 누적해 스포너 마커가 없을 때 fallback 스폰 중점으로 쓴다.
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
@@ -319,17 +320,17 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	// (S_NpcSpawnBatch) so they instantiate the goblins. Guarded so a re-entry
 	// can't double-spawn (zone is one-shot anyway).
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
-		// Spawn center: prefer a "BossSpawn" marker; fall back to the Wall midpoint
-		// when the level has no BossSpawn marker authored.
+		// Spawn center: prefer the "HobgoblinSpawner" marker; fall back to the Wall
+		// midpoint when the level has no spawner marker authored.
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "HobgoblinSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
 			std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
-			break;   // 첫 BossSpawn 마커만 사용
+			break;   // 첫 스포너 마커만 사용
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
@@ -370,19 +371,20 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_Hobgoblin과 동일 패턴: GrandBaum 마커(WallGrandBaum_0/1, BossSpawn)로 벽/스폰점을
+// Arena_Hobgoblin과 동일 패턴: GrandBaum 마커(WallGrandbaum_0/1/2, GrandbaumSpawner)로 벽/스폰점을
 // 구성하고 GrandBaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
 void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
-		if (m.name != "WallGrandBaum_0" && m.name != "WallGrandBaum_1") continue;
+		if (m.name != "WallGrandbaum_0" && m.name != "WallGrandbaum_1"
+		    && m.name != "WallGrandbaum_2") continue;
 		spawnBarrierFromMarker(m);
 		wallSum += m.pos;
 		++wallCount;
@@ -394,7 +396,7 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "GrandbaumSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
 			std::cout << "[Zone] GrandBaum spawn point '" << m.name << "' at ("
@@ -407,7 +409,7 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallGrandBaum/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
+		// [디버그 트리거] 전용 WallGrandbaum/GrandbaumSpawner 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
 		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
 		if (!haveSpawnPos) {
 			mu::Vec3 anyWallSum{};
@@ -459,20 +461,21 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_GrandBaum과 동일 패턴: Isis 마커(WallIsis_0/1, BossSpawn)로 벽/스폰점을 구성하고 Isis
+// Arena_Grandbaum과 동일 패턴: Isis 마커(WallIsys_0/1/2, IsysSpawner)로 벽/스폰점을 구성하고 Isis
 // 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm). 디버그 트리거(홉고블린
-// zone 재사용) 시에는 WallIsis 마커가 없어 벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.
+// zone 재사용) 시에는 WallIsys 마커가 매칭 안 돼 벽은 생략되고, any-Wall/플레이어 위치로 fallback한다.
 void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isis)\n";
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
-		if (m.name != "WallIsis_0" && m.name != "WallIsis_1") continue;
+		if (m.name != "WallIsys_0" && m.name != "WallIsys_1"
+		    && m.name != "WallIsys_2") continue;
 		spawnBarrierFromMarker(m);
 		wallSum += m.pos;
 		++wallCount;
@@ -484,7 +487,7 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "IsysSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
 			std::cout << "[Zone] Isis spawn point '" << m.name << "' at ("
@@ -497,7 +500,7 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallIsis/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
+		// [디버그 트리거] 전용 WallIsys/IsysSpawner 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
 		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
 		if (!haveSpawnPos) {
 			mu::Vec3 anyWallSum{};
