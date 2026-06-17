@@ -205,7 +205,10 @@ void PhysicsWorld::integrate(Seconds dt)
             }
             b.setOmega(b.omega() * std::max(0.f, 1.f - b.angularDamping() * dtf));
 
-            const auto linAcc = gravity_ + b.forceAccum() * b.invMass();
+            // Per-body gravity gate: grounded character controllers set
+            // gravityScale to 0 so gravity stops fighting the contact solver
+            // (no residual vertical micro-jitter). Restored to 1 when airborne.
+            const auto linAcc = gravity_ * b.gravityScale() + b.forceAccum() * b.invMass();
             b.setLinearVel(b.linearVel() + linAcc * dtf);
 
             // Integrate angular velocity: I_world^-1 * torque.

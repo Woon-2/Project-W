@@ -184,7 +184,8 @@ float4 PSMain(VSOutput input) : SV_TARGET {
             break;
         }
     }
-    float shadow = calcCSMShadow(input.posV, input.posW, normalize(input.normalW), ndotl);
+    // Camera-relative shadow space: lightVP maps (posW - camPos). See calcCSMShadow.
+    float shadow = calcCSMShadow(input.posV, input.posW - camPos, normalize(input.normalW), ndotl);
     color *= shadow;
 
 #ifdef CSM_DEBUG_VIS

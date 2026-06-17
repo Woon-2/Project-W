@@ -13,6 +13,11 @@
 #define GBUF_DEBUG_IBL_DIFFUSE  8u
 #define GBUF_DEBUG_IBL_SPECULAR 9u
 #define GBUF_DEBUG_BRDF         10u
+// CSM cascade shadow-map visualization (raw light-space depth)
+#define GBUF_DEBUG_CASCADE0     11u
+#define GBUF_DEBUG_CASCADE1     12u
+#define GBUF_DEBUG_CASCADE2     13u
+#define GBUF_DEBUG_CASCADE3     14u
 
 struct VSOutput {
     float4 pos : SV_Position;
@@ -41,6 +46,7 @@ cbuffer PerFrameData : register(b1) {
     int4     idxGB2;
     int4     idxGB3;
     int4     idxDepth;
+    int4     idxGB4;   // linear view-space Z (posV.z), R32_FLOAT
     // Debug
     uint     debugMode;
     uint3    _pad0;
@@ -105,11 +111,16 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // --- Decode view-space normal ---
     float3 normalV = octDecode(gb1);
 
-    // --- Reconstruct view-space position from depth ---
-    // NDC.xy from UV: x in [-1,+1], y in [+1,-1] (DX NDC top=+1)
-    float4 posNDC = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, rawDepth, 1.0f);
-    float4 posV_h = mul(posNDC, invProj);
-    float3 posV   = posV_h.xyz / posV_h.w;
+    // --- Reconstruct view-space position from the exact linear depth (gb4) ---
+    // Using the stored view-space Z (R32_FLOAT) instead of the quantized NDC depth keeps
+    // the reconstructed position stable as the follow camera micro-moves, which eliminates
+    // shadow shimmering. invProj is constant (proj is fixed per frame), so the per-pixel
+    // view ray is frame-independent; only linearZ (exact) and invView (correct camera) vary.
+    float  linearZ = sampleBindless(idxGB4, uv).r;
+    float2 ndc     = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
+    float4 farH    = mul(float4(ndc, 1.0f, 1.0f), invProj); // unproject at the NDC far plane
+    float3 rayV    = farH.xyz / farH.w;
+    float3 posV    = rayV * (linearZ / rayV.z);
 
     // --- Reconstruct world-space position ---
     float3 posW = mul(float4(posV, 1.0f), invView).xyz;
@@ -173,6 +184,18 @@ float4 PSMain(VSOutput input) : SV_TARGET {
         float  NdotV = max(dot(normalW, Vworld), 0.0f);
         float2 brdf  = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
         return float4(brdf, 0.0f, 1.0f);
+    }
+    // CSM cascade shadow-map view (raw light-space depth, stretched fullscreen). The shadow
+    // SRV carries a comparison sampler, so read the texel directly with Load (no sampler).
+    if (debugMode >= GBUF_DEBUG_CASCADE0 && debugMode <= GBUF_DEBUG_CASCADE3) {
+        uint ci = debugMode - GBUF_DEBUG_CASCADE0;
+        if (ci >= cascadeCount) return float4(0.0f, 0.0f, 0.0f, 1.0f);
+        int4 sidx = idxShadowMap[ci];
+        if (sidx.x != 0) return float4(0.0f, 0.0f, 0.0f, 1.0f); // not a bound Texture2D
+        uint sw, sh;
+        gTex2Ds[sidx.y].GetDimensions(sw, sh);
+        float d = gTex2Ds[sidx.y].Load(int3(int2(saturate(uv) * float2(sw, sh)), 0)).r;
+        return float4(d, d, d, 1.0f);
     }
 
     // --- Full Deferred Lighting ---

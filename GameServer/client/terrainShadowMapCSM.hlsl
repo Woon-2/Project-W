@@ -7,14 +7,17 @@ cbuffer PerDrawcallData : register(b0) {
 };
 
 cbuffer PerFrameData : register(b1) {
-    float4x4 lightVP;
+    float4x4 lightVP;       // maps CAMERA-RELATIVE world positions (posW - camPos) to light NDC
     uint     cascadeIdx;
     uint3    _pfd0;
+    float3   camPos;        // camera world position for the camera-relative shadow rebase
+    float    _pfd1;
 };
 
 // VS: transforms terrain vertex directly into light clip space for the current cascade.
+// Camera-relative shadow space: rebase by camPos to match the receiver side.
 float4 VSMain(float3 position : POSITION) : SV_Position {
-    float4 posW = mul(float4(position, 1.0f), world);
-    return mul(posW, lightVP);
+    float3 posW = mul(float4(position, 1.0f), world).xyz;
+    return mul(float4(posW - camPos, 1.0f), lightVP);
 }
 // No PSMain: depth-only pass, NumRenderTargets = 0

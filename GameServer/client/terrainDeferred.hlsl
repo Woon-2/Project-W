@@ -35,6 +35,7 @@ float2 octEncode(float3 n) {
 
 struct VSOutput {
     float4 posH       : SV_Position;
+    float3 posV       : POSITION_V;
     float3 normalV    : NORMAL_V;
     float3 tangentV   : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
@@ -50,6 +51,7 @@ VSOutput VSMain(
 ) {
     VSOutput ret;
     ret.posH    = mul(float4(position, 1.f), wvp);
+    ret.posV    = mul(float4(position, 1.f), wv).xyz;
     ret.normalV = normalize(mul(normal, (float3x3)wv));
     if (hasAnyNormal) {
         ret.tangentV   = normalize(mul(tangent,   (float3x3)wv));
@@ -68,6 +70,7 @@ struct GBufferOutput {
     float2 gb1 : SV_TARGET1; // NormalV oct-encoded       | R16G16_FLOAT
     float4 gb2 : SV_TARGET2; // LightAccum.rgb + Roughness.a | R8G8B8A8_UNORM
     float  gb3 : SV_TARGET3; // Metallic                  | R8_UNORM
+    float  gb4 : SV_TARGET4; // Linear view-space Z (posV.z) | R32_FLOAT
 };
 
 // ---------------------------------------------------------------------------
@@ -150,5 +153,6 @@ GBufferOutput PSMain(VSOutput input) {
     o.gb1 = octEncode(shadingNormalV);
     o.gb2 = float4(lightAccum, roughness);
     o.gb3 = metallic;
+    o.gb4 = input.posV.z;  // exact linear view-space depth (deferred reconstruction)
     return o;
 }

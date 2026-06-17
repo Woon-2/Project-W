@@ -1804,8 +1804,8 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	};
 
 	// 4 GBuffer RTVs (matches GBufferData layout in sharedResources.hpp)
-	psoDesc.NumRenderTargets = 4u;
-	for (int i = 0; i < 4; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (int i = 0; i < 5; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable = false;
 		psoDesc.BlendState.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	}
@@ -1813,6 +1813,7 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;    // NormalV oct-encoded
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // LightAccum.rgb + Roughness.a
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;        // Metallic
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3637,8 +3638,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	};
 
 	// 4 GBuffer render targets
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3652,6 +3653,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;     // GB1
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB2
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;         // GB3
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;        // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3719,8 +3721,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 		.Flags                  = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3734,6 +3736,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3801,8 +3804,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3816,6 +3819,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3882,8 +3886,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3897,6 +3901,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(

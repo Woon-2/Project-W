@@ -39,12 +39,13 @@ struct VSOutput {
     float2 uv         : UV;
 };
 
-// GBuffer output: 4 render targets
+// GBuffer output: 5 render targets
 struct GBufferOutput {
     float4 gb0 : SV_TARGET0;  // Albedo.rgb (linear) + AO.a        | R8G8B8A8_UNORM
     float2 gb1 : SV_TARGET1;  // NormalV oct-encoded (view-space)   | R16G16_FLOAT
     float4 gb2 : SV_TARGET2;  // LightAccum.rgb + Roughness.a       | R8G8B8A8_UNORM
     float  gb3 : SV_TARGET3;  // Metallic                           | R8_UNORM
+    float  gb4 : SV_TARGET4;  // Linear view-space Z (posV.z)       | R32_FLOAT
 };
 
 cbuffer PerDrawcallData : register(b0) {
@@ -67,6 +68,11 @@ cbuffer PerFrameData : register(b1) {
     float4   cascadeSplitsFarV;
     float4x4 lightVP[MAX_CSM_CASCADES];
     float4   cascadeNormalOffsets;
+    // Camera world position. Unused by this GBuffer geometry pass, but required so the
+    // shared pbrLighting.hlsli (which references camPos for camera-relative shadow space)
+    // compiles. Kept layout-identical to the other PBR PerFrameData mirrors.
+    float3   camPos;
+    float    _padCam;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -229,5 +235,6 @@ GBufferOutput PSMain(VSOutput input) {
     o.gb1 = octEncode(input.normalV);
     o.gb2 = float4(lightAccum, roughness);
     o.gb3 = metallic;
+    o.gb4 = input.posV.z;  // exact linear view-space depth (deferred reconstruction)
     return o;
 }

@@ -2599,6 +2599,10 @@ void Game::update(Milliseconds deltaTime) {
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 접지 중력 게이팅: 이번 step의 terrain 접촉으로 플레이어 접지 판정 + 중력
+		// 게이트 설정(다음 step 반영) + ground-snap. online 경로와 동일 동작.
+		// 물리 step 루프 안에서 호출(고정 timestep 의미 유지).
+		if (player_) player_->updateGroundedGravityGate(physicsWorld_, effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
@@ -3210,6 +3214,10 @@ void Game::cullObjectsForShadow() {
 		cascadePlanes[ci].p[5] = c3 - c2;
 	}
 
+	// Cascade lightVPs are built in camera-relative space (see updateCSMCascades),
+	// so the shadow-cull test bounds must be rebased by the same camera eye.
+	const mu::Vec3 shadowCamRel = dirLight_.cascadeCameraPos();
+
 	for (auto& entt : entities) {
 		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
 
@@ -3221,7 +3229,7 @@ void Game::cullObjectsForShadow() {
 
 			if (std::holds_alternative<AABB>(rootShape)) {
 				const auto& aabb = std::get<AABB>(rootShape);
-				const mu::Vec3 c = aabb.center;
+				const mu::Vec3 c = aabb.center - shadowCamRel;
 				const mu::Vec3 h = aabb.size * 0.5f;
 				for (int i = 0; i < 6 && inside; ++i) {
 					const float e = std::abs(pl[i].x()) * h.x()
@@ -3232,7 +3240,7 @@ void Game::cullObjectsForShadow() {
 				}
 			} else {
 				const auto& obb = std::get<OBB>(rootShape);
-				const mu::Vec3 c  = obb.center;
+				const mu::Vec3 c  = obb.center - shadowCamRel;
 				const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 				const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 				const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
