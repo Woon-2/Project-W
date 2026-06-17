@@ -340,7 +340,7 @@ float calcSingleShadow(float3 posV, float4 posL) {
 #endif
 
 // ---------------------------------------------------------------------------
-// CSM shadow functions (separate Texture2D per cascade, 9-tap PCF)
+// CSM shadow functions (separate Texture2D per cascade, 5x5 PCF)
 // ---------------------------------------------------------------------------
 #ifndef MAX_CSM_CASCADES
 #define MAX_CSM_CASCADES 4
@@ -360,22 +360,21 @@ float sampleCascadePCF(uint cascadeIdx, float3 posRel, float3 normalW, float sin
     posL.xyz /= posL.w;
     posL.z = min(posL.z, 1.0f);
 
-    // 9-tap PCF
+    // 5x5 PCF
     int4 idx = idxShadowMap[cascadeIdx];
-    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
-    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
-    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  1)).r;
-    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0, -1)).r;
-    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  0)).r;
-    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  1)).r;
-    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
-    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
-    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
-    
-    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+    float shadow = 0.f;
+    [unroll]
+    for (int y = -2; y <= 2; ++y) {
+        [unroll]
+        for (int x = -2; x <= 2; ++x) {
+            shadow += sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(x, y)).r;
+        }
+    }
+
+    return shadow / 25.f;
 }
 
-// calcCSMShadow: selects related cascades by view-space depth, performs 9-tap PCF,
+// calcCSMShadow: selects related cascades by view-space depth, performs 5x5 PCF,
 //                then blends the results.
 // posRel: CAMERA-RELATIVE world position (posW - camPos). The cascade lightVP matrices
 //         are built in camera-relative space (see Light::updateCSMCascades), so callers

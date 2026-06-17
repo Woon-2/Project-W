@@ -509,7 +509,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
 3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
-4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
+4. calcCSMShadow(posV, posRel, normalW, ndotl) → 5x5 PCF 그림자 적용
 5. globalAmbient + IBL(`computeIBL`, `#define IBL_ENABLED`) ambient 가산 → Reinhard tonemapping → gamma (forward inline; 인게임 지형은 `terrainDeferred.hlsl`→공용 ACES resolve 경로)
 
 **Deferred Shading 관련 파일:**
