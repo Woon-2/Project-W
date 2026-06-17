@@ -1,6 +1,8 @@
 ﻿#ifndef lobby_room_hpp
 #define lobby_room_hpp
 
+#include "protocol.hpp"
+
 class GameSession;
 class SendBuffer;
 
@@ -12,6 +14,7 @@ public:
 	bool enter( const std::shared_ptr<GameSession>& session );
 	// 퇴장 - 방이 비면 LobbyManager::removeRoom 호출
 	void leave( GameSession* session );
+	void selectWeapon( GameSession* session, PlayerWeaponType weaponType );
 	// 게임 시작 - 방 안 전원에게 S_GameStart 브로드캐스트
 	void startGame();
 

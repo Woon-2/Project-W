@@ -30,6 +30,7 @@ public:
 	const Texture* spearHook() const { return &spearHook_; }
 	const Texture* crystalWand() const { return &crystalWand_; }
 	const Texture* heavyArrow() const { return &heavyArrow_; }
+	const Texture* uiLeftButton() const { return &uiLeftButton_; }
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
@@ -114,6 +115,7 @@ private:
 	Texture spearHook_{};
 	Texture crystalWand_{};
 	Texture heavyArrow_{};
+	Texture uiLeftButton_{};
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
 	// Skill dial icons (12), one per selectable weapon skill.

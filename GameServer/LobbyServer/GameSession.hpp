@@ -2,6 +2,7 @@
 #define game_session_hpp
 
 #include "Session.hpp"
+#include "protocol.hpp"
 
 class LobbyRoom;
 
@@ -11,6 +12,7 @@ public:
 	virtual ~GameSession();
 
 	LobbyRoom* myRoom_ = nullptr;
+	PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Katana;
 
 protected:
 	virtual void onConnected() override;

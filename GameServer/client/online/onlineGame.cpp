@@ -3768,7 +3768,12 @@ void Game::refreshLobbyUI() {
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
 	for (const auto& p : lobbyPlayers_) {
-		vs.players.push_back(LobbyUI::PlayerSlot{ p.name, p.sessionId == hostId_ });
+		vs.players.push_back(LobbyUI::PlayerSlot{
+			p.name,
+			p.sessionId == hostId_,
+			p.sessionId == myId_,
+			p.weaponType
+		});
 	}
 	lobbyUI_.refresh(vs);
 
@@ -3785,6 +3790,7 @@ LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	cb.onCopyCode     = [this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; };
 	cb.onOpenSettings = [this]() { settingsPanel_.open(); };
 	cb.onQuit         = []() { PostQuitMessage(0); };
+	cb.onSelectWeapon = [this](int direction) { lobbySelectWeapon(direction); };
 	return cb;
 }
 
@@ -3868,7 +3874,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		pendingHandoff_ = false;
 		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
-		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_));
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_, selectedLobbyWeapon_));
 		INet::ClientApp::send();
 		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
 		return;
@@ -4113,6 +4119,7 @@ void Game::lobbyLeaveRoom() {
 	isHost_ = false;
 	hostId_ = 0;
 	myId_   = 0;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
@@ -4146,6 +4153,27 @@ void Game::lobbyStartGame() {
 	gSharedLog << "[Lobby] 게임 시작 요청 전송\n";
 }
 
+void Game::lobbySelectWeapon(int direction) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+		return;
+	}
+
+	const int cur = std::clamp(static_cast<int>(selectedLobbyWeapon_), 0, 3);
+	const int next = (cur + (direction >= 0 ? 1 : 3)) % 4;
+	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == myId_) {
+			p.weaponType = selectedLobbyWeapon_;
+			break;
+		}
+	}
+
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSelectWeaponPacket(selectedLobbyWeapon_));
+	INet::ClientApp::send();
+	refreshLobbyUI();
+}
+
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
@@ -4153,15 +4181,16 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	myId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId), selectedLobbyWeapon_ });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
 	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
 }
 
-void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds) {
+void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos) {
 	if (!success) {
 		lobbyUI_.setMainMenuMessage(L"방을 찾을 수 없습니다");
 		gSharedLog << "[Lobby] 방 참가 실패\n";
@@ -4172,10 +4201,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 
 	lobbyPlayers_.clear();
-	for (uint16 id : playerIds) {
-		lobbyPlayers_.push_back({ id, lobbyDisplayName(id) });
+	for (const LobbyPlayerInfo& info : playerInfos) {
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		if (info.sessionId == myId_) {
+			selectedLobbyWeapon_ = info.weaponType;
+		}
 	}
 
 	lobbyState_ = LobbyState::WaitingRoom;
@@ -4184,14 +4217,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
-void Game::onLobbyPlayerJoined(uint16 sessionId) {
+void Game::onLobbyPlayerJoined(const LobbyPlayerInfo& info) {
 	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
-		[sessionId](const LobbyPlayer& p) { return p.sessionId == sessionId; });
+		[&info](const LobbyPlayer& p) { return p.sessionId == info.sessionId; });
 	if (!exists) {
-		lobbyPlayers_.push_back({ sessionId, lobbyDisplayName(sessionId) });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
 	}
 	refreshLobbyUI();
-	gSharedLog << "[Lobby] 플레이어 입장: " << sessionId << "\n";
+	gSharedLog << "[Lobby] 플레이어 입장: " << info.sessionId << "\n";
 }
 
 void Game::onLobbyPlayerLeft(uint16 sessionId) {
@@ -4205,6 +4238,24 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 
 	refreshLobbyUI();
 	gSharedLog << "[Lobby] 플레이어 퇴장: " << sessionId << "\n";
+}
+
+void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) {
+	const auto ordinal = static_cast<uint8>(weaponType);
+	if (ordinal > static_cast<uint8>(PlayerWeaponType::HeavyArrow)) {
+		return;
+	}
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == sessionId) {
+			p.weaponType = weaponType;
+			break;
+		}
+	}
+	if (sessionId == myId_) {
+		selectedLobbyWeapon_ = weaponType;
+	}
+	refreshLobbyUI();
 }
 
 void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {

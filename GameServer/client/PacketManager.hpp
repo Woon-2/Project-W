@@ -1,6 +1,8 @@
 ﻿#ifndef client_packet_manager_hpp
 #define client_packet_manager_hpp
 
+#include "protocol.hpp"
+
 namespace Online { class Game; }
 class SendBuffer;
 
@@ -37,6 +39,7 @@ public:
 	static void handleSJoinRoomPacket( byte* buffer, int32 len );
 	static void handleSLobbyRoomPlayerJoinedPacket( byte* buffer, int32 len );
 	static void handleSLobbyRoomPlayerLeftPacket( byte* buffer, int32 len );
+	static void handleSLobbyWeaponSelectedPacket( byte* buffer, int32 len );
 	static void handleSGameStartPacket( byte* buffer, int32 len );
 
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
@@ -45,12 +48,13 @@ public:
 	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
 	static std::shared_ptr<SendBuffer> makeCSelectSkillPacket(uint8 slot);
 
-	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode);
+	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType);
 
 	// 로비
 	static std::shared_ptr<SendBuffer> makeCCreateRoomPacket();
 	static std::shared_ptr<SendBuffer> makeCJoinRoomPacket(const std::string& code);
 	static std::shared_ptr<SendBuffer> makeCLeaveRoomPacket();
+	static std::shared_ptr<SendBuffer> makeCSelectWeaponPacket(PlayerWeaponType weaponType);
 	static std::shared_ptr<SendBuffer> makeCGameStartPacket();
 };
 

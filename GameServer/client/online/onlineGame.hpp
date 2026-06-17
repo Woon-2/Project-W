@@ -189,13 +189,15 @@ private:
 	void lobbyJoinRoom(const std::string& code);
 	void lobbyLeaveRoom();
 	void lobbyStartGame();
+	void lobbySelectWeapon(int direction);
 
 public:
 	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
 	void onLobbyCreated(const std::string& code, uint16 myId);
-	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds);
-	void onLobbyPlayerJoined(uint16 sessionId);
+	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos);
+	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
 	void onLobbyPlayerLeft(uint16 sessionId);
+	void onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType);
 	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
 
 private:
@@ -471,11 +473,13 @@ private:
 	struct LobbyPlayer {
 		uint16       sessionId;
 		std::wstring name;
+		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
 	};
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
 	uint16                   hostId_ = 0;
 	uint16                   myId_   = 0;
+	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 
 	// GrandBaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
