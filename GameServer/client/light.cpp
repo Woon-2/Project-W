@@ -110,12 +110,12 @@ void MU_CALLCONV Light::updateCSMCascades(
 	const float tanHalfX = 1.f / projM00;   // half-width  per unit view depth
 
 	// Extract A, B from projection matrix to convert view-space depth to NDC z:
-	// NDC_z = A + B/viewZ  (LH: nearZ -> NDC_z=0, farZ -> NDC_z=1)
+	// NDC_z = A + B/viewZ  (Reversed-Z LH: nearZ -> NDC_z=1, farZ -> NDC_z=0)
 	const float A = camProj.row(2)[2];
 	const float B = camProj.row(3)[2];
 
-	// Camera near plane in view space: when NDC_z=0, viewZ = -B/A
-	float prevFarV = -B / A;
+	// Camera near plane in view space: when NDC_z=1, viewZ = B/(1-A)
+	float prevFarV = B / (1.f - A);
 
 	for (u32t i = 0u; i < cascadeCount; ++i) {
 		const float nearV = prevFarV;

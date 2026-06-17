@@ -24,7 +24,7 @@ void ProjectAABBToScreen(
     float3 aabbMin, float3 aabbMax,
     out float2 minUV,
     out float2 maxUV,
-    out float minDepth
+    out float maxDepth
 ) {
     float3 corners[8] = {
         float3(aabbMin.x, aabbMin.y, aabbMin.z),
@@ -39,7 +39,9 @@ void ProjectAABBToScreen(
     
     minUV = float2( 1e9,  1e9);
     maxUV = float2(-1e9, -1e9);
-    minDepth = 1.0;
+    // Reversed-Z: 가까움=1.0, 멀어짐=0.0. AABB 8개 코너 중 카메라에 가장 가까운
+    // (가장 큰 depth) 코너를 찾아야 conservative occlusion test가 유지된다.
+    maxDepth = 0.0;
 
     [unroll]
     for (int i = 0; i < 8; i++)
@@ -53,7 +55,7 @@ void ProjectAABBToScreen(
         minUV = min(minUV, uv);
         maxUV = max(maxUV, uv);
 
-        minDepth = min(minDepth, ndc.z);
+        maxDepth = max(maxDepth, ndc.z);
     }
 }
 
@@ -78,15 +80,16 @@ bool OcclusionTest(float2 minUV, float2 maxUV, float depth)
     int2 minXY = int2(minUV * texSize);
     int2 maxXY = int2(maxUV * texSize);
 
-    float maxDepth = 0.f;
+    // Reversed-Z: 가까움=1.0, 멀어짐=0.0. Hi-Z 셀 중 가장 먼(가장 작은) occluder depth를
+    // 찾아, AABB의 가장 가까운 코너(depth)가 그보다 더 멀리(작게) 있지 않은지 검사한다.
+    float minDepth = 1.f;
 
-    maxDepth = max(maxDepth, hiZMap.Load(int3(minXY, mip)));
-    maxDepth = max(maxDepth, hiZMap.Load(int3(int2(maxXY.x, minXY.y), mip)));
-    maxDepth = max(maxDepth, hiZMap.Load(int3(int2(minXY.x, maxXY.y), mip)));
-    maxDepth = max(maxDepth, hiZMap.Load(int3(maxXY, mip)));
+    minDepth = min(minDepth, hiZMap.Load(int3(minXY, mip)));
+    minDepth = min(minDepth, hiZMap.Load(int3(int2(maxXY.x, minXY.y), mip)));
+    minDepth = min(minDepth, hiZMap.Load(int3(int2(minXY.x, maxXY.y), mip)));
+    minDepth = min(minDepth, hiZMap.Load(int3(maxXY, mip)));
 
-    // �ٽ� ��
-    return depth <= maxDepth;
+    return depth >= minDepth;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);

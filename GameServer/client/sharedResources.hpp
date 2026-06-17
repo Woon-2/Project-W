@@ -290,9 +290,9 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 namespace HiZMap {
 
-// clearDepth를 1.0f보다 작은 값으로 설정함으로써
-// distance culling의 효과를 동시에 볼 수 있다.
-inline constexpr auto clearDepth = 0.9999f;
+// Reversed-Z(near=1.0, far=0.0): clearDepth를 0.0f보다 큰 값으로 설정함으로써
+// distance culling의 효과를 동시에 볼 수 있다 (far plane 바로 안쪽을 미리 깎아낸다).
+inline constexpr auto clearDepth = 0.0001f;
 
 struct HiZMapData {
 	Texture srcTex;

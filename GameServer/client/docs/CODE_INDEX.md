@@ -445,6 +445,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
+| `mu::perspReversedZ()` | `mathUtil.hpp` (client + common, 동일 내용) | Reversed-Z LH 퍼스펙티브 투영(near→depth 1.0, far→depth 0.0). `Camera::setPerspective()`(`camera.cpp`)가 사용 — 메인/로비/포트레이트 카메라 전부 적용. 그림자맵(ortho)은 미적용. 상세: `docs/graphicsArchitecture.md` "Reversed-Z 깊이 버퍼" |
 
 **파이프라인 파일 목록:**
 
