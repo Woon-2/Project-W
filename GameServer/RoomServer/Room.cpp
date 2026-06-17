@@ -10,7 +10,9 @@
 #include "collision.hpp"
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
-#include "MidBossTactics.hpp"
+#include "GoblinMidBossTactic.hpp"
+#include "GrandBaumMidBossTactic.hpp"
+#include "IsisMidBossTactic.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 
@@ -261,25 +263,14 @@ void Room::init(const Level* levelData) {
 
 // Binds gameplay behavior to zone tags. Handlers run on the room thread each
 // tick; lambdas defined here have full access to Room internals.
-// [디버그] Arena_Hobgoblin 진입 시 띄울 전술 전투 선택. 0=Goblin(정식) / 1=GrandBaum / 2=Isis.
-// 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
-// (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. 이제 각 보스는 전용 zone
-//  (Arena_Grandbaum/Arena_Isys)과 마커(Wall*/*Spawner)가 레벨에 저작돼 있어 정식 플레이는 매크로
-//  없이 해당 아레나 진입만으로 트리거된다. 이 매크로는 한 자리에서 세 전술을 비교하는 디버그용.)
-#define HOBGOBLIN_DEBUG_TACTIC 1
-
+// 각 보스는 전용 zone(Arena_Hobgoblin/Arena_Grandbaum/Arena_Isys)과 마커(Wall*/*Spawner)가
+// 레벨에 저작돼 있어 해당 아레나 진입만으로 자기 전술 인카운터가 트리거된다.
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
 	// ZoneMarker tagged "Arena_Hobgoblin" (factionMask = Players).
 	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-#if HOBGOBLIN_DEBUG_TACTIC == 1
-			room.onArenaGrandBaumEnter(zone, playerId);   // [디버그] 홉고블린 대신 GrandBaum 스폰
-#elif HOBGOBLIN_DEBUG_TACTIC == 2
-			room.onArenaIsisEnter(zone, playerId);        // [디버그] 홉고블린 대신 Isis 스폰
-#else
 			room.onArenaHobgoblinEnter(zone, playerId);
-#endif
 		});
 
 	zoneSystem_.on("Arena_Grandbaum", ZoneEvent::Enter,
@@ -409,28 +400,6 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallGrandbaum/GrandbaumSpawner 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
-		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
-		if (!haveSpawnPos) {
-			mu::Vec3 anyWallSum{};
-			int      anyWallCount = 0;
-			for (const auto& m : worldTerrain_->markers()) {
-				if (m.type != "Wall") continue;
-				anyWallSum += m.pos;
-				++anyWallCount;
-			}
-			if (anyWallCount > 0) {
-				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
-				haveSpawnPos = true;
-				std::cout << "[Zone] GrandBaum spawn point (debug fallback: any Wall 중점)\n";
-			}
-			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
-				spawnPos     = s->player()->pos();
-				haveSpawnPos = true;
-				std::cout << "[Zone] GrandBaum spawn point (debug fallback: 진입 플레이어 위치)\n";
-			}
-		}
-
 		if (haveSpawnPos) {
 			spawnGrandBaumEncounter(spawnPos, spawnPos);
 
@@ -500,28 +469,6 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallIsys/IsysSpawner 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
-		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
-		if (!haveSpawnPos) {
-			mu::Vec3 anyWallSum{};
-			int      anyWallCount = 0;
-			for (const auto& m : worldTerrain_->markers()) {
-				if (m.type != "Wall") continue;
-				anyWallSum += m.pos;
-				++anyWallCount;
-			}
-			if (anyWallCount > 0) {
-				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
-				haveSpawnPos = true;
-				std::cout << "[Zone] Isis spawn point (debug fallback: any Wall 중점)\n";
-			}
-			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
-				spawnPos     = s->player()->pos();
-				haveSpawnPos = true;
-				std::cout << "[Zone] Isis spawn point (debug fallback: 진입 플레이어 위치)\n";
-			}
-		}
-
 		if (haveSpawnPos) {
 			spawnIsisEncounter(spawnPos, spawnPos);
 
@@ -1618,7 +1565,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 
 	// 보스는 spawnPos(Wall 마커 등 지형보다 높을 수 있음)를 그대로 받으므로 지형 높이로 보정.
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
-	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
+	platoonLeader_ = std::make_unique<PlatoonLeader>(
+		makeBase(bossPos), bossCfg, std::make_unique<GoblinMidBossTactic>());
 	registerBody(*platoonLeader_);
 	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);

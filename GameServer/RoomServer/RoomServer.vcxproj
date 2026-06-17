@@ -162,7 +162,10 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
-    <ClCompile Include="MidBossTactics.cpp" />
+    <ClCompile Include="MidBossTacticBase.cpp" />
+    <ClCompile Include="GoblinMidBossTactic.cpp" />
+    <ClCompile Include="GrandBaumMidBossTactic.cpp" />
+    <ClCompile Include="IsisMidBossTactic.cpp" />
     <ClCompile Include="mushroom.cpp" />
     <ClCompile Include="PlatoonLeader.cpp" />
     <ClCompile Include="snake.cpp" />
@@ -215,7 +218,10 @@
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="goblin.hpp" />
     <ClInclude Include="IMidBossTactic.hpp" />
-    <ClInclude Include="MidBossTactics.hpp" />
+    <ClInclude Include="MidBossTacticBase.hpp" />
+    <ClInclude Include="GoblinMidBossTactic.hpp" />
+    <ClInclude Include="GrandBaumMidBossTactic.hpp" />
+    <ClInclude Include="IsisMidBossTactic.hpp" />
     <ClInclude Include="mushroom.hpp" />
     <ClInclude Include="PlatoonLeader.hpp" />
     <ClInclude Include="snake.hpp" />

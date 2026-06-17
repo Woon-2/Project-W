@@ -73,7 +73,7 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 
 | 파일 | 내용 |
 |---|---|
-| `MidBossTactics.hpp/.cpp` | `GrandBaumMidBossTactic`(Goblin 전술과 동거). NPCAI 구조 미러. |
+| `GrandBaumMidBossTactic.hpp/.cpp` | `GrandBaumMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
 | `Room.hpp/.cpp` | `spawnGrandBaumEncounter`(이종 4부대), `onArenaGrandBaumEnter`, ShieldWall/넉백/동적소환 헬퍼, 데미지 훅, `move` 클램프 면제. |
 | `object.hpp` | `damageTakenMultiplier_`. |
 | `GameSession.hpp` | 넉백 클램프 면제 타이머. |
@@ -92,8 +92,9 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 
 ## 트리거
 
-Zone 태그 `"Arena_GrandBaum"` + 마커 `WallGrandBaum_0/1`(후방벽), `BossSpawn`(없으면 Wall 중점
-fallback). 홉고블린(`Arena_Hobgoblin`) 미러.
+Zone 태그 `"Arena_Grandbaum"` + 마커 `WallGrandbaum_0/1/2`(후방벽), `GrandbaumSpawner`(없으면 Wall
+중점 fallback). 해당 아레나 진입만으로 트리거된다. (과거 한자리 비교용 디버그 트리거
+`HOBGOBLIN_DEBUG_TACTIC`는 제거됨 — `Arena_Hobgoblin`은 다시 홉고블린 전용.)
 
 ## 스탯/상수 (인게임 스케일)
 
@@ -116,12 +117,12 @@ RoomServer · client 모두 Debug/x64 빌드 통과.
 ## 검증 방법
 
 실행 검증은 `client`로(DummyClient 아님). RoomServer+LobbyServer+client 기동 → 방 입장 →
-`Arena_GrandBaum` zone 진입.
+`Arena_Grandbaum` zone 진입.
 1. 예방: 66% 전 뱀 부대(D) 전멸 → 66% 도달 시 ShieldWall **스킵** 확인.
 2. 해제: 뱀 남긴 채 66% 도달 → 슬라임 링(통과 불가)+보스 90% 경감 → 증원 웨이브 스폰 → 전멸 시
    링 해제·재취약. 33%에서 1회 재현(독립).
 3. 넉백: 링 형성 시 안쪽 플레이어 0.32s 밀려남 + 1.2s 입력잠금.
 4. 표적 우선순위: 뱀 근처 플레이어 우선 추적.
 
-> **주의**: 현재 레벨 데이터에 `Arena_GrandBaum` zone/마커가 없어, 실제 트리거하려면 레벨 저작 또는
-> 임시 디버그 트리거가 필요하다.
+> **주의**: 디버그 fallback이 제거됐으므로 `Arena_Grandbaum` zone과 `WallGrandbaum_*`/`GrandbaumSpawner`
+> 마커가 레벨에 저작돼 있어야 GrandBaum이 스폰된다(미저작 시 인카운터 스킵).

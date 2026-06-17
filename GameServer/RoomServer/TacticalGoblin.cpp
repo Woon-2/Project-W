@@ -1,6 +1,5 @@
 #include "rspch.hpp"
 #include "TacticalGoblin.hpp"
-#include "Room.hpp"
 
 TacticalNpcConfig TacticalGoblin::trooperConfig() {
 	auto cfg = TacticalNpcConfig{
@@ -28,10 +27,4 @@ TacticalNpcConfig TacticalGoblin::bossConfig() {
 		.separationWeight	= 0.3f
     };
     return cfg;
-}
-
-void TacticalGoblin::spawnEncounter(Room& room, mu::Vec3 spawnCenter,
-                                    mu::Vec3 bossPos,
-                                    int numSquads, int troopersPerSquad) {
-    room.spawnTacticalGoblinEncounter(spawnCenter, bossPos, numSquads, troopersPerSquad);
 }

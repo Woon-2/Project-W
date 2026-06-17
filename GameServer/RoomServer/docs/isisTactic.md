@@ -99,17 +99,18 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 
 | 파일 | 내용 |
 |---|---|
-| `MidBossTactics.hpp/.cpp` | `IsisMidBossTactic`(Goblin/GrandBaum 전술과 동거). NPCAI 구조 미러. |
-| `Room.hpp/.cpp` | `spawnIsisEncounter`(Buddy 2 + Bomber 2 + Isis 보스), `onArenaIsisEnter`, zone 바인딩, 디버그 트리거. |
+| `IsisMidBossTactic.hpp/.cpp` | `IsisMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
+| `Room.hpp/.cpp` | `spawnIsisEncounter`(Buddy 2 + Bomber 2 + Isis 보스), `onArenaIsisEnter`, zone 바인딩(`Arena_Isys`). |
 
 (프로토콜/PacketManager/client/`.vcxproj` 변경 없음.)
 
 ## 트리거
 
-- 정식: zone 태그 `"Arena_Isis"` + 마커 `WallIsis_0/1`(후방벽, 선택), `BossSpawn`(없으면 Wall 중점 fallback).
-- **임시 디버그**(`Room.cpp` `ISIS_DEBUG_TRIGGER_VIA_HOBGOBLIN 1`): 정식 `Arena_Isis` 마커가 레벨에 아직
-  없어, 검증용으로 기존 `Arena_Hobgoblin` zone 진입 시 홉고블린 대신 Isis 인카운터를 스폰한다. 정식 마커
-  저작 후 이 매크로를 `0`으로 되돌릴 것.
+- zone 태그 `"Arena_Isys"` + 마커 `WallIsys_0/1/2`(후방벽, 선택), `IsysSpawner`(없으면 Wall 중점 fallback).
+  해당 아레나 진입만으로 트리거된다.
+- 과거 한자리 비교용 디버그 트리거(`HOBGOBLIN_DEBUG_TACTIC`, `Arena_Hobgoblin` 재사용 + any-Wall/플레이어
+  위치 fallback)는 **제거됨**. `Arena_Hobgoblin`은 다시 홉고블린 전용이며, Isis는 전용 마커가 저작된
+  `Arena_Isys`에서만 스폰된다.
 
 ## 스탯/상수 (인게임)
 
@@ -119,22 +120,23 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 
 ## 빌드 상태
 
-- **M1**: 전술 골격 + Engage 분산교전 + 보스 근접 FSM(백스텝 포함) + 80% unlock + 인카운터 스폰 + 디버그 트리거.
+- **M1**: 전술 골격 + Engage 분산교전 + 보스 근접 FSM(백스텝 포함) + 80% unlock + 인카운터 스폰.
 - **M2**: 협공 풀 사이클(후퇴→Bomber 집결→1차 쐐기→Buddy 집결+보스 합류→2차 쐐기 ×1.5→Cooldown).
 - **M3**: 거리 인게임 스케일(×~0.4) + 보스 속도 모터 캡 + 본 문서/메모리. **실제 client 검증·밸런싱은
-  레벨 마커 저작(또는 디버그 트리거 사용) 후** 진행.
+  `Arena_Isys` 레벨 마커 저작 후** 진행.
 
 RoomServer Debug/x64 빌드 통과(오류 0/경고 0).
 
 ## 검증 방법
 
 실행 검증은 `client`로(DummyClient 아님). RoomServer + LobbyServer + client 기동 → 방 입장 →
-디버그 트리거(`Arena_Hobgoblin` zone) 진입:
+`Arena_Isys` zone 진입:
 1. **Engage**: 4스쿼드 분산 교전, 보스 근접 FSM(추적→공격), 누적 피해 60↑ 시 백스텝 이탈.
 2. **Unlock**: 한 스쿼드 인원 20%↑ 처치 → 협공 사이클 진입.
 3. **1차 쐐기**: 전군 후퇴·집결 → Bomber가 최대·최근접 군집에 쐐기 돌진(피해).
 4. **2차 쐐기**: Buddy 라인 + 보스 합류 → **다른 군집**(1차 페널티로 분산)에 쐐기 + **×1.5 피해**.
 5. **루프**: Cooldown 후 Engage 복귀, 재차 80% 게이트로 재발동.
 
-> **주의(GrandBaum과 동일 한계)**: 정식 `Arena_Isis` zone/마커가 레벨에 없어 임시 디버그 트리거로 검증한다.
-> 정식 레벨 저작·밸런싱(거리/속도 상수, 105기/방 성능, config 스탯/부대인원)은 후속.
+> **주의**: 디버그 fallback이 제거됐으므로 `Arena_Isys` zone과 `WallIsys_*`/`IsysSpawner` 마커가 레벨에
+> 저작돼 있어야 Isis가 스폰된다(미저작 시 인카운터 스킵). 밸런싱(거리/속도 상수, 105기/방 성능,
+> config 스탯/부대인원)은 후속.
