@@ -1148,12 +1148,14 @@ void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
 	if (gfx.renderPath() == GFX::RenderPath::Deferred) {
 		gfx.addDrawEvent(TerrainDeferredPipeline::DrawEvent{
 			.terrain = terrainData_,
-			.world   = renderState_.world
+			.world   = renderState_.world,
+			.shadowCulled = isShadowCulled()
 		});
 	} else {
 		gfx.addDrawEvent(TerrainPipeline::DrawEvent{
 			.terrain = terrainData_,
-			.world   = renderState_.world
+			.world   = renderState_.world,
+			.shadowCulled = isShadowCulled()
 		});
 	}
 }

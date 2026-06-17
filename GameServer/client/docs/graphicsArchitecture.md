@@ -145,7 +145,25 @@ C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(
   오히려 떨림을 유발했고, 카메라-상대 공간만으로 shimmer가 해소됨(2026-06 사용자 검증).
 - 보조: deferred lighting은 GBuffer `gb4`(linear view-Z, R32F)로 posV를 정확 복원(NDC 깊이 양자화 제거) — 단독으론 소폭 개선.
 - **주의:** cascade `lightVP`가 카메라-상대 공간이므로, 절대 월드 BVH로 cull/test하는 코드는 `cascadeCameraPos()`로
-  rebase 필요. standalone `game.cpp::cullObjectsForShadow`는 AABB/OBB center를 `- cascadeCameraPos()`로 rebase함(online엔 이 패턴 없음).
+  rebase 필요 — 이 rebase는 이제 `Light::shadowVisible`(아래) 내부에서 일괄 처리된다.
+- **ortho z-pad = `2·radius` (유지):** `mu::ortho(...,minZ - 2·radius, maxZ)`. near 평면을 frustum slice보다 충분히
+  뒤로 빼서, 빛과 slice 사이에 있는 캐스터(slice 바로 밖 나무/풀 등)도 깊이를 기록한다. `radius`로 줄이면 일부
+  foliage가 near 평면 뒤로 사라져, 2x 패딩을 의도적으로 유지(2026-06-17 사용자 검증). chunk의 `shadowVisible(expand=3)`은
+  z축소와 무관하게 보수적 컬링으로 유지.
+
+**Shadow(light) frustum culling — 단일 진입점 (2026-06-17):**
+그림자 캐스터 컬링은 **메인 카메라가 아니라 광원 cascade 기준**으로 수행해야 한다(메인 frustum으로 컬링하면
+화면 밖 캐스터의 그림자가 사라지는 popping 발생). 모든 light-frustum 컬링은 `Light::shadowVisible(...)` 하나로 통일:
+- `updateCSMCascades`가 cascade마다 `cascadeFrusta_[i] = extractFrustum(view·proj)`를 캐시(ortho 투영이라 6평면=OBB).
+- `Light::shadowVisible(AABB/OBB/variant, expand=1)` — bounds를 `cascadeCameraPos_`로 rebase + `expand`로 half-extent
+  확장 후 `intersects(Frustum, ·)`(`frustumCull.hpp`, AABB·OBB 오버로드)로 테스트, 어느 cascade에라도 보이면 visible.
+  cascade 0개면 항상 true(미컬, 안전 폴백).
+- 호출 위치 3곳: ① 엔티티 `game.cpp::cullObjectsForShadow`(인라인 SAT ~60줄 → 한 줄로 축약) ② 지형 chunk
+  `TerrainChunkManager::submitDrawEvents`(`expand=3`, 대형 캐스터 보존) ③ scatter BVH prop `submitScatterDrawEvents`(`expand=1`).
+- **메인 vs 그림자 가시성 분리:** scatter prop은 메인카메라 `frustum_` VFC와 `shadowVisible`를 독립 평가해 DrawEvent의
+  `viewFrustumCulled`/`shadowCulled`를 따로 설정 → 화면 밖이지만 그림자 frustum 안인 나무는 shadow 패스에만 제출(gbuffer/Hi-Z 제외).
+  지형 chunk DrawEvent에도 `shadowCulled` 필드 추가, terrain `shadowDraw` 루프에서 skip(gbuffer는 무영향).
+- Hi-Z occlusion은 메인 패스 개념 → occludee/occluder 선정은 `mainVisible`일 때만(그림자에는 Hi-Z 미적용).
 
 **Normal Offset Shadow Bias:** (`pbrLighting.hlsli::sampleCascadePCF`)
 - world-space normal 방향으로 `offset * sinTheta` 만큼 샘플 위치를 오프셋

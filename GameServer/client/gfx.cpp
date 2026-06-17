@@ -2411,7 +2411,7 @@ void GFX::render() {
 			lpfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
 			lpfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
 			lpfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
-			lpfd.iblIntensity        = 1.0f;
+			lpfd.iblIntensity        = 0.85f;
 			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
 			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
 			lpfd.fogDensity = 0.0008f;
