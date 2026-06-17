@@ -49,9 +49,23 @@ public:
     void update(float dtSec);                       // animates wheel rotation
     void render(GFX& gfx, float screenW, float screenH) const;
 
+    // Resolution-relative pivot tuning. Position is stored as a fraction of
+    // screen width/height (not absolute pixels) so it keeps the same relative
+    // placement across resolutions. nudgeMarginPx lets debug input adjust it
+    // in familiar pixel units; the conversion to fraction happens here.
+    void nudgeMarginPx(float dxPx, float dyPx, float screenW, float screenH);
+    float marginXFrac() const { return marginXFrac_; }
+    float marginYFrac() const { return marginYFrac_; }
+
 private:
     bool     visible_       = false;
     unsigned weaponOrdinal_ = 0;
+
+    // Wheel pivot offset from the right/bottom screen edge, as a fraction of
+    // screen width/height. Defaults reproduce the original 96px margin at the
+    // client's default 1024x768 window.
+    float marginXFrac_ = 96.f / 1024.f;
+    float marginYFrac_ = 96.f / 768.f;
 
     const Texture* slotIcon_[kSlots] = { nullptr, nullptr, nullptr };
     const Texture* basicIcon_        = nullptr;
