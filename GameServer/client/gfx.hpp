@@ -91,7 +91,7 @@ struct AssetConfigs {
 	struct ShadowMapConfig {
 		std::string key          = "ShadowMap";
 		// cascade별 shadow map 해상도 (index 0 = 가장 가까운 cascade)
-		std::array<u32t, MAX_CSM_CASCADES> cascadeResolutions = { 2048u, 1024u, 1024u, 512u };
+		std::array<u32t, MAX_CSM_CASCADES> cascadeResolutions = { 4096u, 4096u, 2048u, 2048u };
 		u32t        cascadeCount = static_cast<u32t>(MAX_CSM_CASCADES);
 		DXGI_FORMAT format       = DXGI_FORMAT_D32_FLOAT;
 	} shadowMap;
@@ -389,8 +389,9 @@ public:
 	void setRenderPath(RenderPath path) { renderPath_ = path; }
 
 	// GBuffer 채널 debug 뷰를 순환한다 ('G' 키에 연결됨).
-	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth → None
-	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 11u; }
+	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth
+	//        → IBL diffuse → IBL specular → BRDF → CSM cascade 0~3 shadow map → None
+	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 15u; }
 
 	// Returns false when text rendering fails (e.g. device loss); callers keep
 	// their text dirty and retry on a later frame.
@@ -617,7 +618,7 @@ private:
 	bool hiZCullEnabled_      = true;
 	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
-	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT
+	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT, 11~14=CSM cascade 0~3 shadow map
 	float tonemapExposure_    = 1.0f;  // linear exposure multiplier applied in the tonemap resolve pass
 	float bloomThreshold_     = 1.0f;  // bloom brightness threshold (HDR luminance)
 	float bloomIntensity_     = 0.08f; // bloom additive strength at composite (0 = bloom off)

@@ -2936,6 +2936,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 접지 중력 게이팅: 이번 step의 terrain 접촉을 보고 로컬 플레이어 접지 판정 +
+		// 중력 게이트 설정(다음 step에 반영) + ground-snap. 물리 step 루프 안에서
+		// (렌더 프레임이 아니라) 호출해야 고정 timestep 의미가 유지된다.
+		if (player_) player_->updateGroundedGravityGate(physicsWorld_, effectiveInterval);
 		// 물리 적분 직후, 로컬 플레이어를 다른 플레이어와 reciprocal soft separation.
 		// (setCurrPos로 curr만 갱신 → 렌더 보간의 prev는 보존된다)
 		resolvePlayerSeparation(effectiveInterval);

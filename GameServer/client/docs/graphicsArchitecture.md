@@ -54,7 +54,7 @@
 5. mainPass(UI)
 
 **Deferred Path (인게임 기본; 로비는 Forward):**
-1. GBuffer + **SceneColorHDR** clear (GB0~GB3 RTV + GBuffer DSV + SceneColorHDR RTV)
+1. GBuffer + **SceneColorHDR** clear (GB0~GB4 RTV + GBuffer DSV + SceneColorHDR RTV)
 1b. **(Hi-Z ON)** Occluder pass: `occluderPass(TerrainDeferred)` → `occluderPass(PBRDeferred)` — 지형 + 근거리 BVH prop을 position-only depth로 Hi-Z source depth에 기록 → Hi-Z mip pyramid build → `hiZPass(PBRDeferredSkinned)` + **`hiZPass(PBRDeferred)`** (cull/compact/command)
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
 3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동)
@@ -85,6 +85,22 @@ C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(
 ```
 - 기본 파라미터: nearZ=0.1, farZ=500, lambda=0.75
 - texel snapping으로 shadow swimming 제거 (cascade별 독립 해상도 사용)
+
+**Camera-relative 정밀도 — shadow shimmering 해결 (2026-06):** follow camera에서만 나타나던 그림자 떨림의
+근본 원인은 청크 원점(~월드 5500,5500)의 큰 좌표가 CSM 행렬 연산을 거치며 float 정밀도를 잃은 것이었다
+(CSM 맵 생성 버그 아님 — cascade 디버그 뷰에서 cascade map 자체가 흔들리는 것으로 확정). 카메라-상대 공간이 실제 해결책이며, 다음 표준 기법으로 해결:
+- **카메라-상대 그림자 공간:** `updateCSMCascades`가 frustum corner를 카메라 eye 원점 기준(camera-relative)으로
+  구성 → cascade ortho bounds·`lightVP`가 `posW - camPos`를 light NDC로 매핑. caster(depth 패스)·receiver(셰이딩)
+  양쪽이 셰이더에서 `camPos`를 먼저 빼고 `lightVP`를 적용해 ~5500 대형 좌표가 light-space 연산에 진입하지 않음
+  (**caster·receiver를 반드시 함께 rebase** — 한쪽만 하면 그림자 깨짐). `Light::cascadeCameraPos()`로 기준 eye 노출.
+- **frustum corner 직접 생성:** `inverse(camView*camProj)` 제거. 카메라 basis(camView 상위 3x3 열 = 직교 transpose,
+  exact)·fov(camProj `m11`,`m00`)·per-cascade near/far로 corner를 카메라-상대 공간에서 직접 계산(역행렬 정밀도 손실 제거).
+- **texel center snap 유지:** sphere center XY를 `worldUnitsPerTexel(=2·radius/res)` 격자에 스냅(radius가
+  rotation-invariant라 프레임 간 안정). per-cascade **radius 양자화는 시도 후 제거** — 이산 radius 스텝이 이동 중
+  오히려 떨림을 유발했고, 카메라-상대 공간만으로 shimmer가 해소됨(2026-06 사용자 검증).
+- 보조: deferred lighting은 GBuffer `gb4`(linear view-Z, R32F)로 posV를 정확 복원(NDC 깊이 양자화 제거) — 단독으론 소폭 개선.
+- **주의:** cascade `lightVP`가 카메라-상대 공간이므로, 절대 월드 BVH로 cull/test하는 코드는 `cascadeCameraPos()`로
+  rebase 필요. standalone `game.cpp::cullObjectsForShadow`는 AABB/OBB center를 `- cascadeCameraPos()`로 rebase함(online엔 이 패턴 없음).
 
 **Normal Offset Shadow Bias:** (`pbrLighting.hlsli::sampleCascadePCF`)
 - world-space normal 방향으로 `offset * sinTheta` 만큼 샘플 위치를 오프셋
@@ -141,6 +157,7 @@ Light::updateCSMCascades()
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space), 클리어값 (0.5, 0.5) → (0,0,1) |
 | GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (ambient/IBL는 lighting 패스로 이동) + Roughness.a |
 | GB3 | R8_UNORM | Metallic |
+| GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원이 NDC 깊이 양자화 대신 사용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 > **주의:** GB2.rgb는 emissive 전용이다. `pbrDeferred.hlsl`·`pbrDeferredSkinned.hlsl`·`terrainDeferred.hlsl` 모두 `lightAccum = emissive`(지형/스킨드 모두)로 기록해야 한다. 과거 스킨드 셰이더만 `globalAmbient*albedo`를 굽던 버그가 있었고(이중 ambient: GB2 상수 ambient + lighting 패스 IBL), 셋 다 emissive-only로 통일했다.

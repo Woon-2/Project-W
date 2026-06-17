@@ -705,6 +705,78 @@ void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
 	body_.setLinearVel(newVelocity);
 }
 
+void Object::updateGroundedGravityGate(const PhysicsWorld& world, Seconds physicsDt) {
+	// physicsDt: 호출이 물리 step과 1:1로 일어남을 문서화하는 인자. 현재 지속 판정은
+	// step 카운트 기반이라 직접 쓰지 않는다(시그니처는 향후 확장 대비).
+	(void)physicsDt;
+	// 캐릭터 컨트롤러 표준 패턴(Unity/UE)의 grounded gravity gating + ground snap.
+	// Dynamic body만 의미가 있다(Kinematic/Static은 중력을 받지 않는다).
+	if (body_.motionType() != MotionType::Dynamic) {
+		grounded_      = false;
+		groundedSteps_ = 0;
+		body_.setGravityScale(1.f);
+		return;
+	}
+
+	// 접지 판정 파라미터.
+	//  kGroundNormalY    : 접촉 법선의 위쪽 정렬 임계값. terrain 접촉은 항상 Y-up
+	//                      (collision.cpp testVertex)이지만, 일반화를 위해 충분히
+	//                      위를 향하는 접촉만 지면으로 인정한다(가파른 벽 제외).
+	//  kRiseMaxSpeed     : 이보다 빠르게 상승 중이면(점프/넉백) 절대 접지로 보지 않는다.
+	//  kSnapMaxSpeed     : 접지 시 0으로 스냅할 하강 속도의 상한. 더 빠른 하강은
+	//                      막 착지한 큰 낙하이므로 솔버가 처리하도록 둔다.
+	//  kGroundedStepsMin : 게이트를 끄기 전 요구하는 연속 접지 step 수(상태 안정화).
+	constexpr float kGroundNormalY    = 0.7f;   // ~45도 이내의 지면만 접지로 인정
+	constexpr float kRiseMaxSpeed     = 0.05f;  // m/s, 상승 중이면 공중 판정
+	constexpr float kSnapMaxSpeed     = 1.0f;   // m/s, 스냅 대상 하강 속도 상한
+	constexpr int   kGroundedStepsMin = 2;      // 연속 접지 step 요구치
+
+	// 이번 step이 생성한 terrain 접촉 중, 이 body의 지면 접촉(법선이 위를 향함)을 찾는다.
+	// terrain 접촉에서는 dynamic body가 항상 bodyA(B=terrain), 법선은 B→A=terrain→body.
+	bool hasGroundContact = false;
+	world.forEachContact([&](const ContactConstraint& cc) {
+		if (hasGroundContact)            return;
+		if (!cc.isTerrainContact())      return;
+		if (cc.bodyA != &body_)          return;   // 이 body의 접촉만
+		for (int i = 0; i < cc.count; ++i) {
+			if (mu::Vec3(cc.contacts[i].normal).y() >= kGroundNormalY) {
+				hasGroundContact = true;
+				break;
+			}
+		}
+	});
+
+	// 상승 중(점프/넉백)에는 즉시 공중 판정 → 중력 켜짐 → 정상 상승/낙하.
+	const float vy = body_.linearVel().y();
+	const bool  rising = vy > kRiseMaxSpeed;
+
+	if (hasGroundContact && !rising) {
+		// 접지 후보: 연속 step 카운트를 늘린다(상태 안정화).
+		if (groundedSteps_ < kGroundedStepsMin)
+			++groundedSteps_;
+	} else {
+		// 지면 접촉이 사라졌거나 상승 중: 즉시 공중으로 전환(낙하 지연 없음).
+		groundedSteps_ = 0;
+	}
+
+	grounded_ = (groundedSteps_ >= kGroundedStepsMin);
+
+	if (grounded_) {
+		// 중력 게이트 off: 다음 step부터 중력이 접촉 솔버와 싸우지 않는다.
+		body_.setGravityScale(0.f);
+		// Ground-snap: 작은 하강 속도를 0으로 클램프해 잔여 튐을 제거한다.
+		// 상승 속도는 절대 건드리지 않는다(점프/넉백 보존). 큰 하강 속도(막 착지)는
+		// 솔버가 처리하도록 그대로 둔다.
+		if (vy < 0.f && vy > -kSnapMaxSpeed) {
+			const auto v = body_.linearVel();
+			body_.setLinearVel(mu::Vec3(v.x(), 0.f, v.z()));
+		}
+	} else {
+		// 공중: 중력 복원 → 점프/낙하가 이전과 동일하게 동작한다.
+		body_.setGravityScale(1.f);
+	}
+}
+
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	body_.setOmega(newOmega);
 }

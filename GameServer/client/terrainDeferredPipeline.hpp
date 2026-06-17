@@ -38,6 +38,7 @@ struct LightData {
     XMFLOAT4   cascadeSplitsFarV = {};
     u32t       cascadeCount = MAX_CSM_CASCADES;
     std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
+    mu::Vec3   cascadeCameraPos = {};  // camera eye for camera-relative cascade space (caster/receiver rebase)
 };
 
 // GBuffer pass only needs globalAmbient for the pre-computed lightAccum term.
@@ -132,7 +133,7 @@ private:
     ComPtr<ID3D12CommandQueue>        cmdQ_          = nullptr;
     D3D12_VIEWPORT                    viewport_{};
     D3D12_RECT                        scissorRect_{};
-    D3D12_CPU_DESCRIPTOR_HANDLE       rtvGB_[4]{};
+    D3D12_CPU_DESCRIPTOR_HANDLE       rtvGB_[5]{};
     D3D12_CPU_DESCRIPTOR_HANDLE       dsvGB_{};
     Fence*                            pFence_        = nullptr;
     Resources*                        pResources_    = nullptr;

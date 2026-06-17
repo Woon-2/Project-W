@@ -50,6 +50,9 @@ public:
 	XMFLOAT4 cascadeSplitsFarV() const { return cascadeSplitsFarV_; }
 	u32t cascadeCount() const { return cascadeCount_; }
 	const std::array<float, MAX_CSM_CASCADES>& cascadeNormalOffsets() const { return cascadeNormalOffsets_; }
+	// Camera eye used to build the camera-relative cascade lightVPs (set by updateCSMCascades).
+	// Casters/receivers rebase positions by this before applying lightVP.
+	mu::Vec3 MU_CALLCONV cascadeCameraPos() const { return cascadeCameraPos_; }
 
 	mu::NVec3 MU_CALLCONV dir() const {
 		return mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
@@ -69,6 +72,7 @@ private:
 	XMFLOAT4 cascadeSplitsFarV_{};
 	u32t cascadeCount_ = 0u;
 	std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets_{};
+	mu::Vec3 cascadeCameraPos_{};  // camera eye for camera-relative cascade space
 };
 
 #endif	// __light_HPP

@@ -43,6 +43,11 @@ public:
     // handled exclusively by Split Impulse.
     void setTerrainContact(bool v) { isTerrainContact_ = v; }
 
+    // True if this constraint is a body-vs-terrain support contact. The game
+    // layer reads this (via forEachContact) to decide whether a character is
+    // grounded for gravity gating.
+    bool isTerrainContact() const { return isTerrainContact_; }
+
     // Split Impulse position correction: accumulates pseudo-velocities that are
     // applied to body positions at the end of the step (never to real velocity).
     void solvePosition() override;

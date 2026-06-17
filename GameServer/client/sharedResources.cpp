@@ -744,18 +744,21 @@ void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 		gb.gb1   = createGB1RT  (device, width, height,                               rtvPool, srvTexPool, ("GBuffer_GB1" + suffix).c_str());
 		gb.gb2   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB2" + suffix).c_str());
 		gb.gb3   = createColorRT(device, width, height, DXGI_FORMAT_R8_UNORM,          rtvPool, srvTexPool, ("GBuffer_GB3" + suffix).c_str());
+		gb.gb4   = createColorRT(device, width, height, DXGI_FORMAT_R32_FLOAT,         rtvPool, srvTexPool, ("GBuffer_GB4" + suffix).c_str());
 		gb.depth = createDepthRT(device, width, height,                 dsvPool, srvTexPool, ("GBuffer_Depth" + suffix).c_str());
 
 		gb.rtvHandles[0] = rtvPool.cpuHandle(gb.gb0.idxRtv);
 		gb.rtvHandles[1] = rtvPool.cpuHandle(gb.gb1.idxRtv);
 		gb.rtvHandles[2] = rtvPool.cpuHandle(gb.gb2.idxRtv);
 		gb.rtvHandles[3] = rtvPool.cpuHandle(gb.gb3.idxRtv);
+		gb.rtvHandles[4] = rtvPool.cpuHandle(gb.gb4.idxRtv);
 		gb.dsvHandle     = dsvPool.cpuHandle(gb.depth.idxDsv);
 
 		gb.curStateGB[0] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[1] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[2] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[3] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateGB[4] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateDepth = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
 		gBufferData.push_back(std::move(gb));
@@ -764,9 +767,9 @@ void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 
 void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& gb = gBufferData[roomIdx];
-	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+	Texture* colorTex[5] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 };
 
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < 5; ++i) {
 		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_RENDER_TARGET) {
 			transitionResourceState(cmdList, colorTex[i]->res.Get(),
 				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -787,9 +790,9 @@ void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) 
 
 void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& gb = gBufferData[roomIdx];
-	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+	Texture* colorTex[5] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 };
 
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < 5; ++i) {
 		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
 			transitionResourceState(cmdList, colorTex[i]->res.Get(),
 				D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -815,18 +818,21 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	const float kBlack[4] = { 0.f, 0.f, 0.f, 0.f };
 	// GB1: clear to (0.5, 0.5, 0, 0) — octDecode((0.5,0.5)) = (0,0,1) forward normal
 	const float kNormalClear[4] = { 0.5f, 0.5f, 0.f, 0.f };
+	// GB4 (linear view-space Z): background pixels = 0 (overwritten by skybox in the forward pass)
+	const float kZeroZ[4] = { 0.f, 0.f, 0.f, 0.f };
 
 	cmdList->ClearRenderTargetView(gb.rtvHandles[0], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[1], kNormalClear, 0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[2], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[3], kBlack,       0u, nullptr);
+	cmdList->ClearRenderTargetView(gb.rtvHandles[4], kZeroZ,       0u, nullptr);
 	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
 }
 
 void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool ) {
 	for (auto& gb : gBufferData) {
-		// 색상 RT 4개: RTV + SRV 반납
-		for (auto* colorTex : { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 }) {
+		// 색상 RT 5개: RTV + SRV 반납
+		for (auto* colorTex : { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 }) {
 			freeRTV(*colorTex, rtvPool);
 			freeSRV(*colorTex, srvTexPool);
 		}

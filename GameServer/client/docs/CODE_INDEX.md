@@ -82,12 +82,14 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RigidBody::applyForce()` | `rigidBody.cpp` | force accumulator에 추가 |
 | `RigidBody::applyImpulse()` | `rigidBody.cpp` | 즉시 vel/omega 변경 |
 | `RigidBody::applyTorqueImpulse()` | `rigidBody.cpp` | 즉시 omega 변경 (joint/PD 토크용) |
+| `RigidBody::setGravityScale()` / `gravityScale()` | `rigidBody.hpp #110` | per-body 중력 배율(Unity gravityScale 등가, 기본 1). integrate Dynamic 분기에서 `gravity_ * gravityScale()`; 접지 중력 게이팅이 0/1 토글 |
 | `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
 | `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
 | `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
+| `ContactConstraint::isTerrainContact()` | `contactConstraint.hpp #49` | terrain support 접촉 여부 getter (게임 레이어 접지 판정용) |
 | `StaticContact` struct | `staticDepenetration.hpp` | Static-Dynamic/Static-Kinematic 충돌 레코드; normal은 static→movable; ContactConstraint solver 우회 |
 | `resolveStaticPenetration()` | `staticDepenetration.hpp/cpp` | static 침투 positional depenetration(partial+slop+clamp) + inward normal-vel 클램프; 회전·분리속도 미주입; Kinematic도 직접 이동(invMass 무관); 이동 body는 outMoved로 반환(BVH 재빌드용) |
 | `staticdepen::kSlop/kCorrectFrac/kMaxCorrect` | `staticDepenetration.hpp` | 진동 방지 파라미터 0.005m / 0.8 / 0.2m |
@@ -382,6 +384,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
+| `Object::updateGroundedGravityGate()` | `object.cpp #708` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
+| `Object::isGrounded()` | `object.hpp #232` | 접지 판정 결과 (updateGroundedGravityGate가 갱신) |
 
 **구체 오브젝트 클래스:**
 
@@ -528,11 +532,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
 | GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (정적·스킨드·지형 모두 emissive 전용; ambient/IBL는 lighting 패스) + Roughness.a |
 | GB3 | R8_UNORM | Metallic |
+| GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원에서 NDC 깊이 양자화 회피용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 - GB1 클리어 값: `(0.5, 0.5, 0, 0)` → octDecode 시 정면 법선 (0, 0, 1)
 - Normal Oct Encoding: `pbrLighting.hlsli`의 `octEncode()` / `octDecode()` 유틸리티 사용
-- depth + invProj → posV, posV + invView → posW (Lighting 패스에서 위치 재구성)
+- GB4(linear view-Z) × invProj 뷰 광선 → posV(NDC 깊이 양자화 회피), posV × invView → posW; CSM 그림자는 posW−camPos(**camera-relative**)로 샘플 (Lighting 패스 위치 재구성)
 
 **HDR / IBL / Bloom 관련 파일 (상세 아키텍처: `docs/graphicsArchitecture.md` "HDR + IBL + Bloom 파이프라인"):**
 
@@ -552,7 +557,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **Deferred 렌더 패스 순서 (`gfx.cpp::render()`):**
 1. GBuffer + SceneColorHDR 클리어 (`clearGBuffer` + SceneColor `transitionToWrite`/clear)
 2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
-3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
+3. GBuffer Pass (정적) — MRT 5개(GB0~GB4) + DSV에 geometry 기록
 4. **GBuffer Indirect Pass (스킨드)** — Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw. Compact Pass 이후 visibleFlags → `visibilityReadback` 복사(1-frame delay). 동일 MRT + DSV.
 5. GBuffer Pass (지형) — TerrainDeferredPipeline, 동일 MRT + DSV
 6. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
@@ -785,7 +790,8 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산 |
+| `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산. **카메라-상대 공간**에서 frustum corner 직접 생성(역행렬 없음: camView 열=basis·camProj=fov) + center texel snap — shadow shimmering 해결 (radius 양자화는 시도 후 제거: 이동 중 떨림 유발) |
+| `Light::cascadeCameraPos()` | `light.hpp #55` | camera-relative cascade 빌드에 쓰인 카메라 eye. caster/receiver가 `posW-camPos` rebase에 사용(standalone shadow culling도 이 값으로 BVH rebase) |
 | `Light::render()` | `light.hpp #35` | PBR, PBRSkinned, Terrain 세 파이프라인에 LightData 자기등록 |
 | `Light::dir()` | `light.hpp #52` | 조명 방향 (NVec3) |
 

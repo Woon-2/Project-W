@@ -11,6 +11,7 @@
 class AssetManager;
 class Object;
 class Timer;
+class PhysicsWorld;
 
 class AnimBlenderPlayer : public AnimBlender {
 public:
@@ -218,6 +219,17 @@ public:
 	// Physics body accessor. PhysicsWorld 등록 시 &body()를 전달한다.
 	RigidBody&       body()       { return body_; }
 	const RigidBody& body() const { return body_; }
+
+	// 접지 중력 게이팅 (character controller grounded gravity gating).
+	// 물리 step() 직후, 이번 step이 만든 terrain 접촉을 보고 이 body가 접지 상태인지
+	// 판정한 뒤 body_.gravityScale()을 설정한다(접지=0, 공중=1). 접지 시 작은 하강
+	// 속도를 0으로 스냅(ground-snap)해 중력↔접촉 솔버의 미세 진동(jitter)을 제거한다.
+	// 공중 전환(낭떠러지/점프/넉백)은 즉시 일어나 낙하가 정상 동작한다.
+	// 반드시 physicsWorld.step() 이후(렌더 프레임이 아닌 물리 step 루프)에서 호출한다.
+	void updateGroundedGravityGate(const PhysicsWorld& world, Seconds physicsDt);
+
+	// 현재 접지 판정 결과(읽기 전용). updateGroundedGravityGate()가 갱신한다.
+	bool isGrounded() const { return grounded_; }
 	// CombatSystem/DebugBVView 등 BVH 접근용 편의 accessor.
 	const BVH& worldBVH() const { return body_.worldBVH(); }
 
@@ -313,6 +325,14 @@ protected:
 	i32t maxHp_{};
 	Faction faction_ = Faction::Neutral;
 	bool barrierActive_ = false;
+
+	// --- 접지 중력 게이팅 상태 (updateGroundedGravityGate가 관리) ---
+	// grounded_      : 현재 접지 여부(중력 게이트 off 상태와 동일).
+	// groundedSteps_ : 연속 접지 step 수. 게이트를 끄기 전 짧은 지속을 요구해
+	//                  단발성 접촉으로 인한 상태 flicker를 방지한다. 공중 전환은
+	//                  즉시(0으로 리셋) 일어나 낙하가 지연 없이 동작한다.
+	bool grounded_      = false;
+	int  groundedSteps_ = 0;
 
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;

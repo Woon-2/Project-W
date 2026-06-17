@@ -113,21 +113,22 @@ extern std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowM
 
 }	// namespace SharedResources::ShadowMap
 
-// GBuffer 텍스처 1세트 (4 color RT + 1 depth RT)
+// GBuffer 텍스처 1세트 (5 color RT + 1 depth RT)
 struct GBufferData {
 	Texture gb0;    // R8G8B8A8_UNORM  — Albedo.rgb + AO.a
 	Texture gb1;    // R16G16_FLOAT    — NormalV oct-encoded
 	Texture gb2;    // R8G8B8A8_UNORM  — LightAccum.rgb + Roughness.a
 	Texture gb3;    // R8_UNORM        — Metallic
+	Texture gb4;    // R32_FLOAT       — Linear view-space Z (posV.z)
 	Texture depth;  // R32_TYPELESS resource; DSV=D32_FLOAT, SRV=R32_FLOAT
 	u32t width;
 	u32t height;
 	// OMSetRenderTargets / ClearRenderTargetView 용 RTV 핸들 (addGBuffer 시 캐싱)
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[4];
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[5];
 	// ClearDepthStencilView 용 DSV 핸들 (addGBuffer 시 캐싱)
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;
 	// 리소스 상태 추적 (전환 최적화용)
-	D3D12_RESOURCE_STATES curStateGB[4];
+	D3D12_RESOURCE_STATES curStateGB[5];
 	D3D12_RESOURCE_STATES curStateDepth;
 };
 
@@ -138,9 +139,9 @@ namespace GBuffer {
 extern std::vector<GBufferData> gBufferData;
 
 // roomCnt개 방 각각에 대해 GBuffer 텍스처 세트를 생성하여 gBufferData에 등록한다.
-// rtvPool: 색상 RT 4개 × roomCnt 슬롯이 필요하다 (호출자가 미리 크기 확보).
+// rtvPool: 색상 RT 5개 × roomCnt 슬롯이 필요하다 (호출자가 미리 크기 확보).
 // dsvPool: 깊이 버퍼 1개 × roomCnt 슬롯이 필요하다.
-// srvTexPool: bindless SRV 5개 × roomCnt 슬롯이 필요하다.
+// srvTexPool: bindless SRV 6개 × roomCnt 슬롯이 필요하다.
 void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 	std::size_t roomCnt, DescriptorPool& rtvPool,
 	DescriptorPool& dsvPool, DescriptorPool& srvTexPool

@@ -468,6 +468,7 @@ void Dispatcher::shadowUpdate() {
             mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 }
@@ -500,6 +501,7 @@ void Dispatcher::shadowUpdateMT() {
             mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 
@@ -716,7 +718,7 @@ void Dispatcher::gBufferIndirectDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(gBufferShader_.Get()), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1047,7 +1049,7 @@ void Dispatcher::gBufferDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(gBufferShader_.Get()), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1212,7 +1214,7 @@ void Dispatcher::addJobGBufferIndirectDraw(
     threadPool_->addJob([=, &latch]() {
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(gBufferShader_.Get()), false);
-        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1301,7 +1303,7 @@ void Dispatcher::addJobGBufferDraw( ID3D12GraphicsCommandList* threadCmdList,
     threadPool_->addJob([=, &latch]() {
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(gBufferShader_.Get()), false);
-        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
 

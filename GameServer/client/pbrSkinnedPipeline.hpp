@@ -42,6 +42,7 @@ struct LightData {
 	XMFLOAT4 cascadeSplitsFarV = {};  // view-space far depth per cascade
 	u32t cascadeCount = MAX_CSM_CASCADES;
 	std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
+	mu::Vec3 cascadeCameraPos = {};  // camera eye for camera-relative cascade space (caster/receiver rebase)
 };
 
 struct CameraData {

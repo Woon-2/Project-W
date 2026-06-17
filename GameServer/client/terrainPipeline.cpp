@@ -278,6 +278,7 @@ void Dispatcher::shadowUpdate() {
             light.cascadeViews[ci] * light.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = light.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 }

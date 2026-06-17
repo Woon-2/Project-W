@@ -2402,6 +2402,7 @@ void GFX::render() {
 			lpfd.idxGB2   = gbData.gb2.idxSrv;
 			lpfd.idxGB3   = gbData.gb3.idxSrv;
 			lpfd.idxDepth = gbData.depth.idxSrv;
+			lpfd.idxGB4   = gbData.gb4.idxSrv;
 			lpfd.debugMode = gBufferDebugMode_;
 			lpfd.idxSkybox = skyboxIdxSrv;
 			// IBL maps (generated at load by precomputeIBL)
@@ -2536,8 +2537,10 @@ void GFX::render() {
 
 		// Forward-always 패스: skybox(raw, 백버퍼)·BV·파티클. resolve 이후 백버퍼에 그린다.
 		// (skybox는 원래도 톤매핑 없이 raw로 그려졌으므로 SceneColorHDR를 거치지 않는다.)
-		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-		skyboxPipelineDispatcher.drawSingleThreaded();
+		if (gBufferDebugMode_ < 11)  {
+			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+			skyboxPipelineDispatcher.drawSingleThreaded();
+		}
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();

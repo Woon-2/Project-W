@@ -51,6 +51,26 @@ Ragdoll 뼈대: group=2, mask=0xFFFD → 뼈대끼리 self-collision 필터링.
 
 ---
 
+## 캐릭터 접지 중력 게이팅 (Grounded Gravity Gating)
+
+플레이어가 지형 위에 정지해 있을 때, 매 step 중력이 접촉 솔버와 싸우며 잔여 수직 미세 튐(micro-jitter)을
+만들고 이것이 follow camera·그림자로 전파된다. Unity `Rigidbody.gravityScale` + UE 캐릭터 컨트롤러의
+표준 grounded-gating + ground-snap 패턴으로 제거한다.
+
+- **재사용 프리미티브:** `RigidBody::gravityScale_`(기본 1) — integrate Dynamic 분기에서
+  `linAcc = gravity_ * gravityScale() + forceAccum*invMass` (`physicsWorld.cpp`). 0이면 중력 off.
+- **접지 판정(게임 레이어):** `Object::updateGroundedGravityGate(world, dt)` — 물리 step **직후**(렌더 프레임 아님)
+  호출. `world.forEachContact`로 이 body가 bodyA인 terrain 접촉(`isTerrainContact()`) 중 normal.y ≥ 0.7(≈45°)인
+  것을 찾고, 상승 중(vy > 0.05)이 아니면 접지 후보. 별도 ground probe 없이 기존 접촉 데이터를 재사용.
+- **비대칭 히스테리시스:** 접지는 연속 2 step 지속을 요구(flicker 방지), 공중 전환은 즉시(낙하 지연 0).
+- **접지 시:** `setGravityScale(0)` + 작은 하강속도(vy∈(-1,0))만 0으로 ground-snap. 상승속도는 절대 불간섭
+  (점프/넉백 보존), 빠른 하강(vy<-1, 막 착지)은 솔버가 처리하도록 둔다.
+- **호출 지점:** online `online/onlineGame.cpp`·standalone `standalone/game.cpp`의 물리 step while 루프 안(`player_` 가드).
+- **확장 메모:** `kGroundNormalY=0.7`은 현재 terrain normal이 항상 Y-up이라 항상 통과 — 경사 normal 도입 시
+  경사 한계로 의미가 생긴다. 슬라이딩이 필요하면 `kSnapMaxSpeed`(1.0 m/s)·접지 조건을 재검토.
+
+---
+
 ## PhysicsWorld::step() 흐름
 
 ```
