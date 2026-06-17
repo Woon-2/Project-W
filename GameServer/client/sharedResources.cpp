@@ -697,7 +697,8 @@ Texture createDepthRT( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 	Texture tex = createTexture( device, width, height, format,
 		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		clearVal
@@ -826,7 +827,8 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	cmdList->ClearRenderTargetView(gb.rtvHandles[2], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[3], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[4], kZeroZ,       0u, nullptr);
-	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 0.f, 0u, 0u, nullptr);
 }
 
 void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool ) {
@@ -1078,7 +1080,8 @@ Texture createPortraitDepth( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: 포트레이트 카메라도 setPerspective를 쓰므로 far plane이 0.0에 매핑된다.
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 	Texture tex = createTexture( device, width, height, format,
 		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		clearVal
@@ -1169,7 +1172,9 @@ void addHiZMaps( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT formatF = DXGI_FORMAT_R32_FLOAT;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	// (실제 매 프레임 클리어는 clearHiZMap()에서 clearDepth 상수를 사용한다.)
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 
 	for (std::size_t r = 0u; r < roomCnt; ++r) {
 		auto& mapData = hiZMaps.emplace_back();

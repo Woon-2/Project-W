@@ -2,7 +2,9 @@
 #define __light_HPP
 
 #include "gfx.hpp"
+#include "frustumCull.hpp"   // Frustum, intersects(Frustum, AABB/OBB); collision.hpp (AABB/OBB) via this
 #include <array>
+#include <variant>
 
 class Camera;
 
@@ -54,6 +56,16 @@ public:
 	// Casters/receivers rebase positions by this before applying lightVP.
 	mu::Vec3 MU_CALLCONV cascadeCameraPos() const { return cascadeCameraPos_; }
 
+	// --- Shadow (light) frustum culling: single entry point ---------------------
+	// Returns true if the world-space shape casts into ANY cascade (i.e. it should
+	// NOT be shadow-culled). The cascade frusta are cached in updateCSMCascades, in
+	// camera-relative space, so the shape is rebased by cascadeCameraPos_ internally.
+	// `expand` inflates the half-extents (e.g. 3.0 for large terrain chunks) to keep
+	// the test conservative. When no cascades exist, returns true (never culls).
+	bool MU_CALLCONV shadowVisible(const AABB& worldAABB, float expand = 1.f) const;
+	bool MU_CALLCONV shadowVisible(const OBB&  worldOBB,  float expand = 1.f) const;
+	bool MU_CALLCONV shadowVisible(const std::variant<AABB, OBB>& worldShape, float expand = 1.f) const;
+
 	mu::NVec3 MU_CALLCONV dir() const {
 		return mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
 	}
@@ -69,6 +81,7 @@ private:
 	// CSM cascade data
 	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews_{};
 	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs_{};
+	std::array<Frustum, MAX_CSM_CASCADES> cascadeFrusta_{};  // cached for shadowVisible()
 	XMFLOAT4 cascadeSplitsFarV_{};
 	u32t cascadeCount_ = 0u;
 	std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets_{};

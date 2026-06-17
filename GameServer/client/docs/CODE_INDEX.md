@@ -445,6 +445,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
+| `mu::perspReversedZ()` | `mathUtil.hpp` (client + common, 동일 내용) | Reversed-Z LH 퍼스펙티브 투영(near→depth 1.0, far→depth 0.0). `Camera::setPerspective()`(`camera.cpp`)가 사용 — 메인/로비/포트레이트 카메라 전부 적용. 그림자맵(ortho)은 미적용. 상세: `docs/graphicsArchitecture.md` "Reversed-Z 깊이 버퍼" |
 
 **파이프라인 파일 목록:**
 
@@ -455,7 +456,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | PBRDeferredPipeline | `pbrDeferredPipeline.hpp` / `pbrDeferredPipeline.cpp` | 정적 메시 Deferred Shading (Shadow + GBuffer + Lighting). **Hi-Z 추가(2026-06-15)**: `occludeeCandidate` DrawEvent는 `occluderPass()`(근거리 prop depth)→`hiZPass()`(cull/compact/command, skinned 5 compute 셰이더+`cmdSig_` 재사용, feedback ring 없음)→`gBufferIndirectPass()`(`PBRDeferredIndirectGBufferShader` + `gVisibleIndices` remap). 비-occludee는 기존 `gBufferPass()` direct. `OccluderInfo{mesh,subMesh,world}`/`Resources::HiZPass`/`OccluderPass` |
 | PBRDeferredSkinnedPipeline | `pbrDeferredSkinnedPipeline.hpp` / `pbrDeferredSkinnedPipeline.cpp` | 스킨드 메시 Deferred Shading (Shadow + GBuffer만; Lighting은 PBRDeferredPipeline 담당). Hi-Z occlusion(2-slot feedback ring, CPU readback) |
 | Masked foliage shadow | `shadowMapCSMMasked.hlsl` / `shader.cpp::createShadowMapCSMMaskedShader` | alpha-cutout 캐스터(나뭇잎/풀)용 그림자 변형. `PBRDeferredPipeline::shadowDraw/MT`가 `material->constantAlphaCutoff>0` 그룹만 masked PSO(Position+UV, `CULL_NONE`, `clip(albedo.a-cutoff)` PS)로 분기. b0=`ShadowMapCSMMaskedShader::PerDrawcallData`(`perDrawcallDataMasked`), VB=`"PBRDeferredPipeline_ShadowMasked"`. 공용 DefaultRootSig의 bindless 풀 사용. 상세: `graphicsArchitecture.md` |
-| frustumCull | `frustumCull.hpp` | 재사용 VFC 헬퍼: `Frustum`/`extractFrustum(viewProj)`(Gribb-Hartmann)/`intersects(Frustum,AABB)`. scatter prop per-instance VFC 전용(기존 `cullObjects()`는 미변경) |
+| frustumCull | `frustumCull.hpp` | 재사용 VFC 헬퍼: `Frustum`/`extractFrustum(viewProj)`(Gribb-Hartmann)/`intersects(Frustum,AABB)`/`intersects(Frustum,OBB)`(OBB SAT). scatter prop VFC + `Light::shadowVisible`(그림자 컬링) 공용 |
 | BVPipeline | `BVPipeline.hpp` | 바운딩 볼륨 디버그 |
 | BillboardPipeline | `billboardPipeline.hpp` | 빌보드 |
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
@@ -472,7 +473,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|
 | `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체 + scatter(`ScatterPrototype`/`ScatterInstance`, `ChunkIndex::scatterPrototypes`/`ChunkIndexEntry::scatter`), chunk streaming 함수 선언 |
 | `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`(v2: ScatterPrototypes 전역 섹션 + Chunk 내 Scatter 블록; v3: per-instance `Rot` 쿼터니언, v2는 `Yaw` 레거시→Y쿼터니언 변환)/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
-| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + **BVH 기준 컬링**: 비-BVH=거리컬 `kDetailCullRadius`(80m), BVH=`setCullCamera`로 받은 `frustum_`로 per-instance VFC→Hi-Z(`occludeeCandidate`)+근거리(`kPropOccluderRadius` 40m) occluder)/`setCullCamera(Frustum,eye)`, `buildCrossQuadMesh`(양면 빌보드). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384, 정적 Hi-Z 65536) |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + **BVH 기준 컬링**: 비-BVH=거리컬 `kDetailCullRadius`(80m), BVH=메인카메라 `frustum_` VFC와 `Light::shadowVisible` **그림자 컬링을 독립 평가**→ `viewFrustumCulled`/`shadowCulled` 분리 설정(화면 밖 나무도 그림자 유지), 둘 다 안 보이면 skip; Hi-Z occludee/occluder는 메인 가시 시에만)/`setCullCamera(Frustum,eye)`, `buildCrossQuadMesh`(양면 빌보드). **`submitDrawEvents(GFX&, const Light&)`**: chunk 메시도 `shadowVisible(AABB, expand=3)`로 그림자 컬링(`TerrainObject::setShadowCulled`→DrawEvent `shadowCulled`, terrain shadowDraw 루프에서 skip; gbuffer는 무영향). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384, 정적 Hi-Z 65536) |
 | `docs/scatterSystem.md` | Scatter 시스템 설계: 포맷 v3(per-instance Rot 쿼터니언·Align To Ground 베이크), 이름 매핑(ModelExtractor targetName), 자동 인스턴싱, 알파 컷아웃(+albedo 맵 누락 클리핑 함정), 빌보드, 충돌(ScatterCollider 구현) |
 | `docs/scatterAuthoringGuide.md` | 지형에 Tree/Rock/Flower/Bush/Plant 띄우는 실전 작성 가이드(ModelExtractor→TerrainExtractor→DDS 변환→배치→실행, 트러블슈팅) |
 | `unityScripts/TerrainExtractor.cs` | 지형+산포 추출(Export All Chunks). chunks_index v3 작성, `ScanPrototypes`(이름=매핑키), `GatherScatter`(트리=treeInstances·디테일=`ComputeDetailInstanceTransforms`), per-instance `Rot` 쿼터니언에 Align To Ground 틸트 베이크 |
@@ -509,7 +510,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
 3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
-4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
+4. calcCSMShadow(posV, posRel, normalW, ndotl) → 5x5 PCF 그림자 적용
 5. globalAmbient + IBL(`computeIBL`, `#define IBL_ENABLED`) ambient 가산 → Reinhard tonemapping → gamma (forward inline; 인게임 지형은 `terrainDeferred.hlsl`→공용 ACES resolve 경로)
 
 **Deferred Shading 관련 파일:**
@@ -791,7 +792,8 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산. **카메라-상대 공간**에서 frustum corner 직접 생성(역행렬 없음: camView 열=basis·camProj=fov) + center texel snap — shadow shimmering 해결 (radius 양자화는 시도 후 제거: 이동 중 떨림 유발) |
-| `Light::cascadeCameraPos()` | `light.hpp #55` | camera-relative cascade 빌드에 쓰인 카메라 eye. caster/receiver가 `posW-camPos` rebase에 사용(standalone shadow culling도 이 값으로 BVH rebase) |
+| `Light::cascadeCameraPos()` | `light.hpp #55` | camera-relative cascade 빌드에 쓰인 카메라 eye. caster/receiver가 `posW-camPos` rebase에 사용(`shadowVisible`도 이 값으로 bounds rebase) |
+| `Light::shadowVisible(AABB/OBB/variant, expand=1)` | `light.hpp #57` / `light.cpp` | **그림자(light-frustum) 컬링 단일 진입점.** `updateCSMCascades`에서 캐시한 `cascadeFrusta_`(ortho=OBB, camera-relative)에 대해 `cascadeCameraPos_` rebase + `expand`로 half-extent 확장 후 `intersects` 테스트, 어느 cascade에라도 보이면 true(cascade 0개면 항상 true=미컬). 엔티티(`cullObjectsForShadow`)·지형 chunk(expand=3)·scatter prop(expand=1) 모두 이 함수 사용. ortho z-pad는 `minZ-2·radius` 유지(radius 축소는 foliage가 near 뒤로 사라져 되돌림) |
 | `Light::render()` | `light.hpp #35` | PBR, PBRSkinned, Terrain 세 파이프라인에 LightData 자기등록 |
 | `Light::dir()` | `light.hpp #52` | 조명 방향 (NVec3) |
 

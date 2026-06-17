@@ -110,12 +110,12 @@ void MU_CALLCONV Light::updateCSMCascades(
 	const float tanHalfX = 1.f / projM00;   // half-width  per unit view depth
 
 	// Extract A, B from projection matrix to convert view-space depth to NDC z:
-	// NDC_z = A + B/viewZ  (LH: nearZ -> NDC_z=0, farZ -> NDC_z=1)
+	// NDC_z = A + B/viewZ  (Reversed-Z LH: nearZ -> NDC_z=1, farZ -> NDC_z=0)
 	const float A = camProj.row(2)[2];
 	const float B = camProj.row(3)[2];
 
-	// Camera near plane in view space: when NDC_z=0, viewZ = -B/A
-	float prevFarV = -B / A;
+	// Camera near plane in view space: when NDC_z=1, viewZ = B/(1-A)
+	float prevFarV = B / (1.f - A);
 
 	for (u32t i = 0u; i < cascadeCount; ++i) {
 		const float nearV = prevFarV;
@@ -172,6 +172,7 @@ void MU_CALLCONV Light::updateCSMCascades(
 		if (!std::isfinite(radius) || radius < 0.01f) {
 			cascadeViews_[i] = lightView;
 			cascadeProjs_[i] = mu::ortho(-0.5f, 0.5f, -0.5f, 0.5f, -1.f, 1.f);
+			cascadeFrusta_[i] = extractFrustum(cascadeViews_[i] * cascadeProjs_[i]);
 			cascadeNormalOffsets_[i] = 0.f;
 			prevFarV = farV;
 			continue;
@@ -192,12 +193,15 @@ void MU_CALLCONV Light::updateCSMCascades(
 		const float minX = cx - radius, maxX = cx + radius;
 		const float minY = cy - radius, maxY = cy + radius;
 
-		// nearZPadding = radius: scales with cascade size, preserves depth precision.
-		// Catches shadow casters behind the frustum slice without over-extending the Z range.
+		// nearZPadding = 2*radius: extends the ortho near plane well behind the frustum slice
+		// so casters between the light and the slice (e.g. trees/grass just outside the slice)
+		// still record depth. radius alone let some foliage fall behind the near plane, so the
+		// 2x padding is kept intentionally despite the slightly wider Z range.
 		constexpr float kNormalOffsetTexels = 2.0f;
 		cascadeNormalOffsets_[i] = worldUnitsPerTexel * kNormalOffsetTexels;
 		cascadeViews_[i] = lightView;
 		cascadeProjs_[i] = mu::ortho(minX, maxX, minY, maxY, minZ - 2.f * radius, maxZ);
+		cascadeFrusta_[i] = extractFrustum(cascadeViews_[i] * cascadeProjs_[i]);
 
 		prevFarV = farV;
 	}
@@ -208,6 +212,29 @@ void MU_CALLCONV Light::updateCSMCascades(
 		splits[i] = cascadeFarDistances[i];
 	}
 	cascadeSplitsFarV_ = XMFLOAT4(splits[0], splits[1], splits[2], splits[3]);
+}
+
+bool MU_CALLCONV Light::shadowVisible(const AABB& worldAABB, float expand) const {
+	if (cascadeCount_ == 0u) return true;   // no cascades -> never cull
+	// Rebase into camera-relative cascade space and inflate half-extents by `expand`.
+	const AABB rel{ worldAABB.center - cascadeCameraPos_, worldAABB.size * expand };
+	for (u32t ci = 0u; ci < cascadeCount_; ++ci)
+		if (intersects(cascadeFrusta_[ci], rel)) return true;
+	return false;
+}
+
+bool MU_CALLCONV Light::shadowVisible(const OBB& worldOBB, float expand) const {
+	if (cascadeCount_ == 0u) return true;
+	const OBB rel{ worldOBB.center - cascadeCameraPos_, worldOBB.halfExtents * expand, worldOBB.orient };
+	for (u32t ci = 0u; ci < cascadeCount_; ++ci)
+		if (intersects(cascadeFrusta_[ci], rel)) return true;
+	return false;
+}
+
+bool MU_CALLCONV Light::shadowVisible(const std::variant<AABB, OBB>& worldShape, float expand) const {
+	if (std::holds_alternative<AABB>(worldShape))
+		return shadowVisible(std::get<AABB>(worldShape), expand);
+	return shadowVisible(std::get<OBB>(worldShape), expand);
 }
 
 void Light::render(GFX& gfx) {

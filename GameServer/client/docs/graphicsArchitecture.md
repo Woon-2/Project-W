@@ -73,6 +73,45 @@
 Skybox / Billboard / UI / 파티클은 renderPath에 관계없이 항상 backbuffer에 직접 그린다(SceneColorHDR·GBuffer 미사용). Forward path(로비)는 HDR/Bloom/resolve를 거치지 않고 셰이더 내 inline tonemap으로 backbuffer에 직접 출력한다.
 Terrain은 Deferred path에서 gBufferPass로 GBuffer에 기록, Forward path에서만 mainPass로 실행한다.
 
+#### Reversed-Z 깊이 버퍼
+
+메인 카메라(퍼스펙티브)가 쓰는 depth buffer는 reversed-Z(near→NDC z=1.0, far→NDC z=0.0)다.
+
+**Why:** `DXGI_FORMAT_D32_FLOAT`라도 퍼스펙티브의 쌍곡선 z 매핑 때문에 far 영역 depth가 1.0
+근처(float가 표현값이 희소한 구간)에 뭉쳐 정밀도가 이중으로 손실된다. near=1.0/far=0.0으로
+뒤집어 far를 float가 밀집한 0.0 근처로 보내 개선한다.
+
+**적용 범위:**
+- **O** — 메인 scene depth(forward/deferred 백버퍼), GBuffer depth, Hi-Z occluder depth+mip
+  chain, Portrait depth. 전부 `Camera::setPerspective()` → `mu::perspReversedZ()`
+  (`mathUtil.hpp`, client/common 사본 동일 유지)를 거치는 퍼스펙티브 카메라가 공급한다.
+- **X** — CSM 그림자맵(직교투영)은 그대로 표준-Z. ortho는 z 매핑이 선형이라 reversed-Z의
+  핵심 이득(쌍곡선 압축 보정)이 적용되지 않기 때문. 그림자 비교 샘플러(`LESS_EQUAL`),
+  `mu::ortho()`, cascade split 계산은 변경하지 않았다.
+
+**투영행렬:** depth(z) = A + B/z 형태에서 depth(nearZ)=1, depth(farZ)=0이 되도록 풀면
+`A = nearZ/(nearZ-farZ)`, `B = nearZ*farZ/(farZ-nearZ)`. `XMMatrixPerspectiveFovLH`는
+표준 매핑만 지원하므로 z/w 항을 직접 구성(`mu::perspReversedZ`).
+
+**Depth clear / DepthFunc:** far=0.0이므로 클리어 값 1.0f→0.0f(메인/GBuffer/Hi-Z/Portrait).
+`shader.cpp`의 그림자맵 PSO 7개(`createShadowMap*`, `createTerrainShadowMap*`)를 제외한
+나머지 전부 `DepthFunc`를 `LESS`→`GREATER` / `LESS_EQUAL`→`GREATER_EQUAL`로 반전.
+`HiZMap::clearDepth`(distance culling용 epsilon)도 `0.9999f`→`0.0001f`로 대칭 변환.
+
+**Hi-Z 비교 방향 반전:** `hiZMap.hlsl` 다운샘플 `max`→`min`(2x2 셀 중 가장 먼 occluder
+depth 보존), `hiZCull.hlsl`의 `ProjectAABBToScreen`(`min`→`max`, AABB 8코너 중 카메라에
+가장 가까운 코너)·`OcclusionTest`(`max`→`min` 집계, `depth <= maxDepth` → `depth >= minDepth`).
+
+**기타 반영 지점:**
+- soft particle depth linearization(`blendCGMesh.hlsl`/`smokeBlendCG.hlsl`):
+  `linearZ = (nearZ*farZ)/(nearZ + depth01*(farZ-nearZ))`
+- 스카이박스 far-plane trick(`skybox.hlsl`): `clipPos.xyww`(NDC z=1=far, 표준-Z) →
+  `float4(clipPos.xy, 0.f, clipPos.w)`(NDC z=0=far, reversed-Z)
+- `pbrDeferredLighting.hlsl`의 위치 재구성은 raw NDC depth가 아니라 GB4의 선형 view-Z
+  (`posV.z`)를 쓰므로 무관(`rawDepth` 디버그 뷰만 반전되어 보임 — 정상)
+- 뷰포트 `MinDepth`/`MaxDepth`(0~1)는 변경 없음 — NDC→뷰포트 depth 범위 매핑이라
+  reversed-Z(투영행렬이 NDC z를 만드는 방식)와는 별개
+
 #### CSM (Cascaded Shadow Mapping)
 
 4-cascade CSM이 PBR / PBRSkinned / Terrain 파이프라인에 모두 적용되어 있다.
@@ -95,12 +134,36 @@ C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(
   (**caster·receiver를 반드시 함께 rebase** — 한쪽만 하면 그림자 깨짐). `Light::cascadeCameraPos()`로 기준 eye 노출.
 - **frustum corner 직접 생성:** `inverse(camView*camProj)` 제거. 카메라 basis(camView 상위 3x3 열 = 직교 transpose,
   exact)·fov(camProj `m11`,`m00`)·per-cascade near/far로 corner를 카메라-상대 공간에서 직접 계산(역행렬 정밀도 손실 제거).
+  첫 cascade의 near 경계(`prevFarV` 초기값)는 `camProj`의 A/B 항(`NDC_z = A + B/viewZ`)에서 역산하는데, 이 공식은
+  카메라 투영의 Z 매핑 방향에 종속적이다 — **Reversed-Z 도입(2026-06) 시 한 번 깨졌던 지점**: 표준-Z는 `NDC_z=0`이
+  near라 `viewZ=-B/A`였지만, reversed-Z는 `NDC_z=1`이 near이므로 `viewZ=B/(1-A)`로 풀어야 한다. 누락 시 첫 cascade의
+  near가 farZ로 잘못 계산되어 cascade 0의 바운딩 구가 거대해지고(거의 전체 depth range를 덮음) 가까운 오브젝트가
+  저해상도 그림자를 받는 증상이 나타난다(`light.cpp::updateCSMCascades`). 카메라 투영 행렬의 Z 매핑을 바꿀 때마다
+  이 추출 공식도 같이 점검해야 한다.
 - **texel center snap 유지:** sphere center XY를 `worldUnitsPerTexel(=2·radius/res)` 격자에 스냅(radius가
   rotation-invariant라 프레임 간 안정). per-cascade **radius 양자화는 시도 후 제거** — 이산 radius 스텝이 이동 중
   오히려 떨림을 유발했고, 카메라-상대 공간만으로 shimmer가 해소됨(2026-06 사용자 검증).
 - 보조: deferred lighting은 GBuffer `gb4`(linear view-Z, R32F)로 posV를 정확 복원(NDC 깊이 양자화 제거) — 단독으론 소폭 개선.
 - **주의:** cascade `lightVP`가 카메라-상대 공간이므로, 절대 월드 BVH로 cull/test하는 코드는 `cascadeCameraPos()`로
-  rebase 필요. standalone `game.cpp::cullObjectsForShadow`는 AABB/OBB center를 `- cascadeCameraPos()`로 rebase함(online엔 이 패턴 없음).
+  rebase 필요 — 이 rebase는 이제 `Light::shadowVisible`(아래) 내부에서 일괄 처리된다.
+- **ortho z-pad = `2·radius` (유지):** `mu::ortho(...,minZ - 2·radius, maxZ)`. near 평면을 frustum slice보다 충분히
+  뒤로 빼서, 빛과 slice 사이에 있는 캐스터(slice 바로 밖 나무/풀 등)도 깊이를 기록한다. `radius`로 줄이면 일부
+  foliage가 near 평면 뒤로 사라져, 2x 패딩을 의도적으로 유지(2026-06-17 사용자 검증). chunk의 `shadowVisible(expand=3)`은
+  z축소와 무관하게 보수적 컬링으로 유지.
+
+**Shadow(light) frustum culling — 단일 진입점 (2026-06-17):**
+그림자 캐스터 컬링은 **메인 카메라가 아니라 광원 cascade 기준**으로 수행해야 한다(메인 frustum으로 컬링하면
+화면 밖 캐스터의 그림자가 사라지는 popping 발생). 모든 light-frustum 컬링은 `Light::shadowVisible(...)` 하나로 통일:
+- `updateCSMCascades`가 cascade마다 `cascadeFrusta_[i] = extractFrustum(view·proj)`를 캐시(ortho 투영이라 6평면=OBB).
+- `Light::shadowVisible(AABB/OBB/variant, expand=1)` — bounds를 `cascadeCameraPos_`로 rebase + `expand`로 half-extent
+  확장 후 `intersects(Frustum, ·)`(`frustumCull.hpp`, AABB·OBB 오버로드)로 테스트, 어느 cascade에라도 보이면 visible.
+  cascade 0개면 항상 true(미컬, 안전 폴백).
+- 호출 위치 3곳: ① 엔티티 `game.cpp::cullObjectsForShadow`(인라인 SAT ~60줄 → 한 줄로 축약) ② 지형 chunk
+  `TerrainChunkManager::submitDrawEvents`(`expand=3`, 대형 캐스터 보존) ③ scatter BVH prop `submitScatterDrawEvents`(`expand=1`).
+- **메인 vs 그림자 가시성 분리:** scatter prop은 메인카메라 `frustum_` VFC와 `shadowVisible`를 독립 평가해 DrawEvent의
+  `viewFrustumCulled`/`shadowCulled`를 따로 설정 → 화면 밖이지만 그림자 frustum 안인 나무는 shadow 패스에만 제출(gbuffer/Hi-Z 제외).
+  지형 chunk DrawEvent에도 `shadowCulled` 필드 추가, terrain `shadowDraw` 루프에서 skip(gbuffer는 무영향).
+- Hi-Z occlusion은 메인 패스 개념 → occludee/occluder 선정은 `mainVisible`일 때만(그림자에는 Hi-Z 미적용).
 
 **Normal Offset Shadow Bias:** (`pbrLighting.hlsli::sampleCascadePCF`)
 - world-space normal 방향으로 `offset * sinTheta` 만큼 샘플 위치를 오프셋

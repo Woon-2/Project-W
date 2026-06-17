@@ -164,7 +164,7 @@ void Game::setupStageVisual() {
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
-	dirLight_.intensity = 6.6f;
+	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
@@ -3521,7 +3521,7 @@ void Game::renderInGame() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -3982,7 +3982,7 @@ void Game::renderWaitingRoom() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -4565,6 +4565,36 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// --- Skill dial: wheel selects, wheel-click uses, left-click = basic attack ---
 	skillDial_.update(deltaTime.count() / 1000.f);
 	comboSecLeft_ = std::max(0.f, comboSecLeft_ - deltaTime.count() / 1000.f);   // local combo countdown
+
+	// DEV: arrow keys nudge the skill dial's resolution-relative pivot margin so a
+	// good position can be found live, without recompiling. Logs the settled
+	// fraction/pixel values on key release so repeated nudges are easy to read back.
+	if (skillDial_.visible() && !uiManager_.needsCursor()) {
+		const float dtSec = deltaTime.count() / 1000.f;
+		const bool  shift = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		const float speed = (shift ? 600.f : 120.f) * dtSec;   // px/sec, at current resolution
+
+		const float dx = (keyboardStateCurr_[VK_RIGHT] & 0x80) ? speed
+		                : (keyboardStateCurr_[VK_LEFT]  & 0x80) ? -speed : 0.f;
+		const float dy = (keyboardStateCurr_[VK_DOWN]   & 0x80) ? -speed
+		                : (keyboardStateCurr_[VK_UP]     & 0x80) ?  speed : 0.f;
+
+		const float w = static_cast<float>(gClientRect.right - gClientRect.left);
+		const float h = static_cast<float>(gClientRect.bottom - gClientRect.top);
+		if (dx != 0.f || dy != 0.f) skillDial_.nudgeMarginPx(dx, dy, w, h);
+
+		const bool anyDown     = ((keyboardStateCurr_[VK_LEFT] | keyboardStateCurr_[VK_RIGHT] |
+		                            keyboardStateCurr_[VK_UP]  | keyboardStateCurr_[VK_DOWN]) & 0x80) != 0;
+		const bool anyDownPrev = ((keyboardStatePrev_[VK_LEFT] | keyboardStatePrev_[VK_RIGHT] |
+		                            keyboardStatePrev_[VK_UP]  | keyboardStatePrev_[VK_DOWN]) & 0x80) != 0;
+		if (anyDownPrev && !anyDown) {
+			gSharedLog << "[SkillDial Tune] marginXFrac=" << skillDial_.marginXFrac()
+			           << " marginYFrac=" << skillDial_.marginYFrac()
+			           << " (px@" << w << "x" << h << ": "
+			           << w * skillDial_.marginXFrac() << ", " << h * skillDial_.marginYFrac() << ")\n";
+			dumpLog();
+		}
+	}
 
 	const float nowSec = std::chrono::duration<float>(
 		std::chrono::steady_clock::now().time_since_epoch()).count();

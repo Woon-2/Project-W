@@ -311,10 +311,11 @@ ComPtr<ID3D12Resource> createDepthBuffer(
 		.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 	};
 
+	// Reversed-Z: 메인 scene depth는 far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
 	auto cv = D3D12_CLEAR_VALUE{
 		.Format = format,
 		.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{
-			.Depth = 1.0f,
+			.Depth = 0.0f,
 			.Stencil = 0u
 		}
 	};

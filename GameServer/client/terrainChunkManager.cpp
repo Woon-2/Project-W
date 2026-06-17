@@ -5,6 +5,7 @@
 #include "BVPipeline.hpp"   // [TEMP DEBUG] prop BV visualization
 #include "physicsWorld.hpp"
 #include "threadPool.hpp"
+#include "light.hpp"           // Light::shadowVisible (shadow-frustum culling)
 #include "errorHandling.hpp"   // setD3DName
 #include "../common/scatterTransform.hpp"
 
@@ -353,7 +354,7 @@ void TerrainChunkManager::registerChunkScatterCollider(LoadedChunk& slot) {
         slot.scatterHandle = physicsWorld_->registerScatter(std::move(collider));
 }
 
-void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const {
+void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot, const Light& light) const {
     if (slot.scatter.empty()) return;
     const bool  useDeferred  = (gfx.renderPath() == GFX::RenderPath::Deferred);
     // GPU Hi-Z occlusion for BVH props is only available on the deferred path with culling on.
@@ -393,21 +394,29 @@ void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& s
         const bool  hasBVH = proto.collidable;   // model && !model->bvh.empty()
 
         // Culling policy by BVH presence:
-        //   no BVH  (grass/flowers/bushes) → distance cull around the player only.
-        //   has BVH (trees/mesh props)     → per-instance VFC; survivors go through the
-        //                                    GPU Hi-Z occlusion path (when available), and
-        //                                    near-camera ones additionally act as occluders.
-        bool occludee = false;
+        //   no BVH  (grass/flowers/bushes) → distance cull around the player only; not shadowed.
+        //   has BVH (trees/mesh props)     → independent main-camera VFC and light-frustum
+        //                                    (shadow) culling, so off-camera casters still
+        //                                    render into the shadow map. Main-pass survivors go
+        //                                    through the GPU Hi-Z path, near-camera ones occlude.
+        bool occludee      = false;
+        bool mainVisible   = true;   // gbuffer / Hi-Z (main camera)
+        bool shadowVisible = true;   // shadow pass (light frustum)
         if (!hasBVH) {
+            // Foliage: distance cull around the player only; main + shadow behavior unchanged
+            // (drawn in both passes when within radius), matching the previous policy.
             if (hasCullCenter_) {
                 const float dx = inst.worldAABB.center.x() - cullCenter_.x();
                 const float dz = inst.worldAABB.center.z() - cullCenter_.z();
                 if (dx * dx + dz * dz > detailCullR2) continue;
             }
         } else {
-            if (hasFrustum_ && !intersects(frustum_, inst.worldAABB)) continue;
+            mainVisible   = !hasFrustum_ || intersects(frustum_, inst.worldAABB);
+            shadowVisible = light.shadowVisible(inst.worldAABB);
+            if (!mainVisible && !shadowVisible) continue;   // invisible to both passes
 
-            if (hiZForProps) {
+            // Hi-Z occlusion is a main-pass concept only; gate it behind main visibility.
+            if (mainVisible && hiZForProps) {
                 occludee = true;
 
                 const float dxc = inst.worldAABB.center.x() - cameraPos_.x();
@@ -428,12 +437,13 @@ void TerrainChunkManager::submitScatterDrawEvents(GFX& gfx, const LoadedChunk& s
             if (useDeferred) {
                 gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{
                     .world = world, .mesh = part.mesh, .subMesh = part.subMesh,
-                    .material = part.material, .viewFrustumCulled = false,
-                    .shadowCulled = false, .occludeeCandidate = occludee });
+                    .material = part.material, .viewFrustumCulled = !mainVisible,
+                    .shadowCulled = !shadowVisible, .occludeeCandidate = occludee });
             } else {
                 gfx.addDrawEvent(PBRPipeline::DrawEvent{
                     .world = world, .mesh = part.mesh, .subMesh = part.subMesh,
-                    .material = part.material, .viewFrustumCulled = false, .shadowCulled = false });
+                    .material = part.material, .viewFrustumCulled = !mainVisible,
+                    .shadowCulled = !shadowVisible });
             }
         }
     }
@@ -660,11 +670,22 @@ void TerrainChunkManager::tickGraveyard() {
     }
 }
 
-void TerrainChunkManager::submitDrawEvents(GFX& gfx) {
+void TerrainChunkManager::submitDrawEvents(GFX& gfx, const Light& light) {
     for (auto& [key, slot] : chunks_) {
         if ((slot.state == State::Ready || slot.state == State::Expiring) && slot.object) {
+            // Shadow (light-frustum) culling for the chunk mesh. Terrain chunks are large
+            // shadow casters, so the test bounds are inflated 3x to stay conservative once
+            // the cascade Z-range is tightened (see Light::updateCSMCascades). The gbuffer
+            // path is unaffected: the chunk always renders to the main camera.
+            if (const auto* td = slot.object->terrainData()) {
+                const mu::Vec3 pos = slot.object->pos();   // = worldOffset(col,row), chunk min corner
+                const mu::Vec3 size(td->sizeX, td->sizeY, td->sizeZ);
+                const AABB chunkAABB{ pos + size * 0.5f, size };
+                slot.object->setShadowCulled(!light.shadowVisible(chunkAABB, /*expand=*/3.f));
+            }
+
             slot.object->render(gfx);
-            submitScatterDrawEvents(gfx, slot);
+            submitScatterDrawEvents(gfx, slot, light);
         }
     }
 }
