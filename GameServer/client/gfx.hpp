@@ -620,9 +620,9 @@ private:
 	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
 	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT, 11~14=CSM cascade 0~3 shadow map
-	float tonemapExposure_    = 1.0f;  // linear exposure multiplier applied in the tonemap resolve pass
-	float bloomThreshold_     = 1.0f;  // bloom brightness threshold (HDR luminance)
-	float bloomIntensity_     = 0.08f; // bloom additive strength at composite (0 = bloom off)
+	float tonemapExposure_    = 1.25f;  // linear exposure multiplier applied in the tonemap resolve pass
+	float bloomThreshold_     = 0.77f;  // bloom brightness threshold (HDR luminance)
+	float bloomIntensity_     = 0.1f; // bloom additive strength at composite (0 = bloom off)
 };
 
 #endif	// __GFX_HPP
