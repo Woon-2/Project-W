@@ -544,16 +544,17 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `sharedResources.{hpp,cpp}` | `SharedResources::SceneColor` — per-room R16G16B16A16_FLOAT HDR RT(+SRV). `SharedResources::IBL` — irradiance/prefiltered 큐브 + BRDF LUT(정적). `SharedResources::Bloom` — per-room HDR 밉체인(밉별 RTV+단일밉 SRV, 서브리소스별 상태 추적, `transitionMip`/`mip0Srv`) |
+| `sharedResources.{hpp,cpp}` | `SharedResources::SceneColor` — per-room R16G16B16A16_FLOAT HDR RT(+SRV). `SharedResources::IBL` — irradiance/prefiltered 큐브 + BRDF LUT(정적). `SharedResources::Bloom` — per-room HDR 밉체인(밉별 RTV+단일밉 SRV, 서브리소스별 상태 추적, `transitionMip`/`mip0Srv`). `SharedResources::ColorGrading` — color grading용 3D LUT(`.cube` 파싱→R8G8B8A8_UNORM Texture3D, 정적, 단일) |
 | `iblIrradiance.hlsl` / `iblPrefilter.hlsl` / `iblBRDFLUT.hlsl` | IBL 프리컴퓨트 컴퓨트 셰이더(코사인 컨볼루션 / GGX importance / split-sum LUT). `envIsLDR` 토글 |
 | `iblPrecomputePipeline.{hpp,cpp}` | `precomputeIBL()` — 로드 타임 1회(LoadFence), 스카이박스 큐브→IBL 맵 3종 생성 |
 | `pbrLighting.hlsli` | `computeIBL`/`fresnelSchlickRoughness`(상단 정의, split-sum). `#define IBL_ENABLED` 셰이더만 컴파일 |
-| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → backbuffer. debugMode≠0 패스스루 |
+| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루 |
 | `bloom.hlsl` / `BloomPipeline.{hpp,cpp}` | 픽셀 기반 bloom(VS 공유 + PSPrefilter/PSDownsample/PSUpsample). `Dispatcher::render()`가 전 패스를 단일 cmdlist에 기록 |
+| `bindless.hlsli` | `gTex2Ds`/`gTex2DArrays`/`gTexCubes`/`gTex3Ds` bindless 배열(`IDX_RANGE_*`). `sampleBindless3D`: LUT half-texel 보정(`uvw = v*(N-1)/N + 0.5/N`, N은 `BindlessIndex.idxInArray`에 저장) |
 
 - IBL/HDR/Bloom 노브(`gfx.hpp`): `tonemapExposure_`(1.0), `bloomThreshold_`(1.0), `bloomIntensity_`(0.08), `iblIntensity`(lpfd/forward FrameData).
 - Forward IBL 패리티: `pbr.hlsl`·`pbrSkinned.hlsl`·`terrain.hlsl` cbuffer에 camPos+IBL 필드, 포트레이트는 `FrameData::iblIntensity=0`.
-- **디스크립터 풀:** bloom RTV(밉×room) 때문에 `rtvPool_`/`rtvHeap_`=64. per-room×N RT 추가 시 풀 용량 갱신 필수.
+- **디스크립터 풀:** bloom RTV(밉×room) 때문에 `rtvPool_`/`rtvHeap_`=64. per-room×N RT 추가 시 풀 용량 갱신 필수. Color grading LUT는 `srvTex3DPool_`(SRVHeap `[2100,2116)`, `gfx.cpp` 생성자) — bindless Texture3D 전용 4번째 텍스처 풀(`DefaultRootSig`의 `Texture3DPool` 파라미터, `t10 space4`).
 
 **Deferred 렌더 패스 순서 (`gfx.cpp::render()`):**
 1. GBuffer + SceneColorHDR 클리어 (`clearGBuffer` + SceneColor `transitionToWrite`/clear)
@@ -566,7 +567,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행.
 9. SceneColorHDR RTV→SRV (`SceneColor::transitionToRead`)
 10. **Bloom** (`gBufferDebugMode_==0`일 때): SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample) → mip0 SRV
-11. **Tonemap resolve**: SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **backbuffer(LDR)**
+11. **Tonemap resolve**: SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT, `SharedResources::ColorGrading::lutData`) → **backbuffer(LDR)**
 12. Forward-always 오버레이(backbuffer, resolve 이후): Skybox, BV debug, Billboard, 파티클류 (GBuffer/SceneColorHDR 미사용)
 
 **GFX RenderPath 선택 (`gfx.hpp`):**

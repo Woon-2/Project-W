@@ -3,7 +3,7 @@
 
 - 코어: `gfx.hpp`, `gfxUtil.hpp`, `mesh.hpp`, `shader.hpp`, `font.hpp`, `collision.hpp`
 - 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `pbrDeferredPipeline.hpp`, `pbrDeferredSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `terrainDeferredPipeline.hpp`, `sharedResources.hpp`
-- 후처리/IBL: `TonemapPipeline.hpp`(ACES+exposure resolve), `BloomPipeline.hpp`(HDR bloom), `iblPrecomputePipeline.hpp`(IBL 맵 프리컴퓨트) — 상세는 아래 "HDR + IBL + Bloom 파이프라인"
+- 후처리/IBL: `TonemapPipeline.hpp`(ACES+exposure resolve + 3D LUT color grading), `BloomPipeline.hpp`(HDR bloom), `iblPrecomputePipeline.hpp`(IBL 맵 프리컴퓨트) — 상세는 아래 "HDR + IBL + Bloom 파이프라인"
 
 #### 장치 초기화
 - `GFX::setupDXGI`
@@ -66,7 +66,7 @@
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
-9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **backbuffer(LDR)**
+9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**
 10. Forward-always 오버레이(backbuffer, resolve 이후): Skybox(raw) → BV → Billboard → 파티클류
 11. mainPass(UI)
 
@@ -296,11 +296,20 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   메인 forward/deferred는 1.0.
 
 **4) Tonemap resolve (`tonemapResolve.hlsl`, `TonemapPipeline`)** — 단일 톤매핑 지점
-- fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → backbuffer.
-- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode. (debugMode≠0 → 패스스루)
+- fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → **3D LUT color grading** → backbuffer.
+- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode, idxColorGradingLUT. (debugMode≠0 → 패스스루, idxColorGradingLUT.x<0 → grading 미적용)
 - 노브: `GFX::tonemapExposure_`(기본 1.0).
 
-**5) Bloom (`bloom.hlsl`, `BloomPipeline`, `SharedResources::Bloom`)** — 픽셀 기반 HDR 밉체인
+**5) Color grading LUT (`SharedResources::ColorGrading`, `bindless.hlsli::sampleBindless3D`)** — gamma 보정 직후 적용되는 고정 단일 3D LUT
+- 로드 타임 1회(`GFX::initSharedResources` → `addColorGradingLUT`), `resources/LUT/warm-natural_6.C0008.cube`(33³, DaVinci Resolve 표준 `.cube` 텍스트 포맷)를 파싱해
+  `R8G8B8A8_UNORM` `Texture3D`로 업로드. 씬 전역·정적이라 런타임 전환 없음(LUT를 바꾸려면 파일 교체 + 경로 갱신 후 재빌드).
+- **bindless Texture3D 풀**: 기존 Tex2D/Tex2DArray/TexCube 3종에 4번째로 추가(`bindless.hlsli`의 `gTex3Ds[] : register(t10, space4)`,
+  `DefaultRootSig`의 `Texture3DPool` 파라미터, `GFX::srvTex3DPool_` — SRVHeap `[2100,2116)`).
+- **half-texel 보정**: LUT 텍셀 i는 값 `i/(N-1)`을 나타내지만, 하드웨어 샘플링은 UV=v를 텍셀 연속좌표 `v*N-0.5`로 매핑한다.
+  보정 없이 샘플링하면 그리드 인덱스가 어긋나 그레이딩 커브가 과장되고 identity LUT조차 완전한 passthrough가 되지 않는다.
+  `sampleBindless3D`에서 `uvw = color * (N-1)/N + 0.5/N`로 보정하며, N은 `BindlessIndex.idxInArray`(Tex3D는 array slice가 없어 비는 슬롯)에 실어 전달한다.
+
+**6) Bloom (`bloom.hlsl`, `BloomPipeline`, `SharedResources::Bloom`)** — 픽셀 기반 HDR 밉체인
 - per-room RGBA16F 밉체인(half-res base, 최대 6밉, `ALLOW_RENDER_TARGET`). **밉별 RTV + 밉별 단일밉 SRV**.
 - 패스(단일 cmdlist): prefilter(soft-threshold + 13-tap 다운샘플; scene→mip0) → downsample 체인(mip i-1→i)
   → **additive upsample** 체인(3×3 tent, mip i+1→i). 총 2N-1 패스.
@@ -318,7 +327,7 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
 - **디스크립터 풀 사이징:** bloom은 per-room×밉수(최대 6) RTV를 소비한다. `rtvPool_`/`rtvHeap_`는 64
   (백버퍼+GBuffer4+SceneColor+Portrait+Bloom6 = room당 13 × 최대 3 room ≈ 39 + 여유). per-room×N 형태의
   RT 리소스를 추가할 때 풀 용량 갱신 필수(고갈 시 `DescriptorPool::alloc`이 빈 컨테이너 front()=UB→크래시).
-  bloom SRV는 `srvTexPool_`(1800)에서 충당.
+  bloom SRV는 `srvTexPool_`(1800)에서 충당. color grading LUT SRV는 별도 `srvTex3DPool_`(16, SRVHeap `[2100,2116)`)에서 충당.
 - **MT/동시성:** lighting write → SceneColor transitionToRead → bloom → resolve는 모두 RenderingSlave cmdlist를
   `cmdQ_` 제출 순서로 직렬화(동일 큐 → 별도 fence 불필요). bloom/SceneColor 리소스는 per-room이라 프레임 레이스 없음.
 - **resize:** SceneColor·Bloom은 eraseX→addX로 재생성(IBL 맵은 해상도 무관·정적 유지).

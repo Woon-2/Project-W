@@ -45,7 +45,9 @@ public:
 		float exposure,
 		float bloomIntensity,
 		u32t debugMode,
-		const BindlessIndex& idxBloom
+		const BindlessIndex& idxBloom,
+		DescriptorPool* pTexPool3D,
+		const BindlessIndex& idxColorGradingLUT
 	);
 
 	// Stages the b0 constant buffer with the scene-color bindless index.
@@ -60,6 +62,7 @@ private:
 	DescriptorPool* pTexCubePool_  = nullptr;
 	DescriptorPool* pSamPool_      = nullptr;
 	DescriptorPool* pCmpSamPool_   = nullptr;
+	DescriptorPool* pTexPool3D_    = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
 	ComPtr<ID3D12PipelineState> shader_ = nullptr;
 	ComPtr<ID3D12CommandQueue>  cmdQ_   = nullptr;
@@ -75,6 +78,7 @@ private:
 	float bloomIntensity_ = 0.0f;
 	u32t  debugMode_      = 0u;
 	BindlessIndex idxBloom_{ -1, -1, -1, -1 };
+	BindlessIndex idxColorGradingLUT_{ -1, -1, -1, -1 };
 
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxTexPool_{};
@@ -82,6 +86,7 @@ private:
 	UINT rootParamIdxTexCubePool_{};
 	UINT rootParamIdxSamPool_{};
 	UINT rootParamIdxCmpSamPool_{};
+	UINT rootParamIdxTexPool3D_{};
 };
 
 }	// namespace TonemapPipeline

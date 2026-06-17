@@ -3458,6 +3458,24 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	} );
 
+	const auto tex3dRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 10u,
+		.RegisterSpace = 4u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// t10, space4: Texture3DPool (color grading LUT 등 volume texture)
+	addParam( "Texture3DPool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &tex3dRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
 	const auto samRange = D3D12_DESCRIPTOR_RANGE {
 		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
 		.NumDescriptors = UINT(-1),

@@ -375,6 +375,30 @@ void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, Descript
 
 }	// namespace SharedResources::IBL
 
+namespace ColorGrading {
+
+// 씬 전역, 고정된 단일 color grading LUT. tonemap resolve 패스가 gamma 보정 직후 항상 적용한다.
+// (idxRange == etoi(Texture::Type::Tex3D), srvTex3DPool에서 할당된 SRV)
+struct ColorGradingData {
+	Texture lut;
+	u32t    size = 0u;	// LUT_3D_SIZE (한 축의 해상도) — half-texel 보정용으로 idxInArray에도 동일 값이 들어있다.
+	bool    created = false;
+};
+
+extern ColorGradingData lutData;
+
+// lutPath의 .cube 파일을 파싱해 3D 텍스처 + bindless SRV로 등록한다.
+// cmdList에 업로드 명령을 기록하므로, 호출 후 cmdList를 Close/Execute하고 fenceToAssociate로
+// GPU 작업 완료를 대기한 뒤에야 업로드 버퍼가 안전하게 해제된다(loadDDS와 동일한 규약).
+void addColorGradingLUT( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, DescriptorPool& srvTex3DPool, const std::filesystem::path& lutPath
+);
+
+// LUT의 SRV 슬롯을 반납한다.
+void eraseColorGradingLUT( DescriptorPool& srvTex3DPool );
+
+}	// namespace SharedResources::ColorGrading
+
 }	// namespace SharedResources
 
 #endif	// __sharedResources_HPP

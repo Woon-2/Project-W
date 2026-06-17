@@ -450,6 +450,7 @@ private:
 	DescriptorPool srvTexPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool srvTexArrayPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool srvTexCubePool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool srvTex3DPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요 (color grading LUT 등 volume texture)
 	DescriptorPool uavPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요

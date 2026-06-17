@@ -185,9 +185,10 @@ void GFX::init() {
 	);
 
 	// SRV & CBV & UAV Heap은 GPU Visible, bind 필요
+	// 2100(Tex2D 1800 + TexArray 100 + TexCube 100 + UAV 100) + Tex3D 16(color grading LUT 등) = 2116
 	srvCbvUavHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = 2100u,
+		.NumDescriptors = 2116u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		.NodeMask = 0
 	} );
@@ -232,6 +233,15 @@ void GFX::init() {
 
 	cpuStart.ptr += 100u * cbvSrvUavIncSize;
 	gpuStart.ptr += 100u * cbvSrvUavIncSize;
+
+	// SRV Texture3D Pool: SRVHeap의 [2100, 2116) 범위 (color grading LUT 등 volume texture)
+	srvTex3DPool_ = DescriptorPool(16u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 16u * cbvSrvUavIncSize;
+	gpuStart.ptr += 16u * cbvSrvUavIncSize;
 
 	// Sampler Heap은 GPU Visible, bind 필요
 	samHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
@@ -1304,6 +1314,11 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 	// IBL 타깃 리소스 생성 (irradiance/prefiltered 큐브 + BRDF LUT). 정적(환경 의존),
 	// 스카이박스 큐브 상주 후 loadRequestedAssets에서 precomputeIBL이 채운다.
 	SharedResources::IBL::addIBL(device_.Get(), uavPool_, srvTexCubePool_, srvTexPool_);
+	// Color grading LUT. 씬 전역, 정적, tonemap resolve 패스가 gamma 보정 직후 항상 적용한다.
+	SharedResources::ColorGrading::addColorGradingLUT(
+		device_.Get(), cmdList.Get(), fence, srvTex3DPool_,
+		"../resources/LUT/warm-natural_6.C0008.cube"
+	);
 	// hi-z map 생성 (hi-z occlusion culling용)
 	SharedResources::HiZMap::addHiZMaps(
 		device_.Get(), static_cast<u32t>(gClientRect.right  - gClientRect.left),
@@ -1901,6 +1916,11 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Color grading LUT bindless index: 로드되지 않았으면(created==false) grading 미적용.
+	const BindlessIndex colorGradingLUTSrv = SharedResources::ColorGrading::lutData.created
+		? SharedResources::ColorGrading::lutData.lut.idxSrv
+		: BindlessIndex{ -1, -1, -1, -1 };
+
 	// Tonemap resolve dispatcher (deferred path에서만 draw; SceneColorHDR -> 백버퍼 LDR)
 	auto tonemapPipelineDispatcher = TonemapPipeline::Dispatcher(
 		tmpDescriptorHeaps,
@@ -1912,7 +1932,8 @@ void GFX::render() {
 		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
 		sceneColorSrv, sceneColorRoomIdx,
 		tonemapExposure_, bloomIntensity_, gBufferDebugMode_,
-		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx)
+		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx),
+		&srvTex3DPool_, colorGradingLUTSrv
 	);
 
 	// Bloom dispatcher (deferred path only; runs before the resolve composite reads mip 0).
@@ -2411,7 +2432,7 @@ void GFX::render() {
 			lpfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
 			lpfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
 			lpfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
-			lpfd.iblIntensity        = 0.85f;
+			lpfd.iblIntensity        = 0.92f;
 			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
 			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
 			lpfd.fogDensity = 0.0008f;

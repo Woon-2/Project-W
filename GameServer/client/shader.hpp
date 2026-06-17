@@ -1047,15 +1047,15 @@ struct PerFrameData {
 namespace TonemapResolveShader {
 
 // Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
-// 48 bytes. Layout finalized up-front (exposure/debug/bloom) so the cbuffer is
-// not re-packed as later Phase 2 features land.
+// 64 bytes.
 struct PerDrawcallData {
-	BindlessIndex idxSceneColor;   // HDR scene-color SRV
-	BindlessIndex idxBloom;        // bloom mip0 SRV (invalid => additive bloom is a no-op)
-	float         exposure;        // linear exposure multiplier applied before tonemapping
-	float         bloomIntensity;  // additive bloom strength (0 => off)
-	u32t          debugMode;       // GBuffer debug mode; !=0 => passthrough (skip tonemap)
+	BindlessIndex idxSceneColor;        // HDR scene-color SRV
+	BindlessIndex idxBloom;             // bloom mip0 SRV (invalid => additive bloom is a no-op)
+	float         exposure;             // linear exposure multiplier applied before tonemapping
+	float         bloomIntensity;       // additive bloom strength (0 => off)
+	u32t          debugMode;            // GBuffer debug mode; !=0 => passthrough (skip tonemap)
 	float         _pad;
+	BindlessIndex idxColorGradingLUT;   // 3D LUT SRV (idxRange<0 => grading is a no-op)
 };
 
 }	// namespace TonemapResolveShader

@@ -859,6 +859,43 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 	return __createTexture(device, width, height, format, flags, initialState, &optimizedClearValue);
 }
 
+// 커스텀 3D 텍스처(Texture3D, size x size x size)를 생성한다. color grading LUT 용도.
+Texture createTexture3D( ID3D12Device* device, std::uint32_t size,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
+) {
+	Texture ret{};
+
+	auto heapProperties = D3D12_HEAP_PROPERTIES{
+		.Type = D3D12_HEAP_TYPE_DEFAULT,
+		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+		.CreationNodeMask = 0u,
+		.VisibleNodeMask = 0u
+	};
+
+	auto desc = D3D12_RESOURCE_DESC{
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+		.Alignment = 0u,
+		.Width = size,
+		.Height = size,
+		.DepthOrArraySize = static_cast<UINT16>(size),
+		.MipLevels = 1u,
+		.Format = format,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = flags
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateCommittedResource(
+			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr,
+			__uuidof(ID3D12Resource), &ret.res
+		), false
+	);
+
+	return ret;
+}
+
 Texture createTextureWithMips( ID3D12Device* device, uint32_t width, uint32_t height,
     DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
 ) {
