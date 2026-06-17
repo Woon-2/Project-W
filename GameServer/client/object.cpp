@@ -267,24 +267,17 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	}
 }
 
-void MonsterAnimBlender::init(const Model* model,
-                              const std::vector<std::shared_ptr<AnimClip>>& anims,
-                              std::string_view clipPrefix)
-{
+// ---------------------------------------------------------------------------
+// AnimBlenderGoblin
+// ---------------------------------------------------------------------------
+void AnimBlenderGoblin::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
 	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
-
-	std::string p(clipPrefix);
-	clipIdle_   = p + "_Idle";
-	clipWalk_   = p + "_Walk";
-	clipAttack_ = p + "_Attack";
-	clipHit_    = p + "_Hit";
-	clipDeath_  = p + "_Death";
 }
 
-void MonsterAnimBlender::update(Seconds deltaTime, void* pVoidOwner) {
+void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	setOwnerPos(pOwner->pos());
 
@@ -305,17 +298,17 @@ void MonsterAnimBlender::update(Seconds deltaTime, void* pVoidOwner) {
 	tIdle_ = 1.f - tWalk_;
 
 	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip(clipIdle_)->duration;
+	const auto durationIdle = targetClip("Goblin_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
 
 	if (tWalk_ > 0.f) {
 		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip(clipWalk_)->duration;
+		const auto durationWalk = targetClip("Goblin_Walk")->duration;
 		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
 	}
 
 	if (cooldownAttack_ > 0ms) {
-		const auto durationAttack = targetClip(clipAttack_)->duration;
+		const auto durationAttack = targetClip("Goblin_Attack")->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
 		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
 		cooldownAttack_ -= deltaTime;
@@ -351,30 +344,30 @@ void MonsterAnimBlender::update(Seconds deltaTime, void* pVoidOwner) {
 	}
 }
 
-void MonsterAnimBlender::onCalcLocal(PassKey<AnimSystem>) {
-	updateFrames(clipIdle_,   animTimeIdle_);
-	updateFrames(clipWalk_,   animTimeWalk_);
-	updateFrames(clipAttack_, animTimeAttack_);
-	updateFrames(clipHit_,    animTimeHit_);
-	updateFrames(clipDeath_,  animTimeDeath_);
+void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames("Goblin_Idle",   animTimeIdle_);
+	updateFrames("Goblin_Walk",   animTimeWalk_);
+	updateFrames("Goblin_Attack", animTimeAttack_);
+	updateFrames("Goblin_Hit",    animTimeHit_);
+	updateFrames("Goblin_Death",  animTimeDeath_);
 
 	auto& localXforms  = localXformData();
-	auto& framesIdle   = curFrames(clipIdle_);
-	auto& framesWalk   = curFrames(clipWalk_);
-	auto& framesAttack = curFrames(clipAttack_);
-	auto& framesHit    = curFrames(clipHit_);
-	auto& framesDeath  = curFrames(clipDeath_);
+	auto& framesIdle   = curFrames("Goblin_Idle");
+	auto& framesWalk   = curFrames("Goblin_Walk");
+	auto& framesAttack = curFrames("Goblin_Attack");
+	auto& framesHit    = curFrames("Goblin_Hit");
+	auto& framesDeath  = curFrames("Goblin_Death");
 
 	if (mode_ == Mode::Baked) {
 		// death는 우선도가 가장 높음
 		if (tDeath_ > 0.01f) {
-			auto& deathClip = targetClip(clipDeath_);
+			auto& deathClip = targetClip("Goblin_Death");
 			finalBakedClipId_    = deathClip->id;
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
 		// 그 다음 공격 애니메이션 우선도 높게 주기
 		else if (tAttack_ > 0.01f) {
-			auto& attackClip = targetClip(clipAttack_);
+			auto& attackClip = targetClip("Goblin_Attack");
 			finalBakedClipId_    = attackClip->id;
 			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
@@ -383,8 +376,8 @@ void MonsterAnimBlender::onCalcLocal(PassKey<AnimSystem>) {
 			float   weights[]   = { tIdle_, tWalk_ };
 			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
 			const AnimClip* clips[] = {
-				targetClip(clipIdle_).get(),
-				targetClip(clipWalk_).get()
+				targetClip("Goblin_Idle").get(),
+				targetClip("Goblin_Walk").get()
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
@@ -406,8 +399,306 @@ void MonsterAnimBlender::onCalcLocal(PassKey<AnimSystem>) {
 	}
 }
 
-void MonsterAnimBlender::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<MonsterAnimBlender*>(pVoidOwner);
+void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderGoblin*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+
+	case EventType::Attack:
+		pOwner->animTimeAttack_ = 0s;
+		pOwner->cooldownAttack_ = 3000ms;
+		break;
+
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+
+	default:
+		break;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AnimBlenderSnake
+// ---------------------------------------------------------------------------
+void AnimBlenderSnake::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+}
+
+void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+
+	const auto speed = pOwner->velocity().len();
+
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Snake_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Snake_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms) {
+		const auto durationAttack = targetClip("Snake_Attack")->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;   // 2배속 재생
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames("Snake_Idle",   animTimeIdle_);
+	updateFrames("Snake_Walk",   animTimeWalk_);
+	updateFrames("Snake_Attack", animTimeAttack_);
+	updateFrames("Snake_Hit",    animTimeHit_);
+	updateFrames("Snake_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Snake_Idle");
+	auto& framesWalk   = curFrames("Snake_Walk");
+	auto& framesAttack = curFrames("Snake_Attack");
+	auto& framesHit    = curFrames("Snake_Hit");
+	auto& framesDeath  = curFrames("Snake_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Snake_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (tAttack_ > 0.01f) {
+			auto& attackClip = targetClip("Snake_Attack");
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Snake_Idle").get(),
+				targetClip("Snake_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderSnake::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderSnake*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+
+	case EventType::Attack:
+		pOwner->animTimeAttack_ = 0s;
+		pOwner->cooldownAttack_ = 3000ms;
+		break;
+
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+
+	default:
+		break;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AnimBlenderMushroom
+// ---------------------------------------------------------------------------
+void AnimBlenderMushroom::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+}
+
+void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+
+	const auto speed = pOwner->velocity().len();
+
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Mushroom_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Mushroom_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms) {
+		const auto durationAttack = targetClip("Mushroom_Attack")->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;   // 2배속 재생
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames("Mushroom_Idle",   animTimeIdle_);
+	updateFrames("Mushroom_Walk",   animTimeWalk_);
+	updateFrames("Mushroom_Attack", animTimeAttack_);
+	updateFrames("Mushroom_Hit",    animTimeHit_);
+	updateFrames("Mushroom_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Mushroom_Idle");
+	auto& framesWalk   = curFrames("Mushroom_Walk");
+	auto& framesAttack = curFrames("Mushroom_Attack");
+	auto& framesHit    = curFrames("Mushroom_Hit");
+	auto& framesDeath  = curFrames("Mushroom_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Mushroom_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (tAttack_ > 0.01f) {
+			auto& attackClip = targetClip("Mushroom_Attack");
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Mushroom_Idle").get(),
+				targetClip("Mushroom_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderMushroom::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderMushroom*>(pVoidOwner);
 
 	switch (event->type) {
 	case EventType::Hit:
@@ -1026,8 +1317,8 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	}
 }
 
-void Monster::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<Monster*>(pVoidOwner);
+void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Goblin*>(pVoidOwner);
 	switch (event->type) {
 	case EventType::Hit:
 		if (pOwner) {
@@ -1088,23 +1379,139 @@ void Monster::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Even
 	}
 }
 
+void Snake::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Snake*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+		}
+		break;
+
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt())
+				pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+
+	case EventType::Attack:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	case EventType::Respawn:
+		if (pOwner) {
+			pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Mushroom::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Mushroom*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+		}
+		break;
+
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt())
+				pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+
+	case EventType::Attack:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	case EventType::Respawn:
+		if (pOwner) {
+			pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
 void Goblin::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
-	auto blender = std::make_unique<MonsterAnimBlender>();
-	blender->init(assetManager.modelGoblin(), assetManager.goblinAnimations(), "Goblin");
+	auto blender = std::make_unique<AnimBlenderGoblin>();
+	blender->init(assetManager.modelGoblin(), assetManager.goblinAnimations());
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
 
 void Snake::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
-	auto blender = std::make_unique<MonsterAnimBlender>();
-	blender->init(assetManager.modelSnake(), assetManager.snakeAnimations(), "Snake");
+	auto blender = std::make_unique<AnimBlenderSnake>();
+	blender->init(assetManager.modelSnake(), assetManager.snakeAnimations());
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
 
 void Mushroom::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
-	auto blender = std::make_unique<MonsterAnimBlender>();
-	blender->init(assetManager.modelMushroom(), assetManager.mushroomAnimations(), "Mushroom");
+	auto blender = std::make_unique<AnimBlenderMushroom>();
+	blender->init(assetManager.modelMushroom(), assetManager.mushroomAnimations());
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }

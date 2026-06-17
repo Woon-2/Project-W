@@ -272,7 +272,9 @@ private:
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
 	// Non-owning unified monster lookup (all monster types).
-	std::unordered_map<uint16, Monster*> idMonsterMap_{};
+	// Object* 로 두어 고블린/뱀/버섯 등 종류와 무관하게 통합 순회한다.
+	// ragdoll 등 몬스터 공통 동작은 Object의 가상 접근자로 접근.
+	std::unordered_map<uint16, Object*> idMonsterMap_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -405,7 +407,7 @@ private:
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
 	struct MonsterHpEntry {
-		Monster*         monster;              // non-owning; lifetime owned by typed shared_ptr vectors
+		Object*          monster;              // non-owning; lifetime owned by typed shared_ptr vectors
 		UI::ProgressBar* hpBar;                // owned by uiManager_
 		float            worldYOffset;
 		float            hpBarVisibleSeconds = 0.f;

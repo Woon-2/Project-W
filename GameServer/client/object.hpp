@@ -62,19 +62,17 @@ private:
 	bool dead_ = false;
 };
 
-// Generic monster animation blender. Supports the 5-clip set
-// (Idle, Walk, Attack, Hit, Death) shared by all monster types.
-// Clip prefix (e.g. "Goblin", "Snake", "Mushroom") is supplied at init time.
-class MonsterAnimBlender : public AnimBlender {
+// 고블린 애니메이션 블렌더. 5-클립 세트(Idle/Walk/Attack/Hit/Death)를
+// 속력 기반으로 블렌딩한다. 몬스터별 클립이 추가될 수 있으므로 각 몬스터마다
+// 독립된 블렌더 클래스를 둔다(공용 블렌더로 일반화하지 않음).
+class AnimBlenderGoblin : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
 	public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
 
-	void init(const Model* model,
-	          const std::vector<std::shared_ptr<AnimClip>>& anims,
-	          std::string_view clipPrefix);
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
 	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
@@ -83,12 +81,6 @@ public:
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
-
-	std::string clipIdle_{};
-	std::string clipWalk_{};
-	std::string clipAttack_{};
-	std::string clipHit_{};
-	std::string clipDeath_{};
 
 	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
@@ -113,8 +105,75 @@ private:
 	bool dead_ = false;
 };
 
-// Backward-compat alias: Goblin continues to use MonsterAnimBlender.
-using AnimBlenderGoblin = MonsterAnimBlender;
+// 뱀 애니메이션 블렌더. AnimBlenderGoblin과 동일한 5-클립 구조이나
+// 향후 뱀 고유 클립 추가를 위해 별도 클래스로 둔다.
+class AnimBlenderSnake : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+// 버섯 애니메이션 블렌더. 동일한 5-클립 구조이나 향후 버섯 고유 클립
+// 추가를 위해 별도 클래스로 둔다.
+class AnimBlenderMushroom : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
@@ -262,6 +321,15 @@ public:
 
 	virtual IEventBus* eventBus() { return &gNullEventBus; }
 
+	// 래그돌 접근자(베이스 기본값: 래그돌 없음). 래그돌을 보유하는 몬스터 클래스가
+	// 오버라이드한다. idMonsterMap_ 등 Object* 기반 통합 순회에서 종류와 무관하게 접근하기 위함.
+	// (eventBus()/setAnimBlender()와 동일한 no-op 가상 패턴)
+	virtual Ragdoll* ragdoll() { return nullptr; }
+	virtual bool ragdollPendingActivation() const { return false; }
+	virtual void setRagdollPendingActivation(bool) {}
+	virtual mu::Vec3 ragdollInitVelocity() const { return {}; }
+	virtual void MU_CALLCONV setRagdollInitVelocity(mu::Vec3) {}
+
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
@@ -380,12 +448,13 @@ private:
 	EventBus eventBus_{};
 };
 
-// Common base for all monster types: holds ragdoll state and the shared
-// EventBus that handles Hit / Death / Attack / Respawn events uniformly.
-class Monster : public Object {
+// 각 몬스터는 Object를 직접 상속한다. 공용 Monster 베이스로 일반화하지 않고,
+// ragdoll 상태와 Hit/Death/Attack/Respawn을 처리하는 EventBus를 클래스마다 복제한다.
+// 행동/클립이 몬스터별로 분기하므로 의도적으로 패턴만 반복한다.
+class Goblin : public Object {
 public:
-	Monster() = default;
-	Monster(Object&& base) : Object(std::move(base)) {}
+	Goblin() = default;
+	Goblin(Object&& base) : Object(std::move(base)) {}
 
 	class EventBus : public IEventBus {
 	public:
@@ -394,43 +463,73 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
-	Ragdoll& ragdoll() { return ragdoll_; }
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
 
-	bool ragdollPendingActivation() const { return ragdollPendingActivation_; }
-	void setRagdollPendingActivation(bool v) { ragdollPendingActivation_ = v; }
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 
-	mu::Vec3 ragdollInitVelocity() const { return ragdollInitVelocity_; }
-	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) { ragdollInitVelocity_ = v; }
-
-protected:
+private:
 	EventBus eventBus_{};
 	Ragdoll  ragdoll_{};
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
-class Goblin : public Monster {
-public:
-	Goblin() = default;
-	Goblin(Object&& base) : Monster(std::move(base)) {}
-
-	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
-};
-
-class Snake : public Monster {
+class Snake : public Object {
 public:
 	Snake() = default;
-	Snake(Object&& base) : Monster(std::move(base)) {}
+	Snake(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
 };
 
-class Mushroom : public Monster {
+class Mushroom : public Object {
 public:
 	Mushroom() = default;
-	Mushroom(Object&& base) : Monster(std::move(base)) {}
+	Mushroom(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
 };
 
 // 거점(Stronghold): 데미지를 받는 정적 구조물. 고블린/플레이어처럼 EventBus로

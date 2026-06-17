@@ -326,7 +326,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 클래스 | 위치 |
 |--------|------|
 | `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
-| `MonsterAnimBlender` (구 `AnimBlenderGoblin`) | `object.hpp #67-113` — clipPrefix("Goblin"/"Snake"/"Mushroom")로 파라미터화; `using AnimBlenderGoblin = MonsterAnimBlender` alias 유지 |
+| `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Attack/Hit/Death) 속력 블렌딩; 클립 이름 리터럴 고정 |
+| `AnimBlenderSnake` | `object.hpp #110` — 고블린과 동일 구조, 뱀 고유 클립 확장 대비 별도 클래스 |
+| `AnimBlenderMushroom` | `object.hpp #145` — 동일 구조, 버섯 고유 클립 확장 대비 별도 클래스 |
 | `AnimBlenderAnubis` | `object.hpp #100-140` |
 | `AnimBlenderBat` | `object.hpp #142-182` |
 | `AnimBlenderBomber` | `object.hpp #184-???` |
@@ -393,10 +395,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|
 | `Cube` | `object.hpp #591` |
 | `Player` | `object.hpp #600` |
-| `Monster` (base) | `object.hpp #360` — ragdoll 공유 필드·`EventBus` 포함 |
-| `Goblin` | `object.hpp #387` : `Monster` |
-| `Snake` | `object.hpp #395` : `Monster` |
-| `Mushroom` | `object.hpp #403` : `Monster` |
+| `Object` ragdoll 가상 접근자 | `object.hpp #263` 인근 — `ragdoll()`(`Ragdoll*`, 베이스 nullptr)/`ragdollPendingActivation`/`ragdollInitVelocity`; `idMonsterMap_<Object*>` 통합 순회용 |
+| `Goblin` | `object.hpp #454` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
+| `Snake` | `object.hpp #481` : `Object` — 고블린과 동일 패턴 복제 |
+| `Mushroom` | `object.hpp #508` : `Object` — 고블린과 동일 패턴 복제 |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
 | `Bomber` | `object.hpp #696` |

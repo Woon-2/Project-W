@@ -2153,7 +2153,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setAnimBlender(animSystem_, assetManager_);
 
 	if (goblin->model() && goblin->model()->ragdollDef) {
-		goblin->ragdoll().build(
+		goblin->ragdoll()->build(
 			goblin->model()->skeleton,
 			*goblin->model()->ragdollDef,
 			physicsWorld_
@@ -2213,7 +2213,7 @@ void Game::createSnake(const ObjectInfo& info) {
 	snake->setAnimBlender(animSystem_, assetManager_);
 
 	if (snake->model() && snake->model()->ragdollDef) {
-		snake->ragdoll().build(
+		snake->ragdoll()->build(
 			snake->model()->skeleton,
 			*snake->model()->ragdollDef,
 			physicsWorld_
@@ -2268,7 +2268,7 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushroom->setAnimBlender(animSystem_, assetManager_);
 
 	if (mushroom->model() && mushroom->model()->ragdollDef) {
-		mushroom->ragdoll().build(
+		mushroom->ragdoll()->build(
 			mushroom->model()->skeleton,
 			*mushroom->model()->ragdollDef,
 			physicsWorld_
@@ -2550,8 +2550,8 @@ void Game::hideNpcs(const std::vector<uint16>& npcIds) {
 
 		auto& goblin = it->second;
 		goblin->setHidden(true);
-		if (goblin->ragdoll().isActive())
-			goblin->ragdoll().deactivate(physicsWorld_);
+		if (goblin->ragdoll()->isActive())
+			goblin->ragdoll()->deactivate(physicsWorld_);
 	}
 }
 
@@ -2723,7 +2723,7 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
-	Monster* monster = it->second;
+	Object* monster = it->second;
 
 	if (monster->isDead()) return;
 
@@ -2774,13 +2774,13 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	);
 	if (it == idMonsterMap_.end()) return;
 
-	Monster* npc = it->second;
+	Object* npc = it->second;
 	npc->setHp( newHp );
 	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
-	if (npc->ragdoll().isActive())
-		npc->ragdoll().deactivate(physicsWorld_);
+	if (npc->ragdoll()->isActive())
+		npc->ragdoll()->deactivate(physicsWorld_);
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
@@ -3128,10 +3128,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
 	{
-		auto activateRagdollIfPending = [&](Monster& g) {
+		auto activateRagdollIfPending = [&](Object& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -3166,8 +3166,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Monster& g) {
-			Ragdoll& rd = g.ragdoll();
+		auto syncRagdollToAnim = [&](Object& g) {
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -4711,7 +4711,7 @@ void Game::applyHiZCulling() {
 			if (auto* blender = p->animBlender())
 				blender->setCulled(p->isFrustumCulled());
 		}
-		auto resetHiZ = [&](const std::shared_ptr<Monster>& m) {
+		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
 			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
 		};

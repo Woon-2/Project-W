@@ -665,8 +665,8 @@ Game::Game() {
 }
 
 Game::~Game() {
-	if (goblin_ && goblin_->ragdoll().isBuilt())
-		goblin_->ragdoll().destroy(physicsWorld_);
+	if (goblin_ && goblin_->ragdoll()->isBuilt())
+		goblin_->ragdoll()->destroy(physicsWorld_);
 	threadPool_.stop();
 
 	// Drain the GPU before member destruction: members declared after gfx_ are
@@ -2370,7 +2370,7 @@ void Game::configureGoblin(Goblin& goblin) {
 	setupMonsterBody(goblin.body(), 40.f);
 
 	if (goblin.model() && goblin.model()->ragdollDef) {
-		goblin.ragdoll().build(
+		goblin.ragdoll()->build(
 			goblin.model()->skeleton,
 			*goblin.model()->ragdollDef,
 			physicsWorld_
@@ -2749,7 +2749,7 @@ void Game::update(Milliseconds deltaTime) {
 		auto activateRagdollIfPending = [&](Goblin& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -2786,7 +2786,7 @@ void Game::update(Milliseconds deltaTime) {
 		};
 
 		auto syncRagdollToAnim = [&](Goblin& g) {
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
