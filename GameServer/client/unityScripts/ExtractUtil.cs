@@ -18,12 +18,12 @@ public static class ExtractUtil
         return string.Format("</{0}>", tagSource);
     }
 
-    // WriteXX...: BinaryWriter�� Ư���� �ڷ����� ����ϱ� ���� ��ƿ��Ƽ �Լ�
-    // ExtractXX...: WriteXX... �Լ����� �̿��Ͽ� ����Ƽ�� Ư���� �ڷᱸ���� ����ϴ� �Լ�
+    // WriteXX...: BinaryWriter로 특정한 자료형을 출력하기 위한 유틸리티 함수
+    // ExtractXX...: WriteXX... 함수들을 이용하여 유니티의 특정한 자료구조를 출력하는 함수
 
-    // @param Transform ��� ���� ������ ����� �� Ʈ��(����Ʈ��)�� ��Ʈ���
-    // @param nodeCnt ��� ������ ������ų ����
-    // Transform Ʈ��(����Ʈ��)�� ��� ������ nodeCnt�� �����Ѵ�.
+    // @param Transform 노드 개수 추적의 대상이 될 트리(서브트리)의 루트노드
+    // @param nodeCnt 노드 개수를 누적시킬 변수
+    // Transform 트리(서브트리)의 노드 개수를 nodeCnt에 누적한다.
     public static void AccNodeCnt(Transform xform, ref int nodeCnt)
     {
         nodeCnt++;
@@ -171,24 +171,24 @@ public static class ExtractUtil
         out Quaternion relativeRotation,
         out Vector3 relativeScale)
     {
-        // �� Transform�� ���� ���
+        // 두 Transform의 월드 행렬
         Matrix4x4 targetMatrix = target.localToWorldMatrix;
         Matrix4x4 referenceMatrix = reference.localToWorldMatrix;
 
-        // B�� ����� * A = A�� B �������� ��ȯ
+        // B의 역행렬 * A = A를 B 기준으로 변환
         Matrix4x4 relativeMatrix = referenceMatrix.inverse * targetMatrix;
 
-        // ����� position, rotation, scale�� ����
+        // 행렬을 position, rotation, scale로 분해
         relativePosition = relativeMatrix.GetColumn(3);
 
-        // ������ ���� (�� ���� ����)
+        // 스케일 추출 (열 벡터 길이)
         relativeScale = new Vector3(
             relativeMatrix.GetColumn(0).magnitude,
             relativeMatrix.GetColumn(1).magnitude,
             relativeMatrix.GetColumn(2).magnitude
         );
 
-        // ����ȭ �� ȸ�� ����
+        // 정규화 후 회전 추출
         Quaternion rot = Quaternion.LookRotation(
             relativeMatrix.GetColumn(2).normalized,
             relativeMatrix.GetColumn(1).normalized
@@ -223,7 +223,27 @@ public static class ExtractUtil
 
     public static void WriteDressMatrix(BinaryWriter binaryWriter, string tagSource, Transform dressXform, Transform xform)
     {
-        WriteMatrix(binaryWriter, tagSource, dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
+        // dressXform(보통 모델 루트)의 worldToLocalMatrix는 위치/회전/스케일을 전부 제거하기 때문에,
+        // 루트 오브젝트에 의도적으로 걸어둔 scale(모델 전체 크기 조절)까지 함께 사라진다.
+        // 씬 배치용 위치/회전은 그대로 제외하되, 루트의 localScale만 다시 곱해 되살린다.
+        Matrix4x4 rootScale = Matrix4x4.Scale(dressXform.localScale);
+        WriteMatrix(binaryWriter, tagSource, rootScale * dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
+    }
+
+    // 바운딩 볼륨 박스의 Center/Size에 루트 스케일을 반영해 추출한다.
+    // - 본에 부착된 박스: 런타임(object.cpp)에서 bone.toDress(이미 루트 스케일 포함, WriteDressMatrix 참고)를
+    //   통해 center를 매 프레임 변환하므로, 여기서 center에 루트 스케일을 또 곱하면 이중 적용된다.
+    //   반면 half-extents(size)는 런타임에서 게임플레이용 scale만 곱해질 뿐 bone.toDress의 스케일은
+    //   반영되지 않으므로, size에는 추출 시점에 루트 스케일을 곱해줘야 한다.
+    // - 본이 없는 박스(오브젝트 기준 정적 박스): 런타임에 모델 고유 스케일을 적용할 경로가 전혀 없으므로
+    //   center와 size 모두에 루트 스케일을 곱해야 한다.
+    public static void GetScaledBoxCenterSize(
+        BoundingBoxData box, Vector3 rootScale,
+        out Vector3 center, out Vector3 size)
+    {
+        bool hasBone = box.bone != null;
+        center = hasBone ? box.localCenter : Vector3.Scale(box.localCenter, rootScale);
+        size = Vector3.Scale(box.size, rootScale);
     }
 
     public static void WriteVector(BinaryWriter binaryWriter, Vector2 vec)

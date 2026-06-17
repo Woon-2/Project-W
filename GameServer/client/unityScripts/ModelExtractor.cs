@@ -115,6 +115,37 @@ public class ModelExtractorWindow : EditorWindow
         Debug.Log($"[TextureMapper] Found {textureMappings.Count} textures in {obj.name}");
     }
 
+    // 텍스처를 식별하는 키를 만든다.
+    // Texture.name만으로는 텍스처를 구분할 수 없는 경우가 있다 (예: InfinityPBR 계열 에셋팩은
+    // bat/gargoyle/goblin/Hobgoblin/bomber/snake 등 서로 다른 크리처의 albedo 텍스처가
+    // 전부 "InfinityPBR_StandardColorID"라는 동일한 이름을 갖는다).
+    // texHashMap(AssetManager 전역 텍스처 캐시)이 이 이름을 키로 사용하므로,
+    // 이름이 겹치면 먼저 로드된 크리처의 텍스처를 나중에 로드되는 다른 크리처가 그대로 재사용해버린다.
+    //
+    // 전체 AssetDatabase 경로를 키로 쓰면 바이너리 포맷의 문자열 길이 제한에 걸린다
+    // (길이 prefix가 1바이트라 최대 255바이트, C++ 측 읽기 버퍼도 그에 맞춰 256바이트로 고정되어 있음).
+    // 대신 textureMappings에 기록된 출력 경로(Path)의 파일명(확장자 제외)을 키로 쓴다.
+    // 이 프로젝트에서는 크리처마다 출력 파일명이 이미 고유하게 관리되고 있어
+    // (BatColorSet, SnakeColorSet, GargoyleColorSet ...) 충돌 없이 짧은 키를 얻을 수 있다.
+    string GetTextureKey(Texture tex)
+    {
+        if (tex == null) return null;
+
+        string path = (textureMappings != null && textureMappings.TryGetValue(tex, out var mapped))
+            ? mapped
+            : AssetDatabase.GetAssetPath(tex);
+
+        string key = string.IsNullOrEmpty(path) ? tex.name : Path.GetFileNameWithoutExtension(path);
+        if (string.IsNullOrEmpty(key)) key = tex.name;
+
+        if (System.Text.Encoding.UTF8.GetByteCount(key) > 255)
+        {
+            Debug.LogError($"[ModelExtractor] 텍스처 키가 바이너리 포맷 한계(255바이트)를 초과합니다: {key}");
+        }
+
+        return key;
+    }
+
     // 잘 알려진 albedo 프로퍼티 이름 후보.
     static readonly string[] kAlbedoPropCandidates =
         { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
@@ -250,7 +281,7 @@ public class ModelExtractorWindow : EditorWindow
         {
             ExtractUtil.WriteHeadTag(geometryWriter, "Item");
             Texture tex = kvp.Key;
-            ExtractUtil.WriteText(geometryWriter, "TextureName", tex.name);
+            ExtractUtil.WriteText(geometryWriter, "TextureName", GetTextureKey(tex));
             ExtractUtil.WriteText(geometryWriter, "WrapModeU", tex.wrapModeU.ToString());
             ExtractUtil.WriteText(geometryWriter, "WrapModeV", tex.wrapModeV.ToString());
             ExtractUtil.WriteText(geometryWriter, "WrapModeW", tex.wrapModeW.ToString());
@@ -415,7 +446,7 @@ public class ModelExtractorWindow : EditorWindow
             Texture albedoTex = FindAlbedoTexture(materials[i]);
             if (albedoTex != null)
             {
-                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", albedoTex.name);
+                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", GetTextureKey(albedoTex));
             }
             // NormalMap
             if (materials[i].HasProperty("_BumpMap"))
@@ -423,7 +454,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture bumpMap = materials[i].GetTexture("_BumpMap");
                 if (bumpMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "NormalMap", bumpMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "NormalMap", GetTextureKey(bumpMap));
                 }
             }
             // MetallicSmoothnessMap
@@ -432,7 +463,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture metallicGlossMap = materials[i].GetTexture("_MetallicGlossMap");
                 if (metallicGlossMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "MetallicSmoothnessMap", metallicGlossMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "MetallicSmoothnessMap", GetTextureKey(metallicGlossMap));
                 }
             }
             // EmmisiveMap
@@ -441,7 +472,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture emmisionMap = materials[i].GetTexture("_EmissionMap");
                 if (emmisionMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "EmmisiveMap", emmisionMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "EmmisiveMap", GetTextureKey(emmisionMap));
                 }
             }
             // AOMap
@@ -450,7 +481,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture aoMap = materials[i].GetTexture("_OcclusionMap");
                 if (aoMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "AOMap", aoMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "AOMap", GetTextureKey(aoMap));
                 }
             }
 
@@ -658,9 +689,11 @@ public class ModelExtractorWindow : EditorWindow
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
 
-                // 로컬 기준 값들
-                ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
-                ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
+                // 로컬 기준 값들 (루트 스케일 반영 — ExtractUtil.GetScaledBoxCenterSize 참고)
+                ExtractUtil.GetScaledBoxCenterSize(
+                    box, targetObject.transform.localScale, out var center, out var size);
+                ExtractUtil.WriteVector(geometryWriter, "Center", center);
+                ExtractUtil.WriteVector(geometryWriter, "Size", size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
 
                 // static 여부 (본에 붙은 박스는 본의, 그 외는 대상 오브젝트의 static 플래그를 따른다)

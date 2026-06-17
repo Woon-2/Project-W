@@ -135,8 +135,11 @@ public class ModelExtractorForServerWindow : EditorWindow
                 ExtractUtil.WriteText(geometryWriter, "Name", box.name ?? "");
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
-                ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
-                ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
+                // 루트 스케일 반영 (ExtractUtil.GetScaledBoxCenterSize 참고)
+                ExtractUtil.GetScaledBoxCenterSize(
+                    box, targetObject.transform.localScale, out var center, out var size);
+                ExtractUtil.WriteVector(geometryWriter, "Center", center);
+                ExtractUtil.WriteVector(geometryWriter, "Size", size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
                 // static 여부 (본에 붙은 박스는 본의, 그 외는 대상 오브젝트의 static 플래그를 따른다)
                 bool isStatic = box.bone != null ? box.bone.gameObject.isStatic : targetObject.isStatic;
