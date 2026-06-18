@@ -75,6 +75,7 @@ private:
     void play();
     void resetCharacters();
     void positionDummyInFront();   // place the target object in front of the caster, on the ground
+    void killFrontParticle();      // debug: destroy the first live particle of any active VFX (tests killParticle)
     void clearHitboxSelection();   // ESC: leave hitbox editing
 
     // --- editing ---

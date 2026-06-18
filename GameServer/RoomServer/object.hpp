@@ -237,7 +237,7 @@ public:
 	void         setLastCreditMs(Milliseconds t) { lastCreditMs_ = t; }
 
 private:
-	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
 	uint8        selectedSlot_ = 0;
 	float        skillCharge_[kSkillSlots] = { 0.f, 0.f, 0.f };

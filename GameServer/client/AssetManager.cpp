@@ -388,6 +388,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "MagicCircle",
+		.texturePath     = "../resources/Textures/magic_circle.dds",
+		.pDest           = &magicCircleTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "Stone",
 		.texturePath     = "../resources/Textures/Stone.dds",
 		.pDest           = &stoneTex_,

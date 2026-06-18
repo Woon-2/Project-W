@@ -31,6 +31,10 @@ end
 -- All active particles in ParticleEffect[vfxId].system(systemIdx) receive hitboxes.
 -- When useParticleSize = true in the SpawnHitbox event, each particle's current visual size
 -- scales the OBB halfExtents defined in localOBBs (size=1.0 → halfExtents unchanged).
+-- SpawnHitbox field `penetrate` (default true) controls persistence:
+--   penetrate = false => non-penetrating: the source particle is destroyed on its first hit
+--   (and any Death sub-emitter -- e.g. an explosion -- fires at the impact point). VFXParticle
+--   hitboxes only; arrow.lua / arrow_volley.lua / energy_explosion_arrow.lua use it.
 function VFXParticleAttach(vfxId, systemIdx)
     return { type = "VFXParticle", vfxId = vfxId, systemIdx = systemIdx or 0 }
 end

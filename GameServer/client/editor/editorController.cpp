@@ -119,7 +119,9 @@ void Controller::buildUI() {
         L"  free: WASD move, RMB look, Q/E down/up\n"
         L"follow: WASD move caster, RMB orbit\n"
         L"P      : dump edit diff to console\n"
-        L"R      : reset characters");
+        L"R      : reset characters\n"
+        L"C      : kill front particle (debug)\n"
+        L"T      : put target in line of fire");
 
     panel_ = static_cast<UI::Panel*>(root->addChild(std::make_unique<UI::Panel>()));
     panel_->name    = "editorPanel";
@@ -184,6 +186,23 @@ void Controller::positionDummyInFront() {
     // Face the caster so the dummy looks at the attacker.
     t->setOrient(mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
                            mu::Radian(std::atan2(-fwd.x(), -fwd.z()))));
+}
+
+void Controller::killFrontParticle() {
+    // Debug hook for the kill primitive: destroy the first live particle of any
+    // active effect. A non-penetrating skill destroys its own particle on hit
+    // through the same ParticleSystem::killParticle() path; this lets the
+    // primitive (and any Death sub-emitter chain, e.g. an explosion) be observed
+    // in isolation before the hitbox plumbing is exercised.
+    if (!skillCtx_ || !skillCtx_->vfxById) return;
+    for (int v = 0; v < skillCtx_->vfxByIdSize; ++v) {
+        ParticleEffect* fx = skillCtx_->vfxById[v];
+        if (!fx) continue;
+        for (int s = 0; s < fx->systemCount(); ++s) {
+            ParticleSystem& sys = fx->system(s);
+            if (sys.activeCount() > 0) { sys.killParticle(0); return; }
+        }
+    }
 }
 
 void Controller::clearHitboxSelection() {
@@ -413,6 +432,8 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
     if (isPressed(cur, prev, VK_SPACE))  play();
     if (isPressed(cur, prev, 'P'))       { if (draft_.valid()) draft_.dumpDiff(); }
     if (isPressed(cur, prev, 'R'))       resetCharacters();
+    if (isPressed(cur, prev, 'C'))       killFrontParticle();
+    if (isPressed(cur, prev, 'T'))       positionDummyInFront();
     if (isPressed(cur, prev, 'F'))       enableFreeCamera(!cameraFree_);
     if (isPressed(cur, prev, VK_ESCAPE)) clearHitboxSelection();
 
@@ -532,15 +553,16 @@ void Controller::refreshPanel() {
     if (statusLabel_) {
         std::wstring s = L"Skill: ";
         s += draft_.valid() ? widen(draft_.name()) : L"(none)";
-        wchar_t buf[160];
+        wchar_t buf[200];
         auto t = targetObj();
         const int thp  = t ? t->hp()    : 0;
         const int tmax = t ? t->maxHp() : 0;
-        swprintf_s(buf, L"  |  scale %.2f%s  |  cam:%s  |  target HP %d/%d  |  %s",
+        const unsigned destroyed = skillSystem_ ? skillSystem_->debugStats().particlesDestroyedOnHit : 0u;
+        swprintf_s(buf, L"  |  scale %.2f%s  |  cam:%s  |  target HP %d/%d  |  destroyed %u  |  %s",
                    timeScale_,
                    (timeScale_ <= 0.f ? L" PAUSED" : L""),
                    (cameraFree_ ? L"FREE" : L"FOLLOW"),
-                   thp, tmax,
+                   thp, tmax, destroyed,
                    (selectedDefIdx_ >= 0 ? L"editing def (Esc to exit)" : L"click a hitbox to edit"));
         s += buf;
         statusLabel_->setText(s);

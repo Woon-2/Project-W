@@ -47,6 +47,9 @@ struct SkillHitboxDef {
     float            hitGroupCooldownMs  = 0.f;
     bool             useParticleSize     = false;
     bool             applyAttachRotation = true;
+    // VFXParticle only: false = non-penetrating (source particle consumed on first hit; server
+    // skips its hitbox afterward). true (default) = penetrating. Keep in sync with client copy.
+    bool             penetrate           = true;
 };
 
 enum class SkillEventType : u8t {

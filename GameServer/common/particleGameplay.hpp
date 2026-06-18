@@ -510,6 +510,11 @@ struct ParticleState {
     float      ageT;             // 0..1 normalized age
     mu::Vec3   angularAngle3D;   // radians, accumulated rotation
     mu::Mat4x4 baseRotation;     // spawn orientation (startRotation3D * base)
+    // Stable spawn identity (counter-PRNG key). Lets the server-authoritative
+    // hitbox path track a specific particle across frames (e.g. mark a
+    // non-penetrating projectile consumed on hit). Same key on both machines.
+    std::uint32_t stream = 0;
+    std::uint32_t id     = 0;
 };
 
 namespace detail {
@@ -796,6 +801,8 @@ inline void evaluateSystemParticles(const SystemResolver& resolve, int systemIdx
             continue;
 
         ParticleState st;
+        st.stream = rs.stream;
+        st.id     = rs.id;
         st.pos  = rs.origin + rs.vel * ageScaled
                 + rs.grav * (0.5f * ageScaled * ageScaled);
         st.ageT = ageScaled / rs.sp.lifetime;

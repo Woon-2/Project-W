@@ -175,3 +175,52 @@ ArrowHit 자식 시스템에 잘못 부착되어 있었음).
   `pg::importGameplayConfig`도 같이 바꿔야 한다.
 - 히트박스가 붙는 시스템의 게임플레이 필드를 game.cpp 코드로 tweak하지 말 것
   (looping처럼 필요하면 Lua systems 테이블로 내려서 양측에 공급).
+
+## 8. 비관통(Destroy-on-Hit) 히트박스
+
+> 2026-06-18 추가. `penetrate` 플래그 + `ParticleSystem::killParticle`.
+
+### 개요
+
+`SpawnHitbox`의 `penetrate = false`(VFXParticle 전용)는 **비관통** 히트박스를 만든다.
+첫 명중 시 소스 particle이 소멸한다. 기본값은 `true`(관통, 기존 동작 유지).
+
+- **클라**: `SkillSystem::processHitResults`가 명중한 비관통 히트박스의 소스 particle을
+  `ParticleSystem::killParticle(index)`로 소멸시킨다. 같은 프레임 다중킬은 소스별 인덱스
+  **내림차순**으로 처리해 swap-remove의 인덱스 무효화를 피한다. `killParticle`은 표준
+  사망 경로(Death 서브이미터 + swap-remove)를 재사용하므로, Death 체인이 있으면 그 자리에
+  폭발 등 자식 이펙트가 재생된다. 히트박스↔particle 매핑은 매 프레임 위치 기반으로
+  재구성되므로(`updateParticleHitboxSources`) 소멸 후 자동 정리된다.
+- **서버(권위)**: `ParticleHitboxSource::consumedKeys`에 명중 particle의 안정 키
+  `(stream<<32)|id`를 기록하고, 이후 `updateParticleHitboxSources`가 해당 particle을
+  히트박스 생성에서 제외한다(`pg::ParticleState`에 `stream/id` surface). 데미지는 기존
+  `EvSkillHit`로 전파되므로 **per-particle 프로토콜 추가는 없다**.
+
+### 인터페이스 경계 (커플링 회피)
+
+Particle VFX가 노출하는 외부 통제 함수는 `ParticleSystem::killParticle(int)` 하나다.
+Skill System은 이미 보유한 `ParticleSystem*`로 이 함수만 호출한다(새 의존성 없음).
+
+### 화살→폭발 (energy_explosion_arrow)
+
+화살(System 1)에 데미지 0 비관통 트리거 히트박스를 부착한다. 명중 시:
+
+- **클라**: 화살 particle 소멸 → 기존 Arrow `Death` 서브이미터 체인이 폭발(System 2)을
+  충돌 위치에서 재생 → 기존 System 2 히트박스 소스가 블라스트 판정(데미지).
+- **서버**: 화살 소비 시 폭발(System 2; `chainParent == 화살 시스템`) 소스에
+  `consumeAnchor{pos, time}`를 설정한다. 설정되면 `updateParticleHitboxSources`가
+  System 2를 **루트 play 버스트**(chainParent=-1, Emit)로 충돌 지점·시각에 평가한다.
+  해석적 체인(최대사거리 사망)이 아니라 권위적 충돌 지점에 블라스트가 형성된다.
+
+빗맞은 화살은 종전대로 수명(0.6s) 만료로 최대사거리에서 폭발한다(클라/서버 해석적 체인
+일치, 폴백).
+
+### 결정론 한계 / 권위 모델
+
+- 비관통 소멸은 타깃 위치(비결정)에 의존하므로 해석적 모델 밖이다. 클라는 자기 예측 명중
+  위치, 서버는 권위 명중 위치에서 각자 소멸/재앵커한다 — 폭발 위치가 1프레임/타깃보간
+  수준에서 어긋날 수 있다(기존 예측 편차와 동급). 데미지는 서버 권위.
+- `consumeAnchor`는 소스당 1개다. 다중 동시 화살이 하나의 폭발 시스템을 공유하는 스킬을
+  추가하면 particle별 앵커로 확장해야 한다(현재 화살 1→폭발 1이라 불필요).
+- 서버 재앵커는 System 2를 루트 Emit으로 재평가하므로 particle 스폰 키가 체인 경로와
+  달라진다. System 2 particle은 서버에서 소비되지 않으므로(consumedKeys 무관) 문제 없음.

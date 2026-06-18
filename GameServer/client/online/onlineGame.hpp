@@ -290,10 +290,19 @@ private:
 	ZoneSystem clientZoneSystem_{};
 	std::unordered_map<uint16, uint8> zoneStates_{};
 	void bindZoneHandlers();
+	void rebuildBarrierMagicCircleQuads(uint8 state);
+	void renderBarrierMagicCircleQuads();
 
 	// Virtual walls built locally on S_ZoneState (collision-only, not rendered) so
 	// the predicted local player cannot pass. Geometry comes from "Wall" markers.
 	std::vector<std::shared_ptr<Cube>> barriers_{};
+	struct BarrierMagicCircleQuad {
+		mu::Mat4x4 world{};
+		mu::Mat4x4 rotation{};
+		mu::Vec4   tint{ 1.f, 1.f, 1.f, 1.f };
+		mu::Vec3   sortPos{};
+	};
+	std::vector<BarrierMagicCircleQuad> barrierMagicCircleQuads_{};
 
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };

@@ -14,8 +14,8 @@ using Bus = SoundManager::Bus;
 // system picks them up. Missing files just warn at play time (no crash).
 constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	// --- Background music (streamed, looped) ---
-	{ "lobby",     "../resources/audio/bgm/lobby.mp3",   Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
-	{ "ingame",    "../resources/audio/bgm/ingame.wav",  Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
+	{ "lobby",     "../resources/audio/bgm/lobby.wav",   Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
+	{ "ingame",    "../resources/audio/bgm/Action 5 (Loop).wav",  Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
 
 	// --- UI ---
 	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 1.0f },

@@ -54,6 +54,7 @@ public:
 	const Texture* trail62Tex()            const { return &trail62Tex_; }
 	const Texture* trail67Tex()            const { return &trail67Tex_; }
 	const Texture* circleTex()             const { return &circleTex_; }
+	const Texture* magicCircleTex()        const { return &magicCircleTex_; }
 	const Texture* stoneTex()              const { return &stoneTex_; }
 	const Texture* gradient3tTex()         const { return &gradient3tTex_; }
 	const Texture* gradient4_3Tex()        const { return &gradient4_3Tex_; }
@@ -148,6 +149,7 @@ private:
 	Texture trail62Tex_{};
 	Texture trail67Tex_{};
 	Texture circleTex_{};
+	Texture magicCircleTex_{};
 	Texture stoneTex_{};
 	Texture gradient3tTex_{};
 	Texture gradient4_3Tex_{};

@@ -210,7 +210,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, `(mask & category)` 후 hitbox×target 쌍만 emit |
 | `SkillSystem::update()` | `skillSystem.cpp` | activeList 순회 → updateHitboxes → checkHitboxCollisions → processHitResults |
 | `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집(category=factionBit) → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
-| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파 |
+| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파, 프레임별 `particleLocalIdx` 기록 |
+| `processHitResults()` 비관통 처리 | `skillSystem.cpp` | `penetrate=false` 히트박스 명중 시 소스 파티클을 `killParticle`로 소멸(소스별 인덱스 내림차순); `debugStats().particlesDestroyedOnHit` 카운트. `particleHitboxDeterminism.md` §8 |
 | `Faction` enum / `hostileMask()` | `object.hpp` | 피아 식별: Neutral/Players/Monsters; 히트박스 targetMask = hostileMask(owner.faction) |
 | `Object::faction()`/`setFaction()` | `object.hpp` | 진영 접근자(생성 지점에서 setFaction 호출) |
 | `SkillInstance::seed` / `startSkill(..., seed)` | `skillSystem.hpp/.cpp` | per-cast 결정론 시드 (C/S_SkillStart로 공유); PlayVFX에서 `fx->setDeterministicSeed(mixSeed(seed, vfxId))` |
@@ -665,6 +666,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `startContinuous()` | init() 기반 연속 방출 시작 |
 | `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
 | `stopContinuous()` | 연속 방출 정지 |
+| `killParticle(int index)` | `particles()` 인덱스의 파티클 즉시 소멸(표준 사망 경로: Death 서브이미터 + swap-remove). 비관통 히트박스의 외부 통제 hook. 내부 `killParticleAt(i)` 공유 |
 
 **Sub Emitters (`particleEffect.hpp` / `particleModules.hpp`):**
 - `SubEmittersModule` — `Event::Birth` / `Event::Death`, `emitProbability`, `inheritVelocity/Color/Size`
@@ -803,7 +805,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `piercingSlashEffect_` | PiercingSlash — `SM_VFX_Slash_01_HD` 메시 + PiercingSlashMeshPipeline (MatPiercingSlash), `PS_VFX_Slash_ParticleSystems.json` / `M_VFX_Slash_Fire.json` |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
-| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템: [0] Arrow StretchedBillboard (`Arrow_ParticleSystems.json` → `EnergyExplosionArrowTex`), [1] Charge (8x6 Additive, sub-emitter on Arrow Birth), [2] Hit (8x6 Additive, sub-emitter on Arrow Death), [3] HitWhiteBG (8x6 Multiply, sub-emitter on Arrow Death) |
+| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템(game.cpp `bindSubEmitter` 기준): [0] Charge(16), [1] Arrow StretchedBillboard(32, Charge.Death 서브이미터), [2] Hit(16, Arrow.Death), [3] HitWhiteBG(16, Arrow.Death). Lua `addVFX` 테이블([0]Charge [1]Arrow [2]Hit)과 인덱스 일치. 화살 비관통 트리거=`VFXParticleAttach(13,1)`, 폭발 판정=`(13,2)` |
 | `tornadoEffect_` | 토네이도 연속 이펙트. 4 시스템 (`Par_TornadoContinous_ParticleSystems.json`): [0] 메인 링 (`Par_TornadoContinous`, MatWindRing), [1] 하단 링 (`/Bottom`, MatWindRing), [2] 링 라이즈 (`/RingRise`, MatWindRing), [3] 버스트 점 (`/Par_BurstParticles`, MatUnlit Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
@@ -1056,6 +1058,7 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
 | `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
 | `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
+| `SkillHitboxDef::penetrate` | `skillTypes.hpp` (클라/서버) | VFXParticle 전용: false=비관통(첫 피격 시 소스 파티클 소멸). 서버: `ParticleHitboxSource::consumedKeys`/`consumeAnchor`로 권위 처리. `particleHitboxDeterminism.md` §8 |
 | `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
 | PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
 | PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |

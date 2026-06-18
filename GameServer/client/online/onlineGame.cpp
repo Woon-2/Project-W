@@ -70,6 +70,37 @@ static constexpr int     kLagScaleDownFrames  = 100;
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
 
+static const mu::Vec4 kBarrierMagicBlockedColor{ 1.0f, 0.12f, 0.08f, 0.82f };
+static const mu::Vec4 kBarrierMagicPassableColor{ 0.10f, 0.48f, 1.0f, 0.72f };
+static constexpr float    kBarrierMagicMinDiameter = 8.f;
+static constexpr float    kBarrierMagicMaxDiameter = 24.f;
+static constexpr int      kBarrierMagicRenderOrder = 4;
+static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
+static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
+
+static bool isHobgoblinBarrierMarker(const MarkerDef& m) {
+	return m.type == "Wall" && (m.name == "WallHobgoblin_0" || m.name == "WallHobgoblin_1");
+}
+
+static float barrierMagicDiameter(const MarkerDef& m) {
+	const float wallHeight = std::fabs(m.scale.y());
+	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
+}
+
+static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
+	if (m.name == "WallHobgoblin_0") {
+		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
+	}
+	return mu::Vec3{};
+}
+
+static uint8 currentBarrierMagicState(const std::unordered_map<uint16, uint8>& zoneStates) {
+	for (const auto& [_, state] : zoneStates) {
+		if (state == 1) return 1;
+	}
+	return 0;
+}
+
 static constexpr float   kArrowRainRadius          = 4.75f;
 static constexpr int     kArrowVolleyCount          = 9;
 static constexpr float   kPiercingMultiRadius       = 2.0f;
@@ -158,6 +189,7 @@ void Game::setupStageVisual() {
 	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
 	clientZoneSystem_.build(chunkManager_.zones());
 	bindZoneHandlers();
+	rebuildBarrierMagicCircleQuads(currentBarrierMagicState(zoneStates_));
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
@@ -2377,6 +2409,45 @@ void Game::bindZoneHandlers() {
 	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
 }
 
+void Game::rebuildBarrierMagicCircleQuads(uint8 state) {
+	barrierMagicCircleQuads_.clear();
+
+	const bool blocked = (state == 1);
+	for (const auto& m : chunkManager_.markers()) {
+		if (!isHobgoblinBarrierMarker(m)) continue;
+
+		const float diameter = barrierMagicDiameter(m);
+		const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+		BarrierMagicCircleQuad quad{};
+		quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
+		           * mu::translate(circlePos);
+		quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+		quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
+		quad.sortPos = circlePos;
+		barrierMagicCircleQuads_.push_back(quad);
+	}
+}
+
+void Game::renderBarrierMagicCircleQuads() {
+	const Texture* tex = assetManager_.magicCircleTex();
+	if (!tex) return;
+
+	for (const auto& quad : barrierMagicCircleQuads_) {
+		gfx_.addDrawEvent(BillboardPipeline::DrawEvent{
+			.world = quad.world,
+			.pTex = tex,
+			.tint = quad.tint,
+			.blend = ps::BlendMode::Alpha,
+			.rotation3D = quad.rotation,
+			.alignment = ps::RendererModule::Alignment::Local,
+			.renderOrder = kBarrierMagicRenderOrder,
+			.sortMode = ps::RendererModule::SortMode::Distance,
+			.sortingFudge = -0.1f,
+			.sortPos = quad.sortPos,
+		});
+	}
+}
+
 // 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
 // "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
 // 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
@@ -2384,11 +2455,12 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
+	rebuildBarrierMagicCircleQuads(state);
+
 	if ( state == 1 ) {
 		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
 		for ( const auto& m : chunkManager_.markers() ) {
-			if ( m.type != "Wall" ) continue;
-			if ( m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1" ) continue;
+			if ( !isHobgoblinBarrierMarker(m) ) continue;
 
 			auto bar = std::make_shared<Cube>();
 			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
@@ -3470,6 +3542,7 @@ void Game::renderInGame() {
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	renderBarrierMagicCircleQuads();
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
