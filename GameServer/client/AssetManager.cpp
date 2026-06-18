@@ -104,6 +104,11 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelGoblin_
 	} );
 	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/goblin/Hobgoblin.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelHobgoblin_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/snake/snake.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelSnake_

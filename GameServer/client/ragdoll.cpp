@@ -23,9 +23,18 @@ static mu::Vec3 extractPos(mu::Mat4x4 m)
     return mu::Vec3(r.x(), r.y(), r.z());
 }
 
-// Extract normalised quaternion from a pure rotation (+ translation) matrix.
+// Extract normalised quaternion from a rotation (+ translation) matrix.
+// Strips (uniform) scale from the basis first: inputs like bone.toDress * finalXform *
+// objectWorldMat carry the object scale, and quatRotMat on a scaled basis yields a distorted
+// quaternion. Pure-rotation inputs are unaffected (rows already unit length).
 static mu::NQuat extractOrient(mu::Mat4x4 m)
 {
+    for (int i = 0; i < 3; ++i) {
+        const mu::Vec4 r = m.row(i);
+        mu::Vec3 axis(r.x(), r.y(), r.z());
+        if (axis.len2() > 1e-12f) axis = mu::Vec3(mu::normalize(axis));
+        m.setRow(i, mu::Vec4(axis.x(), axis.y(), axis.z(), r.w()));
+    }
     return mu::NQuat(mu::quatRotMat(m.get()));
 }
 
@@ -104,10 +113,11 @@ const RagdollBone* Ragdoll::findBone(int boneIdx) const
 // Ragdoll::build
 // ---------------------------------------------------------------------------
 
-void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world)
+void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world, mu::Vec3 modelScale)
 {
     bones_.clear(); bodies_.clear(); joints_.clear();
     jointBodies_.clear(); ignoredPairs_.clear();
+    modelScale_ = modelScale;
 
     bones_.reserve(def.bones.size());
     bodies_.reserve(def.bones.size());
@@ -121,9 +131,13 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         const Bone* bone = findBoneByName(skel, bd.boneName);
         if (!bone) continue;
 
+        // Apply model x instance scale to box dimensions and the capsule offset so the bodies
+        // sit on the scaled skeleton (bone origin is scaled via objectWorldMat).
+        const mu::Vec3 scaledHalf   = bd.halfExtents * modelScale;
+        const mu::Vec3 scaledCenter = bd.center * modelScale;
         auto body = std::make_unique<RigidBody>(MotionType::Kinematic);
         body->setMass(bd.mass);
-        body->setInertia(computeBoxInertia(bd.mass, bd.halfExtents));
+        body->setInertia(computeBoxInertia(bd.mass, scaledHalf));
         body->setLinearDamping(bd.linearDamping);
         body->setAngularDamping(bd.angularDamping);
         body->setFriction(bd.friction);
@@ -136,8 +150,8 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         RagdollBone rb;
         rb.boneIdx       = bone->boneIdx;
         rb.body          = body.get();
-        rb.capsuleOffset = bd.center;
-        rb.halfExtents   = bd.halfExtents;
+        rb.capsuleOffset = scaledCenter;    // scaled: rotated by pure orientation in seed/sync
+        rb.halfExtents   = scaledHalf;
         rb.noiseImpulse  = bd.noiseImpulse;
 
         bones_.push_back(rb);
@@ -311,7 +325,11 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
 
         const mu::Vec3 boneOriginWorld =
             rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
-        const mu::Mat4x4 boneWorldMat = makeRigidMat(boneOriginWorld, rb.body->orient());
+        // Inject model scale so the skinned mesh stays scaled: without it boneWorldMat is rigid
+        // and objectWorldMat's scale cancels out in finalXform * world, snapping the mesh back to
+        // its unscaled size on ragdoll activation.
+        const mu::Mat4x4 boneWorldMat =
+            mu::Mat4x4(mu::scale(modelScale_)) * makeRigidMat(boneOriginWorld, rb.body->orient());
 
         finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / objectWorldMat);
     }
@@ -412,9 +430,18 @@ void Ragdoll::deactivate(PhysicsWorld& world)
 // ---------------------------------------------------------------------------
 // Ragdoll::buildPassengers
 //
-// Walk the skeleton hierarchy and, for each non-ragdoll bone that descends from
-// a ragdoll bone, capture a relative transform so it can be driven rigidly by
-// its nearest ragdoll ancestor in syncToFinalXforms().
+// Bind every non-ragdoll bone rigidly to a ragdoll body so the whole skeleton
+// follows the physics simulation.  A bone left unbound keeps its death-pose
+// finalXforms; since the owning Object's world matrix is also frozen while the
+// ragdoll is active, such a bone stays fixed in world space — anchoring the mesh
+// at a fixed point and stretching it when the rest of the ragdoll moves.
+//
+// Two passes:
+//   1) buildPassengersDFS — bones that DESCEND from a ragdoll bone bind to their
+//      nearest ragdoll ancestor (preserves intra-limb rigidity).
+//   2) Orphan pass — bones with NO ragdoll ancestor (above/beside the bodies in
+//      the hierarchy, e.g. a central hub bone) bind to the nearest ragdoll body
+//      found by an undirected skeleton walk (parent + children).
 //
 // Row-vector convention: passenger = relativeXform * ancestor
 // => relativeXform = passenger / ancestor = passenger * inv(ancestor)
@@ -424,8 +451,68 @@ void Ragdoll::buildPassengers(const Skeleton& skel,
                                const std::vector<mu::Mat4x4>& finalXforms)
 {
     passengers_.clear();
-    if (!skel.pRoot) return;
+    if (!skel.pRoot || !skel.bones) return;
+
+    // Pass 1: ancestor-based binding for descendants of ragdoll bodies.
     buildPassengersDFS(skel.pRoot, -1, finalXforms);
+
+    // Pass 2: attach orphan bones (no ragdoll ancestor) to their nearest body.
+    const std::vector<Bone>& bones = *skel.bones;
+    const int n = static_cast<int>(bones.size());
+    if (n == 0) return;
+
+    // Child -> parent map (Bone stores only its children).
+    std::vector<int> parent(n, -1);
+    for (const Bone& b : bones)
+        for (const Bone* c : b.children)
+            if (c->boneIdx >= 0 && c->boneIdx < n)
+                parent[c->boneIdx] = b.boneIdx;
+
+    // Multi-source BFS from every ragdoll body over the undirected skeleton graph
+    // to find each bone's nearest ragdoll body (by hop count).
+    std::vector<int> nearestBody(n, -1);
+    std::vector<int> queue;
+    queue.reserve(n);
+    for (const RagdollBone& rb : bones_) {
+        if (rb.boneIdx >= 0 && rb.boneIdx < n && nearestBody[rb.boneIdx] < 0) {
+            nearestBody[rb.boneIdx] = rb.boneIdx;
+            queue.push_back(rb.boneIdx);
+        }
+    }
+    for (std::size_t head = 0; head < queue.size(); ++head) {
+        const int cur = queue[head];
+        const int src = nearestBody[cur];
+        auto visit = [&](int nb) {
+            if (nb >= 0 && nb < n && nearestBody[nb] < 0) {
+                nearestBody[nb] = src;
+                queue.push_back(nb);
+            }
+        };
+        visit(parent[cur]);
+        for (const Bone* c : bones[cur].children)
+            visit(c->boneIdx);
+    }
+
+    // Mark bones already driven (ragdoll bodies + Pass-1 passengers).
+    std::vector<bool> bound(n, false);
+    for (const RagdollBone& rb : bones_)
+        if (rb.boneIdx >= 0 && rb.boneIdx < n) bound[rb.boneIdx] = true;
+    for (const PassengerBone& pb : passengers_)
+        if (pb.boneIdx >= 0 && pb.boneIdx < n) bound[pb.boneIdx] = true;
+
+    // Bind each remaining orphan bone to its nearest ragdoll body.
+    const int fx = static_cast<int>(finalXforms.size());
+    for (int i = 0; i < n; ++i) {
+        if (bound[i]) continue;
+        const int anc = nearestBody[i];
+        if (anc < 0) continue;               // no ragdoll bodies at all
+        if (i >= fx || anc >= fx) continue;  // finalXforms bounds guard
+        PassengerBone pb;
+        pb.boneIdx         = i;
+        pb.ancestorBoneIdx = anc;
+        pb.relativeXform   = finalXforms[i] / finalXforms[anc];
+        passengers_.push_back(pb);
+    }
 }
 
 void Ragdoll::buildPassengersDFS(const Bone* bone, int currentAncestorIdx,
@@ -479,15 +566,14 @@ void Ragdoll::syncFromPoseDFS(const Bone* bone,
     // Update the matching rigid body if one exists.
     const RagdollBone* rb = findBone(bone->boneIdx);
     if (rb) {
-        // Body centre = bone origin + capsuleOffset rotated into world.
-        const mu::Vec4 localOfs(rb->capsuleOffset.x(),
-                                rb->capsuleOffset.y(),
-                                rb->capsuleOffset.z(), 1.f);
-        const mu::Vec4 worldOfs = localOfs * boneWorldMat;
-        const mu::Vec3 bodyPos(worldOfs.x(), worldOfs.y(), worldOfs.z());
+        // Body centre = bone origin + capsuleOffset rotated into world. extractOrient strips
+        // scale and capsuleOffset is already scaled, so rotate it by the pure orientation
+        // (matches seedFromFinalXforms) instead of the scaled boneWorldMat (avoids double scale).
+        const mu::NQuat boneOrient = extractOrient(boneWorldMat);
+        const mu::Vec3  boneOrigin = extractPos(boneWorldMat);
 
-        rb->body->setPos(bodyPos);
-        rb->body->setOrient(extractOrient(boneWorldMat));
+        rb->body->setPos(boneOrigin + boneOrient.rotate(rb->capsuleOffset));
+        rb->body->setOrient(boneOrient);
 
         if (!active_) {
             // Kinematic: snap prev = curr to avoid one-frame interpolation artefact.

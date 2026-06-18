@@ -151,13 +151,17 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `getHumanoidRagdollDef()` | `ragdollDef.cpp #10` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
 | `importRagdollConfig()` | `mesh.cpp` | binary → Model::ragdollDef 로드 |
 | `Model::ragdollDef` | `mesh.hpp` | std::optional<RagdollDef>, 파일에서 로드된 ragdoll 설정 |
+| `Model::baseScale` | `mesh.hpp` | Unity root localScale(`ModelScale` 필드); `Object::setModel`이 흡수해 `modelBaseScale_⊙instanceScale_`로 body scale 적용 (vertex bake 대체, graphicsArchitecture.md 참조) |
+| `Object::applyCompositeScale()` | `object.cpp` | `body_.scale()=modelBaseScale_⊙instanceScale_` 합성 + rebuildBodyBVH. setModel/setScale에서 호출 |
 | `RagdollBone` struct | `ragdoll.hpp #15` | boneIdx, body*(non-owning), parentJoint*(non-owning), capsuleOffset |
 | `Ragdoll` class | `ragdoll.hpp #33` | bone별 RigidBody + Constraint 소유, PhysicsWorld 비소유 등록 |
-| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 |
+| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 (modelScale 인자로 halfExtents/관성에 모델 scale 반영) |
 | `Ragdoll::destroy()` | `ragdoll.cpp` | joint 먼저, body 나중 제거 (dangling ptr 방지) |
 | `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
 | `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |
 | `Ragdoll::syncToPose()` | `ragdoll.cpp` | body pos/orient → AnimFrame pose (DFS) |
+| `Ragdoll::syncToFinalXforms()` | `ragdoll.cpp` | body transform → finalXforms 덮어씀 + passenger 본 재구성 |
+| `Ragdoll::buildPassengers()` | `ragdoll.cpp` | 비-body 본 → 최근접 ragdoll body에 강체 바인딩 (DFS 조상 + 고아 본 BFS 2-pass) |
 | `Ragdoll::activate()` | `ragdoll.cpp` | Kinematic → Dynamic |
 | `Ragdoll::deactivate()` | `ragdoll.cpp` | Dynamic → Kinematic |
 | `ActiveRagdollController` class | `activeRagdoll.hpp #25` | PD 토크 컨트롤러, 피격 반응 포함 |
@@ -327,7 +331,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 클래스 | 위치 |
 |--------|------|
 | `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
-| `MonsterAnimBlender` (구 `AnimBlenderGoblin`) | `object.hpp #67-113` — clipPrefix("Goblin"/"Snake"/"Mushroom")로 파라미터화; `using AnimBlenderGoblin = MonsterAnimBlender` alias 유지 |
+| `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Attack/Hit/Death) 속력 블렌딩; 클립 이름 리터럴 고정 |
+| `AnimBlenderSnake` | `object.hpp #110` — 고블린과 동일 구조, 뱀 고유 클립 확장 대비 별도 클래스 |
+| `AnimBlenderMushroom` | `object.hpp #145` — 동일 구조, 버섯 고유 클립 확장 대비 별도 클래스 |
 | `AnimBlenderAnubis` | `object.hpp #100-140` |
 | `AnimBlenderBat` | `object.hpp #142-182` |
 | `AnimBlenderBomber` | `object.hpp #184-???` |
@@ -375,7 +381,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
 | `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
-| `Object::render()` | `object.cpp #490` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함) |
+| `Object::render()` | `object.cpp #843` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
 | `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
@@ -394,10 +400,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|
 | `Cube` | `object.hpp #591` |
 | `Player` | `object.hpp #600` |
-| `Monster` (base) | `object.hpp #360` — ragdoll 공유 필드·`EventBus` 포함 |
-| `Goblin` | `object.hpp #387` : `Monster` |
-| `Snake` | `object.hpp #395` : `Monster` |
-| `Mushroom` | `object.hpp #403` : `Monster` |
+| `Object` ragdoll 가상 접근자 | `object.hpp #263` 인근 — `ragdoll()`(`Ragdoll*`, 베이스 nullptr)/`ragdollPendingActivation`/`ragdollInitVelocity`; `idMonsterMap_<Object*>` 통합 순회용 |
+| `Goblin` | `object.hpp #454` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
+| `Snake` | `object.hpp #481` : `Object` — 고블린과 동일 패턴 복제 |
+| `Mushroom` | `object.hpp #508` : `Object` — 고블린과 동일 패턴 복제 |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
 | `Bomber` | `object.hpp #696` |
@@ -742,9 +748,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
 | `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
-| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
+| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → feedbackCullResultToAnim |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |
-| `Game::applyHiZCulling()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled (gfx_.render() 이후 호출) |
+| `Game::feedbackCullResultToAnim()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled, hasEverUpdated()==false면 culled 강제 해제 (gfx_.render() 이후 호출) |
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
@@ -882,7 +888,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
    a. `cullObjects()` — frustum culling → setFrustumCulled
    b. Object::render() 호출들 — frustum culled만 제외, Hi-Z culled는 DrawEvent 제출
    c. `gfx_.render()` — Hi-Z readback 복사 포함
-   d. `applyHiZCulling()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled
+   d. `feedbackCullResultToAnim()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled (최초 1회는 hasEverUpdated() 보정으로 강제 갱신)
 
 ---
 

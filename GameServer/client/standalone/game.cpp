@@ -665,8 +665,8 @@ Game::Game() {
 }
 
 Game::~Game() {
-	if (goblin_ && goblin_->ragdoll().isBuilt())
-		goblin_->ragdoll().destroy(physicsWorld_);
+	if (goblin_ && goblin_->ragdoll()->isBuilt())
+		goblin_->ragdoll()->destroy(physicsWorld_);
 	threadPool_.stop();
 
 	// Drain the GPU before member destruction: members declared after gfx_ are
@@ -2374,10 +2374,11 @@ void Game::configureGoblin(Goblin& goblin) {
 	setupMonsterBody(goblin.body(), 40.f);
 
 	if (goblin.model() && goblin.model()->ragdollDef) {
-		goblin.ragdoll().build(
+		goblin.ragdoll()->build(
 			goblin.model()->skeleton,
 			*goblin.model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin.scale()
 		);
 	}
 }
@@ -2735,7 +2736,7 @@ void Game::update(Milliseconds deltaTime) {
 		auto activateRagdollIfPending = [&](Goblin& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -2772,7 +2773,7 @@ void Game::update(Milliseconds deltaTime) {
 		};
 
 		auto syncRagdollToAnim = [&](Goblin& g) {
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -2959,7 +2960,7 @@ void Game::render() {
 	}
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -3191,17 +3192,21 @@ void Game::cullObjectsForShadow() {
 		entt->setShadowCulled(!dirLight_.shadowVisible(entt->body().worldBVH().nodes[0].shape));
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& entt : { std::static_pointer_cast<Object>(goblin_) }) {
 			entt->setHiZCulled(false);
 			if (auto* blender = entt->animBlender())
-				blender->setCulled(entt->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && entt->isFrustumCulled());
 		}
 		for (auto& g : goblins_) {
 			g->setHiZCulled(false);
 			if (auto* blender = g->animBlender())
-				blender->setCulled(g->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && g->isFrustumCulled());
 		}
 		return;
 	}
@@ -3210,7 +3215,7 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	applyToEntity(goblin_);
 	for (auto& g : goblins_)

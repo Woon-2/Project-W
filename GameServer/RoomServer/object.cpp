@@ -11,7 +11,8 @@ void Object::setModel(const Model* pModel){
 	}
 
 	pModel_ = pModel;
-	rebuildBodyBVH();
+	modelBaseScale_ = pModel->baseScale;   // model's own scale (unbaked); applied via body scale
+	applyCompositeScale();
 }
 
 void Object::update(Milliseconds deltaTime) {
@@ -37,12 +38,18 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	}
 }
 
-void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
-	body_.setScale(newScale);
+// Compose model base scale x per-instance scale into body_ (mirrors client Object).
+void Object::applyCompositeScale() {
+	body_.setScale(modelBaseScale_ * instanceScale_);
 
 	if (pModel_ && !pModel_->bvh.empty()) {
 		rebuildBodyBVH();
 	}
+}
+
+void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
+	instanceScale_ = newScale;
+	applyCompositeScale();
 }
 
 mu::Vec3 MU_CALLCONV Object::calcSeparationForce( const std::vector<mu::Vec3>& nearby, float radius ) const {
@@ -72,7 +79,9 @@ void Object::updateAnimBones(Seconds dt) {
 	std::vector<mu::Mat4x4> boneModelXforms(boneCnt);
 	animController_.computeBoneModelXforms(pModel_->skeleton, boneModelXforms);
 
-	const mu::Mat4x4 entityWorld = mu::Mat4x4(orient().mat()) * mu::translate(pos());
+	// Includes body scale so bone-attached BV centers grow with the model (client parity).
+	const mu::Mat4x4 entityWorld = mu::Mat4x4(mu::scale(body_.scale()))
+		* mu::Mat4x4(orient().mat()) * mu::translate(pos());
 	std::vector<mu::Mat4x4> boneWorldXforms(boneCnt);
 	for (int i = 0; i < boneCnt; ++i)
 		boneWorldXforms[i] = boneModelXforms[i] * entityWorld;
@@ -114,12 +123,17 @@ void Object::rebuildBodyBVH() {
 
 		if (hasBoneXform) {
 			const mu::Mat4x4& boneXform = boneWorldXforms_[src.boneIdx];
-			dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
-				using T = std::decay_t<decltype(s)>;
-				if constexpr (std::is_same_v<T, AABB>)
-					return transformOBBByMatrix(toOBB(s), boneXform);
-				else
-					return transformOBBByMatrix(s, boneXform);
+			const mu::Vec3    s         = body_.scale();
+			dst.shape = std::visit([&](auto&& shp) -> std::variant<AABB, OBB> {
+				using T = std::decay_t<decltype(shp)>;
+				OBB obb = [&] {
+					if constexpr (std::is_same_v<T, AABB>) return toOBB(shp);
+					else                                    return shp;
+				}();
+				// Bone xform is rigid; entityWorld scale only moves the center, so scale the
+				// half-extents separately for the BV to grow with the model (client parity).
+				obb.halfExtents = obb.halfExtents * s;
+				return transformOBBByMatrix(obb, boneXform);
 			}, src.shape);
 		} else {
 			// Rigid (non-bone) path shared with ScatterCollider. Correctly turns a

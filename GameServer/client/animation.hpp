@@ -123,6 +123,11 @@ public:
 	void setCulled(bool v) { culled_ = v; }
 	bool isCulled() const  { return culled_; }
 
+	// AnimSystem::update에서 한 번이라도 onCalcLocal이 호출되었는지 여부.
+	// 생성 직후 컬링(Hi-Z/frustum)에 걸려 한 번도 갱신되지 못한 채 방치되는 것을 막기 위해
+	// 호출부(feedbackCullResultToAnim 등)에서 이 값을 확인해 최초 1회는 강제로 culled를 해제한다.
+	bool hasEverUpdated() const { return hasEverUpdated_; }
+
 	// 이벤트 수신을 지원하려면 상속 클래스에서 이 함수를 오버라이드해
 	// 자신만의 EventBus 구현에 대한 포인터를 리턴하도록 한다.
 	virtual IEventBus* eventBus() { return nullptr; }
@@ -162,6 +167,7 @@ public:
 		stage_ = stage;
 		if (stage == Stage::committedLocal) {
 			priority_ = 0.f;
+			hasEverUpdated_ = true;
 		}
 	}
 	Stage stage() const { return stage_; }
@@ -204,6 +210,7 @@ protected:
 	Seconds updateLag_{};
 	float priority_{};
 	bool  culled_ = false;
+	bool  hasEverUpdated_ = false;
 	Mode mode_{ Mode::Keyframe };
 	int finalBakedClipId_{};
 	int finalBakedClipFrame_{};

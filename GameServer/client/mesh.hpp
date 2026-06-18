@@ -172,6 +172,7 @@ struct MeshWithDressXform {
 // std::vector에 저장하여 모델을 표현한다.
 struct Model {
 	std::string name;
+	mu::Vec3 baseScale{ 1.f, 1.f, 1.f };   // Unity root localScale; applied at runtime via Object body scale (setModel)
 	std::vector<MeshWithDressXform> meshWithDressXforms;
 	BVH bvh;   // model-space BVH template; world-space copy lives in PhysicState
 	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;

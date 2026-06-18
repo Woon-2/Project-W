@@ -2189,10 +2189,11 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setAnimBlender(animSystem_, assetManager_);
 
 	if (goblin->model() && goblin->model()->ragdollDef) {
-		goblin->ragdoll().build(
+		goblin->ragdoll()->build(
 			goblin->model()->skeleton,
 			*goblin->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin->body().scale()
 		);
 	}
 
@@ -2238,6 +2239,65 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
 }
 
+// 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
+// (같은 리그를 공유하므로 goblinAnimations()/goblinHpBars_/idGoblinMap_ 등은 그대로 재사용).
+void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
+	auto hobgoblin = std::make_shared<Hobgoblin>();
+
+	hobgoblin->setId(hobgoblinInfo.objectId);
+	hobgoblin->setPos(DirectX::XMLoadFloat3(&hobgoblinInfo.pos));
+	hobgoblin->setOrient(DirectX::XMLoadFloat4(&hobgoblinInfo.orient));
+	hobgoblin->setScale(DirectX::XMLoadFloat3(&hobgoblinInfo.scale));
+	hobgoblin->setModel(assetManager_.modelHobgoblin());
+	hobgoblin->setAnimBlender(animSystem_, assetManager_);
+
+	if (hobgoblin->model() && hobgoblin->model()->ragdollDef) {
+		hobgoblin->ragdoll()->build(
+			hobgoblin->model()->skeleton,
+			*hobgoblin->model()->ragdollDef,
+			physicsWorld_,
+			hobgoblin->body().scale()
+		);
+	}
+
+	hobgoblin->setHp(hobgoblinInfo.hp);
+	hobgoblin->setMaxHp(hobgoblinInfo.maxHp);
+	hobgoblin->setFaction(Faction::Monsters);
+	hobgoblin->enableBVRendering();
+
+	hobgoblin->body().setMotionType(MotionType::Kinematic);
+	hobgoblin->body().setMass(40.f);
+	hobgoblin->body().setLinearDamping(0.f);
+	hobgoblin->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
+	}
+
+	hobgoblin->setRenderObjectId(nextRenderObjId_++);
+
+	// Register hobgoblin in skill system's object lookup table.
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = hobgoblin.get();
+	}
+
+	goblins_.push_back(hobgoblin);
+	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
+	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
+}
+
 void Game::createSnake(const ObjectInfo& info) {
 	auto snake = std::make_shared<Snake>();
 
@@ -2249,10 +2309,11 @@ void Game::createSnake(const ObjectInfo& info) {
 	snake->setAnimBlender(animSystem_, assetManager_);
 
 	if (snake->model() && snake->model()->ragdollDef) {
-		snake->ragdoll().build(
+		snake->ragdoll()->build(
 			snake->model()->skeleton,
 			*snake->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			snake->body().scale()
 		);
 	}
 
@@ -2304,10 +2365,11 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushroom->setAnimBlender(animSystem_, assetManager_);
 
 	if (mushroom->model() && mushroom->model()->ragdollDef) {
-		mushroom->ragdoll().build(
+		mushroom->ragdoll()->build(
 			mushroom->model()->skeleton,
 			*mushroom->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			mushroom->body().scale()
 		);
 	}
 
@@ -2626,8 +2688,8 @@ void Game::hideNpcs(const std::vector<uint16>& npcIds) {
 
 		auto& goblin = it->second;
 		goblin->setHidden(true);
-		if (goblin->ragdoll().isActive())
-			goblin->ragdoll().deactivate(physicsWorld_);
+		if (goblin->ragdoll()->isActive())
+			goblin->ragdoll()->deactivate(physicsWorld_);
 	}
 }
 
@@ -2799,7 +2861,7 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
-	Monster* monster = it->second;
+	Object* monster = it->second;
 
 	if (monster->isDead()) return;
 
@@ -2850,13 +2912,13 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	);
 	if (it == idMonsterMap_.end()) return;
 
-	Monster* npc = it->second;
+	Object* npc = it->second;
 	npc->setHp( newHp );
 	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
-	if (npc->ragdoll().isActive())
-		npc->ragdoll().deactivate(physicsWorld_);
+	if (npc->ragdoll()->isActive())
+		npc->ragdoll()->deactivate(physicsWorld_);
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
@@ -3196,10 +3258,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
 	{
-		auto activateRagdollIfPending = [&](Monster& g) {
+		auto activateRagdollIfPending = [&](Object& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -3234,8 +3296,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Monster& g) {
-			Ragdoll& rd = g.ragdoll();
+		auto syncRagdollToAnim = [&](Object& g) {
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -3634,7 +3696,7 @@ void Game::renderInGame() {
 	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // ===========================================================================
@@ -4822,16 +4884,23 @@ void Game::cullObjects() {
 	}
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+// 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
+// 못한 채 방치(T-pose 등)될 수 있기 때문이다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
 			if (auto* blender = p->animBlender())
-				blender->setCulled(p->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && p->isFrustumCulled());
 		}
-		auto resetHiZ = [&](const std::shared_ptr<Monster>& m) {
+		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+			if (auto* blender = m->animBlender())
+				blender->setCulled(blender->hasEverUpdated() && m->isFrustumCulled());
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
@@ -4843,7 +4912,7 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);

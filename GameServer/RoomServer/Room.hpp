@@ -123,6 +123,16 @@ public:
 	// strongholds to snap monster spawn positions onto the ground.
 	float MU_CALLCONV groundHeightAtWorld( float x, float z ) const;
 
+	// Bounded rejection-sampling variant of randomSpawnInDisc: retries a fixed
+	// number of times to find a candidate whose footprint (footprintSource's
+	// model/orient/scale, placed at the candidate position) does not overlap any
+	// registered scatter prop. Falls back to the last sampled position if every
+	// attempt collides; the existing static depenetration resolves any residual
+	// overlap over the next few physics steps. footprintSource must already have
+	// setModel/setScale/setOrient applied. Used by Stronghold to place/revive monsters.
+	mu::Vec3 MU_CALLCONV randomSpawnInDiscAvoidingProps(
+		mu::Vec3 center, float radius, const Object& footprintSource) const;
+
 	// Bind terrain height/normal callbacks onto a skill dispatch context so
 	// AttachType::Ground hitboxes snap to the same surface the client uses.
 	void bindGroundQueries( SkillDispatchContext& ctx ) const;
@@ -249,6 +259,9 @@ private:
 	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
 	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
 	std::unique_ptr<PlatoonLeader>              platoonLeader_;
+	// platoonLeader_가 클라에 어떤 모델로 보일지(ObjectInfo.type). Goblin 전술은 Hobgoblin,
+	// GrandBaum/Isis는 전용 모델 추가 전까지 Goblin placeholder.
+	ObjectType                                  platoonLeaderObjType_{ ObjectType::Goblin };
 	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
 	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;

@@ -73,6 +73,7 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+	void createHobgoblin(const ObjectInfo& hobgoblinInfo);
 	void createSnake(const ObjectInfo& info);
 	void createMushroom(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
@@ -205,7 +206,10 @@ private:
 	std::wstring lobbyDisplayName(uint16 sessionId) const;
 
 	void cullObjects();
-	void applyHiZCulling();
+	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
+	// (이전 이름: applyHiZCulling — 컬링 자체를 수행하는 게 아니라 readback 결과를
+	//  애니메이션 시스템으로 피드백하는 역할이라 이름을 바꿈)
+	void feedbackCullResultToAnim();
 
 	// 플레이어 간 reciprocal soft separation (클라 예측).
 	// 로컬 플레이어를 다른 플레이어와의 수평 침투량의 "절반"만큼만 밀어낸다.
@@ -274,7 +278,9 @@ private:
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
 	// Non-owning unified monster lookup (all monster types).
-	std::unordered_map<uint16, Monster*> idMonsterMap_{};
+	// Object* 로 두어 고블린/뱀/버섯 등 종류와 무관하게 통합 순회한다.
+	// ragdoll 등 몬스터 공통 동작은 Object의 가상 접근자로 접근.
+	std::unordered_map<uint16, Object*> idMonsterMap_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -416,7 +422,7 @@ private:
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
 	struct MonsterHpEntry {
-		Monster*         monster;              // non-owning; lifetime owned by typed shared_ptr vectors
+		Object*          monster;              // non-owning; lifetime owned by typed shared_ptr vectors
 		UI::ProgressBar* hpBar;                // owned by uiManager_
 		float            worldYOffset;
 		float            hpBarVisibleSeconds = 0.f;

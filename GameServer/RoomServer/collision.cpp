@@ -290,8 +290,16 @@ CollisionResult collides(const BVH& a, const BVH& b) {
 OBB transformOBBByMatrix(const OBB& obb, const mu::Mat4x4& xform) {
     const mu::Vec3 newCenter(
         DirectX::XMVector3TransformCoord(obb.center.get(), xform.get()));
+    // xform may carry (uniform) object/body scale (entityWorld). Extracting a rotation
+    // quaternion from a scaled basis distorts the orientation, so normalize the basis rows
+    // first; scale is applied to halfExtents separately by the caller (mirrors the client
+    // objRigid split in Object::rebuildBodyBVH).
+    DirectX::XMMATRIX rot = xform.get();
+    rot.r[0] = DirectX::XMVector3Normalize(rot.r[0]);
+    rot.r[1] = DirectX::XMVector3Normalize(rot.r[1]);
+    rot.r[2] = DirectX::XMVector3Normalize(rot.r[2]);
     const DirectX::XMVECTOR matRotQuat =
-        DirectX::XMQuaternionRotationMatrix(xform.get());
+        DirectX::XMQuaternionRotationMatrix(rot);
     const DirectX::XMVECTOR combined =
         DirectX::XMQuaternionMultiply(obb.orient.get(), matRotQuat);
     return OBB{ newCenter, obb.halfExtents, mu::NQuat(combined, mu::NQuat::NoNormalize_t{}) };
@@ -643,4 +651,20 @@ int ScatterCollider::generateContacts(RigidBody& dyn, const ContactSink& sink) c
         ++added;
     });
     return added;
+}
+
+bool ScatterCollider::overlapsBVH(const BVH& queryWorldBVH) const
+{
+    if (queryWorldBVH.empty() || insts_.empty()) return false;
+
+    const AABB& queryBounds = queryWorldBVH.nodes[0].bounds;
+
+    bool hit = false;
+    forEachCandidate(queryBounds, [&](int i) {
+        if (hit) return;
+        const Inst& inst = insts_[i];
+        if (!collides(queryBounds, inst.worldAABB).hit) return;
+        if (collides(queryWorldBVH, inst.worldBVH).hit) hit = true;
+    });
+    return hit;
 }

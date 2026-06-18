@@ -54,8 +54,6 @@ public:
     const StrongholdDef& def()              const { return def_; }
 
 private:
-    mu::Vec3 randomSpawnPos(Room& room) const;
-
     StrongholdDef def_{};
     int groupId_ = -1;
 

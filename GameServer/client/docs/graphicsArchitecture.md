@@ -407,8 +407,37 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 **새 오브젝트를 Hi-Z culling에 참여시킬 때 필수 체크리스트:**
 1. `setupStage()`에서 `obj->setRenderObjectId(nextRenderObjId++)` 할당
 2. `gfx_.setMaxRenderObjectId(nextRenderObjId - 1u)` 호출
-3. `applyHiZCulling()` 내에 `applyToEntity(obj)` 추가
+3. `feedbackCullResultToAnim()`(이전 이름: `applyHiZCulling()`) 내에 `applyToEntity(obj)` 추가
 4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
+
+**최초 1회 애니메이션 갱신 보장:**
+서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
+visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 받을 수 있다.
+이 상태로 방치되면 AnimBlender가 한 번도 갱신되지 못한다(T-pose 등).
+`AnimBlender::hasEverUpdated()`(최초 `onCalcLocal` 호출 시 true로 전환)가 false인 동안은
+`feedbackCullResultToAnim()`에서 컬링 판정과 무관하게 `setCulled(false)`를 강제해
+최소 1회는 애니메이션 갱신이 이루어지도록 한다.
+
+**Baked 스키닝 stale clipId 가드 (생성 직후 stretch 방지):**
+스킨드 deferred 경로(`pbrDeferredSkinned.hlsl`)는 `Mode::Baked`일 때 본 행렬을 업로드하지 않고
+GPU가 `bakedClipId`로 bindless 텍스처를 직접 샘플한다(`loadBakedMatrix(clipIdx, ...)`).
+이때 `clipId`는 **전역 bindless descriptor 인덱스**다(`AssetManager::setupBakedAnimationIds()`에서
+`clip->id = bakedSamples.idxSrv.idxResource`).
+
+문제 흐름:
+1. `AnimSystem::updatePriorities()`는 time-slice 없이 전체 blender를 돌며 거리 기반으로 `mode_`를
+   결정 → 먼 오브젝트는 즉시 `Mode::Baked`로 전환.
+2. 그러나 `finalBakedClipId_`/`finalBakedClipFrame_`은 `onCalcLocal()`의 **Baked 분기에서만** 세팅.
+3. `AnimSystem::update(0.01s)`는 time-slice 내 priority 순으로 일부 blender만 처리 → 첫 프레임엔
+   다수가 미처리 → `finalBakedClipId_`가 기본값 **0**.
+4. `clipId=0`은 애니메이션이 아닌 descriptor 0번 텍스처를 가리키고, 이를 4×4 본 행렬로 읽으면
+   garbage 스키닝 → 캐릭터가 길게 늘어나는 **stretch**(특히 온라인 InGameScene 진입 직후).
+   몬스터 종류가 많을수록 ① time-slice 누락 blender 증가 ② Baked 전환 객체 증가로 더 자주 발생.
+
+**가드(`Object::render`):** `bakedReady = (mode==Baked && hasEverUpdated() && finalBakedClipId() > 0)`
+가 false면 `bakedClipId/Frame = -1`을 넘겨 `boneXforms`(미갱신 시 identity = T-pose) 경로로 폴백한다.
+유효한 baked clip이 준비되면 자동으로 baked 경로로 복귀. (비-deferred `PBRSkinnedPipeline`은 baked
+필드가 없어 항상 boneXforms 경로 → 무관.)
 
 #### TerrainPipeline 특성
 
@@ -426,3 +455,15 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 - Normal map 포맷: **Unity DXT5nm** — X는 Alpha 채널, Y는 Green 채널, R은 더미(1.0) → `nmSample.ag * 2 - 1`로 읽어야 함
 - Normal mapping: `hasAnyNormal` 플래그(cbuffer b0)로 조건부 처리, `float3x3(tangentV, bitangentV, normalV)` 패턴 (pbr.hlsl과 동일)
 - `terrain.hlsl`에서 `pbrLighting.hlsli` include 시 `#define TERRAIN_SHADER` 필수 — `illuminate()` 스킵 가드
+
+#### 모델 scale 런타임 적용 (setModel + body_.scale 합성)
+
+Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin)의 scale은 **추출 시점에 베이크하지 않고**, 메시·본·BV·래그돌을 모두 **unscaled로 추출**한 뒤 런타임에 오브젝트 단위 scale(`body_.scale()`)로 한 번만 적용한다.
+
+- **베이크 폐기 이유:** 이전에는 정점/본 `toDress`/BV에 `Scale(rootScale)`을 베이크했는데, 스킨드 모델에서 애니메이션 본 변환(`finalXformData`, rigid)에는 scale 채널이 없어 애니메이션 재생 시 골격이 unscaled로 되돌아가 스키닝이 어긋났다. scale을 world 변환 한 곳에서 균일 적용하면 애니메이션과 독립적으로 정합한다.
+- **추출 (unscaled, `ModelExtractor.cs`/`ModelExtractorForServer.cs`/`ExtractUtil.cs`):** Geometry 헤더(서버는 `ModelName` 직후)에 `ModelScale`(Vec3, = Unity root localScale) 필드를 기록한다. dress 변환은 `D = root.worldToLocal·node.localToWorld`(scale 제거)로 정점/노멀/탄젠트/bounds를 베이크하고, 본 `Dress`/`ToLocal`, BV `center`/`size`, 래그돌 `halfExtents`/`center`도 모두 unscaled. 노드 `LocalMatrix`/`DressMatrix`는 identity 유지(`meshXform` no-op).
+- **런타임 주입 (`Object::setModel`):** `modelBaseScale_ = pModel->baseScale`을 흡수하고, `body_.scale() = modelBaseScale_ ⊙ instanceScale_`(component-wise)로 합성한다. `instanceScale_`은 per-instance 게임플레이 scale(`setScale`, 기본 1). 둘 중 하나가 바뀌면 `applyCompositeScale()`이 재합성 + `rebuildBodyBVH()`. setModel/setScale 호출 순서와 무관하게 합성식이 동일.
+- **정합 (BV-mesh):** 렌더(`renderState_.world = scale(scale)·orient·pos`)와 BV(`rebuildBodyBVH`의 `transformShapeRigid` / 본-부착 `halfExtents*scale`)가 **동일한 `body_.scale()` 단일 경로**로 mesh와 BV를 같이 키워 정합한다. 본-부착 BV의 center는 `objWorld`(scale 포함)로 변환되어 mesh 스키닝(`vertex·anim·world`)과 일치하고, **회전은 scale을 뺀 rigid 행렬에서 추출**한다 — scale 섞인 행렬에 `quatRotMat`/`XMQuaternionRotationMatrix`를 먹이면 쿼터니언이 왜곡되므로, 클라 `rebuildBodyBVH`는 `objRigid`(scale 없는 object world)를 별도로 만들어 `boneToWorldRigid`로 회전을 뽑고(디버그 `update`의 `worldBVs`도 동일), 서버 `transformOBBByMatrix`는 회전 추출 직전 basis 행을 정규화한다.
+- **래그돌 (`Ragdoll::build(..., modelScale)`):** `halfExtents`·관성·`capsuleOffset`에 합성 scale을 곱하고 `Ragdoll::modelScale_`에 저장한다. 본 위치는 `objectWorldMat`(= `renderState().world`, scale 포함)이 처리한다. **활성 시 메시 크기 유지:** `syncToFinalXforms`는 `boneWorldMat = scale(modelScale_)·makeRigidMat(...)`로 scale을 주입해야 한다 — rigid 행렬만 쓰면 `finalXform·world`에서 `objectWorldMat`의 scale이 상쇄되어 메시가 unscaled로 돌아간다(크기 원복 버그). 회전 추출(`extractOrient`)은 basis를 정규화해 scale-safe하게 하고, `syncFromPoseDFS`는 seed와 동일하게 `boneOrigin + orient.rotate(capsuleOffset)`로 통일한다. joint anchor는 `activate`의 `resetAnchors`가 seed된 scaled body 위치에서 재계산하므로 자동 scaled.
+- **서버(RoomServer):** `ModelScale`을 읽어 `setModel`에서 동일하게 흡수(`Object`에 `modelBaseScale_`/`instanceScale_` 대칭 도입). `updateAnimBones`의 `entityWorld`에 `scale(body_.scale())`을 추가하고, 본-부착 BV의 `halfExtents`에 scale을 별도로 곱한다(`transformOBBByMatrix`는 center만 변환하고 회전은 정규화한 basis에서 추출). scale은 모델 고정값이라 네트워크 전송 불필요(클라/서버 동일 `.bin`).
+- **제약:** **균일(uniform) scale만 지원**(x=y=z) — shear 및 비균일 회전추출 이슈 회피. **포맷에 `ModelScale` 필드가 추가되어 모든 `.bin`(클라+서버) 재추출 필요.**
