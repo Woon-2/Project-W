@@ -770,10 +770,10 @@ void GFX::createSwapChain() {
 	}
 	// PBR Deferred Skinned Pipeline ----
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.groupOffsets.init(
-		device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_GroupOffset"
+		device_.Get(), sizeof(u32t) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_GroupOffset"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.indirectCmd.init(
-		device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_IndirectCommand"
+		device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_IndirectCommand"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perFrameDataClear.init(
 		device_.Get(), sizeof(HiZClearShader::PerFrameData), backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerFrameDataClear"
@@ -788,10 +788,10 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(HiZCullShader::PerFrameData), backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerFrameDataCull"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupCnt.init(
-		device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupCnt"
+		device_.Get(), sizeof(u32t) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupCnt"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupData.init(
-		device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupData"
+		device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perInstanceDataCompact.init(
 		device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCompact"

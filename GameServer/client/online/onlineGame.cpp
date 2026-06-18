@@ -2202,6 +2202,64 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
 }
 
+// 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
+// (같은 리그를 공유하므로 goblinAnimations()/goblinHpBars_/idGoblinMap_ 등은 그대로 재사용).
+void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
+	auto hobgoblin = std::make_shared<Hobgoblin>();
+
+	hobgoblin->setId(hobgoblinInfo.objectId);
+	hobgoblin->setPos(DirectX::XMLoadFloat3(&hobgoblinInfo.pos));
+	hobgoblin->setOrient(DirectX::XMLoadFloat4(&hobgoblinInfo.orient));
+	hobgoblin->setScale(DirectX::XMLoadFloat3(&hobgoblinInfo.scale));
+	hobgoblin->setModel(assetManager_.modelHobgoblin());
+	hobgoblin->setAnimBlender(animSystem_, assetManager_);
+
+	if (hobgoblin->model() && hobgoblin->model()->ragdollDef) {
+		hobgoblin->ragdoll()->build(
+			hobgoblin->model()->skeleton,
+			*hobgoblin->model()->ragdollDef,
+			physicsWorld_
+		);
+	}
+
+	hobgoblin->setHp(hobgoblinInfo.hp);
+	hobgoblin->setMaxHp(hobgoblinInfo.maxHp);
+	hobgoblin->setFaction(Faction::Monsters);
+	hobgoblin->enableBVRendering();
+
+	hobgoblin->body().setMotionType(MotionType::Kinematic);
+	hobgoblin->body().setMass(40.f);
+	hobgoblin->body().setLinearDamping(0.f);
+	hobgoblin->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
+	}
+
+	hobgoblin->setRenderObjectId(nextRenderObjId_++);
+
+	// Register hobgoblin in skill system's object lookup table.
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = hobgoblin.get();
+	}
+
+	goblins_.push_back(hobgoblin);
+	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
+	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
+}
+
 void Game::createSnake(const ObjectInfo& info) {
 	auto snake = std::make_shared<Snake>();
 
@@ -4713,7 +4771,7 @@ void Game::applyHiZCulling() {
 		}
 		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+			if (auto* blender = m->animBlender()) blender->setCulled(false);
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);

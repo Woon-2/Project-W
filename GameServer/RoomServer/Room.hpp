@@ -249,6 +249,9 @@ private:
 	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
 	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
 	std::unique_ptr<PlatoonLeader>              platoonLeader_;
+	// platoonLeader_가 클라에 어떤 모델로 보일지(ObjectInfo.type). Goblin 전술은 Hobgoblin,
+	// GrandBaum/Isis는 전용 모델 추가 전까지 Goblin placeholder.
+	ObjectType                                  platoonLeaderObjType_{ ObjectType::Goblin };
 	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
 	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;

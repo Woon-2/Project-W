@@ -339,14 +339,14 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 		}
 
 		if (haveSpawnPos) {
-			// Boss reuses the regular goblin model: spawnCenter == bossPos.
+			// 보스는 Hobgoblin 모델로 스폰(troopers는 일반 goblin): spawnCenter == bossPos.
 			spawnTacticalGoblinEncounter(spawnPos, spawnPos, /*numSquads*/3, /*troopersPerSquad*/20);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
-			auto appendInfo = [&](const TacticalNpc& o) {
+			auto appendInfo = [&](const TacticalNpc& o, ObjectType type) {
 				spawnInfos.push_back(ObjectInfo{
-					.type           = ObjectType::Goblin,
+					.type           = type,
 					.objectId       = static_cast<uint16>(o.getId()),
 					.materialSetIdx = 0,
 					.hp             = o.hp(),
@@ -357,8 +357,8 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 				});
 			};
 			for (const auto& npc : tacticalNpcs_)
-				if (npc) appendInfo(*npc);
-			if (platoonLeader_) appendInfo(*platoonLeader_);
+				if (npc) appendInfo(*npc, ObjectType::Goblin);
+			if (platoonLeader_) appendInfo(*platoonLeader_, platoonLeaderObjType_);
 
 			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
 		}
@@ -877,7 +877,7 @@ void Room::enter(GameSession* session) {
 	}
 
 	// 이미 전술 전투가 시작된 뒤 접속한 플레이어도 무리를 보도록 스냅샷에 포함.
-	// 보스도 일반 고블린 모델(ObjectType::Goblin)로 전송.
+	// 보스는 platoonLeaderObjType_(전술별로 Hobgoblin/Goblin)로 전송.
 	for (const auto& npc : tacticalNpcs_) {
 		if (!npc) continue;
 		objInfos.push_back(ObjectInfo{
@@ -893,7 +893,7 @@ void Room::enter(GameSession* session) {
 	}
 	if (platoonLeader_) {
 		objInfos.push_back(ObjectInfo{
-			.type = ObjectType::Goblin,
+			.type = platoonLeaderObjType_,
 			.objectId = static_cast<uint16>(platoonLeader_->getId()),
 			.materialSetIdx = 0,
 			.hp = platoonLeader_->hp(),
@@ -1558,13 +1558,15 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		return base;
 	};
 	// 일반 goblin(setupGoblin)과 동일한 모델/물리 셋업: 충돌 BVH·중력·플레이어 충돌·
-	// motor 이동(setDesiredVel)에 필요. tactical NPC/보스 모두 동일하게 적용.
+	// motor 이동(setDesiredVel)에 필요. trooper는 Goblin, 보스는 Hobgoblin 모델을 쓴다.
+	// 둘은 같은 리그(Hobgoblin/GoblinSkeleton, 91본 동일 이름/순서)를 공유하므로
+	// goblinAnimations()의 Goblin_* 클립을 모델과 무관하게 그대로 재사용할 수 있다.
 	const auto& anims = assetManager_->goblinAnimations();
-	auto registerBody = [&](Object& obj) {
+	auto registerBody = [&](Object& obj, const Model* model) {
 		obj.setId(IdPool::pop());
 		obj.setFaction(Faction::Monsters);   // 플레이어 공격의 적대 대상이 되도록(미설정 시 Neutral → 스킬 필터 제외)
 
-		obj.setModel(assetManager_->modelGoblin());
+		obj.setModel(model);
 		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
 		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
@@ -1601,7 +1603,7 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 			mu::Vec3 trooperPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 
 			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
-			registerBody(*npc);
+			registerBody(*npc, assetManager_->modelGoblin());
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). 나머지 충돌은 유지.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
 			npc->setSquadId(s);
@@ -1616,9 +1618,10 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	// 보스는 spawnPos(Wall 마커 등 지형보다 높을 수 있음)를 그대로 받으므로 지형 높이로 보정.
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
-	registerBody(*platoonLeader_);
+	registerBody(*platoonLeader_, assetManager_->modelHobgoblin());
 	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Hobgoblin;   // 클라에 Hobgoblin 모델로 통지(ObjectInfo.type)
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
@@ -1717,6 +1720,7 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		makeBase(bossPos), bossCfg, std::make_unique<GrandBaumMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Goblin;   // 전용 모델 추가 전까지 goblin placeholder
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
@@ -1814,6 +1818,7 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		makeBase(bossPos), bossCfg, std::make_unique<IsisMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Goblin;   // 전용 모델 추가 전까지 goblin placeholder
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());

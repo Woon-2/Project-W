@@ -73,6 +73,7 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+	void createHobgoblin(const ObjectInfo& hobgoblinInfo);
 	void createSnake(const ObjectInfo& info);
 	void createMushroom(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);

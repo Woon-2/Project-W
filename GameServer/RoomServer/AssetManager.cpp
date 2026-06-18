@@ -6,6 +6,7 @@ void AssetManager::loadAssets() {
     modelCube_     = loadModelFromFile("../resources/models/cube/cubeServer.bin");
     modelPlayer_   = loadModelFromFile("../resources/models/player/playerServer.bin");
     modelGoblin_   = loadModelFromFile("../resources/models/goblin/goblinServer.bin");
+    modelHobgoblin_ = loadModelFromFile("../resources/models/goblin/HobgoblinServer.bin");
     modelSnake_    = loadModelFromFile("../resources/models/snake/snakeServer.bin");
     modelMushroom_ = loadModelFromFile("../resources/models/mushroom/mushroomServer.bin");
 

@@ -478,6 +478,17 @@ private:
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
+// Goblin과 같은 리그(91본, 동일 이름/순서)와 Goblin_* 클립을 공유하는 모델 변형(전술 전투
+// 중간보스 전용 외형). 별개 종(species)이 아니라 Goblin의 스킨 교체이므로, 다른 몬스터들과
+// 달리 Object 직접 상속을 반복하지 않고 Goblin을 상속해 EventBus/ragdoll을 그대로 재사용한다.
+class Hobgoblin : public Goblin {
+public:
+	Hobgoblin() = default;
+	Hobgoblin(Object&& base) : Goblin(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
 class Snake : public Object {
 public:
 	Snake() = default;

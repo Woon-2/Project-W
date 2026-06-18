@@ -1431,8 +1431,15 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     bone.name = readText(ifs, "Name");
     const auto toDress = readMatrix(ifs, "Dress");
     bone.toDress = DirectX::XMLoadFloat4x4(&toDress);
-    const auto toLocal = readMatrix(ifs, "ToLocal");
-    bone.toLocal = DirectX::XMLoadFloat4x4(&toLocal);
+    // 스트림에서 ToLocal을 소비하되 값은 toDress의 역행렬로 재계산한다.
+    // toLocal(inverse bind)은 정의상 항상 inverse(toDress)이어야 하지만,
+    // 루트 스케일이 걸린 모델(예: Hobgoblin)에서는 ModelExtractor가 Dress에는
+    // 스케일을 반영하고 ToLocal에는 반영하지 않아 둘이 역행렬 관계가 깨진다.
+    // 그 경우 본 계층을 따라 누적되며 스키닝이 어긋나(rest pose에서도 비항등) 메시가
+    // 꼬여 엉뚱한 위치로 튀므로, 적재 시 불변식 toLocal == inverse(toDress)를 강제한다.
+    // (올바르게 추출된 모델은 stored ToLocal과 동일하므로 무해.)
+    readMatrix(ifs, "ToLocal");
+    bone.toLocal = mu::inverse(bone.toDress);
 
     bone.boneIdx = boneIdx++;
 

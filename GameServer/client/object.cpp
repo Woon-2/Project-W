@@ -913,7 +913,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -921,7 +921,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}*/
+	}
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {
@@ -1498,6 +1498,17 @@ void Mushroom::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 void Goblin::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
 	auto blender = std::make_unique<AnimBlenderGoblin>();
 	blender->init(assetManager.modelGoblin(), assetManager.goblinAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
+// Hobgoblin은 Goblin과 동일한 메시(메시 로컬 정점 동일)·리그(91본)이고, 큰 외형은 루트 스케일이
+// 반영된 bind pose(Dress)와 meshXform으로 표현된다. 같은 Goblin_* 클립/baked 클립을 그대로
+// 재사용해도(루트 스케일은 스키닝 켤레에서 상쇄됨) keyframe·baked 양쪽 모두 동일하게 올바른 결과를
+// 낸다 — 단, 바인드 포즈 불변식(toLocal == inverse(toDress))이 적재 시 강제되어야 한다(mesh.cpp 참조).
+void Hobgoblin::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderGoblin>();
+	blender->init(assetManager.modelHobgoblin(), assetManager.goblinAnimations());
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }

@@ -732,8 +732,14 @@ public class ModelExtractorWindow : EditorWindow
     {
         ExtractUtil.WriteHeadTag(skeletonWriter, "Bone");
         ExtractUtil.WriteText(skeletonWriter, "Name", bone.gameObject.name);
-        ExtractUtil.WriteDressMatrix(skeletonWriter, "Dress", targetObject.transform, bone);
-        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", bindposes[boneIdx]);
+        // Dress(bind)는 WriteDressMatrix가 루트 localScale을 반영해 쓴다. ToLocal(inverse bind)은
+        // 반드시 inverse(Dress)여야 스키닝 rest pose가 항등이 된다. bindposes는 루트 스케일이
+        // 반영되지 않은 값이라(ProcessBoneHierarchy) 스케일 모델에선 Dress와 역행렬 관계가 깨지므로,
+        // Dress와 동일하게 구성한 행렬의 역행렬을 ToLocal로 쓴다.
+        Matrix4x4 dress = Matrix4x4.Scale(targetObject.transform.localScale)
+            * targetObject.transform.worldToLocalMatrix * bone.localToWorldMatrix;
+        ExtractUtil.WriteMatrix(skeletonWriter, "Dress", dress);
+        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", dress.inverse);
         BoneSocket socket = bone.gameObject.GetComponent<BoneSocket>();
         if (socket != null)
         {

@@ -22,6 +22,7 @@ public:
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
 	const Model* modelGoblin() const { return &modelGoblin_; }
+	const Model* modelHobgoblin() const { return &modelHobgoblin_; }
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
@@ -104,6 +105,7 @@ private:
 	Model modelCube_{};
 	Model modelPlayer_{};
 	Model modelGoblin_{};
+	Model modelHobgoblin_{};
 	Model modelSnake_{};
 	Model modelMushroom_{};
 	Skybox skyboxMaterial_{};
