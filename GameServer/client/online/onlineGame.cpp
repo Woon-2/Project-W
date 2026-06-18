@@ -4771,7 +4771,7 @@ void Game::applyHiZCulling() {
 		}
 		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(false);
+			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
