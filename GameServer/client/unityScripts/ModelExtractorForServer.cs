@@ -135,11 +135,9 @@ public class ModelExtractorForServerWindow : EditorWindow
                 ExtractUtil.WriteText(geometryWriter, "Name", box.name ?? "");
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
-                // 루트 스케일 반영 (ExtractUtil.GetScaledBoxCenterSize 참고)
-                ExtractUtil.GetScaledBoxCenterSize(
-                    box, targetObject.transform.localScale, out var center, out var size);
-                ExtractUtil.WriteVector(geometryWriter, "Center", center);
-                ExtractUtil.WriteVector(geometryWriter, "Size", size);
+                // BV는 unscaled로 추출(모델 고유 scale은 런타임 body scale로 적용).
+                ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
+                ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
                 // static 여부 (본에 붙은 박스는 본의, 그 외는 대상 오브젝트의 static 플래그를 따른다)
                 bool isStatic = box.bone != null ? box.bone.gameObject.isStatic : targetObject.isStatic;
@@ -162,6 +160,9 @@ public class ModelExtractorForServerWindow : EditorWindow
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
 
         ExtractUtil.WriteText(geometryWriter, "ModelName", targetName);
+        // Model's own scale; BV/bones are extracted unscaled and the server applies this via
+        // the object's body scale (mirrors the client setModel path).
+        ExtractUtil.WriteVector(geometryWriter, "ModelScale", targetObject.transform.localScale);
         ExtractBoundingVolumes();
 
         bool hasSkeleton = targetSkeleton != null;

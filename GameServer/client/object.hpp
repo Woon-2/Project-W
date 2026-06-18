@@ -269,7 +269,7 @@ public:
 	mu::NQuat MU_CALLCONV orient() const { return body_.orient(); }
 	// 크기를 갱신한다. prev/curr 모두 동기화. BVH 재빌드.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 MU_CALLCONV scale() const { return body_.scale(); }
+	mu::Vec3 MU_CALLCONV scale() const { return instanceScale_; }
 
 	mu::Vec3 MU_CALLCONV forward() const { return forward_; }
 	mu::Vec3 MU_CALLCONV right() const { return right_; }
@@ -372,7 +372,15 @@ public:
 	mu::Vec4         bvColor()            const { return bvColor_; }
 
 protected:
+	// 모델 고유 scale(modelBaseScale_)과 게임플레이 per-instance scale(instanceScale_)을
+	// 합성해 body_.scale()로 적용하고 BVH를 재빌드한다. setModel/setScale에서 호출.
+	void applyCompositeScale();
+
 	RigidBody body_{};
+
+	// body_.scale() = modelBaseScale_ * instanceScale_ (component-wise).
+	mu::Vec3 modelBaseScale_{ 1.f, 1.f, 1.f };   // setModel에서 pModel->baseScale 흡수 (모델 고유 scale)
+	mu::Vec3 instanceScale_ { 1.f, 1.f, 1.f };   // setScale이 쓰는 게임플레이 scale (기본 1)
 
 	RenderState renderState_{};
 

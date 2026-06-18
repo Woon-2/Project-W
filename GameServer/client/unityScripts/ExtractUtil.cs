@@ -165,6 +165,31 @@ public static class ExtractUtil
         WriteMatrix(binaryWriter, tagSource, matrix);
     }
 
+    // === 메시 지오메트리 dress 공간 베이크 ===
+    // 모델 루트의 scale을 정점에 미리 구워넣어, 임포트/런타임이 모델 고유 scale을
+    // 신경 쓰지 않게 한다. 노드 DressMatrix D = Scale(rootScale)·root.worldToLocal·node.localToWorld.
+    // (D는 정점을 mesh-local → dress 공간으로 옮긴다. 본 toDress/toLocal과 같은 공간이라
+    //  스키닝 팔레트가 일관되게 동작한다.)
+
+    // 정점 위치 배열을 D로 변환(affine point).
+    public static Vector3[] BakePositions(Vector3[] verts, Matrix4x4 D)
+    {
+        Vector3[] outv = new Vector3[verts.Length];
+        for (int i = 0; i < verts.Length; i++)
+            outv[i] = D.MultiplyPoint3x4(verts[i]);
+        return outv;
+    }
+
+    // 방향(노멀/탄젠트) 배열을 행렬 m으로 변환 후 정규화.
+    // 노멀은 normalMatrix(= D.inverse.transpose), 탄젠트는 D를 넘긴다.
+    public static Vector3[] BakeDirections(Vector3[] dirs, Matrix4x4 m)
+    {
+        Vector3[] outv = new Vector3[dirs.Length];
+        for (int i = 0; i < dirs.Length; i++)
+            outv[i] = m.MultiplyVector(dirs[i]).normalized;
+        return outv;
+    }
+
     public static void GetRelativeTRS(
         Transform target, Transform reference,
         out Vector3 relativePosition,
@@ -223,27 +248,9 @@ public static class ExtractUtil
 
     public static void WriteDressMatrix(BinaryWriter binaryWriter, string tagSource, Transform dressXform, Transform xform)
     {
-        // dressXform(보통 모델 루트)의 worldToLocalMatrix는 위치/회전/스케일을 전부 제거하기 때문에,
-        // 루트 오브젝트에 의도적으로 걸어둔 scale(모델 전체 크기 조절)까지 함께 사라진다.
-        // 씬 배치용 위치/회전은 그대로 제외하되, 루트의 localScale만 다시 곱해 되살린다.
-        Matrix4x4 rootScale = Matrix4x4.Scale(dressXform.localScale);
-        WriteMatrix(binaryWriter, tagSource, rootScale * dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
-    }
-
-    // 바운딩 볼륨 박스의 Center/Size에 루트 스케일을 반영해 추출한다.
-    // - 본에 부착된 박스: 런타임(object.cpp)에서 bone.toDress(이미 루트 스케일 포함, WriteDressMatrix 참고)를
-    //   통해 center를 매 프레임 변환하므로, 여기서 center에 루트 스케일을 또 곱하면 이중 적용된다.
-    //   반면 half-extents(size)는 런타임에서 게임플레이용 scale만 곱해질 뿐 bone.toDress의 스케일은
-    //   반영되지 않으므로, size에는 추출 시점에 루트 스케일을 곱해줘야 한다.
-    // - 본이 없는 박스(오브젝트 기준 정적 박스): 런타임에 모델 고유 스케일을 적용할 경로가 전혀 없으므로
-    //   center와 size 모두에 루트 스케일을 곱해야 한다.
-    public static void GetScaledBoxCenterSize(
-        BoundingBoxData box, Vector3 rootScale,
-        out Vector3 center, out Vector3 size)
-    {
-        bool hasBone = box.bone != null;
-        center = hasBone ? box.localCenter : Vector3.Scale(box.localCenter, rootScale);
-        size = Vector3.Scale(box.size, rootScale);
+        // dressXform(보통 모델 루트)의 worldToLocalMatrix로 씬 배치용 위치/회전/스케일을 제거한다.
+        // 모델 고유 scale도 함께 빠지며, 런타임에 body scale로 한 번만 적용된다(클라 setModel 경로와 동일).
+        WriteMatrix(binaryWriter, tagSource, dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
     }
 
     public static void WriteVector(BinaryWriter binaryWriter, Vector2 vec)

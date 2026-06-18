@@ -1242,6 +1242,8 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
 ) {
     readHeadTag(ifs, "Geometry");
     const auto nodeCnt = readInteger(ifs, "NodeCnt");
+    const auto modelScale = readVec3(ifs, "ModelScale");
+    model.baseScale = DirectX::XMLoadFloat3(&modelScale);
     importTransform(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
     readTailTag(ifs, "Geometry");
 }
@@ -1429,17 +1431,14 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     auto& bone = (*model.skeleton.bones)[boneIdx];
     bone.name = readText(ifs, "Name");
+    // toDress(bind)는 모델 고유 scale이 베이크된 dress 공간 행렬, toLocal(inverse bind)은
+    // 그 역행렬이다. 추출기가 toLocal = inverse(toDress)로 기록하므로 스트림 값을 그대로
+    // 사용한다. (메시 정점도 추출 시 같은 dress 공간으로 베이크되어 임포트는 scale을
+    // 신경 쓸 필요가 없다 — graphicsArchitecture.md "모델 scale 베이크" 참고.)
     const auto toDress = readMatrix(ifs, "Dress");
     bone.toDress = DirectX::XMLoadFloat4x4(&toDress);
-    // 스트림에서 ToLocal을 소비하되 값은 toDress의 역행렬로 재계산한다.
-    // toLocal(inverse bind)은 정의상 항상 inverse(toDress)이어야 하지만,
-    // 루트 스케일이 걸린 모델(예: Hobgoblin)에서는 ModelExtractor가 Dress에는
-    // 스케일을 반영하고 ToLocal에는 반영하지 않아 둘이 역행렬 관계가 깨진다.
-    // 그 경우 본 계층을 따라 누적되며 스키닝이 어긋나(rest pose에서도 비항등) 메시가
-    // 꼬여 엉뚱한 위치로 튀므로, 적재 시 불변식 toLocal == inverse(toDress)를 강제한다.
-    // (올바르게 추출된 모델은 stored ToLocal과 동일하므로 무해.)
-    readMatrix(ifs, "ToLocal");
-    bone.toLocal = mu::inverse(bone.toDress);
+    const auto toLocal = readMatrix(ifs, "ToLocal");
+    bone.toLocal = DirectX::XMLoadFloat4x4(&toLocal);
 
     bone.boneIdx = boneIdx++;
 

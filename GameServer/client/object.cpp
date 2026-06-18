@@ -741,7 +741,8 @@ void Object::setModel(const Model* pModel){
 	}
 
 	renderState_.pModel = pModel;
-	rebuildBodyBVH();
+	modelBaseScale_ = pModel->baseScale;   // 모델 고유 scale 흡수 (vertex bake 대신 런타임 적용)
+	applyCompositeScale();                 // body_.scale() 갱신 + rebuildBodyBVH
 	renderState_.worldBVs.resize(body_.worldBVH().nodes.size());
 }
 
@@ -799,7 +800,12 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 					else { lc = s.center; lh = s.halfExtents; lo = s.orient; }
 					const mu::Vec3  wc = mu::Vec3(mu::Vec4(lc, 1.f) * boneToWorld);
 					const mu::Vec3  wh = lh * scale;
-					const mu::NQuat wo = lo * mu::NQuat{ mu::Quat{ mu::quatRotMat(boneToWorld.get()) } };
+					// Orientation from a scale-free matrix (mirrors rebuildBodyBVH); the scaled world
+						// distorts quatRotMat. Extents already take object scale via `wh = lh * scale`.
+						const mu::Mat4x4 boneToWorldRigid = bone.toDress
+							* renderState_.animBlender->finalXformData()[node.boneIdx]
+							* mu::Mat4x4(orient) * mu::translate(pos);
+						const mu::NQuat wo = lo * mu::NQuat{ mu::Quat{ mu::quatRotMat(boneToWorldRigid.get()) } };
 					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(wh * 2.f))
 					                         * mu::Mat4x4(wo)
 					                         * mu::translate(wc);
@@ -1082,11 +1088,18 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 		rebuildBodyBVH();
 }
 
-void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
-	body_.setScale(newScale);
+// 모델 고유 scale과 게임플레이 per-instance scale을 component-wise 합성해 body_에 적용한다.
+// setModel/setScale 호출 순서와 무관하게 합성식이 동일해 정합한다.
+void Object::applyCompositeScale() {
+	body_.setScale(modelBaseScale_ * instanceScale_);
 	body_.snapToCurrent();
 	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
 		rebuildBodyBVH();
+}
+
+void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
+	instanceScale_ = newScale;
+	applyCompositeScale();
 }
 
 void Object::equip(Equipment&& equipment) { 
@@ -1105,8 +1118,9 @@ void Object::disequip(Bone::SocketType socketType) {
 	for (auto& toRemove : toRemoves) {
 		toRemove.object->body_.setPos(body_.pos());
 		toRemove.object->body_.setOrient(body_.orient());
-		toRemove.object->body_.setScale(body_.scale());
-		toRemove.object->body_.snapToCurrent();
+		// 부모의 합성 scale을 게임플레이 scale로 물려준다(자식 모델 고유 scale은 보존).
+		// setScale 내부에서 snapToCurrent까지 수행된다.
+		toRemove.object->setScale(scale());
 	}
 
 	equipments_.erase(toRemoves.begin(), toRemoves.end());
@@ -1166,6 +1180,8 @@ void Object::rebuildBodyBVH() {
 	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(bScale))
 	                          * mu::Mat4x4(bOrient)
 	                          * mu::translate(bPos);
+	const mu::Mat4x4 objRigid = mu::Mat4x4(bOrient)
+	                          * mu::translate(bPos);
 
 	auto& worldBVH = body_.worldBVH();
 	worldBVH.nodes.resize(localBVH.nodes.size());
@@ -1185,6 +1201,7 @@ void Object::rebuildBodyBVH() {
 			const auto&      boneXforms = renderState_.animBlender->finalXformData();
 			// bone local -> animated dress -> object world
 			const mu::Mat4x4 boneToWorld = bone.toDress * boneXforms[src.boneIdx] * objWorld;
+			const mu::Mat4x4 boneToWorldRigid = bone.toDress * boneXforms[src.boneIdx] * objRigid;
 
 			dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
 				using T = std::decay_t<decltype(s)>;
@@ -1203,7 +1220,7 @@ void Object::rebuildBodyBVH() {
 				// Scale halfExtents by root object scale only (bone transforms are rigid)
 				const mu::Vec3  worldHalfExtents = localHalfExtents * bScale;
 				// Extract rotation from boneToWorld and compose with local orient
-				const mu::NQuat boneWorldOrient{ mu::Quat{ mu::quatRotMat(boneToWorld.get()) } };
+				const mu::NQuat boneWorldOrient{ mu::Quat{ mu::quatRotMat(boneToWorldRigid.get()) } };
 				const mu::NQuat worldOrient      = localOrient * boneWorldOrient;
 				return OBB{ worldCenter, worldHalfExtents, worldOrient };
 			}, src.shape);

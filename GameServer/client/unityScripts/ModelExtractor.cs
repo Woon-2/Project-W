@@ -202,6 +202,9 @@ public class ModelExtractorWindow : EditorWindow
         var w = itemDataWriter;
         ExtractUtil.WriteHeadTag(w, "RagdollConfig");
 
+        // 래그돌 박스 치수는 unscaled로 추출한다. 런타임 Ragdoll::build에서 모델 고유 scale을
+        // halfExtents·inertia에만 곱하고, center(capsuleOffset)는 boneWorldMat(objectWorldMat에
+        // scale 포함)으로 변환되므로 unscaled로 둔다.
         ExtractUtil.WriteInteger(w, "BodyCnt", ragdoll.bodies.Count);
         foreach (var body in ragdoll.bodies)
         {
@@ -648,6 +651,11 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.AccNodeCnt(targetObject.transform, ref nodeCnt);
         ExtractUtil.WriteInteger(geometryWriter, "NodeCnt", nodeCnt);
 
+        // Model's own scale (Unity root localScale). The geometry/BV/bones are extracted
+        // unscaled; the runtime applies this via Object's body scale (setModel), so mesh and
+        // BV stay consistent through a single scale path.
+        ExtractUtil.WriteVector(geometryWriter, "ModelScale", targetObject.transform.localScale);
+
         ExtractTransform(targetObject.transform, targetObject.transform);
 
         ExtractUtil.WriteTailTag(geometryWriter, "Geometry");
@@ -689,11 +697,9 @@ public class ModelExtractorWindow : EditorWindow
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
 
-                // 로컬 기준 값들 (루트 스케일 반영 — ExtractUtil.GetScaledBoxCenterSize 참고)
-                ExtractUtil.GetScaledBoxCenterSize(
-                    box, targetObject.transform.localScale, out var center, out var size);
-                ExtractUtil.WriteVector(geometryWriter, "Center", center);
-                ExtractUtil.WriteVector(geometryWriter, "Size", size);
+                // BV는 unscaled로 추출(모델 고유 scale은 런타임 body scale로 적용).
+                ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
+                ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
 
                 // static 여부 (본에 붙은 박스는 본의, 그 외는 대상 오브젝트의 static 플래그를 따른다)
@@ -732,14 +738,8 @@ public class ModelExtractorWindow : EditorWindow
     {
         ExtractUtil.WriteHeadTag(skeletonWriter, "Bone");
         ExtractUtil.WriteText(skeletonWriter, "Name", bone.gameObject.name);
-        // Dress(bind)는 WriteDressMatrix가 루트 localScale을 반영해 쓴다. ToLocal(inverse bind)은
-        // 반드시 inverse(Dress)여야 스키닝 rest pose가 항등이 된다. bindposes는 루트 스케일이
-        // 반영되지 않은 값이라(ProcessBoneHierarchy) 스케일 모델에선 Dress와 역행렬 관계가 깨지므로,
-        // Dress와 동일하게 구성한 행렬의 역행렬을 ToLocal로 쓴다.
-        Matrix4x4 dress = Matrix4x4.Scale(targetObject.transform.localScale)
-            * targetObject.transform.worldToLocalMatrix * bone.localToWorldMatrix;
-        ExtractUtil.WriteMatrix(skeletonWriter, "Dress", dress);
-        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", dress.inverse);
+        ExtractUtil.WriteDressMatrix(skeletonWriter, "Dress", targetObject.transform, bone);
+        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", bindposes[boneIdx]);
         BoneSocket socket = bone.gameObject.GetComponent<BoneSocket>();
         if (socket != null)
         {

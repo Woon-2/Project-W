@@ -54,7 +54,7 @@ public:
 	mu::NQuat orient() const { return body_.orient(); }
 
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 scale() const { return body_.scale(); }
+	mu::Vec3 scale() const { return instanceScale_; }
 
 	mu::Vec3 forward() const { return forward_; }
 	mu::Vec3 right() const { return right_; }
@@ -154,9 +154,16 @@ protected:
 	mu::Vec3 MU_CALLCONV calcSeparationForce( const std::vector<mu::Vec3>& nearby, float radius ) const;
 
 private:
+	// Compose model base scale x per-instance scale into body_ (mirrors client Object).
+	void applyCompositeScale();
+
 	float oldX_{};
 	float oldZ_{};
 	RigidBody body_{};
+
+	// body_.scale() = modelBaseScale_ * instanceScale_ (component-wise).
+	mu::Vec3 modelBaseScale_{ 1.f, 1.f, 1.f };   // setModel: pModel_->baseScale (model's own scale)
+	mu::Vec3 instanceScale_ { 1.f, 1.f, 1.f };   // setScale: per-instance gameplay scale
 
 	mu::Vec3 forward_{};
 	mu::Vec3 right_{};

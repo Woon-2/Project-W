@@ -151,9 +151,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `getHumanoidRagdollDef()` | `ragdollDef.cpp #10` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
 | `importRagdollConfig()` | `mesh.cpp` | binary → Model::ragdollDef 로드 |
 | `Model::ragdollDef` | `mesh.hpp` | std::optional<RagdollDef>, 파일에서 로드된 ragdoll 설정 |
+| `Model::baseScale` | `mesh.hpp` | Unity root localScale(`ModelScale` 필드); `Object::setModel`이 흡수해 `modelBaseScale_⊙instanceScale_`로 body scale 적용 (vertex bake 대체, graphicsArchitecture.md 참조) |
+| `Object::applyCompositeScale()` | `object.cpp` | `body_.scale()=modelBaseScale_⊙instanceScale_` 합성 + rebuildBodyBVH. setModel/setScale에서 호출 |
 | `RagdollBone` struct | `ragdoll.hpp #15` | boneIdx, body*(non-owning), parentJoint*(non-owning), capsuleOffset |
 | `Ragdoll` class | `ragdoll.hpp #33` | bone별 RigidBody + Constraint 소유, PhysicsWorld 비소유 등록 |
-| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 |
+| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 (modelScale 인자로 halfExtents/관성에 모델 scale 반영) |
 | `Ragdoll::destroy()` | `ragdoll.cpp` | joint 먼저, body 나중 제거 (dangling ptr 방지) |
 | `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
 | `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |

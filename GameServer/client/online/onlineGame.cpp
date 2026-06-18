@@ -2156,7 +2156,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 		goblin->ragdoll()->build(
 			goblin->model()->skeleton,
 			*goblin->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin->body().scale()
 		);
 	}
 
@@ -2218,7 +2219,8 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 		hobgoblin->ragdoll()->build(
 			hobgoblin->model()->skeleton,
 			*hobgoblin->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			hobgoblin->body().scale()
 		);
 	}
 
@@ -2274,7 +2276,8 @@ void Game::createSnake(const ObjectInfo& info) {
 		snake->ragdoll()->build(
 			snake->model()->skeleton,
 			*snake->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			snake->body().scale()
 		);
 	}
 
@@ -2329,7 +2332,8 @@ void Game::createMushroom(const ObjectInfo& info) {
 		mushroom->ragdoll()->build(
 			mushroom->model()->skeleton,
 			*mushroom->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			mushroom->body().scale()
 		);
 	}
 

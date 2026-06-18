@@ -178,6 +178,8 @@ Model loadModelFromFile(const std::filesystem::path& path) {
     }
 
     ret.name = readText(ifs, "ModelName");
+    const auto modelScale = readVec3(ifs, "ModelScale");
+    ret.baseScale = DirectX::XMLoadFloat3(&modelScale);
     importBoundingVolumes(ifs, ret);
 
     const bool hasSkeleton = static_cast<bool>(readInteger(ifs, "HasSkeleton"));

@@ -2373,7 +2373,8 @@ void Game::configureGoblin(Goblin& goblin) {
 		goblin.ragdoll()->build(
 			goblin.model()->skeleton,
 			*goblin.model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin.scale()
 		);
 	}
 }
