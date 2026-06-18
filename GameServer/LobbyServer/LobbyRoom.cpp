@@ -17,7 +17,10 @@ bool LobbyRoom::enter( const std::shared_ptr<GameSession>& session ) {
 		return false;
 	}
 
-	auto info = LobbyPlayerInfo{ .sessionId = static_cast<uint16>(session->id()) };
+	auto info = LobbyPlayerInfo{
+		.sessionId = static_cast<uint16>(session->id()),
+		.weaponType = session->selectedWeaponType_,
+	};
 	auto pkt = PacketManager::makeSLobbyRoomPlayerJoinedPacket( info );
 
 	for ( const auto& p : players_ ) {
@@ -31,6 +34,20 @@ bool LobbyRoom::enter( const std::shared_ptr<GameSession>& session ) {
 	}
 
 	return true;
+}
+
+void LobbyRoom::selectWeapon( GameSession* session, PlayerWeaponType weaponType ) {
+	std::lock_guard lock( mutex_ );
+
+	auto it = std::find_if( players_.begin(), players_.end(),
+		[session]( const std::shared_ptr<GameSession>& p ) { return p.get() == session; } );
+	if ( it == players_.end() ) {
+		return;
+	}
+
+	session->selectedWeaponType_ = weaponType;
+	broadcast( PacketManager::makeSLobbyWeaponSelectedPacket(
+		static_cast<uint16>(session->id()), weaponType ) );
 }
 
 void LobbyRoom::leave( GameSession* session ) {
@@ -96,7 +113,10 @@ std::vector<LobbyPlayerInfo> LobbyRoom::playerInfos() const {
 	infos.reserve( players_.size() );
 
 	for ( const auto& p : players_ ) {
-		infos.push_back( LobbyPlayerInfo{ static_cast<uint16>(p->id()) } );
+		infos.push_back( LobbyPlayerInfo{
+			static_cast<uint16>(p->id()),
+			p->selectedWeaponType_
+		} );
 	}
 	return infos;
 }

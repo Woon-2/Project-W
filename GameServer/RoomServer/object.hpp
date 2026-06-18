@@ -193,15 +193,24 @@ private:
 
 class Player : public Object {
 public:
+	static constexpr int kSkillSlots = 3;
+
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
 
 	void setWeaponType(PlayerWeaponType weaponType) { weaponType_ = weaponType; }
 	PlayerWeaponType weaponType() const { return weaponType_; }
+	void resetSkillState() {
+		selectedSlot_ = 0;
+		for (int i = 0; i < kSkillSlots; ++i) {
+			skillCharge_[i] = 0.f;
+			cooldownEnd_[i] = Milliseconds{ 0.f };
+		}
+		comboCount_ = 0;
+		lastCreditMs_ = Milliseconds{ 0.f };
+	}
 
 	// --- Stack-charge skill state (server-authoritative) ---
-	static constexpr int kSkillSlots = 3;
-
 	uint8 selectedSlot() const { return selectedSlot_; }
 	void  setSelectedSlot(uint8 s) { selectedSlot_ = (s < kSkillSlots) ? s : 0; }
 
@@ -228,7 +237,7 @@ public:
 	void         setLastCreditMs(Milliseconds t) { lastCreditMs_ = t; }
 
 private:
-	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
 	uint8        selectedSlot_ = 0;
 	float        skillCharge_[kSkillSlots] = { 0.f, 0.f, 0.f };

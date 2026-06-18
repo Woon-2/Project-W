@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../gfx.hpp"
+#include "protocol.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Button.hpp"
@@ -41,12 +42,15 @@ public:
         std::function<void()>                    onCopyCode;
         std::function<void()>                    onOpenSettings;
         std::function<void()>                    onQuit;
+        std::function<void(int)>                 onSelectWeapon;
     };
 
     // Snapshot of lobby/session state passed to refresh() each time it changes.
     struct PlayerSlot {
         std::wstring name;
         bool         isHost = false;
+        bool         isSelf = false;
+        PlayerWeaponType weaponType = PlayerWeaponType::Katana;
     };
     struct ViewState {
         bool        inLobbyScene       = true;   // scene_ == Scene::Lobby
@@ -106,6 +110,8 @@ private:
     Texture lobbyBtnPrimaryTex_{};
     Texture lobbyBtnSecondaryTex_{};
     Texture lobbyInputTex_{};
+    Texture lobbyLeftButtonTex_{};
+    std::array<Texture, 4> lobbyWeaponIconTex_{};
 
     // --- Widget pointers (owned by the UIManager tree) ---
     UI::UIElement* lobbyRoot_       = nullptr;
@@ -126,6 +132,11 @@ private:
     std::array<UI::Label*,  kMaxLobbyPlayers> slotNameLabels_{};
     std::array<UI::Label*,  kMaxLobbyPlayers> slotHostBadgeLabels_{};
     std::array<std::array<UI::Button*, 4>, kMaxLobbyPlayers> slotNameBorders_{};
+    std::array<UI::UIElement*, kMaxLobbyPlayers> slotWeaponRoots_{};
+    std::array<UI::Button*,    kMaxLobbyPlayers> slotWeaponPrevButtons_{};
+    std::array<UI::Button*,    kMaxLobbyPlayers> slotWeaponNextButtons_{};
+    std::array<UI::Image*,     kMaxLobbyPlayers> slotWeaponIcons_{};
+    std::array<UI::Label*,     kMaxLobbyPlayers> slotWeaponLabels_{};
 
     UI::Button*    startGameButton_ = nullptr;
     UI::Label*     startGameLabel_  = nullptr;

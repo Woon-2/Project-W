@@ -204,6 +204,8 @@ SkillHitboxDef ServerSkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.onHit = tableToOnHitDef(*onHit);
 
     def.useParticleSize = tbl.get_or("useParticleSize", false);
+    // penetrate: VFXParticle only -- false = non-penetrating (particle consumed on first hit).
+    def.penetrate       = tbl.get_or("penetrate", true);
     return def;
 }
 

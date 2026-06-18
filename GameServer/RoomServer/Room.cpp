@@ -783,7 +783,7 @@ void Room::enter(GameSession* session) {
 	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
-	player->setWeaponType(PlayerWeaponType::Katana);
+	player->resetSkillState();
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {

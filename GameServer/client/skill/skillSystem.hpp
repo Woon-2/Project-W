@@ -49,6 +49,8 @@ struct AttachedHitbox {
     float            hitGroupCooldownMs   = 0.f;  // 0 = hit once; >0 = re-hit after N ms
     bool             active               = false;
     bool             applyAttachRotation  = true; // false = position tracks but orientation ignores attachment
+    bool             penetrate            = true; // VFXParticle: false = destroy source particle on hit
+    int              particleLocalIdx     = -1;   // VFXParticle: index into pSystem->particles() this frame (for killParticle)
 };
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,7 @@ struct ParticleHitboxSource {
     bool             active                = false;
     bool             useParticleSize       = false;
     bool             applyRotation         = true; // false = ignore particle orientation for hitbox OBBs
+    bool             penetrate             = true; // false = destroy the source particle on first hit
     std::vector<int> hitboxHandles;        // hitboxPool_ indices, one per active particle
 };
 
@@ -269,6 +272,14 @@ public:
     // selectedHitboxIdx (>= 0) is drawn in a highlight color instead of the default.
     void renderDebugHitboxes(DebugBVView& bvView, int selectedHitboxIdx = -1) const;
 
+    // Verification counters (StandAlone editor). particlesDestroyedOnHit counts
+    // each non-penetrating particle consumed on impact; for the projectile-into-burst
+    // archetype (e.g. energy_explosion_arrow) it equals the number of explosions triggered.
+    struct DebugStats {
+        u32t particlesDestroyedOnHit = 0;
+    };
+    const DebugStats& debugStats() const { return debugStats_; }
+
     // -----------------------------------------------------------------------
     // Editor support
     // -----------------------------------------------------------------------
@@ -345,6 +356,13 @@ private:
         i32t targetObjectId;
     };
     std::vector<HitResult> pendingHits_;
+
+    // (particleSourceIdx, particleLocalIdx) of non-penetrating particles to
+    // destroy after the hit loop. Killed per-source in descending index order so
+    // ParticleSystem::killParticle's swap-remove does not invalidate pending ones.
+    std::vector<std::pair<int, int>> pendingParticleKills_;
+
+    DebugStats debugStats_;
 };
 
 #endif  // __skill_skillSystem_HPP

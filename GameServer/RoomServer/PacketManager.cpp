@@ -43,6 +43,11 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 void PacketManager::handleCEnterPacket(GameSession* session, byte* buffer, int32 len) {
 	auto pkt = reinterpret_cast<CEnterPacket*>(buffer);
 	std::string code(pkt->lobbyCode, strnlen_s(pkt->lobbyCode, sizeof(pkt->lobbyCode)));
+	const auto ordinal = static_cast<uint8>(pkt->weaponType);
+	session->player()->setWeaponType(
+		ordinal <= static_cast<uint8>(PlayerWeaponType::HeavyArrow)
+			? pkt->weaponType
+			: PlayerWeaponType::Katana);
 	session->enterRoom(code);
 }
 

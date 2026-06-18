@@ -223,6 +223,10 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
     // useParticleSize: VFXParticle only -- scale OBB halfExtents by each particle's current visual size
     def.useParticleSize = tbl.get_or("useParticleSize", false);
 
+    // penetrate: VFXParticle only -- false = non-penetrating (particle destroyed on first hit).
+    // Default true (penetrating); see SkillHitboxDef::penetrate.
+    def.penetrate = tbl.get_or("penetrate", true);
+
     return def;
 }
 

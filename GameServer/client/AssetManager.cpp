@@ -195,6 +195,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "UiLeftButton",
+		.texturePath     = "../resources/UI/ui_left_button.dds",
+		.pDest           = &uiLeftButton_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "DamageDigits",
 		.texturePath     = "../resources/UI/damage_digits.dds",
 		.pDest           = &digitAtlasTex_,
@@ -373,6 +382,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.name            = "Circle",
 		.texturePath     = "../resources/Textures/Circle.dds",
 		.pDest           = &circleTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "MagicCircle",
+		.texturePath     = "../resources/Textures/magic_circle.dds",
+		.pDest           = &magicCircleTex_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

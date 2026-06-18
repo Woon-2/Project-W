@@ -46,6 +46,7 @@ skill:addEvent(130, "SpawnHitbox", {
     attach              = VFXParticleAttach(10, 0),
     applyAttachRotation = true,
     useParticleSize     = false,
+    penetrate           = false,   -- non-penetrating: arrow particle is destroyed on first hit
     hitGroup            = 0,
     hitGroupCooldownMs  = 550,
     onHit               = onHit
