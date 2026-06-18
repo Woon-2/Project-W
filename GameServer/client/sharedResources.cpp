@@ -1152,7 +1152,7 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& p = portraitData[roomIdx];
 	const float kTransparent[4] = { 0.f, 0.f, 0.f, 0.f };
 	cmdList->ClearRenderTargetView(p.rtv, kTransparent, 0u, nullptr);
-	cmdList->ClearDepthStencilView(p.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+	cmdList->ClearDepthStencilView(p.dsv, D3D12_CLEAR_FLAG_DEPTH, 0.f, 0u, 0u, nullptr);
 }
 
 }	// namespace Portrait
