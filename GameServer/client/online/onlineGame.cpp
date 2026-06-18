@@ -2054,6 +2054,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.vfxByIdSize         = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
+		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos) {
+			INet::ClientApp::sound().playSfx3D(name, pos);
+		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,
 		// AttachType::Ground hitboxes, particle ground-conform/collision).
@@ -3112,14 +3116,6 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				{
 					killCountWidget_->addKill();
 				}
-			}
-
-			// 전투 효과음(3D, 대상의 월드 위치에서 재생). 카탈로그에 파일이 없으면 1회 경고만.
-			switch (pEv->type) {
-			case EventType::Hit:    INet::ClientApp::sound().playSfx3D("hit",    obj->renderState().pos); break;
-			case EventType::Death:  INet::ClientApp::sound().playSfx3D("death",  obj->renderState().pos); break;
-			case EventType::Attack: INet::ClientApp::sound().playSfx3D("attack", obj->renderState().pos); break;
-			default: break;
 			}
 
 			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
@@ -4505,10 +4501,8 @@ void Game::setupSkillDial(PlayerWeaponType weaponType) {
 void Game::onSkillCharge(uint16 playerId, uint8 slot, float charge) {
 	if (!player_) return;
 	if (playerId == static_cast<uint16>(player_->getId())) {
-		// setCharge reports the 0 -> 1 transition; the icon also pops + flips to its
-		// lit "ready" shader mode. Fire the audio cue on the transition.
-		if (skillDial_.setCharge(slot, charge))
-			INet::ClientApp::sound().playSfx("skill_ready", 1.f);
+		// setCharge pops the icon + flips it to its lit "ready" shader mode on the 0 -> 1 transition.
+		skillDial_.setCharge(slot, charge);
 	} else if (slot < SkillDialHUD::kSlots) {
 		teammateCharge_[playerId][slot] = charge;
 	}

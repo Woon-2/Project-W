@@ -88,6 +88,12 @@ end
 -- Example -- forward 4m ground circle:   skill:addEvent(120,"PlayVFX",{ vfxId=7, offset=Vec3(0,0,4), groundLock=true })
 -- Example -- 45-degree fan to the left:   skill:addEvent(120,"PlayVFX",{ vfxId=8, offset=Vec3(0,0,2), orient={45,0,0} })
 
+-- PlaySound event parameters (skill:addEvent(ms, "PlaySound", { ... })):
+--   sound = <string>  -- logical name in the sound catalog (soundCatalog.cpp), e.g. "sword_slash_1"
+-- Plays a cosmetic 3D one-shot at the caster's position at the event time. Client-only:
+-- the server skips this event (no audio), so PlaySound never affects gameplay determinism.
+-- Example: skill:addEvent(200, "PlaySound", { sound = "sword_slash_1" })
+
 -- Helper: on-hit response definition.
 function OnHit(params)
     return {

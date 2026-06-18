@@ -129,6 +129,7 @@ static SkillEventType parseEventType(std::string_view s) {
     if (s == "ModifyStat")        return SkillEventType::ModifyStat;
     if (s == "ApplyImpulse")      return SkillEventType::ApplyImpulse;
     if (s == "CameraShake")       return SkillEventType::CameraShake;
+    if (s == "PlaySound")         return SkillEventType::PlaySound;
     if (s == "SendGameplayEvent") return SkillEventType::SendGameplayEvent;
     if (s == "SpawnProjectile")   return SkillEventType::SpawnProjectile;
     if (s == "SetGroundAnchor")   return SkillEventType::SetGroundAnchor;
@@ -411,6 +412,13 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                 auto& p    = ev.payload.cameraShake;
                 p.magnitude = evTbl.get_or("magnitude", 0.f);
                 p.duration  = Milliseconds{ static_cast<float>(evTbl.get_or("durationMs", 0)) };
+                break;
+            }
+            case SkillEventType::PlaySound: {
+                std::string sound = evTbl.get_or<std::string>("sound", "");
+                auto& p = ev.payload.playSound;
+                std::strncpy(p.soundName, sound.c_str(), sizeof(p.soundName) - 1);
+                p.soundName[sizeof(p.soundName) - 1] = '\0';
                 break;
             }
             case SkillEventType::ModifyStat: {

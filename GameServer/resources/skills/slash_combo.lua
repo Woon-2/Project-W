@@ -23,6 +23,13 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.0)
 })
 
+-- Per-beat swing SFX, aligned to the four hitbox waves (SpawnHitbox times):
+--   150 / 550 / 750ms = light slashes; 1250ms = finisher (the big double-arc wave).
+skill:addEvent(150,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(550,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(750,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(1250, "PlaySound", { sound = "sword_slash_finish" })
+
 local onHit = OnHit({
     damage          = 35,
     vfxId           = 255,

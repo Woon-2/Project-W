@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace {
 
@@ -59,6 +60,22 @@ struct SoundManager::Impl {
 	// De-spammed warnings for missing/failed files.
 	std::unordered_set<std::string> warned;
 
+	// Pre-decoded SFX sources, keyed by file path. Each is loaded once at init
+	// (MA_SOUND_FLAG_DECODE) and kept alive for the manager's lifetime so the
+	// resource manager caches the decoded PCM; startOneShot then clones a voice
+	// with ma_sound_init_copy() -- no disk read or decode on the play path.
+	// Without this the FIRST play of a sound decodes synchronously on the game
+	// thread, delaying its onset (the first combat hit lags behind its visual).
+	// unordered_map nodes are address-stable, which ma_sound (a node-graph node)
+	// requires, so the sounds are initialised in place via operator[].
+	std::unordered_map<std::string, ma_sound> sfxTemplates;
+
+	// Leading-silence offset (PCM frames) to skip per preloaded sound, measured
+	// once at preload. mp3 files carry encoder-delay padding (and a clip may have a
+	// quiet head) that decodes into leading silence; skipping it tightens the onset
+	// so the hit lands on time. Keyed by file path; absent/0 = skip nothing.
+	std::unordered_map<std::string, ma_uint64> sfxLeadFrames;
+
 	// Returns true if this SFX may play now, throttling identical-name bursts.
 	bool sfxAllowed(std::string_view name) {
 		std::string key(name);
@@ -77,6 +94,93 @@ struct SoundManager::Impl {
 		}
 	}
 
+	// Returns the count of leading PCM frames at/below the silence floor in a
+	// fully-decoded sound (mp3 encoder-delay padding + any quiet clip head). The
+	// sound's read cursor is restored to 0 afterwards. 0 = nothing to skip.
+	ma_uint64 detectLeadSilenceFrames(ma_sound& s) {
+		ma_format fmt = ma_format_unknown;
+		ma_uint32 ch  = 0;
+		if (ma_sound_get_data_format(&s, &fmt, &ch, nullptr, nullptr, 0) != MA_SUCCESS || ch == 0)
+			return 0;
+		ma_data_source* ds = ma_sound_get_data_source(&s);
+		if (!ds) return 0;
+
+		constexpr ma_uint64 kChunk = 4096;
+		ma_uint64 lead = 0;
+		bool found = false;
+
+		if (fmt == ma_format_f32) {
+			std::vector<float> buf(kChunk * ch);
+			for (;;) {
+				ma_uint64 read = 0;
+				if (ma_data_source_read_pcm_frames(ds, buf.data(), kChunk, &read) != MA_SUCCESS || read == 0) break;
+				for (ma_uint64 f = 0; f < read && !found; ++f) {
+					for (ma_uint32 c = 0; c < ch; ++c) {
+						float a = buf[f * ch + c];
+						if (a < 0.f) a = -a;
+						if (a > 0.003f) { lead += f; found = true; break; }
+					}
+				}
+				if (found) break;
+				lead += read;
+			}
+		} else if (fmt == ma_format_s16) {
+			std::vector<ma_int16> buf(kChunk * ch);
+			for (;;) {
+				ma_uint64 read = 0;
+				if (ma_data_source_read_pcm_frames(ds, buf.data(), kChunk, &read) != MA_SUCCESS || read == 0) break;
+				for (ma_uint64 f = 0; f < read && !found; ++f) {
+					for (ma_uint32 c = 0; c < ch; ++c) {
+						int a = buf[f * ch + c];
+						if (a < 0) a = -a;
+						if (a > 100) { lead += f; found = true; break; }
+					}
+				}
+				if (found) break;
+				lead += read;
+			}
+		}
+
+		ma_data_source_seek_to_pcm_frame(ds, 0);   // restore cursor for cloning
+		return found ? lead : 0;
+	}
+
+	// Pre-decode every non-streamed catalog sound so the first in-game play is
+	// instant (no synchronous decode on the game thread). Missing/failed files
+	// are skipped silently; startOneShot then falls back to init-from-file, which
+	// warns once. Streamed/BGM entries are left to the streaming path.
+	void preloadSfx() {
+		int loaded = 0, failed = 0;
+		for (const snd::CatalogEntry& e : snd::allSounds()) {
+			if (e.stream || e.bus == SoundManager::Bus::Bgm) continue;
+			std::string key(e.path);
+			if (sfxTemplates.find(key) != sfxTemplates.end()) continue;
+			ma_sound& slot = sfxTemplates[key];   // node-stable storage; init in place
+			const ma_uint32 flags = MA_SOUND_FLAG_DECODE
+			                      | MA_SOUND_FLAG_NO_SPATIALIZATION
+			                      | MA_SOUND_FLAG_NO_DEFAULT_ATTACHMENT;
+			if (ma_sound_init_from_file(&engine, key.c_str(), flags, nullptr, nullptr, &slot) == MA_SUCCESS) {
+				++loaded;
+				const ma_uint64 lead = detectLeadSilenceFrames(slot);
+				if (lead > 0) sfxLeadFrames[key] = lead;
+			} else {
+				sfxTemplates.erase(key);   // never decoded; drop the empty slot
+				++failed;
+				gSharedLog << "[Sound] SFX preload FAILED: '" << key << "'\n";
+			}
+		}
+		gSharedLog << "[Sound] SFX preloaded: " << loaded << " ok, " << failed << " failed.\n";
+
+		// Warm the full play path (voice clone + mixer + device) once per sound at
+		// zero volume, so the FIRST audible play in-game pays no cold-start latency
+		// (first voice activation / first resource-manager data-source copy). Silent.
+		for (const snd::CatalogEntry& e : snd::allSounds()) {
+			if (e.stream || e.bus == SoundManager::Bus::Bgm) continue;
+			if (sfxTemplates.find(std::string(e.path)) == sfxTemplates.end()) continue;
+			startOneShot(e, /*spatial*/true, /*volume*/0.f, /*hasPos*/false, 0.f, 0.f, 0.f);
+		}
+	}
+
 	// Starts a one-shot voice from the pool. Returns false if the pool is full
 	// (the sound is simply dropped) or the file failed to load.
 	bool startOneShot(const snd::CatalogEntry& e, bool spatial, float volume,
@@ -88,14 +192,30 @@ struct SoundManager::Impl {
 		if (idx < 0) return false;
 
 		Voice& v = voices[idx];
-		ma_uint32 flags = MA_SOUND_FLAG_DECODE;
-		if (!spatial) flags |= MA_SOUND_FLAG_NO_SPATIALIZATION;
+		const std::string pathKey(e.path);
 
-		std::string path(e.path);
-		if (ma_sound_init_from_file(&engine, path.c_str(), flags,
-		                            &buses[static_cast<int>(e.bus)], nullptr, &v.sound) != MA_SUCCESS) {
+		// Prefer a pre-decoded template (clone shares the cached PCM, no disk read
+		// or decode); fall back to loading from file if this sound was not preloaded.
+		bool ok = false;
+		if (auto it = sfxTemplates.find(pathKey); it != sfxTemplates.end()) {
+			const ma_uint32 flags = spatial ? 0u : MA_SOUND_FLAG_NO_SPATIALIZATION;
+			ok = (ma_sound_init_copy(&engine, &it->second, flags,
+			                         &buses[static_cast<int>(e.bus)], &v.sound) == MA_SUCCESS);
+		} else {
+			ma_uint32 flags = MA_SOUND_FLAG_DECODE;
+			if (!spatial) flags |= MA_SOUND_FLAG_NO_SPATIALIZATION;
+			ok = (ma_sound_init_from_file(&engine, pathKey.c_str(), flags,
+			                              &buses[static_cast<int>(e.bus)], nullptr, &v.sound) == MA_SUCCESS);
+		}
+		if (!ok) {
 			warnOnce(e.path);
 			return false;
+		}
+
+		// Skip leading silence baked into the decoded PCM (mp3 encoder-delay padding
+		// / quiet clip head), measured once at preload, so the onset is tight.
+		if (auto lit = sfxLeadFrames.find(pathKey); lit != sfxLeadFrames.end() && lit->second > 0) {
+			ma_sound_seek_to_pcm_frame(&v.sound, lit->second);
 		}
 		ma_sound_set_volume(&v.sound, e.defaultVolume * clamp01(volume));
 		if (spatial && hasPos) {
@@ -133,6 +253,10 @@ bool SoundManager::init() {
 
 	ma_engine_set_volume(&impl_->engine, impl_->masterVol);
 	impl_->enabled = true;
+
+	// Warm the SFX cache so the first play of each sound is instant (no decode hitch).
+	impl_->preloadSfx();
+
 	gSharedLog << "[Sound] Audio engine initialized.\n";
 	return true;
 }
@@ -146,6 +270,11 @@ void SoundManager::shutdown() {
 	for (auto& b : impl_->bgm) {
 		if (b.active) { ma_sound_uninit(&b.sound); b.active = false; b.name.clear(); }
 	}
+	for (auto& [path, tmpl] : impl_->sfxTemplates) {
+		ma_sound_uninit(&tmpl);
+	}
+	impl_->sfxTemplates.clear();
+	impl_->sfxLeadFrames.clear();
 	for (int i = 0; i < kBusCount; ++i) {
 		ma_sound_group_uninit(&impl_->buses[i]);
 	}

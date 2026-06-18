@@ -89,6 +89,7 @@ enum class SkillEventType : u8t {
     ApplyImpulse,
     CameraShake,
     SetGroundAnchor,
+    PlaySound,
     SIZE
 };
 
@@ -155,6 +156,10 @@ union SkillEventPayload {
         float        magnitude;
         Milliseconds duration;
     } cameraShake;
+
+    struct PlaySound {
+        char soundName[24];  // sound-catalog logical name, null-terminated (max 23 chars)
+    } playSound;
 
     struct SendGameplayEvent {
         u8t  eventTypeOrdinal;  // EventType ordinal

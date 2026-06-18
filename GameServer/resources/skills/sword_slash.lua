@@ -21,6 +21,9 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 0.8, 1.0)
 })
 
+-- Swing SFX, on the slash.
+skill:addEvent(100, "PlaySound", { sound = "sword_slash_1" })
+
 local onHitDefBase = OnHit({
     damage          = 25,
     vfxId           = 0,

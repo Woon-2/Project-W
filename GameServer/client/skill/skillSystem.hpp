@@ -17,6 +17,8 @@
 #include "../particleEffect.hpp"
 #include "../camera.hpp"
 
+#include <functional>
+
 class Object;
 class ParticleEffect;
 class Camera;
@@ -222,6 +224,12 @@ struct SkillDispatchContext {
     // Online mode: server is authoritative for damage.
     // When true, processHitResults skips EvSkillHit but still applies VFX + impulse.
     bool             clientPredictionOnly = false;
+
+    // Cosmetic 3D SFX trigger for PlaySound timeline events. The client wires this
+    // to SoundManager::playSfx3D; the server / headless paths leave it null (no-op),
+    // so PlaySound never affects gameplay determinism. soundName indexes the sound
+    // catalog and is valid only for the duration of the call (points into the asset).
+    std::function<void(const char* soundName, mu::Vec3 pos)> playSound = nullptr;
 };
 
 // ---------------------------------------------------------------------------

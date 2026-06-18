@@ -1071,6 +1071,9 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
 | PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
 | PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
+| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24]) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=...}`. 서버는 미지원 이벤트로 스킵(결정론 무영향) |
+| PlaySound 디스패치 (caster `renderState().pos`에서 `ctx.playSound` 호출) | `skill/skillSystem.cpp` `dispatchEvent` PlaySound case | `SkillDispatchContext::playSound` 콜백(클라=`playSfx3D`, 서버=null no-op) |
+| PlaySound 콜백 바인딩 | `standalone/game.cpp` / `online/onlineGame.cpp` skillCtx 셋업 | `skillCtx_.playSound = [](name,pos){ sound().playSfx3D }` |
 | 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
 | `screenToRay(...)` | `camera.hpp` | 스크린 픽셀 → 월드 ray (inverse view-proj) |
 
@@ -1136,7 +1139,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **백엔드:** miniaudio (단일 헤더, `client/sound/miniaudio.h` — 외부 참조, 수정 금지)
 **엔진 추상화:** `client/sound/soundManager.hpp` / `soundManager.cpp`
 **카탈로그:** `client/sound/soundCatalog.hpp` / `soundCatalog.cpp`
-**자산 폴더:** `resources/audio/bgm/*.mp3`, `resources/audio/sfx/*.wav`
+**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3`(스킬음)
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
@@ -1151,13 +1154,16 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | 소유/접근 | `ClientApp.cpp` `init/release/update`, `ClientApp::sound()` | 프로세스 전역 단일 소유, init 1회/매 프레임 update tick |
 | BGM 씬 연결 | `online/onlineGame.cpp` `enterLobby`("lobby") / `enterInGame`("ingame") | 씬 전환 시 크로스페이드 |
 | UI 클릭음 훅 | `ui/widgets/Button.hpp` `sClickSfx`(정적), `online/onlineGame.cpp` `enterLobby`에서 1회 바인딩 | UI 레이어 ↔ 사운드 백엔드 디커플링 |
-| 전투 SFX(3D) | `online/onlineGame.cpp` 이벤트 디스패치 루프, `standalone/game.cpp` 이벤트 루프 | Hit/Death/Attack를 대상 `renderState().pos`에서 재생 |
+| (제거됨) 전투/HUD 플레이스홀더 SFX | — | hit/death/attack(이벤트 루프 디스패치)·skill_hit·ui_hover·skill_ready 카탈로그+.wav+코드 일괄 제거(2026-06-19 정리). 현재 SFX = ui_click + PlaySound 스킬음만 |
+| 스킬 SFX(검 4종) | `sound/soundCatalog.cpp`(`sword_slash_1`/`sword_slash_finish`/`sword_slash_7`/`slash_wave`, .mp3), 각 `resources/skills/*.lua` PlaySound | PlaySound 이벤트 경유 스윙음. SwordSlash(sword_slash@100ms)·Slash7(sword_slash_7@100ms)·SlashWave(slash_wave@120ms)·SlashCombo(slash_1 150/550/750 + finish 1250). 단일 스윙=1회, 콤보=히트박스 웨이브별 |
 | 3D 리스너 갱신 | `online/onlineGame.cpp` `camera_.update` 직후, `standalone/game.cpp` `camera_.updateGFX` 직전 | 매 프레임 카메라 추종 |
 | 볼륨 설정값 | `ui/settingsPanel.hpp` `GameSettings` masterVolume/bgmVolume/sfxVolume(%) | 영속 설정 |
 | 볼륨 설정 UI | `ui/settingsPanel.cpp` "사운드" 그룹(makeStepperRow ×3) | 투명도 행과 동일 스텝퍼 패턴 |
 | 볼륨 적용 | `online/onlineGame.cpp` `render()` | 매 프레임 폴링 → setMasterVolume/setBusVolume. UI 버스=SFX 볼륨 |
 | 포커스 뮤트 | `main.cpp` `gWindowActive`+`WM_ACTIVATEAPP`, `onlineGame.cpp` `render()` 게이팅 | 창 비활성 시 master=0 |
 | SFX 디듀프 | `sound/soundManager.cpp` `sfxAllowed` (kSfxDedupeCooldownSec=35ms) | 동일 SFX 버스트 throttle |
+| SFX 프리로드(첫 재생 무지연) | `sound/soundManager.cpp` `Impl::preloadSfx`(init에서 호출)+`Impl::sfxTemplates`, `soundCatalog.cpp` `allSounds()` | 비스트리밍 카탈로그 전부 init 시 디코드→템플릿(ma_sound) 보관. `startOneShot`은 템플릿 있으면 `ma_sound_init_copy`로 클론(디스크/디코드 0), 없으면 `init_from_file` 폴백. + init 시 무음 워밍업 1회 |
+| SFX 선행무음 스킵(onset 타이트) | `sound/soundManager.cpp` `Impl::detectLeadSilenceFrames`+`sfxLeadFrames`, `startOneShot`의 `ma_sound_seek_to_pcm_frame` | mp3 인코더 패딩/조용한 클립 머리 = 디코드된 PCM 앞 무음 → 프리로드 때 첫 비무음 프레임(-50dBFS) 측정, 재생 시 그만큼 seek. **첫 타격음 지연의 실제 원인**(디코드 아님; wav는 무음 없어 정상이었음) |
 | 존 BGM 예시 | `online/onlineGame.cpp` `bindZoneHandlers()` | 태그 정의 시 `playBgm(...)` 1줄 연결 (데이터 의존) |
 
 ### UI 스크롤/클리핑 (설정 패널 창모드 오버플로 대응)

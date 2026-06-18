@@ -650,6 +650,18 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         break;
     }
 
+    case SkillEventType::PlaySound: {
+        // Cosmetic only: play a 3D one-shot at the caster's current position.
+        // ctx.playSound is null on the server/headless path (no-op), so this event
+        // is purely client-side and never affects gameplay determinism.
+        if (ctx.playSound) {
+            const Object* owner = lookupObject(ctx, inst.ownerObjectId);
+            const mu::Vec3 pos = owner ? owner->renderState().pos : mu::Vec3{ 0.f, 0.f, 0.f };
+            ctx.playSound(ev.payload.playSound.soundName, pos);
+        }
+        break;
+    }
+
     case SkillEventType::ModifyStat: {
         const auto& p = ev.payload.modifyStat;
         Object* owner = lookupObject(ctx, inst.ownerObjectId);

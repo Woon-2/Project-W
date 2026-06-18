@@ -19,17 +19,12 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 
 	// --- UI ---
 	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 1.0f },
-	{ "ui_hover",  "../resources/audio/sfx/ui_hover.wav", Bus::Ui,  false, false, 0.7f },
 
-	// --- Combat SFX (positional) ---
-	{ "hit",       "../resources/audio/sfx/hit.wav",       Bus::Sfx, false, false, 1.0f },
-	{ "death",     "../resources/audio/sfx/death.wav",     Bus::Sfx, false, false, 1.0f },
-	{ "attack",    "../resources/audio/sfx/attack.wav",    Bus::Sfx, false, false, 0.9f },
-	{ "skill_hit", "../resources/audio/sfx/skill_hit.wav", Bus::Sfx, false, false, 1.0f },
-
-	// --- HUD ---
-	// Played when a skill slot reaches its first usable stack (0 -> 1).
-	{ "skill_ready", "../resources/audio/sfx/skill_ready.wav", Bus::Ui, false, false, 1.0f },
+	// --- Skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "sword_slash_1",      "../resources/audio/sfx/sword/sword_slash_1.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "sword_slash_finish", "../resources/audio/sfx/sword/sword_slash_finish.mp3", Bus::Sfx, false, false, 1.0f },
+	{ "sword_slash_7",      "../resources/audio/sfx/sword/sword_slash_7.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "slash_wave",         "../resources/audio/sfx/sword/slash_wave.mp3",         Bus::Sfx, false, false, 1.0f },
 });
 
 }	// namespace
@@ -41,6 +36,10 @@ const CatalogEntry* findSound(std::string_view name) {
 		}
 	}
 	return nullptr;
+}
+
+std::span<const CatalogEntry> allSounds() {
+	return { kCatalog.data(), kCatalog.size() };
 }
 
 }	// namespace snd

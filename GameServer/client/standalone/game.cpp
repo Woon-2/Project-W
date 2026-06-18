@@ -829,6 +829,10 @@ void Game::setupStage() {
 		skillCtx_.vfxById        = skillVfxById_.data();
 		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera         = &camera_;
+		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos) {
+			INet::ClientApp::sound().playSfx3D(name, pos);
+		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,
 		// AttachType::Ground hitboxes, particle ground-conform/collision).
@@ -2485,26 +2489,8 @@ void Game::update(Milliseconds deltaTime) {
 	editor_.refresh();
 
 	// 이벤트 처리
-	auto resolveSfxObj = [&](i32t id) -> Object* {
-		if (goblin_ && goblin_->getId() == id) return goblin_.get();
-		if (player_ && player_->getId() == id) return player_.get();
-		return nullptr;
-	};
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
-
-		// 전투 효과음(3D). 디스패치 로직과 독립적으로(추가만) 대상 위치에서 재생한다.
-		{
-			Object* sfxObj = nullptr;
-			const char* sfxName = nullptr;
-			switch (pEv->type) {
-			case EventType::Hit:    sfxName = "hit";    sfxObj = resolveSfxObj(static_cast<EvHit*>(pEv)->targetId);      break;
-			case EventType::Attack: sfxName = "attack"; sfxObj = resolveSfxObj(static_cast<EvAttack*>(pEv)->attackerId); break;
-			case EventType::Death:  sfxName = "death";  sfxObj = resolveSfxObj(static_cast<EvDeath*>(pEv)->victimId);    break;
-			default: break;
-			}
-			if (sfxObj && sfxName) INet::ClientApp::sound().playSfx3D(sfxName, sfxObj->renderState().pos);
-		}
 
 		switch (pEv->type) {
 		case EventType::Hit:
