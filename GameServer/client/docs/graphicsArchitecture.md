@@ -418,6 +418,27 @@ visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 �
 `feedbackCullResultToAnim()`에서 컬링 판정과 무관하게 `setCulled(false)`를 강제해
 최소 1회는 애니메이션 갱신이 이루어지도록 한다.
 
+**Baked 스키닝 stale clipId 가드 (생성 직후 stretch 방지):**
+스킨드 deferred 경로(`pbrDeferredSkinned.hlsl`)는 `Mode::Baked`일 때 본 행렬을 업로드하지 않고
+GPU가 `bakedClipId`로 bindless 텍스처를 직접 샘플한다(`loadBakedMatrix(clipIdx, ...)`).
+이때 `clipId`는 **전역 bindless descriptor 인덱스**다(`AssetManager::setupBakedAnimationIds()`에서
+`clip->id = bakedSamples.idxSrv.idxResource`).
+
+문제 흐름:
+1. `AnimSystem::updatePriorities()`는 time-slice 없이 전체 blender를 돌며 거리 기반으로 `mode_`를
+   결정 → 먼 오브젝트는 즉시 `Mode::Baked`로 전환.
+2. 그러나 `finalBakedClipId_`/`finalBakedClipFrame_`은 `onCalcLocal()`의 **Baked 분기에서만** 세팅.
+3. `AnimSystem::update(0.01s)`는 time-slice 내 priority 순으로 일부 blender만 처리 → 첫 프레임엔
+   다수가 미처리 → `finalBakedClipId_`가 기본값 **0**.
+4. `clipId=0`은 애니메이션이 아닌 descriptor 0번 텍스처를 가리키고, 이를 4×4 본 행렬로 읽으면
+   garbage 스키닝 → 캐릭터가 길게 늘어나는 **stretch**(특히 온라인 InGameScene 진입 직후).
+   몬스터 종류가 많을수록 ① time-slice 누락 blender 증가 ② Baked 전환 객체 증가로 더 자주 발생.
+
+**가드(`Object::render`):** `bakedReady = (mode==Baked && hasEverUpdated() && finalBakedClipId() > 0)`
+가 false면 `bakedClipId/Frame = -1`을 넘겨 `boneXforms`(미갱신 시 identity = T-pose) 경로로 폴백한다.
+유효한 baked clip이 준비되면 자동으로 baked 경로로 복귀. (비-deferred `PBRSkinnedPipeline`은 baked
+필드가 없어 항상 boneXforms 경로 → 무관.)
+
 #### TerrainPipeline 특성
 
 - 파일: `terrain.hpp/cpp`, `terrain.hlsl`, `terrainPipeline.hpp/cpp`, `terrainShadowMap.hlsl`

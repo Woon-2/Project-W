@@ -860,6 +860,22 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 			const bool isSkinned = renderState_.animBlender
 				&& mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices");
 
+			// baked 스키닝 경로 준비 여부.
+			// 생성 직후 updatePriorities()가 거리 기반으로 mode_=Baked 로 바꾸지만,
+			// finalBakedClipId_/Frame_ 은 onCalcLocal()의 Baked 분기에서만 세팅된다.
+			// AnimSystem::update()는 time-slice(0.01s) 안에서 priority 순으로 일부 blender만
+			// 처리하므로, 첫 프레임엔 onCalcLocal 이 한 번도 안 불려 finalBakedClipId_=0(int 기본값)
+			// 인 채로 렌더될 수 있다. clip->id 는 전역 bindless descriptor 인덱스라 0은
+			// 애니메이션이 아닌 텍스처(descriptor 0)를 가리키고, 이를 4x4 행렬로 읽으면
+			// garbage 스키닝 → 캐릭터가 길게 늘어나는 stretch 가 발생한다.
+			// 유효한 baked clip 이 준비되기 전엔 boneXforms(미갱신 시 identity=T-pose) 경로를 쓴다.
+			bool bakedReady = false;
+			if (isSkinned) {
+				auto* ab = renderState_.animBlender.get();
+				bakedReady = ab->mode() == AnimBlender::Mode::Baked
+				          && ab->hasEverUpdated() && ab->finalBakedClipId() > 0;
+			}
+
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 				if (useDeferred) {
 					if (isSkinned) {
@@ -870,9 +886,9 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 							.subMesh           = &mesh.subMeshes[i],
 							.material          = &mesh.materialSets[materialSetIdx_].materials[i],
 							.renderObjectId    = renderObjectId_,
-							.bakedClipId       = renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+							.bakedClipId       = bakedReady
 								? renderState_.animBlender->finalBakedClipId() : -1,
-							.bakedClipFrame    = renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+							.bakedClipFrame    = bakedReady
 								? renderState_.animBlender->finalBakedClipFrame() : -1,
 							.viewFrustumCulled = culled,
 							.shadowCulled      = shadowCulled,
