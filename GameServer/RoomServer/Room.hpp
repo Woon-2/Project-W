@@ -123,6 +123,16 @@ public:
 	// strongholds to snap monster spawn positions onto the ground.
 	float MU_CALLCONV groundHeightAtWorld( float x, float z ) const;
 
+	// Bounded rejection-sampling variant of randomSpawnInDisc: retries a fixed
+	// number of times to find a candidate whose footprint (footprintSource's
+	// model/orient/scale, placed at the candidate position) does not overlap any
+	// registered scatter prop. Falls back to the last sampled position if every
+	// attempt collides; the existing static depenetration resolves any residual
+	// overlap over the next few physics steps. footprintSource must already have
+	// setModel/setScale/setOrient applied. Used by Stronghold to place/revive monsters.
+	mu::Vec3 MU_CALLCONV randomSpawnInDiscAvoidingProps(
+		mu::Vec3 center, float radius, const Object& footprintSource) const;
+
 	// Bind terrain height/normal callbacks onto a skill dispatch context so
 	// AttachType::Ground hitboxes snap to the same surface the client uses.
 	void bindGroundQueries( SkillDispatchContext& ctx ) const;

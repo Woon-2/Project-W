@@ -5,10 +5,6 @@
 #include "mushroom.hpp"
 #include "Room.hpp"
 #include <algorithm>
-#include <cmath>
-#include <random>
-
-static thread_local std::mt19937 s_strongholdRng{ std::random_device{}() };
 
 void Stronghold::configure(const StrongholdDef& def, int groupId,
                            int goblinStart, int goblinCount,
@@ -41,18 +37,6 @@ void Stronghold::configure(const StrongholdDef& def, int groupId,
     }
 }
 
-mu::Vec3 Stronghold::randomSpawnPos(Room& room) const {
-    std::uniform_real_distribution<float> distR(0.f, 1.f);
-    std::uniform_real_distribution<float> distAngle(0.f, 2.f * DirectX::XM_PI);
-
-    const float r     = def_.spawnRadius * std::sqrt(distR(s_strongholdRng));
-    const float theta = distAngle(s_strongholdRng);
-    const float x = def_.center.x() + r * std::cos(theta);
-    const float z = def_.center.z() + r * std::sin(theta);
-    const float y = room.groundHeightAtWorld(x, z);
-    return mu::Vec3(x, y, z);
-}
-
 void Stronghold::updatePopulation(Seconds dt,
                                   std::vector<Goblin>&   goblins,
                                   std::vector<Snake>&    snakes,
@@ -72,7 +56,7 @@ void Stronghold::updatePopulation(Seconds dt,
         for (int i = pool.start; i < end && revived < pool.maxPerWave; ++i) {
             auto& m = vec[static_cast<size_t>(i)];
             if (m.hp() > 0) continue;
-            m.reviveAt(randomSpawnPos(room));
+            m.reviveAt(room.randomSpawnInDiscAvoidingProps(def_.center, def_.spawnRadius, m));
             outRevivedIds.push_back(m.getId());
             ++revived;
         }

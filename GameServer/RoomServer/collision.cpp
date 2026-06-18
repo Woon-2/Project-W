@@ -652,3 +652,19 @@ int ScatterCollider::generateContacts(RigidBody& dyn, const ContactSink& sink) c
     });
     return added;
 }
+
+bool ScatterCollider::overlapsBVH(const BVH& queryWorldBVH) const
+{
+    if (queryWorldBVH.empty() || insts_.empty()) return false;
+
+    const AABB& queryBounds = queryWorldBVH.nodes[0].bounds;
+
+    bool hit = false;
+    forEachCandidate(queryBounds, [&](int i) {
+        if (hit) return;
+        const Inst& inst = insts_[i];
+        if (!collides(queryBounds, inst.worldAABB).hit) return;
+        if (collides(queryWorldBVH, inst.worldBVH).hit) hit = true;
+    });
+    return hit;
+}

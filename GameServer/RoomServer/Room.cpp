@@ -50,6 +50,27 @@ mu::Vec3 MU_CALLCONV Room::randomSpawnInDisc(mu::Vec3 center, float radius) cons
 	return mu::Vec3(x, groundHeightAtWorld(x, z), z);
 }
 
+mu::Vec3 MU_CALLCONV Room::randomSpawnInDiscAvoidingProps(
+	mu::Vec3 center, float radius, const Object& footprintSource) const
+{
+	constexpr int kMaxSpawnAttempts = 8;   // fixed budget -> deterministic time per spawn
+
+	const Model* model = footprintSource.model();
+	mu::Vec3 candidate{};
+	for (int attempt = 0; attempt < kMaxSpawnAttempts; ++attempt) {
+		candidate = randomSpawnInDisc(center, radius);
+		if (!model || model->bvh.empty()) return candidate;   // no collision shape to test
+
+		const BVH worldBVH = makeWorldBVH(model->bvh, candidate,
+		                                  footprintSource.body().orient(),
+		                                  footprintSource.body().scale());
+		if (!physicsWorld_.overlapsAnyScatterProp(candidate, worldBVH))
+			return candidate;
+	}
+	return candidate;   // all attempts collided (rare) -> fall back to the last
+	                    // sample; staticDepenetration resolves residual overlap.
+}
+
 void Room::setupGoblin(Goblin& g, const Level& level) {
 	const auto& anims = level.assetManager->goblinAnimations();
 	g.setModel(level.assetManager->modelGoblin());
@@ -144,6 +165,12 @@ void Room::init(const Level* levelData) {
 	worldTerrain_ = &levelData->terrainChunks;   // shared, read-only (height + stronghold defs)
 	assetManager_ = levelData->assetManager;     // backref: cube model for runtime barriers
 
+	// Static prop (tree/rock) colliders for monster-vs-prop authority. Baked from
+	// the shared prop BVHs + per-chunk instance data; no room-local bodies needed.
+	// Registered before the stronghold spawn loop below so initial spawn positions
+	// can already query overlapsAnyScatterProp() (see randomSpawnInDiscAvoidingProps).
+	worldTerrain_->registerScatterColliders(physicsWorld_);
+
 	for (auto& c : cubes_) {
 		c.body().setMotionType(MotionType::Static);
 		c.body().snapToCurrent();
@@ -188,7 +215,7 @@ void Room::init(const Level* levelData) {
 		auto spawnMonster = [&](auto& pool, auto setupFn) {
 			auto& m = pool.emplace_back();
 			setupFn(m, *levelData);
-			const mu::Vec3 pos = randomSpawnInDisc(sd.center, sd.spawnRadius);
+			const mu::Vec3 pos = randomSpawnInDiscAvoidingProps(sd.center, sd.spawnRadius, m);
 			m.setId(IdPool::pop());
 			m.setFaction(Faction::Monsters);
 			m.setPos(pos);
@@ -245,10 +272,6 @@ void Room::init(const Level* levelData) {
 			t.setHeightField(hf);             // shared, read-only
 			physicsWorld_.registerTerrain(&t.body(), hf);
 		});
-
-	// Static prop (tree/rock) colliders for monster-vs-prop authority. Baked from
-	// the shared prop BVHs + per-chunk instance data; no room-local bodies needed.
-	terrainChunks.registerScatterColliders(physicsWorld_);
 
 	// 스킬 레지스트리는 부팅 시 AssetManager가 1회 컴파일하여 전 룸이 공유한다.
 	// (사양이 방마다 달라지지 않으므로 참조만 바인딩; 컴파일/복사 없음.)
