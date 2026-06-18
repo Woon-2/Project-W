@@ -4,19 +4,19 @@
 #include "MidBossTacticBase.hpp"
 
 /*-------------------------------
-      IsisMidBossTactic
+      IsysMidBossTactic
 -------------------------------*/
 
-// 중간보스 Isis 전술. GrandBaum(수동적 생존형)과 대비되는 능동적 섬멸형 — 평소 4스쿼드 분산 교전 +
+// 중간보스 Isys 전술. Grandbaum(수동적 생존형)과 대비되는 능동적 섬멸형 — 평소 4스쿼드 분산 교전 +
 // 보스 자체 근접전을 하다가, 어느 한 스쿼드든 초기 인원 80% 미만으로 깎이면 전군을 후방으로 빼 집결시킨 뒤
 // Bomber로 1차 쐐기 → Buddy+보스로 2차 쐐기(피해 ×1.5)를 "다른 군집"에 꽂는 2연속 쐐기 협공을 반복한다.
 // 부대 계약: squad[0]/[1]=Buddy, squad[2]/[3]=Bomber, 보스 본체=PlatoonLeader.
 // 기존 인프라 재사용: WedgeCharge(+wedgeDamageMult/reserveWedgeApex)·FormationHold·issueStableEngage·
 // buildPlayerClusters. NPCAI sim/MidBossTactics.* 포팅.
-class IsisMidBossTactic : public MidBossTacticBase {
+class IsysMidBossTactic : public MidBossTacticBase {
 public:
-    IsisMidBossTactic() = default;
-    virtual ~IsisMidBossTactic() = default;
+    IsysMidBossTactic() = default;
+    virtual ~IsysMidBossTactic() = default;
 
     virtual void update( Seconds dt, Room& room, PlatoonLeader& leader ) override;
     virtual void onLeaderDead( Room& room, PlatoonLeader& leader ) override;

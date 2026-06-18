@@ -1,11 +1,11 @@
-# Isis(이시스) 중간보스 전술 — 설계/구현 문서
+# Isys(이시스) 중간보스 전술 — 설계/구현 문서
 
-NPCAI 시뮬레이터(`D:\source\repos\Project-W\NPCAI\NPCAI\sim`)의 Isis 전술을 `RoomServer`로 포팅한
-결과를 기록한다. GrandBaum(`grandBaumTactic.md`) / 홉고블린(`GoblinMidBossTactic`) 포팅 인프라를 재사용한다.
+NPCAI 시뮬레이터(`D:\source\repos\Project-W\NPCAI\NPCAI\sim`)의 Isys 전술을 `RoomServer`로 포팅한
+결과를 기록한다. Grandbaum(`grandbaumTactic.md`) / 홉고블린(`GoblinMidBossTactic`) 포팅 인프라를 재사용한다.
 
 ## 전술 개요
 
-Isis는 GrandBaum(수동적 생존형)과 대비되는 **능동적 섬멸형** 패턴이다. 평소 4스쿼드 분산 교전 +
+Isys는 Grandbaum(수동적 생존형)과 대비되는 **능동적 섬멸형** 패턴이다. 평소 4스쿼드 분산 교전 +
 보스 자체 근접전을 하다가, **어느 한 스쿼드든 초기 인원의 80% 미만**으로 줄면 전군을 후방으로 빼
 집결시킨 뒤 **Bomber로 1차 쐐기 → Buddy+보스로 2차 쐐기**를 *다른 군집*에 꽂는 "치고 빠지는
 2연속 쐐기 협공"을 반복한다.
@@ -16,7 +16,7 @@ Isis는 GrandBaum(수동적 생존형)과 대비되는 **능동적 섬멸형** �
 - `squad[2]` / `squad[3]` = **Bomber** 부대 (1차 돌격용)
 - 보스 본체(`PlatoonLeader`) = 평소 자체 근접전, 2차 쐐기에 직접 합류
 
-스쿼드 인덱스 계약은 **스폰 순서**(`Room::spawnIsisEncounter`)로 보장한다.
+스쿼드 인덱스 계약은 **스폰 순서**(`Room::spawnIsysEncounter`)로 보장한다.
 
 ### Phase 흐름
 
@@ -56,7 +56,7 @@ score 기반 타깃 + `BOSS_TARGET_SWITCH_MARGIN`). 추가로 **피해 반응 Ba
 
 ## 재사용한 기존 인프라 (신규 작성 없음)
 
-| Isis 요구 | 재사용 |
+| Isys 요구 | 재사용 |
 |---|---|
 | 쐐기 돌진 | `SquadOrderType::WedgeCharge` + `TacticalSquad` 쐐기 준비/release/charge (Goblin DivideAndConquer 경로) |
 | **보스 합류 ×1.5 피해** | `SquadOrder::wedgeDamageMult` → `TacticalSquad.cpp` `impactDamage = WEDGE_CHARGE_DAMAGE × wedgeDamageMult`. **새 피해 메커니즘 불필요** |
@@ -66,9 +66,9 @@ score 기반 타깃 + `BOSS_TARGET_SWITCH_MARGIN`). 추가로 **피해 반응 Ba
 | 군집화 | `MidBossTacticBase::buildPlayerClusters` |
 | 보스 근접 FSM | Goblin `updateBossPersonalCombat` 패턴 + `moveBossToward` 모터 |
 | 쐐기 충돌 처리 | `Room::beginWedgeCharge/endWedgeCharge/tryApplyWedgeChargeHit` (charge당 플레이어 1회 피격) |
-| 인카운터/존 | `Room::spawnGrandBaumEncounter` / `onArenaGrandBaumEnter` 미러 |
+| 인카운터/존 | `Room::spawnGrandbaumEncounter` / `onArenaGrandbaumEnter` 미러 |
 
-GrandBaum과 달리 Isis는 **새 패킷·넉백·피해경감·동적소환이 일절 없는** 순수 서버 AI 포팅이다.
+Grandbaum과 달리 Isys는 **새 패킷·넉백·피해경감·동적소환이 일절 없는** 순수 서버 AI 포팅이다.
 `MidBossTactics.cpp/.hpp`는 이미 `.vcxproj`에 포함되어 신규 파일/프로젝트 수정도 없다.
 
 ## 보스 고속 이동 — 모터 변환 (중요)
@@ -99,8 +99,8 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 
 | 파일 | 내용 |
 |---|---|
-| `IsisMidBossTactic.hpp/.cpp` | `IsisMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
-| `Room.hpp/.cpp` | `spawnIsisEncounter`(Buddy 2 + Bomber 2 + Isis 보스), `onArenaIsisEnter`, zone 바인딩(`Arena_Isys`). |
+| `IsysMidBossTactic.hpp/.cpp` | `IsysMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
+| `Room.hpp/.cpp` | `spawnIsysEncounter`(Buddy 2 + Bomber 2 + Isys 보스), `onArenaIsysEnter`, zone 바인딩(`Arena_Isys`). |
 
 (프로토콜/PacketManager/client/`.vcxproj` 변경 없음.)
 
@@ -109,14 +109,14 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 - zone 태그 `"Arena_Isys"` + 마커 `WallIsys_0/1/2`(후방벽, 선택), `IsysSpawner`(없으면 Wall 중점 fallback).
   해당 아레나 진입만으로 트리거된다.
 - 과거 한자리 비교용 디버그 트리거(`HOBGOBLIN_DEBUG_TACTIC`, `Arena_Hobgoblin` 재사용 + any-Wall/플레이어
-  위치 fallback)는 **제거됨**. `Arena_Hobgoblin`은 다시 홉고블린 전용이며, Isis는 전용 마커가 저작된
+  위치 fallback)는 **제거됨**. `Arena_Hobgoblin`은 다시 홉고블린 전용이며, Isys는 전용 마커가 저작된
   `Arena_Isys`에서만 스폰된다.
 
 ## 스탯/상수 (인게임)
 
-- config(스폰): Buddy 80HP/4spd, Bomber 45HP/5spd, 보스 2000HP/4spd(홉고블린/GrandBaum 보스 선례).
+- config(스폰): Buddy 80HP/4spd, Bomber 45HP/5spd, 보스 2000HP/4spd(홉고블린/Grandbaum 보스 선례).
   부대 인원 시뮬 원본 유지 — **Buddy 12/12 + Bomber 40/40 = 104기 + 보스(총 105기/방)**. → M3 성능 확인/튜닝 대상.
-- 모델: 전용 Isis/Buddy/Bomber 에셋 추가 전까지 `modelGoblin()`/`ObjectType::Goblin` 재사용(GrandBaum 선례).
+- 모델: 전용 Isys/Buddy/Bomber 에셋 추가 전까지 `modelGoblin()`/`ObjectType::Goblin` 재사용(Grandbaum 선례).
 
 ## 빌드 상태
 
@@ -138,5 +138,5 @@ RoomServer Debug/x64 빌드 통과(오류 0/경고 0).
 5. **루프**: Cooldown 후 Engage 복귀, 재차 80% 게이트로 재발동.
 
 > **주의**: 디버그 fallback이 제거됐으므로 `Arena_Isys` zone과 `WallIsys_*`/`IsysSpawner` 마커가 레벨에
-> 저작돼 있어야 Isis가 스폰된다(미저작 시 인카운터 스킵). 밸런싱(거리/속도 상수, 105기/방 성능,
+> 저작돼 있어야 Isys가 스폰된다(미저작 시 인카운터 스킵). 밸런싱(거리/속도 상수, 105기/방 성능,
 > config 스탯/부대인원)은 후속.

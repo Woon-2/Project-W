@@ -164,10 +164,10 @@
     <ClCompile Include="GoblinMidBossTactic.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
-    <ClCompile Include="GrandBaumMidBossTactic.cpp">
+    <ClCompile Include="GrandbaumMidBossTactic.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
-    <ClCompile Include="IsisMidBossTactic.cpp">
+    <ClCompile Include="IsysMidBossTactic.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
     <ClCompile Include="chargeConfig.cpp" />
@@ -293,10 +293,10 @@
     <ClInclude Include="GoblinMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
-    <ClInclude Include="GrandBaumMidBossTactic.hpp">
+    <ClInclude Include="GrandbaumMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
-    <ClInclude Include="IsisMidBossTactic.hpp">
+    <ClInclude Include="IsysMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
     <ClInclude Include="chargeConfig.hpp" />

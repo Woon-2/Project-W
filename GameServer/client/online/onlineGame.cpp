@@ -4442,7 +4442,7 @@ void Game::processInput(Milliseconds deltaTime) {
 void Game::processInputGame(Milliseconds deltaTime) {
 	const auto prevForward = player_->forward();
 
-	// GrandBaum 넉백/이동잠금: 이동 권한은 클라에 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다.
+	// Grandbaum 넉백/이동잠금: 이동 권한은 클라에 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다.
 	// 넉백 중에는 WASD를 무시하고 서버가 준 방향·속도로 밀려나고, 이어 입력잠금 동안 수평 정지한다.
 	// (둘 다 그 위치가 매 프레임 C_Move로 서버에 반영된다. 서버는 넉백 동안 클램프를 면제한다.)
 	bool movementLocked = false;

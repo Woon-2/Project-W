@@ -4,18 +4,18 @@
 #include "MidBossTacticBase.hpp"
 
 /*-------------------------------
-      GrandBaumMidBossTactic
+      GrandbaumMidBossTactic
 -------------------------------*/
 
-// 중간보스 GrandBaum 전술. 전술은 단 하나(ShieldWall): 보스 HP 66%/33%에서 각 1회 발동.
+// 중간보스 Grandbaum 전술. 전술은 단 하나(ShieldWall): 보스 HP 66%/33%에서 각 1회 발동.
 // 발동 시 슬라임이 보스를 원형으로 감싸(뚫을 수 없는 링) 보스/슬라임이 받는 피해 90% 경감.
 // 파훼는 오직 뱀 — 발동 전 원본 뱀 부대를 전멸시키면 발동 스킵, 발동 후 증원 뱀 웨이브를
 // 전멸시키면 종료. 평소 보스는 표적 우선순위(Snake>Slime>Nearest) melee만 한다.
 // NPCAI sim/MidBossTactics.* 포팅.
-class GrandBaumMidBossTactic : public MidBossTacticBase {
+class GrandbaumMidBossTactic : public MidBossTacticBase {
 public:
-    GrandBaumMidBossTactic() = default;
-    virtual ~GrandBaumMidBossTactic() = default;
+    GrandbaumMidBossTactic() = default;
+    virtual ~GrandbaumMidBossTactic() = default;
 
     virtual void update( Seconds dt, Room& room, PlatoonLeader& leader ) override;
     virtual void onLeaderDead( Room& room, PlatoonLeader& leader ) override;

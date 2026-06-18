@@ -478,7 +478,7 @@ private:
 	uint16                   myId_   = 0;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 
-	// GrandBaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
+	// Grandbaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
 	// 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다(processInputGame).
 	float    knockbackTimer_         = 0.f;   // 남은 강제 이동 시간(s)
 	float    knockbackSpeed_         = 0.f;

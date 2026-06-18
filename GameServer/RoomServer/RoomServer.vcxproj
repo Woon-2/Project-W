@@ -164,8 +164,8 @@
     <ClCompile Include="goblin.cpp" />
     <ClCompile Include="MidBossTacticBase.cpp" />
     <ClCompile Include="GoblinMidBossTactic.cpp" />
-    <ClCompile Include="GrandBaumMidBossTactic.cpp" />
-    <ClCompile Include="IsisMidBossTactic.cpp" />
+    <ClCompile Include="GrandbaumMidBossTactic.cpp" />
+    <ClCompile Include="IsysMidBossTactic.cpp" />
     <ClCompile Include="mushroom.cpp" />
     <ClCompile Include="PlatoonLeader.cpp" />
     <ClCompile Include="snake.cpp" />
@@ -220,8 +220,8 @@
     <ClInclude Include="IMidBossTactic.hpp" />
     <ClInclude Include="MidBossTacticBase.hpp" />
     <ClInclude Include="GoblinMidBossTactic.hpp" />
-    <ClInclude Include="GrandBaumMidBossTactic.hpp" />
-    <ClInclude Include="IsisMidBossTactic.hpp" />
+    <ClInclude Include="GrandbaumMidBossTactic.hpp" />
+    <ClInclude Include="IsysMidBossTactic.hpp" />
     <ClInclude Include="mushroom.hpp" />
     <ClInclude Include="PlatoonLeader.hpp" />
     <ClInclude Include="snake.hpp" />

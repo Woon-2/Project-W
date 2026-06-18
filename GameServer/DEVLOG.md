@@ -1396,3 +1396,32 @@ GrandBaum·Isis는 이미 3-arg 생성자로 명시 주입했지만, 홉고블�
   GrandBaum, `Arena_Isys` → Isis 가 각각 뜨는지 확인.
 - 향후 `TacticalSlime`/`TacticalSnake` 등 per-type NPC 클래스 도입은 이번 작업과 독립적인 후속 가산 작업
   (`TacticalGoblin` 패턴을 템플릿으로 사용).
+
+---
+
+## 2026-06-18 — 보스 코드 철자 정합 (`GrandBaum`→`Grandbaum` / `Isis`→`Isys`) (branch: `server`)
+
+레벨 바이너리는 보스 이름을 `Grandbaum`·`Isys`로 저작하는데, 코드 식별자(클래스·함수·구조체·변수·주석·
+로그 문자열·파일명·문서)는 옛 철자 `GrandBaum`(대문자 B)·`Isis`를 써 와 불일치가 남아 있었다. zone 태그/
+마커 문자열(`Arena_Grandbaum`/`WallGrandbaum_*`/`GrandbaumSpawner`, `Arena_Isys`/`WallIsys_*`/`IsysSpawner`)
+은 앞선 작업(81ad239a)에서 이미 바이너리에 맞췄고, 이번엔 **나머지 코드 철자를 전부 바이너리에 통일**했다.
+기능·런타임 거동 변화는 없는 순수 리네임(와이어/프로토콜에 보스 이름 문자열·enum 없음).
+
+### 범위
+- **GameServer 솔루션만** 변경. NPCAI 프로토타입 시뮬레이터(GameServer.sln 밖, 레벨 바이너리 무관)는 그대로 둠.
+- 이 DEVLOG의 **과거 이력 항목은 당시 명칭 그대로 보존**(이 항목만 신규 추가).
+
+### 변경
+- **파일 리네임(`git mv`)**: `GrandBaumMidBossTactic.{hpp,cpp}`→`Grandbaum...`,
+  `IsisMidBossTactic.{hpp,cpp}`→`Isys...`, `docs/grandBaumTactic.md`→`grandbaumTactic.md`,
+  `docs/isisTactic.md`→`isysTactic.md`.
+- **일괄 치환(대소문자 구분)** `GrandBaum`→`Grandbaum`, `grandBaum`→`grandbaum`, `Isis`→`Isys`를
+  GameServer 내 대상 파일에 적용. 옳은 리터럴(`Grandbaum`/`Isys`)은 대소문자가 달라 미충돌 → 이중 변환 없음.
+  이 치환으로 `#include`·`RoomServer.vcxproj`·`.filters`의 옛 파일명 참조까지 자동 정합.
+- **영향 파일**: RoomServer 전술 4파일, `Room.{cpp,hpp}`, `GameSession.hpp`, `object.hpp`,
+  `MidBossTacticBase.hpp`, `RoomServer.vcxproj(.filters)`, `docs/{grandbaumTactic,isysTactic}.md`,
+  `ServerEngine/protocol.hpp`(주석), `client/online/onlineGame.{cpp,hpp}`(주석).
+
+### 검증
+- `GrandBaum`(대문자 B)·`Isis` 대소문자 구분 잔여 검색 → 대상 파일 0건(과거 DEVLOG 이력 제외).
+- `RoomServer`(Debug|x64) 빌드 통과 — 리네임 파일·인클루드·프로젝트 등록 정합 확인.

@@ -1,5 +1,5 @@
 ﻿#include "rspch.hpp"
-#include "GrandBaumMidBossTactic.hpp"
+#include "GrandbaumMidBossTactic.hpp"
 #include "PlatoonLeader.hpp"
 #include "Room.hpp"
 #include "GameSession.hpp"
@@ -21,10 +21,10 @@ static mu::Vec3 norm3( mu::Vec3 v ) {
 }
 
 /*-------------------------------
-      GrandBaumMidBossTactic
+      GrandbaumMidBossTactic
 -------------------------------*/
 
-void GrandBaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) {
     // 원본 뱀 부대(squad 3) 로스터를 첫 틱에 캡처(부활/위협판정 기준).
     TacticalSquad* originalSnakeSquadForRoster = leader.getSquads().size() >= 4
         ? leader.getSquads()[ 3 ]
@@ -170,13 +170,13 @@ void GrandBaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& lead
     }
 }
 
-void GrandBaumMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
     applyShieldWallProtection( room, leader, false );
     cleanupSnakeWave( room );
     MidBossTacticBase::onLeaderDead( room, leader );
 }
 
-void GrandBaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
     phase_ = next;
 
     if ( next == Phase::Engage ) {
@@ -221,7 +221,7 @@ void GrandBaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
     }
 }
 
-void GrandBaumMidBossTactic::resetBossMelee( PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::resetBossMelee( PlatoonLeader& leader ) {
     bossMeleeState_ = BossMeleeState::AcquireTarget;
     bossMeleeTimer_ = 0s;
     bossMeleeTargetLockTimer_ = 0s;
@@ -233,7 +233,7 @@ void GrandBaumMidBossTactic::resetBossMelee( PlatoonLeader& leader ) {
     leader.transitionTacticalState( TacticalNpcState::Idle );
 }
 
-void GrandBaumMidBossTactic::updateBossMelee( Seconds dt, Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::updateBossMelee( Seconds dt, Room& room, PlatoonLeader& leader ) {
     if ( bossMeleeTargetLockTimer_ > 0s ) {
         bossMeleeTargetLockTimer_ = std::max( Seconds{ 0.f }, bossMeleeTargetLockTimer_ - dt );
     }
@@ -401,8 +401,8 @@ void GrandBaumMidBossTactic::updateBossMelee( Seconds dt, Room& room, PlatoonLea
 }
 
 // 보스 표적 우선순위: (원본 뱀 보존 중에 한해) SnakeThreat > SlimeThreat, 그 외엔 항상 Nearest.
-GrandBaumMidBossTactic::BossTargetChoice
-GrandBaumMidBossTactic::selectBossMeleeTarget( Room& room, const PlatoonLeader& leader ) const {
+GrandbaumMidBossTactic::BossTargetChoice
+GrandbaumMidBossTactic::selectBossMeleeTarget( Room& room, const PlatoonLeader& leader ) const {
     if ( shouldPreserveOriginalSnakes() ) {
         BossTargetChoice snakeThreat = selectOriginalSnakeThreatTarget( room, leader );
         if ( snakeThreat.targetId != 0 ) {
@@ -417,8 +417,8 @@ GrandBaumMidBossTactic::selectBossMeleeTarget( Room& room, const PlatoonLeader& 
 }
 
 // 살아있는 원본 뱀 중 하나라도 SNAKE_STOP_EVADE_RANGE 내에 둔 플레이어(자원을 위협하는 자) 중 최근접.
-GrandBaumMidBossTactic::BossTargetChoice
-GrandBaumMidBossTactic::selectOriginalSnakeThreatTarget( Room& room, const PlatoonLeader& leader ) const {
+GrandbaumMidBossTactic::BossTargetChoice
+GrandbaumMidBossTactic::selectOriginalSnakeThreatTarget( Room& room, const PlatoonLeader& leader ) const {
     uint32 bestPlayerId = 0;
     float bestDistSq = -1.f;
     float rangeSq = SNAKE_STOP_EVADE_RANGE * SNAKE_STOP_EVADE_RANGE;
@@ -447,8 +447,8 @@ GrandBaumMidBossTactic::selectOriginalSnakeThreatTarget( Room& room, const Plato
     return { bestPlayerId, bestPlayerId != 0 ? BossTargetPriority::SnakeThreat : BossTargetPriority::None };
 }
 
-GrandBaumMidBossTactic::BossTargetChoice
-GrandBaumMidBossTactic::selectSlimeThreatTarget( Room& room, const PlatoonLeader& leader ) const {
+GrandbaumMidBossTactic::BossTargetChoice
+GrandbaumMidBossTactic::selectSlimeThreatTarget( Room& room, const PlatoonLeader& leader ) const {
     int32 liveCount = 0;
     mu::Vec3 center = calcLiveSlimeCentroid( room, leader, liveCount );
     if ( liveCount <= 0 ) {
@@ -457,7 +457,7 @@ GrandBaumMidBossTactic::selectSlimeThreatTarget( Room& room, const PlatoonLeader
     return selectNearestPlayerNear( room, center, BOSS_SLIME_THREAT_RANGE, BossTargetPriority::SlimeThreat );
 }
 
-std::vector<uint32> GrandBaumMidBossTactic::getOriginalSnakeCandidateIds( const PlatoonLeader& leader ) const {
+std::vector<uint32> GrandbaumMidBossTactic::getOriginalSnakeCandidateIds( const PlatoonLeader& leader ) const {
     if ( !originalSnakeRoster_.empty() ) {
         return originalSnakeRoster_;
     }
@@ -467,8 +467,8 @@ std::vector<uint32> GrandBaumMidBossTactic::getOriginalSnakeCandidateIds( const 
     return {};
 }
 
-GrandBaumMidBossTactic::BossTargetChoice MU_CALLCONV
-GrandBaumMidBossTactic::selectNearestPlayerTarget( Room& room, mu::Vec3 center ) const {
+GrandbaumMidBossTactic::BossTargetChoice MU_CALLCONV
+GrandbaumMidBossTactic::selectNearestPlayerTarget( Room& room, mu::Vec3 center ) const {
     uint32 bestId = 0;
     float bestDistSq = -1.f;
 
@@ -486,8 +486,8 @@ GrandBaumMidBossTactic::selectNearestPlayerTarget( Room& room, mu::Vec3 center )
     return { bestId, bestId != 0 ? BossTargetPriority::Nearest : BossTargetPriority::None };
 }
 
-GrandBaumMidBossTactic::BossTargetChoice MU_CALLCONV
-GrandBaumMidBossTactic::selectNearestPlayerNear( Room& room, mu::Vec3 center, float radius, BossTargetPriority priority ) const {
+GrandbaumMidBossTactic::BossTargetChoice MU_CALLCONV
+GrandbaumMidBossTactic::selectNearestPlayerNear( Room& room, mu::Vec3 center, float radius, BossTargetPriority priority ) const {
     uint32 bestId = 0;
     float bestDistSq = -1.f;
     float radiusSq = radius * radius;
@@ -509,7 +509,7 @@ GrandBaumMidBossTactic::selectNearestPlayerNear( Room& room, mu::Vec3 center, fl
     return { bestId, bestId != 0 ? priority : BossTargetPriority::None };
 }
 
-bool GrandBaumMidBossTactic::isCurrentBossMeleeTargetValid( Room& room, const PlatoonLeader& leader ) const {
+bool GrandbaumMidBossTactic::isCurrentBossMeleeTargetValid( Room& room, const PlatoonLeader& leader ) const {
     if ( bossMeleeTargetId_ == 0 ) {
         return false;
     }
@@ -552,11 +552,11 @@ bool GrandBaumMidBossTactic::isCurrentBossMeleeTargetValid( Room& room, const Pl
     return false;
 }
 
-bool GrandBaumMidBossTactic::isResourceThreatPriority( BossTargetPriority priority ) const {
+bool GrandbaumMidBossTactic::isResourceThreatPriority( BossTargetPriority priority ) const {
     return priority == BossTargetPriority::SnakeThreat || priority == BossTargetPriority::SlimeThreat;
 }
 
-mu::Vec3 MU_CALLCONV GrandBaumMidBossTactic::calcLiveOriginalSnakeCentroid(
+mu::Vec3 MU_CALLCONV GrandbaumMidBossTactic::calcLiveOriginalSnakeCentroid(
     Room& room, const PlatoonLeader& leader, int32& outLiveCount ) const {
     mu::Vec3 sum{};
     outLiveCount = 0;
@@ -586,7 +586,7 @@ mu::Vec3 MU_CALLCONV GrandBaumMidBossTactic::calcLiveOriginalSnakeCentroid(
     return leader.pos();
 }
 
-mu::Vec3 MU_CALLCONV GrandBaumMidBossTactic::calcLiveSlimeCentroid(
+mu::Vec3 MU_CALLCONV GrandbaumMidBossTactic::calcLiveSlimeCentroid(
     Room& room, const PlatoonLeader& leader, int32& outLiveCount ) const {
     mu::Vec3 sum{};
     outLiveCount = 0;
@@ -613,7 +613,7 @@ mu::Vec3 MU_CALLCONV GrandBaumMidBossTactic::calcLiveSlimeCentroid(
 }
 
 // 보스 이동은 물리 motor(setDesiredVel)에 위임 — 시뮬의 setPosition 직접 적분 대체(dt 불필요).
-void MU_CALLCONV GrandBaumMidBossTactic::moveBossToward(
+void MU_CALLCONV GrandbaumMidBossTactic::moveBossToward(
     PlatoonLeader& leader, mu::Vec3 targetPos, float speedMult ) const {
     mu::Vec3 toTarget = targetPos - leader.pos();
     float dist = toTarget.len();
@@ -630,7 +630,7 @@ void MU_CALLCONV GrandBaumMidBossTactic::moveBossToward(
 
 // 슬라임 부대(0,1,2)만 안정화 교전(균형배정 + 생존중 고정). 원본 뱀(3)은 updateSnakeEvasion이,
 // 증원 웨이브는 DistributedEngage가 별도 처리한다. issueStableEngage는 MidBossTacticBase 공용.
-void GrandBaumMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader ) {
     const auto& squads = leader.getSquads();
     std::vector<TacticalSquad*> slimeSquads;
     for ( size_t i = 0; i < squads.size() && i < 3; ++i ) {
@@ -648,7 +648,7 @@ void GrandBaumMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader ) {
 
 // 원본 뱀 개개를 personal HoldSlot으로 산개/회피시킨다. 위협 가중 중심에서 도주(Evasion)하거나
 // wander 중심 주변을 배회(Wander). 플레이어 감지/이탈 거리로 회피 상태를 히스테리시스 전환.
-void GrandBaumMidBossTactic::updateSnakeEvasion( Seconds dt, Room& room, PlatoonLeader& /*leader*/, TacticalSquad* snakeSquad ) {
+void GrandbaumMidBossTactic::updateSnakeEvasion( Seconds dt, Room& room, PlatoonLeader& /*leader*/, TacticalSquad* snakeSquad ) {
     if ( !snakeSquad || snakeSquad->isEmpty() ) {
         return;
     }
@@ -783,14 +783,14 @@ void GrandBaumMidBossTactic::updateSnakeEvasion( Seconds dt, Room& room, Platoon
     }
 }
 
-mu::Vec3 MU_CALLCONV GrandBaumMidBossTactic::pickSnakePersonalWanderTarget( mu::Vec3 center ) const {
+mu::Vec3 MU_CALLCONV GrandbaumMidBossTactic::pickSnakePersonalWanderTarget( mu::Vec3 center ) const {
     float angle = static_cast<float>( std::rand() ) / static_cast<float>( RAND_MAX ) * 2.f * 3.14159265f;
     float dist  = SNAKE_DISPERSE_WANDER_RADIUS * ( 0.3f + 0.7f * static_cast<float>( std::rand() ) / static_cast<float>( RAND_MAX ) );
     return center + mu::Vec3( std::cos( angle ) * dist, 0.f, std::sin( angle ) * dist );
 }
 
 // 슬라임 부대를 보스 중심 원형 링(RingGuard)으로 배치. 각 부대는 생존 비율만큼 원호 섹터를 나눠 가짐.
-void GrandBaumMidBossTactic::issueShieldWall( Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::issueShieldWall( Room& room, PlatoonLeader& leader ) {
     const auto& squads = leader.getSquads();
     uint32 targetId = selectNearestPlayerId( room, leader.pos() );
 
@@ -860,7 +860,7 @@ void GrandBaumMidBossTactic::issueShieldWall( Room& room, PlatoonLeader& leader 
 }
 
 // 보스 + 슬라임(0,1,2)에 받는 피해 배율을 적용/해제. 활성 시 슬라임을 하드 블로커로 등록(링 통과 차단).
-void GrandBaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeader& leader, bool enabled ) {
+void GrandbaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeader& leader, bool enabled ) {
     float multiplier = enabled ? SHIELDWALL_DAMAGE_MULT : 1.f;
     leader.setDamageTakenMultiplier( multiplier );
 
@@ -891,7 +891,7 @@ void GrandBaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeade
     }
 }
 
-void GrandBaumMidBossTactic::captureOriginalSnakeRoster( Room& room, TacticalSquad* originalSnakeSquad ) {
+void GrandbaumMidBossTactic::captureOriginalSnakeRoster( Room& room, TacticalSquad* originalSnakeSquad ) {
     if ( !originalSnakeRoster_.empty() || !originalSnakeSquad ) {
         return;
     }
@@ -906,11 +906,11 @@ void GrandBaumMidBossTactic::captureOriginalSnakeRoster( Room& room, TacticalSqu
     }
 }
 
-bool GrandBaumMidBossTactic::shouldPreserveOriginalSnakes() const {
+bool GrandbaumMidBossTactic::shouldPreserveOriginalSnakes() const {
     return shieldWallTriggerStage_ < 2;
 }
 
-int32 GrandBaumMidBossTactic::countLiveMembers( Room& room, TacticalSquad* squad ) const {
+int32 GrandbaumMidBossTactic::countLiveMembers( Room& room, TacticalSquad* squad ) const {
     if ( !squad ) {
         return 0;
     }
@@ -924,7 +924,7 @@ int32 GrandBaumMidBossTactic::countLiveMembers( Room& room, TacticalSquad* squad
     return count;
 }
 
-int32 GrandBaumMidBossTactic::countLiveSlimeMembers( Room& room, const PlatoonLeader& leader ) const {
+int32 GrandbaumMidBossTactic::countLiveSlimeMembers( Room& room, const PlatoonLeader& leader ) const {
     int32 count = 0;
     const auto& squads = leader.getSquads();
     const size_t slimeIndices[] = { 0, 1, 2 };
@@ -937,12 +937,12 @@ int32 GrandBaumMidBossTactic::countLiveSlimeMembers( Room& room, const PlatoonLe
     return count;
 }
 
-bool GrandBaumMidBossTactic::canFormShieldWall( int32 liveSlimeCount ) const {
+bool GrandbaumMidBossTactic::canFormShieldWall( int32 liveSlimeCount ) const {
     return liveSlimeCount >= MIN_SHIELD_WALL_SLIME_COUNT;
 }
 
 // 슬라임 부대(0,1,2) 중 살아있는 멤버가 있는 부대가 모두 슬롯 도착이면 형성 완료. 한 부대라도 미도착이면 false.
-bool GrandBaumMidBossTactic::isShieldWallFormed( Room& room, PlatoonLeader& leader ) const {
+bool GrandbaumMidBossTactic::isShieldWallFormed( Room& room, PlatoonLeader& leader ) const {
     const auto& squads = leader.getSquads();
     const size_t slimeIndices[] = { 0, 1, 2 };
     bool anyLiveSquad = false;
@@ -962,13 +962,13 @@ bool GrandBaumMidBossTactic::isShieldWallFormed( Room& room, PlatoonLeader& lead
     return anyLiveSquad;
 }
 
-float GrandBaumMidBossTactic::calcShieldWallRadius( int32 liveSlimeCount ) const {
+float GrandbaumMidBossTactic::calcShieldWallRadius( int32 liveSlimeCount ) const {
     constexpr float TWO_PI = 2.f * 3.14159265f;
     float radius = static_cast<float>( liveSlimeCount ) * SLIME_RING_SLOT_SPACING / TWO_PI;
     return std::clamp( radius, MIN_SHIELD_RING_RADIUS, MAX_SHIELD_RING_RADIUS );
 }
 
-int32 GrandBaumMidBossTactic::calcSnakeWaveSpawnCount( int32 liveOriginalSnakeCount ) const {
+int32 GrandbaumMidBossTactic::calcSnakeWaveSpawnCount( int32 liveOriginalSnakeCount ) const {
     if ( liveOriginalSnakeCount <= 0 ) {
         return 0;
     }
@@ -976,7 +976,7 @@ int32 GrandBaumMidBossTactic::calcSnakeWaveSpawnCount( int32 liveOriginalSnakeCo
     return ( spawnCount / 4 ) * 4;
 }
 
-TacticalNpcConfig GrandBaumMidBossTactic::findSnakeConfig( Room& room, TacticalSquad* originalSnakeSquad ) const {
+TacticalNpcConfig GrandbaumMidBossTactic::findSnakeConfig( Room& room, TacticalSquad* originalSnakeSquad ) const {
     if ( originalSnakeSquad ) {
         for ( uint32 memberId : originalSnakeSquad->getMembers() ) {
             TacticalNpc* npc = room.findTacticalNpcById( memberId );
@@ -998,7 +998,7 @@ TacticalNpcConfig GrandBaumMidBossTactic::findSnakeConfig( Room& room, TacticalS
     return cfg;
 }
 
-bool GrandBaumMidBossTactic::isSnakeWaveAnnihilated( Room& room ) const {
+bool GrandbaumMidBossTactic::isSnakeWaveAnnihilated( Room& room ) const {
     if ( !snakeWaveSpawned_ ) {
         return false;
     }
@@ -1018,7 +1018,7 @@ bool GrandBaumMidBossTactic::isSnakeWaveAnnihilated( Room& room ) const {
 
 // RetreatingOriginal: 원본 뱀이 외곽 슬롯 도착(또는 타임아웃) → 증원 웨이브 소환 → WaveActive.
 // WaveActive: 증원 웨이브가 전멸하면 ShieldWall 종료(보스 다시 취약).
-void GrandBaumMidBossTactic::updateSnakeAmbush( Seconds dt, Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
+void GrandbaumMidBossTactic::updateSnakeAmbush( Seconds dt, Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
     if ( snakeAmbushStage_ == SnakeAmbushStage::RetreatingOriginal ) {
         snakeRetreatTimer_ += dt;
 
@@ -1037,7 +1037,7 @@ void GrandBaumMidBossTactic::updateSnakeAmbush( Seconds dt, Room& room, PlatoonL
     }
 }
 
-void GrandBaumMidBossTactic::issueOriginalSnakeRetreat( Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
+void GrandbaumMidBossTactic::issueOriginalSnakeRetreat( Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
     if ( !originalSnakeSquad || originalSnakeSquad->isEmpty() ) {
         return;
     }
@@ -1073,7 +1073,7 @@ void GrandBaumMidBossTactic::issueOriginalSnakeRetreat( Room& room, PlatoonLeade
 }
 
 // 증원 뱀 웨이브(원본수×10, 최대 60)를 링 외곽 원주에 동적 소환하고 클라에 통지.
-void GrandBaumMidBossTactic::spawnSnakeWave( Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
+void GrandbaumMidBossTactic::spawnSnakeWave( Room& room, PlatoonLeader& leader, TacticalSquad* originalSnakeSquad ) {
     int32 spawnCount = calcSnakeWaveSpawnCount( originalSnakeCountAtShieldWall_ );
     if ( spawnCount <= 0 ) {
         return;
@@ -1105,7 +1105,7 @@ void GrandBaumMidBossTactic::spawnSnakeWave( Room& room, PlatoonLeader& leader, 
     room.broadcastTacticalNpcSpawn( snakeWaveNpcIds_ );
 }
 
-void GrandBaumMidBossTactic::issueSnakeWaveEngage( Room& room, TacticalSquad* waveSquad ) {
+void GrandbaumMidBossTactic::issueSnakeWaveEngage( Room& room, TacticalSquad* waveSquad ) {
     if ( !waveSquad || waveSquad->isEmpty() ) {
         return;
     }
@@ -1131,7 +1131,7 @@ void GrandBaumMidBossTactic::issueSnakeWaveEngage( Room& room, TacticalSquad* wa
     waveSquad->receiveOrder( ord );
 }
 
-void GrandBaumMidBossTactic::finishShieldWall( Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::finishShieldWall( Room& room, PlatoonLeader& leader ) {
     applyShieldWallProtection( room, leader, false );
     cleanupSnakeWave( room );
     reviveOriginalSnakeSquad( room, leader );
@@ -1141,7 +1141,7 @@ void GrandBaumMidBossTactic::finishShieldWall( Room& room, PlatoonLeader& leader
     enterPhase( Phase::Cooldown, leader );
 }
 
-void GrandBaumMidBossTactic::cleanupSnakeWave( Room& room ) {
+void GrandbaumMidBossTactic::cleanupSnakeWave( Room& room ) {
     // 보스 사망/스킵 등으로 아직 살아있는 웨이브가 있으면 클라에 사망 통지 후 제거(디스폰 패킷 대체).
     for ( uint32 npcId : snakeWaveNpcIds_ ) {
         TacticalNpc* npc = room.findTacticalNpcById( npcId );
@@ -1166,7 +1166,7 @@ void GrandBaumMidBossTactic::cleanupSnakeWave( Room& room ) {
 // 후퇴 완료한 원본 뱀을 전장에서 퇴장(숨김)시킨다. 서버 상태는 사망(hp0+물리제거)으로 두되 클라엔
 // 시체 없이 즉시 숨김(S_NpcHide). 살아있던 뱀만 숨기고(이미 죽은 뱀은 시체로 유지), 복귀는
 // finishShieldWall→reviveOriginalSnakeSquad가 hp<=0 분기로 일괄 부활시킨다.
-void GrandBaumMidBossTactic::despawnOriginalSnakeSquad( Room& room ) {
+void GrandbaumMidBossTactic::despawnOriginalSnakeSquad( Room& room ) {
     std::vector<uint32> hiddenIds;
     for ( uint32 memberId : originalSnakeRoster_ ) {
         TacticalNpc* npc = room.findTacticalNpcById( memberId );
@@ -1182,7 +1182,7 @@ void GrandBaumMidBossTactic::despawnOriginalSnakeSquad( Room& room ) {
 }
 
 // 후퇴했던(또는 죽었던) 원본 뱀을 외곽에서 복귀시켜 squad에 재등록하고 evasion을 재개한다.
-void GrandBaumMidBossTactic::reviveOriginalSnakeSquad( Room& room, PlatoonLeader& leader ) {
+void GrandbaumMidBossTactic::reviveOriginalSnakeSquad( Room& room, PlatoonLeader& leader ) {
     if ( originalSnakeRoster_.empty() || leader.getSquads().size() < 4 ) {
         return;
     }

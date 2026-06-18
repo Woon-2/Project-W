@@ -1,5 +1,5 @@
 ﻿#include "rspch.hpp"
-#include "IsisMidBossTactic.hpp"
+#include "IsysMidBossTactic.hpp"
 #include "PlatoonLeader.hpp"
 #include "Room.hpp"
 #include "GameSession.hpp"
@@ -26,10 +26,10 @@ static float lenXZ( mu::Vec3 v ) {
 }
 
 /*-------------------------------
-      IsisMidBossTactic
+      IsysMidBossTactic
 -------------------------------*/
 
-void IsisMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) {
     captureInitialSquadSizes( leader );
     leader.removeDeadMembersFromSquads();
     updateBossDamageReaction( dt, leader );
@@ -197,17 +197,17 @@ void IsisMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
     updateBossPersonalCombat( dt, room, leader );
 }
 
-void IsisMidBossTactic::enterCooldown( PlatoonLeader& leader ) {
+void IsysMidBossTactic::enterCooldown( PlatoonLeader& leader ) {
     cooldownTimer_ = rollCooldown();
     enterPhase( Phase::Cooldown, leader );
 }
 
-void IsisMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
     // (M2: 진행 중 쐐기 정리 추가 예정)
     MidBossTacticBase::onLeaderDead( room, leader );
 }
 
-void IsisMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
+void IsysMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
     phase_ = next;
     phaseTimer_ = 0s;
     engageOrderIssued_ = false;
@@ -246,7 +246,7 @@ void IsisMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
 }
 
 // 첫 틱(부대 배선 완료 후)에 각 스쿼드 초기 인원을 캡처 — unlock(80% 손실) 판정 기준.
-void IsisMidBossTactic::captureInitialSquadSizes( const PlatoonLeader& leader ) {
+void IsysMidBossTactic::captureInitialSquadSizes( const PlatoonLeader& leader ) {
     if ( initialSizesSet_ ) {
         return;
     }
@@ -262,7 +262,7 @@ void IsisMidBossTactic::captureInitialSquadSizes( const PlatoonLeader& leader ) 
     initialSizesSet_ = true;
 }
 
-bool IsisMidBossTactic::checkUnlockCondition( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::checkUnlockCondition( const PlatoonLeader& leader ) const {
     const auto& squads = leader.getSquads();
     for ( size_t i = 0; i < squads.size(); ++i ) {
         int32 initial = ( i < initialSquadSizes_.size() ) ? initialSquadSizes_[ i ] : 0;
@@ -276,7 +276,7 @@ bool IsisMidBossTactic::checkUnlockCondition( const PlatoonLeader& leader ) cons
 }
 
 // 4스쿼드 전부 균형 교전(squad별 sticky 배정). issueStableEngage는 MidBossTacticBase 공용.
-void IsisMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader, bool resetAssignments ) {
+void IsysMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader, bool resetAssignments ) {
     std::vector<TacticalSquad*> liveSquads = collectLiveSquads( leader );
     if ( liveSquads.empty() ) {
         return;
@@ -284,7 +284,7 @@ void IsisMidBossTactic::issueEngage( Room& room, PlatoonLeader& leader, bool res
     issueStableEngage( room, liveSquads, resetAssignments );
 }
 
-void IsisMidBossTactic::updateBossDamageReaction( Seconds dt, const PlatoonLeader& leader ) {
+void IsysMidBossTactic::updateBossDamageReaction( Seconds dt, const PlatoonLeader& leader ) {
     if ( !bossHpTracked_ ) {
         bossHpTracked_ = true;
         previousBossHp_ = static_cast<float>( leader.hp() );
@@ -305,7 +305,7 @@ void IsisMidBossTactic::updateBossDamageReaction( Seconds dt, const PlatoonLeade
 
 // 보스 근접 FSM. Goblin updateBossPersonalCombat 미러(score 기반 타깃 + switch margin)에
 // 피해 반응 Backstep/Retreat 추가. 협공 phase 동안엔 phase 가드로 정지(보스는 2차 쐐기에 직접 합류).
-bool IsisMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader ) {
+bool IsysMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader ) {
     if ( phase_ != Phase::Engage && phase_ != Phase::Cooldown ) {
         return false;
     }
@@ -451,7 +451,7 @@ bool IsisMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Platoo
     return true;
 }
 
-void IsisMidBossTactic::resetBossPersonalCombat( PlatoonLeader& leader ) {
+void IsysMidBossTactic::resetBossPersonalCombat( PlatoonLeader& leader ) {
     bossPersonalState_ = BossPersonalState::EvaluateTarget;
     bossPersonalTimer_ = 0s;
     bossTargetEvalTimer_ = 0s;
@@ -461,7 +461,7 @@ void IsisMidBossTactic::resetBossPersonalCombat( PlatoonLeader& leader ) {
     leader.transitionTacticalState( TacticalNpcState::Idle );
 }
 
-void IsisMidBossTactic::beginBossBackstep( Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::beginBossBackstep( Room& room, PlatoonLeader& leader ) {
     if ( bossPersonalTargetId_ == 0 ) {
         bossPersonalTargetId_ = selectBossPersonalTarget( room, leader );
     }
@@ -484,13 +484,13 @@ void IsisMidBossTactic::beginBossBackstep( Room& room, PlatoonLeader& leader ) {
     leader.transitionTacticalState( TacticalNpcState::Chase );
 }
 
-uint32 IsisMidBossTactic::selectBossPersonalTarget( Room& room, const PlatoonLeader& leader ) const {
+uint32 IsysMidBossTactic::selectBossPersonalTarget( Room& room, const PlatoonLeader& leader ) const {
     return selectBossPersonalTargetScore( room, leader ).targetId;
 }
 
 // 군집 점수(인원 ×1000 − 보스 거리) 최대 플레이어 — 가장 크고 가까운 군집의 대표를 노린다.
-IsisMidBossTactic::BossTargetScore
-IsisMidBossTactic::selectBossPersonalTargetScore( Room& room, const PlatoonLeader& leader ) const {
+IsysMidBossTactic::BossTargetScore
+IsysMidBossTactic::selectBossPersonalTargetScore( Room& room, const PlatoonLeader& leader ) const {
     std::vector<PlayerCluster> clusters = MidBossTacticBase::buildPlayerClusters( room, CLUSTER_RADIUS );
     mu::Vec3 leaderPos = leader.pos();
     BossTargetScore best{};
@@ -518,7 +518,7 @@ IsisMidBossTactic::selectBossPersonalTargetScore( Room& room, const PlatoonLeade
     return best;
 }
 
-bool IsisMidBossTactic::calcBossPersonalTargetScore(
+bool IsysMidBossTactic::calcBossPersonalTargetScore(
     Room& room, const PlatoonLeader& leader, uint32 targetId, float& outScore ) const {
     if ( targetId == 0 ) {
         return false;
@@ -542,7 +542,7 @@ bool IsisMidBossTactic::calcBossPersonalTargetScore(
     return false;
 }
 
-GameSession* IsisMidBossTactic::resolveBossPersonalTarget( Room& room, uint32 targetId ) const {
+GameSession* IsysMidBossTactic::resolveBossPersonalTarget( Room& room, uint32 targetId ) const {
     if ( targetId == 0 ) {
         return nullptr;
     }
@@ -550,7 +550,7 @@ GameSession* IsisMidBossTactic::resolveBossPersonalTarget( Room& room, uint32 ta
 }
 
 // 보스 이동은 물리 motor(setDesiredVel)에 위임 — 시뮬의 setPosition 직접 적분 대체(dt 불필요).
-void MU_CALLCONV IsisMidBossTactic::moveBossToward(
+void MU_CALLCONV IsysMidBossTactic::moveBossToward(
     PlatoonLeader& leader, mu::Vec3 targetPos, float speedMult ) const {
     mu::Vec3 toTarget = targetPos - leader.pos();
     float dist = toTarget.len();
@@ -566,7 +566,7 @@ void MU_CALLCONV IsisMidBossTactic::moveBossToward(
 }
 
 /*-------------------------------
-   IsisMidBossTactic — 협공 사이클
+   IsysMidBossTactic — 협공 사이클
 -------------------------------*/
 
 static std::mt19937& isisRng() {
@@ -574,12 +574,12 @@ static std::mt19937& isisRng() {
     return rng;
 }
 
-Seconds IsisMidBossTactic::rollCooldown() {
+Seconds IsysMidBossTactic::rollCooldown() {
     std::uniform_real_distribution<float> dist( MIN_COOLDOWN, MAX_COOLDOWN );
     return Seconds{ dist( isisRng() ) };
 }
 
-bool IsisMidBossTactic::hasLiveBomberSquad( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::hasLiveBomberSquad( const PlatoonLeader& leader ) const {
     const auto& squads = leader.getSquads();
     for ( size_t i = 2; i < 4 && i < squads.size(); ++i ) {
         if ( squads[ i ] && !squads[ i ]->isEmpty() ) {
@@ -589,7 +589,7 @@ bool IsisMidBossTactic::hasLiveBomberSquad( const PlatoonLeader& leader ) const 
     return false;
 }
 
-bool IsisMidBossTactic::hasLiveBuddySquad( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::hasLiveBuddySquad( const PlatoonLeader& leader ) const {
     const auto& squads = leader.getSquads();
     for ( size_t i = 0; i < 2 && i < squads.size(); ++i ) {
         if ( squads[ i ] && !squads[ i ]->isEmpty() ) {
@@ -599,7 +599,7 @@ bool IsisMidBossTactic::hasLiveBuddySquad( const PlatoonLeader& leader ) const {
     return false;
 }
 
-bool IsisMidBossTactic::allLiveSquadsAtSlots( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::allLiveSquadsAtSlots( const PlatoonLeader& leader ) const {
     bool any = false;
     for ( TacticalSquad* sq : leader.getSquads() ) {
         if ( !sq || sq->isEmpty() ) {
@@ -613,7 +613,7 @@ bool IsisMidBossTactic::allLiveSquadsAtSlots( const PlatoonLeader& leader ) cons
     return any;
 }
 
-bool IsisMidBossTactic::activeStrikeSquadsAtSlots() const {
+bool IsysMidBossTactic::activeStrikeSquadsAtSlots() const {
     if ( activeStrikeSquads_.empty() ) {
         return false;
     }
@@ -625,7 +625,7 @@ bool IsisMidBossTactic::activeStrikeSquadsAtSlots() const {
     return true;
 }
 
-bool IsisMidBossTactic::activeStrikeTasksEngaged() const {
+bool IsysMidBossTactic::activeStrikeTasksEngaged() const {
     if ( activeStrikeTasks_.empty() ) {
         return false;
     }
@@ -639,8 +639,8 @@ bool IsisMidBossTactic::activeStrikeTasksEngaged() const {
 
 // 표적 군집 = buildPlayerClusters 위에 점수(인원 ×1000 − 보스거리) 부여. 2차 쐐기(applyRepeatPenalty)는
 // 1차 타깃과 겹치는 군집에 페널티를 줘 다른 군집으로 분산시킨다. 상위 2개 군집 반환.
-std::vector<IsisMidBossTactic::StrikeCluster>
-IsisMidBossTactic::selectStrikeClusters( Room& room, const PlatoonLeader& leader, bool applyRepeatPenalty ) const {
+std::vector<IsysMidBossTactic::StrikeCluster>
+IsysMidBossTactic::selectStrikeClusters( Room& room, const PlatoonLeader& leader, bool applyRepeatPenalty ) const {
     std::vector<PlayerCluster> baseClusters = MidBossTacticBase::buildPlayerClusters( room, CLUSTER_RADIUS );
     std::vector<StrikeCluster> result;
     result.reserve( baseClusters.size() );
@@ -692,7 +692,7 @@ IsisMidBossTactic::selectStrikeClusters( Room& room, const PlatoonLeader& leader
 }
 
 // 가장 크고 가까운 군집의 대표 플레이어(또는 최근접). 후퇴/대형의 facing 기준.
-GameSession* IsisMidBossTactic::selectPrimaryTarget( Room& room, const PlatoonLeader& leader ) const {
+GameSession* IsysMidBossTactic::selectPrimaryTarget( Room& room, const PlatoonLeader& leader ) const {
     std::vector<StrikeCluster> clusters = selectStrikeClusters( room, leader, false );
     if ( !clusters.empty() ) {
         GameSession* s = room.findLivingSessionByPlayerId(
@@ -704,7 +704,7 @@ GameSession* IsisMidBossTactic::selectPrimaryTarget( Room& room, const PlatoonLe
     return selectNearestPlayer( room, leader.pos() );
 }
 
-void IsisMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader ) {
     GameSession* primary = selectPrimaryTarget( room, leader );
     if ( !primary ) {
         issueEngage( room, leader, true );
@@ -764,7 +764,7 @@ void IsisMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader
         BOMBER_REGROUP_SPACING_SCALE, BOMBER_REGROUP_COLUMN_SCALE, BOMBER_REGROUP_COLUMN_COUNT );
 }
 
-void IsisMidBossTactic::issueRegroupBombers( Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::issueRegroupBombers( Room& room, PlatoonLeader& leader ) {
     std::vector<StrikeCluster> clusters = selectStrikeClusters( room, leader );
     if ( clusters.empty() ) {
         issueEngage( room, leader, true );
@@ -791,7 +791,7 @@ void IsisMidBossTactic::issueRegroupBombers( Room& room, PlatoonLeader& leader )
     }
 }
 
-void IsisMidBossTactic::issueRegroupBuddies( Room& room, PlatoonLeader& leader ) {
+void IsysMidBossTactic::issueRegroupBuddies( Room& room, PlatoonLeader& leader ) {
     if ( secondStrikePrepIssued_ ) {
         return;
     }
@@ -821,9 +821,9 @@ void IsisMidBossTactic::issueRegroupBuddies( Room& room, PlatoonLeader& leader )
     }
 }
 
-// Isis 쐐기는 Goblin과 동일한 공용 WedgeCharge 실행 경로 재사용: TacticalSquad가 쐐기 준비/돌진,
+// Isys 쐐기는 Goblin과 동일한 공용 WedgeCharge 실행 경로 재사용: TacticalSquad가 쐐기 준비/돌진,
 // TacticalNpc가 ChargeThrough로 공용 impact/damage 규칙 적용. 보스 합류 스쿼드는 apex 예약 + 피해 ×1.5.
-void IsisMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
+void IsysMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
                                           bool useBuddySquads, bool applyRepeatPenalty, bool rememberTargets ) {
     std::vector<StrikeCluster> clusters =
         ( useBuddySquads && !secondStrikeClusters_.empty() )
@@ -901,7 +901,7 @@ void IsisMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
     }
 }
 
-void IsisMidBossTactic::issueBomberRegroup( Room& room, TacticalSquad* squad,
+void IsysMidBossTactic::issueBomberRegroup( Room& room, TacticalSquad* squad,
                                             const StrikeCluster& strikeCluster, float sideSign ) {
     if ( !squad || squad->isEmpty() ) {
         return;
@@ -933,7 +933,7 @@ void IsisMidBossTactic::issueBomberRegroup( Room& room, TacticalSquad* squad,
     squad->receiveOrder( ord );
 }
 
-void MU_CALLCONV IsisMidBossTactic::issueBuddyColumn( Room& /*room*/, TacticalSquad* squad,
+void MU_CALLCONV IsysMidBossTactic::issueBuddyColumn( Room& /*room*/, TacticalSquad* squad,
                                                       const StrikeCluster& strikeCluster, float sideSign ) {
     if ( !squad || squad->isEmpty() ) {
         return;
@@ -960,7 +960,7 @@ void MU_CALLCONV IsisMidBossTactic::issueBuddyColumn( Room& /*room*/, TacticalSq
     squad->receiveOrder( ord );
 }
 
-uint32 IsisMidBossTactic::selectStrikeEngageTarget( Room& room, const PlatoonLeader& leader, const StrikeTask& task ) const {
+uint32 IsysMidBossTactic::selectStrikeEngageTarget( Room& room, const PlatoonLeader& leader, const StrikeTask& task ) const {
     mu::Vec3 from = task.squad ? task.squad->calcCentroid() : leader.pos();
     uint32 bestTargetId = 0;
     float bestDistSq = -1.f;
@@ -983,7 +983,7 @@ uint32 IsisMidBossTactic::selectStrikeEngageTarget( Room& room, const PlatoonLea
 }
 
 // 쐐기 관통이 끝난(또는 강제) 스쿼드를 일반 Engage로 전환. charge 종료 + 군집 내 최근접 타깃 교전.
-void IsisMidBossTactic::updateActiveStrikeEngage( Room& room, PlatoonLeader& leader, bool forceAll ) {
+void IsysMidBossTactic::updateActiveStrikeEngage( Room& room, PlatoonLeader& leader, bool forceAll ) {
     for ( StrikeTask& task : activeStrikeTasks_ ) {
         if ( task.engageIssued ) {
             continue;
@@ -1009,10 +1009,10 @@ void IsisMidBossTactic::updateActiveStrikeEngage( Room& room, PlatoonLeader& lea
 }
 
 /*-------------------------------
-   IsisMidBossTactic — 보스 2차 쐐기 합류
+   IsysMidBossTactic — 보스 2차 쐐기 합류
 -------------------------------*/
 
-void IsisMidBossTactic::selectBossJoinedBuddySquad( const PlatoonLeader& leader ) {
+void IsysMidBossTactic::selectBossJoinedBuddySquad( const PlatoonLeader& leader ) {
     resetBossBuddyWedgeJoin();
 
     const auto& squads = leader.getSquads();
@@ -1034,7 +1034,7 @@ void IsisMidBossTactic::selectBossJoinedBuddySquad( const PlatoonLeader& leader 
     bossJoinedBuddySquadIndex_ = candidates[ dist( isisRng() ) ];
 }
 
-void IsisMidBossTactic::resetBossBuddyWedgeJoin() {
+void IsysMidBossTactic::resetBossBuddyWedgeJoin() {
     bossJoinedBuddySquadIndex_ = -1;
     bossBuddyWedgeJoinActive_ = false;
     bossBuddyWedgeChargeStarted_ = false;
@@ -1044,12 +1044,12 @@ void IsisMidBossTactic::resetBossBuddyWedgeJoin() {
     bossBuddyWedgeDir_ = mu::Vec3( 1.f, 0.f, 0.f );
 }
 
-bool IsisMidBossTactic::isBossJoinedBuddySquad( const TacticalSquad* squad ) const {
+bool IsysMidBossTactic::isBossJoinedBuddySquad( const TacticalSquad* squad ) const {
     return squad && bossJoinedBuddySquadIndex_ >= 0 &&
         squad->getSquadId() == bossJoinedBuddySquadIndex_;
 }
 
-bool IsisMidBossTactic::ensureBossBuddyWedgeJoin( Room& /*room*/, const PlatoonLeader& leader ) {
+bool IsysMidBossTactic::ensureBossBuddyWedgeJoin( Room& /*room*/, const PlatoonLeader& leader ) {
     const auto& squads = leader.getSquads();
     auto selectedSquadAlive = [&]() {
         for ( int i = 0; i < 2; ++i ) {
@@ -1108,7 +1108,7 @@ bool IsisMidBossTactic::ensureBossBuddyWedgeJoin( Room& /*room*/, const PlatoonL
     return false;
 }
 
-bool IsisMidBossTactic::isBossBuddyWedgeJoinReady( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::isBossBuddyWedgeJoinReady( const PlatoonLeader& leader ) const {
     if ( !bossBuddyWedgeJoinActive_ ) {
         return bossJoinedBuddySquadIndex_ < 0;   // 합류 대상 없음 → 보스 대기 불필요
     }
@@ -1118,7 +1118,7 @@ bool IsisMidBossTactic::isBossBuddyWedgeJoinReady( const PlatoonLeader& leader )
     return ( leader.pos() - bossBuddyWedgePreparePos_ ).len() <= ISIS_BOSS_WEDGE_JOIN_READY_DIST;
 }
 
-bool IsisMidBossTactic::areSecondStrikePrepSquadsAtSlots() const {
+bool IsysMidBossTactic::areSecondStrikePrepSquadsAtSlots() const {
     if ( secondStrikePrepSquads_.empty() ) {
         return false;
     }
@@ -1130,11 +1130,11 @@ bool IsisMidBossTactic::areSecondStrikePrepSquadsAtSlots() const {
     return true;
 }
 
-bool IsisMidBossTactic::isSecondStrikePrepReady( const PlatoonLeader& leader ) const {
+bool IsysMidBossTactic::isSecondStrikePrepReady( const PlatoonLeader& leader ) const {
     return secondStrikePrepIssued_ && areSecondStrikePrepSquadsAtSlots() && isBossBuddyWedgeJoinReady( leader );
 }
 
-void MU_CALLCONV IsisMidBossTactic::setupBossBuddyWedgeJoin( TacticalSquad* squad,
+void MU_CALLCONV IsysMidBossTactic::setupBossBuddyWedgeJoin( TacticalSquad* squad,
                                                              const StrikeCluster& strikeCluster, mu::Vec3 squadCenter ) {
     if ( !isBossJoinedBuddySquad( squad ) ) {
         return;
@@ -1148,7 +1148,7 @@ void MU_CALLCONV IsisMidBossTactic::setupBossBuddyWedgeJoin( TacticalSquad* squa
     bossBuddyWedgeExitPos_ = strikeCluster.cluster.centroid + forward * TacticalSquad::WEDGE_EXIT_DISTANCE;
 }
 
-void IsisMidBossTactic::syncBossBuddyWedgeChargeStart( const PlatoonLeader& leader ) {
+void IsysMidBossTactic::syncBossBuddyWedgeChargeStart( const PlatoonLeader& leader ) {
     if ( !bossBuddyWedgeJoinActive_ || bossBuddyWedgeChargeStarted_ || bossJoinedBuddySquadIndex_ < 0 ) {
         return;
     }
@@ -1169,7 +1169,7 @@ void IsisMidBossTactic::syncBossBuddyWedgeChargeStart( const PlatoonLeader& lead
 }
 
 // 보스를 prepare apex(합류) → exit(돌진)로 모터 이동. 도착 시 정지 + 돌진 완료 플래그.
-void IsisMidBossTactic::updateBossBuddyWedgeJoin( Seconds /*dt*/, PlatoonLeader& leader ) {
+void IsysMidBossTactic::updateBossBuddyWedgeJoin( Seconds /*dt*/, PlatoonLeader& leader ) {
     if ( !bossBuddyWedgeJoinActive_ ) {
         return;
     }

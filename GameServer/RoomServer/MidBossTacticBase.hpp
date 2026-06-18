@@ -41,7 +41,7 @@ protected:
     void issueIdleAll( PlatoonLeader& leader ) const;
     // squad별 Engage 타깃을 균형(배정 수)→거리→id 순으로 배정하되, 생존 중에는 고정(sticky)하고
     // 타깃이 바뀔 때만 명령을 발행해 중복 engage를 막는다. resetAssignments=true면 전면 재배정.
-    // (Goblin/GrandBaum 등 전술 공용 — squad+player 균형배정이라 전술 무관.)
+    // (Goblin/Grandbaum 등 전술 공용 — squad+player 균형배정이라 전술 무관.)
     void issueStableEngage( Room& room, const std::vector<TacticalSquad*>& liveSquads, bool resetAssignments );
     bool isLivingPlayerTarget( const Room& room, uint32 playerId ) const;
 

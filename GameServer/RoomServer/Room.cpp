@@ -11,8 +11,8 @@
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
 #include "GoblinMidBossTactic.hpp"
-#include "GrandBaumMidBossTactic.hpp"
-#include "IsisMidBossTactic.hpp"
+#include "GrandbaumMidBossTactic.hpp"
+#include "IsysMidBossTactic.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 
@@ -275,13 +275,13 @@ void Room::bindZoneHandlers() {
 
 	zoneSystem_.on("Arena_Grandbaum", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-			room.onArenaGrandBaumEnter(zone, playerId);
+			room.onArenaGrandbaumEnter(zone, playerId);
 		});
 
-	// 정식 Isis zone(레벨 zone tag는 "Arena_Isys" 철자).
+	// 정식 Isys zone(레벨 zone tag는 "Arena_Isys" 철자).
 	zoneSystem_.on("Arena_Isys", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-			room.onArenaIsisEnter(zone, playerId);
+			room.onArenaIsysEnter(zone, playerId);
 		});
 }
 
@@ -362,9 +362,9 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_Hobgoblin과 동일 패턴: GrandBaum 마커(WallGrandbaum_0/1/2, GrandbaumSpawner)로 벽/스폰점을
-// 구성하고 GrandBaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
-void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
+// Arena_Hobgoblin과 동일 패턴: Grandbaum 마커(WallGrandbaum_0/1/2, GrandbaumSpawner)로 벽/스폰점을
+// 구성하고 Grandbaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
+void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
@@ -390,18 +390,18 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 			if (m.type != "GrandbaumSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
-			std::cout << "[Zone] GrandBaum spawn point '" << m.name << "' at ("
+			std::cout << "[Zone] Grandbaum spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 			break;
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
 			haveSpawnPos = true;
-			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
+			std::cout << "[Zone] Grandbaum spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
 		if (haveSpawnPos) {
-			spawnGrandBaumEncounter(spawnPos, spawnPos);
+			spawnGrandbaumEncounter(spawnPos, spawnPos);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
@@ -430,11 +430,11 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_Grandbaum과 동일 패턴: Isis 마커(WallIsys_0/1/2, IsysSpawner)로 벽/스폰점을 구성하고 Isis
+// Arena_Grandbaum과 동일 패턴: Isys 마커(WallIsys_0/1/2, IsysSpawner)로 벽/스폰점을 구성하고 Isys
 // 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm). 디버그 트리거(홉고블린
 // zone 재사용) 시에는 WallIsys 마커가 매칭 안 돼 벽은 생략되고, any-Wall/플레이어 위치로 fallback한다.
-void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
-	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isis)\n";
+void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
 	if (!worldTerrain_) return;
 
@@ -459,18 +459,18 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 			if (m.type != "IsysSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
-			std::cout << "[Zone] Isis spawn point '" << m.name << "' at ("
+			std::cout << "[Zone] Isys spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 			break;
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
 			haveSpawnPos = true;
-			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
+			std::cout << "[Zone] Isys spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
 		if (haveSpawnPos) {
-			spawnIsisEncounter(spawnPos, spawnPos);
+			spawnIsysEncounter(spawnPos, spawnPos);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
@@ -920,7 +920,7 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	mu::Vec3 newPos = DirectX::XMLoadFloat3(&cMvPkt->pos);
 	const mu::Vec3 deltaXZ{ newPos.x() - oldPos.x(), 0.f, newPos.z() - oldPos.z() };
 	const float horizDist = deltaXZ.len();
-	// GrandBaum 넉백 중인 세션은 클램프 면제(클라가 넉백 속도로 빠르게 밀려나므로).
+	// Grandbaum 넉백 중인 세션은 클램프 면제(클라가 넉백 속도로 빠르게 밀려나므로).
 	if (!session->isMoveClampExempt() && horizDist > kMaxMovePerPacket) {
 		const float s = kMaxMovePerPacket / horizDist;
 		// XZ만 허용치로 클램프, Y(낙하/지형)는 그대로 둔다.
@@ -991,7 +991,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		int32 newHp = std::max(prevHp - hit->damage, 0);
 		
 		// 이 로직으로 교체해야 함.
-		// 받는 피해 배율 적용(기본 1.0; GrandBaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
+		// 받는 피해 배율 적용(기본 1.0; Grandbaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
 		//int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		//int32 newHp = std::max(tgt->hp() - dmg, 0);
 		
@@ -1575,10 +1575,10 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		platoonLeader_->addSquad(sq.get());
 }
 
-// GrandBaum 중간보스 인카운터 스폰. 슬라임 3부대(0,1,2) + 뱀 1부대(3)를 spawnCenter 주변에
-// 산개시키고, bossPos에 GrandBaum 전술(GrandBaumMidBossTactic) 보스를 배치한다.
+// Grandbaum 중간보스 인카운터 스폰. 슬라임 3부대(0,1,2) + 뱀 1부대(3)를 spawnCenter 주변에
+// 산개시키고, bossPos에 Grandbaum 전술(GrandbaumMidBossTactic) 보스를 배치한다.
 // NPC 모델/물리 셋업은 일반 goblin과 동일(전용 슬라임/뱀 모델 추가 전까지 goblin 재사용).
-void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 {
 	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
 
@@ -1635,8 +1635,8 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
 	// 부대 구성: 0,1,2 = 슬라임, 3 = 뱀. 인원은 시뮬(A12/B12/C48/D10) 기반(난이도 튜닝 가능).
-	struct GrandBaumSquadDef { const TacticalNpcConfig* cfg; int count; };
-	const GrandBaumSquadDef squadDefs[] = {
+	struct GrandbaumSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const GrandbaumSquadDef squadDefs[] = {
 		{ &slimeCfg, 12 },
 		{ &slimeCfg, 12 },
 		{ &slimeCfg, 48 },
@@ -1665,7 +1665,7 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
-		makeBase(bossPos), bossCfg, std::make_unique<GrandBaumMidBossTactic>());
+		makeBase(bossPos), bossCfg, std::make_unique<GrandbaumMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 
@@ -1673,10 +1673,10 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		platoonLeader_->addSquad(sq.get());
 }
 
-// Isis 중간보스 인카운터. spawnGrandBaumEncounter 미러. 부대 계약: 0,1 = Buddy(2차 돌격 + 보스 합류),
+// Isys 중간보스 인카운터. spawnGrandbaumEncounter 미러. 부대 계약: 0,1 = Buddy(2차 돌격 + 보스 합류),
 // 2,3 = Bomber(1차 돌격). 모델/ObjectType은 전용 에셋 추가 전까지 goblin 재사용. config/인원은
 // 시뮬(Buddy 12/12, Bomber 40/40) 기반 — M3 튜닝/성능 확인 대상.
-void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 {
 	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
 
@@ -1732,9 +1732,9 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
-	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsisMidBossTactic의 squad 인덱스 계약을 보장.
-	struct IsisSquadDef { const TacticalNpcConfig* cfg; int count; };
-	const IsisSquadDef squadDefs[] = {
+	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsysMidBossTactic의 squad 인덱스 계약을 보장.
+	struct IsysSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const IsysSquadDef squadDefs[] = {
 		{ &buddyCfg,  12 },
 		{ &buddyCfg,  12 },
 		{ &bomberCfg, 40 },
@@ -1762,7 +1762,7 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
-		makeBase(bossPos), bossCfg, std::make_unique<IsisMidBossTactic>());
+		makeBase(bossPos), bossCfg, std::make_unique<IsysMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 
@@ -1770,7 +1770,7 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		platoonLeader_->addSquad(sq.get());
 }
 
-// ── GrandBaum ShieldWall 헬퍼 ────────────────────────────────────────────────
+// ── Grandbaum ShieldWall 헬퍼 ────────────────────────────────────────────────
 
 void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 	// 인게임 스케일 넉백(시뮬 SHIELD_WALL_KNOCKBACK_*: speed 90 × ~0.4). 이동 권한은 클라에
@@ -1845,10 +1845,10 @@ void Room::clearShieldWallBlockers() {
 	shieldWallBlockerIds_.clear();
 }
 
-// ── GrandBaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
+// ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
 
 // 일반 goblin과 동일한 모델/물리(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록.
-// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandBaumEncounter의 registerBody와 동일 셋업).
+// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandbaumEncounter의 registerBody와 동일 셋업).
 void Room::registerTacticalNpcBody(Object& obj) {
 	const auto& anims = assetManager_->goblinAnimations();
 	obj.setId(IdPool::pop());
