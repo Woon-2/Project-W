@@ -3627,7 +3627,7 @@ void Game::renderInGame() {
 	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // ===========================================================================
@@ -4766,16 +4766,23 @@ void Game::cullObjects() {
 	}
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+// 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
+// 못한 채 방치(T-pose 등)될 수 있기 때문이다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
 			if (auto* blender = p->animBlender())
-				blender->setCulled(p->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && p->isFrustumCulled());
 		}
 		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+			if (auto* blender = m->animBlender())
+				blender->setCulled(blender->hasEverUpdated() && m->isFrustumCulled());
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
@@ -4787,7 +4794,7 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);

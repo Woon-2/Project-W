@@ -204,7 +204,10 @@ private:
 	std::wstring lobbyDisplayName(uint16 sessionId) const;
 
 	void cullObjects();
-	void applyHiZCulling();
+	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
+	// (이전 이름: applyHiZCulling — 컬링 자체를 수행하는 게 아니라 readback 결과를
+	//  애니메이션 시스템으로 피드백하는 역할이라 이름을 바꿈)
+	void feedbackCullResultToAnim();
 
 	// 플레이어 간 reciprocal soft separation (클라 예측).
 	// 로컬 플레이어를 다른 플레이어와의 수평 침투량의 "절반"만큼만 밀어낸다.

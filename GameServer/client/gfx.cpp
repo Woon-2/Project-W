@@ -535,10 +535,10 @@ void GFX::createSwapChain() {
 	);
 	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
-		device_.Get(), sizeof(BVShader::PerInstanceData) * 50'000u, backBuffers_.size(), "BV_PerInstanceData"
+		device_.Get(), sizeof(BVShader::PerInstanceData) * 120'000u, backBuffers_.size(), "BV_PerInstanceData"
 	);
 	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(BVShader::PerDrawcallData), 50'000u, backBuffers_.size(), "BV_PerDrawcallData"
+		device_.Get(), sizeof(BVShader::PerDrawcallData), 120'000u, backBuffers_.size(), "BV_PerDrawcallData"
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
@@ -689,7 +689,7 @@ void GFX::createSwapChain() {
 	);
 	// PBR Deferred Pipeline ----
 	resourcesPBRDeferredPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 120'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapCSMShader::PerDrawcallData), 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallData"
@@ -701,7 +701,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferred_Shadow_PerFrameData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 120'000u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.lightData.init(
 		device_.Get(), sizeof(PBRDeferredGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferred_GBuffer_LightData"
@@ -723,10 +723,10 @@ void GFX::createSwapChain() {
 		);
 		// PBR Deferred Pipeline — Hi-Z occlusion cull + indirect draw (BVH props) ----
 		resourcesPBRDeferredPipeline_.hiZPass.groupOffsets.init(
-			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_GroupOffset"
+			device_.Get(), sizeof(u32t) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_GroupOffset"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.indirectCmd.init(
-			device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_IndirectCommand"
+			device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_IndirectCommand"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataClear.init(
 			device_.Get(), sizeof(HiZClearShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataClear"
@@ -741,10 +741,10 @@ void GFX::createSwapChain() {
 			device_.Get(), sizeof(HiZCullShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataCull"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perGroupCnt.init(
-			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupCnt"
+			device_.Get(), sizeof(u32t) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupCnt"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perGroupData.init(
-			device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupData"
+			device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupData"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perInstanceDataCompact.init(
 			device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_PerInstanceDataCompact"

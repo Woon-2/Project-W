@@ -101,7 +101,7 @@ struct Resources {
     // No CPU visibility feedback ring: static props need no anim/physics skip, so the
     // cull shader's per-instance feedback write lands in a throwaway scratch buffer.
     struct HiZPass {
-        static constexpr u32t MAX_HIZ_INSTANCES = 65'536u;
+        static constexpr u32t MAX_HIZ_INSTANCES = 120'000u;
 
         StructuredBuffer perInstanceDataCull;      // t0
         StructuredBuffer perInstanceDataCompact;   // t0

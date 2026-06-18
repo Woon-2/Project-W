@@ -746,9 +746,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
 | `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
-| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
+| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → feedbackCullResultToAnim |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |
-| `Game::applyHiZCulling()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled (gfx_.render() 이후 호출) |
+| `Game::feedbackCullResultToAnim()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled, hasEverUpdated()==false면 culled 강제 해제 (gfx_.render() 이후 호출) |
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
@@ -886,7 +886,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
    a. `cullObjects()` — frustum culling → setFrustumCulled
    b. Object::render() 호출들 — frustum culled만 제외, Hi-Z culled는 DrawEvent 제출
    c. `gfx_.render()` — Hi-Z readback 복사 포함
-   d. `applyHiZCulling()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled
+   d. `feedbackCullResultToAnim()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled (최초 1회는 hasEverUpdated() 보정으로 강제 갱신)
 
 ---
 

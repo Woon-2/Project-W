@@ -135,14 +135,16 @@ render():
   uiManager_.render()
   gfx_.addFrameData() × 파이프라인 수
   gfx_.render()               — Hi-Z 5단계 compute + indirect draw + visibleFlags readback
-  applyHiZCulling()           — readback 결과로 setHiZCulled + AnimBlender::setCulled 갱신
+  feedbackCullResultToAnim()  — readback 결과로 setHiZCulled + AnimBlender::setCulled 갱신 (구 applyHiZCulling)
 ```
 
 **컬링 시스템 설계 원칙:**
 - `viewFrustumCulled`: DrawEvent 제출 차단 전용. Hi-Z와 무관.
 - `hiZCulled_`: Object::update()/AnimBlender 연산 스킵 전용. 1-frame delay.
 - `AnimBlender::setCulled(frustum || !hiZVisible)`: 두 플래그 통합해 AnimSystem 스킵 조건으로 사용.
-- `applyHiZCulling()` 한 곳에서만 animBlender 동기화 (`cullObjects()`에서 setCulled 직접 호출 금지).
+  단, `AnimBlender::hasEverUpdated() == false`(아직 한 번도 onCalcLocal이 안 불림)인 동안은
+  컬링 판정과 무관하게 `setCulled(false)`를 강제해 최초 1회 갱신을 보장한다.
+- `feedbackCullResultToAnim()` 한 곳에서만 animBlender 동기화 (`cullObjects()`에서 setCulled 직접 호출 금지).
 
 ---
 

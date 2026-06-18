@@ -407,8 +407,16 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 **새 오브젝트를 Hi-Z culling에 참여시킬 때 필수 체크리스트:**
 1. `setupStage()`에서 `obj->setRenderObjectId(nextRenderObjId++)` 할당
 2. `gfx_.setMaxRenderObjectId(nextRenderObjId - 1u)` 호출
-3. `applyHiZCulling()` 내에 `applyToEntity(obj)` 추가
+3. `feedbackCullResultToAnim()`(이전 이름: `applyHiZCulling()`) 내에 `applyToEntity(obj)` 추가
 4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
+
+**최초 1회 애니메이션 갱신 보장:**
+서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
+visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 받을 수 있다.
+이 상태로 방치되면 AnimBlender가 한 번도 갱신되지 못한다(T-pose 등).
+`AnimBlender::hasEverUpdated()`(최초 `onCalcLocal` 호출 시 true로 전환)가 false인 동안은
+`feedbackCullResultToAnim()`에서 컬링 판정과 무관하게 `setCulled(false)`를 강제해
+최소 1회는 애니메이션 갱신이 이루어지도록 한다.
 
 #### TerrainPipeline 특성
 
