@@ -340,39 +340,51 @@ float calcSingleShadow(float3 posV, float4 posL) {
 #endif
 
 // ---------------------------------------------------------------------------
-// CSM shadow functions (separate Texture2D per cascade, 9-tap PCF)
+// CSM shadow functions (separate Texture2D per cascade, 5x5 PCF)
 // ---------------------------------------------------------------------------
 #ifndef MAX_CSM_CASCADES
 #define MAX_CSM_CASCADES 4
 #endif
 
-float sampleCascadePCF(uint cascadeIdx, float3 posW, float3 normalW, float sinTheta, float offsets[4]) {
+// posRel: CAMERA-RELATIVE world position (posW - camPos). lightVP is built in
+// camera-relative space (see Light::updateCSMCascades), so it maps posRel to light NDC.
+// Feeding the relative position keeps the large world magnitude (~5500) out of the
+// light-space matrix multiply, which is what eliminates the precision-driven shimmer.
+// The normal-offset bias is a small delta and is identical in either frame.
+float sampleCascadePCF(uint cascadeIdx, float3 posRel, float3 normalW, float sinTheta, float offsets[4]) {
     // adjust the offset of selected cascade
-    float3 biasedPosW = posW + normalize(normalW) * offsets[cascadeIdx] * sinTheta;
+    float3 biasedPosRel = posRel + normalize(normalW) * offsets[cascadeIdx] * sinTheta;
 
     // project to light space of the selected cascade
-    float4 posL = mul(mul(float4(biasedPosW, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
+    float4 posL = mul(mul(float4(biasedPosRel, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
     posL.xyz /= posL.w;
     posL.z = min(posL.z, 1.0f);
 
-    // 9-tap PCF
+    // 5x5 PCF
     int4 idx = idxShadowMap[cascadeIdx];
-    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
-    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
-    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  1)).r;
-    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0, -1)).r;
-    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  0)).r;
-    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  1)).r;
-    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
-    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
-    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
-    
-    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+    float shadow = 0.f;
+    [unroll]
+    for (int y = -2; y <= 2; ++y) {
+        [unroll]
+        for (int x = -2; x <= 2; ++x) {
+            shadow += sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(x, y)).r;
+        }
+    }
+
+    return shadow / 25.f;
 }
 
-// calcCSMShadow: selects related cascades by view-space depth, performs 9-tap PCF,
+// calcCSMShadow: selects related cascades by view-space depth, performs 5x5 PCF,
 //                then blends the results.
-float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
+// posRel: CAMERA-RELATIVE world position (posW - camPos). The cascade lightVP matrices
+//         are built in camera-relative space (see Light::updateCSMCascades), so callers
+//         must rebase the receiver position by camPos before calling. The caller (not
+//         this function) owns camPos so that GBuffer geometry passes — which include this
+//         header but have no camPos in their cbuffer and never call this function — still
+//         compile. The subtraction of two similarly-large values yields a small relative
+//         offset at full float precision; that small value then flows through the light
+//         matrices, keeping the ~5500 world magnitude out of the light-space math.
+float calcCSMShadow(float3 posV, float3 posRel, float3 normalW, float rawNdotl) {
     // No-shadow path (e.g. lobby portrait): cascadeCount == 0 means no CSM bound.
     // Skip early to avoid `cascadeCount - 1u` unsigned underflow and OOB cascade sampling.
     if (cascadeCount == 0u) return 1.0f;
@@ -403,7 +415,7 @@ float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
     float sinTheta = (rawNdotl > 0.f) ? sqrt(max(0.f, 1.f - rawNdotl * rawNdotl)) : 0.f;
 
     // main cascade sampling
-    float shadow = sampleCascadePCF(cascadeIdx, posW, normalW, sinTheta, offsets);
+    float shadow = sampleCascadePCF(cascadeIdx, posRel, normalW, sinTheta, offsets);
 
     // --- Cascade Blending logic ---
     // regard blending with next cascade only if the cascade is not the last cascade.
@@ -422,7 +434,7 @@ float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
             
             // sample the next cascade
             uint nextCascadeIdx = cascadeIdx + 1u;
-            float nextShadow = sampleCascadePCF(nextCascadeIdx, posW, normalW, sinTheta, offsets);
+            float nextShadow = sampleCascadePCF(nextCascadeIdx, posRel, normalW, sinTheta, offsets);
             
             // softly blend the two different cascades.
             shadow = lerp(shadow, nextShadow, blendFactor);
@@ -555,7 +567,8 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
             break;
         }
     }
-    float directFactor = calcCSMShadow(posV, posW, normalW, rawNdotl_shadow);
+    // Camera-relative shadow space: lightVP maps (posW - camPos). See calcCSMShadow.
+    float directFactor = calcCSMShadow(posV, posW - camPos, normalW, rawNdotl_shadow);
     color *= directFactor;
 
 #ifdef CSM_DEBUG_VIS
@@ -619,7 +632,8 @@ float3 illuminateFromGBuffer(
             break;
         }
     }
-    return color * calcCSMShadow(posV, posW, normalW, rawNdotl);
+    // Camera-relative shadow space: lightVP maps (posW - camPos). See calcCSMShadow.
+    return color * calcCSMShadow(posV, posW - camPos, normalW, rawNdotl);
 }
 #endif // DEFERRED_LIGHTING_PASS
 

@@ -502,6 +502,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             src.hitGroupCooldownMs = def.hitGroupCooldownMs;
             src.useParticleSize    = def.useParticleSize;
             src.applyRotation      = def.applyAttachRotation;
+            src.penetrate          = def.penetrate;
             src.hitboxHandles.clear();
 
             // Resolve pSystem
@@ -649,6 +650,18 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         break;
     }
 
+    case SkillEventType::PlaySound: {
+        // Cosmetic only: play a 3D one-shot at the caster's current position.
+        // ctx.playSound is null on the server/headless path (no-op), so this event
+        // is purely client-side and never affects gameplay determinism.
+        if (ctx.playSound) {
+            const Object* owner = lookupObject(ctx, inst.ownerObjectId);
+            const mu::Vec3 pos = owner ? owner->renderState().pos : mu::Vec3{ 0.f, 0.f, 0.f };
+            ctx.playSound(ev.payload.playSound.soundName, pos);
+        }
+        break;
+    }
+
     case SkillEventType::ModifyStat: {
         const auto& p = ev.payload.modifyStat;
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
@@ -750,6 +763,7 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
             hb.hitGroup               = src.hitGroup;
             hb.hitGroupCooldownMs     = src.hitGroupCooldownMs;
             hb.applyAttachRotation    = src.applyRotation;
+            hb.penetrate              = src.penetrate;
             hb.particleSourceIdx      = si;
             hb.resolvedAttach.type    = AttachType::VFXParticle;
             hb.resolvedAttach.pSystem = src.pSystem;
@@ -762,6 +776,10 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
         for (int pi = 0; pi < (int)src.hitboxHandles.size(); ++pi) {
             AttachedHitbox& hb = hitboxPool_[src.hitboxHandles[pi]];
             const Particle& p  = parts[pi];
+
+            // Record this frame's particle index so a non-penetrating hit can
+            // destroy the exact source particle via ParticleSystem::killParticle.
+            hb.particleLocalIdx = pi;
 
             float sz = 1.f;
             if (src.useParticleSize) {
@@ -922,6 +940,8 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
 void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
     if (!ctx.evList) return;
 
+    pendingParticleKills_.clear();
+
     for (const HitResult& hr : pendingHits_) {
         AttachedHitbox& hb = hitboxPool_[hr.hitboxIdx];
         if (!hb.active) continue;
@@ -929,7 +949,9 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         const OnHitDef& oh = hb.onHit;
 
         // In online mode server is authoritative for damage; skip local damage event.
-        if (!ctx.clientPredictionOnly)
+        // A zero-damage hitbox (e.g. a non-penetrating projectile trigger whose payload
+        // is the spawned burst) carries no damage event -- only its consume side effect.
+        if (!ctx.clientPredictionOnly && oh.damage != 0)
             holdEvent((*ctx.evList), EvSkillHit{ hr.targetObjectId, oh.damage });
 
         if (oh.hitVfxId != 0xFF && ctx.vfxById &&
@@ -949,7 +971,41 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
                 target->body().applyImpulse(impulseJ, target->pos());
             }
         }
+
+        // Non-penetrating particle hitbox: queue its source particle for destruction.
+        // Deferred so the swap-remove inside killParticle cannot invalidate other
+        // particle indices still referenced by pending hits this frame.
+        if (!hb.penetrate && hb.particleSourceIdx >= 0 && hb.particleLocalIdx >= 0)
+            pendingParticleKills_.emplace_back(hb.particleSourceIdx, hb.particleLocalIdx);
     }
+
+    if (pendingParticleKills_.empty()) return;
+
+    // Group by the *ParticleSystem* (not source index) and destroy unique indices
+    // in descending order, so each killParticle's swap-remove leaves the remaining
+    // (smaller) indices valid -- correct even if several sources share one system.
+    auto sysOf = [this](int srcIdx) -> ParticleSystem* {
+        return particleSources_[srcIdx].pSystem;
+    };
+    std::sort(pendingParticleKills_.begin(), pendingParticleKills_.end(),
+              [&](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  ParticleSystem* pa = sysOf(a.first);
+                  ParticleSystem* pb = sysOf(b.first);
+                  if (pa != pb) return pa < pb;
+                  return a.second > b.second;  // descending particle index within a system
+              });
+    ParticleSystem* lastSys = nullptr;
+    int             lastIdx = -1;
+    for (const auto& [srcIdx, pi] : pendingParticleKills_) {
+        ParticleSystem* sys = sysOf(srcIdx);
+        if (!sys) continue;
+        if (sys == lastSys && pi == lastIdx) continue;  // dedupe (same particle hit >1 target)
+        lastSys = sys;
+        lastIdx = pi;
+        sys->killParticle(pi);
+        ++debugStats_.particlesDestroyedOnHit;
+    }
+    pendingParticleKills_.clear();
 }
 
 // ---------------------------------------------------------------------------

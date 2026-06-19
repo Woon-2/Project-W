@@ -22,6 +22,7 @@ public:
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
 	const Model* modelGoblin() const { return &modelGoblin_; }
+	const Model* modelHobgoblin() const { return &modelHobgoblin_; }
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
@@ -30,6 +31,7 @@ public:
 	const Texture* spearHook() const { return &spearHook_; }
 	const Texture* crystalWand() const { return &crystalWand_; }
 	const Texture* heavyArrow() const { return &heavyArrow_; }
+	const Texture* uiLeftButton() const { return &uiLeftButton_; }
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
@@ -53,6 +55,7 @@ public:
 	const Texture* trail62Tex()            const { return &trail62Tex_; }
 	const Texture* trail67Tex()            const { return &trail67Tex_; }
 	const Texture* circleTex()             const { return &circleTex_; }
+	const Texture* magicCircleTex()        const { return &magicCircleTex_; }
 	const Texture* stoneTex()              const { return &stoneTex_; }
 	const Texture* gradient3tTex()         const { return &gradient3tTex_; }
 	const Texture* gradient4_3Tex()        const { return &gradient4_3Tex_; }
@@ -104,6 +107,7 @@ private:
 	Model modelCube_{};
 	Model modelPlayer_{};
 	Model modelGoblin_{};
+	Model modelHobgoblin_{};
 	Model modelSnake_{};
 	Model modelMushroom_{};
 	Skybox skyboxMaterial_{};
@@ -114,6 +118,7 @@ private:
 	Texture spearHook_{};
 	Texture crystalWand_{};
 	Texture heavyArrow_{};
+	Texture uiLeftButton_{};
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
 	// Skill dial icons (12), one per selectable weapon skill.
@@ -146,6 +151,7 @@ private:
 	Texture trail62Tex_{};
 	Texture trail67Tex_{};
 	Texture circleTex_{};
+	Texture magicCircleTex_{};
 	Texture stoneTex_{};
 	Texture gradient3tTex_{};
 	Texture gradient4_3Tex_{};

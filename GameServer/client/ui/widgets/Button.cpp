@@ -24,7 +24,8 @@ void Button::onRender(const RenderContext& rc) {
             rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
                 .world    = buildWorldMatrix(rc.screenHeight),
                 .pTex     = tex,
-                .colorMul = tint
+                .colorMul = tint,
+                .uvScaleBias = uvScaleBias
             });
         }
         return;

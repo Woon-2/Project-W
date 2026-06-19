@@ -16,6 +16,7 @@
 class GFX;
 class PhysicsWorld;
 class ThreadPool;
+class Light;
 
 // Owns the unified terrain layer palette, the global chunk index, and the set of
 // currently loaded chunks. Replaces the former single TerrainData/TerrainObject.
@@ -38,7 +39,10 @@ public:
     void update(mu::Vec3 playerWorldPos, Milliseconds dt);
 
     // Submits a render draw event (+ Hi-Z occluder) for every ready chunk.
-    void submitDrawEvents(GFX& gfx);
+    // `light` drives shadow (light-frustum) culling for chunks and BVH scatter props,
+    // so off-camera casters still render into the shadow map. (Distinct from the main
+    // camera frustum set via setCullCamera(), which only gates the gbuffer/Hi-Z path.)
+    void submitDrawEvents(GFX& gfx, const Light& light);
 
     // Camera frustum + eye position for per-instance scatter culling. Call once per frame
     // before submitDrawEvents(). The frustum drives BVH-prop view-frustum culling; the eye
@@ -166,7 +170,7 @@ private:
     // and submits per-instance draw events (auto-instanced by the PBR pipelines).
     void loadScatterAssets();
     void resolveChunkScatter(LoadedChunk& slot);
-    void submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot) const;
+    void submitScatterDrawEvents(GFX& gfx, const LoadedChunk& slot, const Light& light) const;
 
     // One raw scatter instance resolved to world primitives (ground-snapped pos,
     // orientation, per-axis scale). Shared by render-instance resolution and the

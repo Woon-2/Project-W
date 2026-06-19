@@ -9,6 +9,7 @@
 // New file: English-only comments to stay cp949-safe (see client/CLAUDE.md).
 
 #include <string_view>
+#include <span>
 #include "soundManager.hpp"   // SoundManager::Bus
 
 namespace snd {
@@ -24,6 +25,10 @@ struct CatalogEntry {
 
 // Returns the entry for `name`, or nullptr if not found.
 const CatalogEntry* findSound(std::string_view name);
+
+// Read-only view of every catalog entry. Used at startup to preload/warm SFX
+// so the first play does not pay a synchronous decode cost on the game thread.
+std::span<const CatalogEntry> allSounds();
 
 }	// namespace snd
 

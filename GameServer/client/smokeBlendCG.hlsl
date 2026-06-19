@@ -101,10 +101,11 @@ float4 sampleOrWhite(uint4 idxTex, uint hasTexture, float2 uv) {
     return hasTexture != 0u ? sampleBindless(idxTex, uv) : float4(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
+// Reversed-Z: depth01=1.0(near) -> nearZ, depth01=0.0(far) -> farZ.
 float eyeDepthFromDeviceDepth(float depth01) {
     const float nearZ = max(cameraNear, 0.0001f);
     const float farZ = max(cameraFar, nearZ + 0.0001f);
-    return (nearZ * farZ) / max(farZ - depth01 * (farZ - nearZ), 0.0001f);
+    return (nearZ * farZ) / max(nearZ + depth01 * (farZ - nearZ), 0.0001f);
 }
 
 float calcSoftParticleFade(float4 clipPos) {

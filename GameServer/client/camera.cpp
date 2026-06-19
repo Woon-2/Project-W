@@ -195,7 +195,7 @@ void Camera::updateGFX(GFX& gfx) {
 }
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {
-	proj_ = mu::persp(fovy, aspect, nearz, farz);
+	proj_ = mu::perspReversedZ(fovy, aspect, nearz, farz);
 	fovy_ = fovy;
 	aspect_ = aspect;
 	nearz_ = nearz;

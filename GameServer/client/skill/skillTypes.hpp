@@ -68,6 +68,10 @@ struct SkillHitboxDef {
     float            hitGroupCooldownMs   = 0.f;    // 0 = hit target only once; >0 = re-hit after N ms
     bool             useParticleSize      = false;  // VFXParticle only: scale halfExtents by particle's current visual size
     bool             applyAttachRotation  = true;   // false = ignore attachment orientation (position still tracks)
+    // VFXParticle only: false = non-penetrating -- the source particle is destroyed on first hit
+    // (ParticleSystem::killParticle), so the projectile/effect stops after impact. true (default) =
+    // penetrating (particle persists; multi-hit governed by hitGroupCooldownMs). No-op for Bone/Ground.
+    bool             penetrate            = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -85,6 +89,7 @@ enum class SkillEventType : u8t {
     ApplyImpulse,
     CameraShake,
     SetGroundAnchor,
+    PlaySound,
     SIZE
 };
 
@@ -151,6 +156,10 @@ union SkillEventPayload {
         float        magnitude;
         Milliseconds duration;
     } cameraShake;
+
+    struct PlaySound {
+        char soundName[24];  // sound-catalog logical name, null-terminated (max 23 chars)
+    } playSound;
 
     struct SendGameplayEvent {
         u8t  eventTypeOrdinal;  // EventType ordinal

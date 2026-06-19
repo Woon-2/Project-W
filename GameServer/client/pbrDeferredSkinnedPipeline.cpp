@@ -347,15 +347,15 @@ void Dispatcher::hiZPassCompute() {
     pResources_->hiZPass.visibleFlags.uavBarrier(cmdList, roomIdx_);
 
     // 2. Prefix Sum Pass
+    // 단일 스레드그룹 내부 chunked scan으로 임의의 group 수를 처리한다(셰이더가 groupCnt를
+    // 읽어 chunk 순회). groupCnt(b1)는 clear 패스용 PerFrameData와 레이아웃·값이 같아 재사용.
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(prefixSumShader_.Get()), false);
+    pResources_->hiZPass.perFrameDataClear.bindCompute(cmdList, rootParamIdxPFD_, roomIdx_);
     pResources_->hiZPass.perGroupCnt.bindComputeAsSRV(cmdList, rootParamIdxSrcCnts0_, roomIdx_);
     pResources_->hiZPass.groupOffsets.bindCompute(cmdList, rootParamIdxDestCnts0_, roomIdx_);
 
     const auto groupCnt = instanceGroups_.size() - 1u;
-    static constexpr auto prefixSumDispatchUnit = 64u;
-    DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
-        static_cast<u32t>( (groupCnt + prefixSumDispatchUnit - 1u) / prefixSumDispatchUnit ), 1u, 1u
-    ), false );
+    DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(1u, 1u, 1u), false );
 
     pResources_->hiZPass.groupOffsets.uavBarrier(cmdList, roomIdx_);
 
@@ -382,8 +382,10 @@ void Dispatcher::hiZPassCompute() {
     pResources_->hiZPass.perGroupData.bindComputeAsSRV(cmdList, rootParamIdxPerGroupData_, roomIdx_);
     pResources_->hiZPass.indirectCmd.bindCompute(cmdList, rootParamIdxIndirectCmd_, roomIdx_);
 
+    // Command 패스는 그룹당 1엔트리 기록(스캔 아님)이라 multi-threadgroup이 정상.
+    static constexpr auto commandDispatchUnit = 64u;
     DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
-        static_cast<u32t>( (groupCnt + prefixSumDispatchUnit - 1u) / prefixSumDispatchUnit ), 1u, 1u
+        static_cast<u32t>( (groupCnt + commandDispatchUnit - 1u) / commandDispatchUnit ), 1u, 1u
     ), false );
 
     pResources_->hiZPass.indirectCmd.uavBarrier(cmdList, roomIdx_);
@@ -468,6 +470,7 @@ void Dispatcher::shadowUpdate() {
             mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 }
@@ -500,6 +503,7 @@ void Dispatcher::shadowUpdateMT() {
             mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 
@@ -716,7 +720,7 @@ void Dispatcher::gBufferIndirectDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(gBufferShader_.Get()), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1047,7 +1051,7 @@ void Dispatcher::gBufferDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(gBufferShader_.Get()), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1212,7 +1216,7 @@ void Dispatcher::addJobGBufferIndirectDraw(
     threadPool_->addJob([=, &latch]() {
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(gBufferShader_.Get()), false);
-        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
@@ -1301,7 +1305,7 @@ void Dispatcher::addJobGBufferDraw( ID3D12GraphicsCommandList* threadCmdList,
     threadPool_->addJob([=, &latch]() {
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(gBufferShader_.Get()), false);
-        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+        DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
         DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
 

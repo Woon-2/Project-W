@@ -135,6 +135,7 @@ public class ModelExtractorForServerWindow : EditorWindow
                 ExtractUtil.WriteText(geometryWriter, "Name", box.name ?? "");
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
+                // BV는 unscaled로 추출(모델 고유 scale은 런타임 body scale로 적용).
                 ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
                 ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);
@@ -159,6 +160,9 @@ public class ModelExtractorForServerWindow : EditorWindow
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
 
         ExtractUtil.WriteText(geometryWriter, "ModelName", targetName);
+        // Model's own scale; BV/bones are extracted unscaled and the server applies this via
+        // the object's body scale (mirrors the client setModel path).
+        ExtractUtil.WriteVector(geometryWriter, "ModelScale", targetObject.transform.localScale);
         ExtractBoundingVolumes();
 
         bool hasSkeleton = targetSkeleton != null;

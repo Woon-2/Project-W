@@ -61,6 +61,8 @@ enum class PacketType : uint16 {
 	C_LeaveRoom,
 	S_LobbyRoomPlayerJoined,
 	S_LobbyRoomPlayerLeft,
+	C_SelectWeapon,
+	S_LobbyWeaponSelected,
 	C_GameStart,
 	S_GameStart,
 };
@@ -72,6 +74,7 @@ enum class ObjectType : uint16 {
 	Stronghold,
 	Snake,
 	Mushroom,
+	Hobgoblin,
 };
 
 enum class PlayerWeaponType : uint8 {
@@ -112,6 +115,7 @@ constexpr int32 kPlayerMaxHp = 500;
 
 struct CEnterPacket : public PacketHeader {
 	char lobbyCode[7];   // 로비에서 받은 방 코드(6자리 영숫자 + null). RoomServer가 방 그룹화에 사용.
+	PlayerWeaponType weaponType;
 };
 
 struct PlayerInfo {
@@ -388,6 +392,7 @@ struct SDebugHitboxPacket : public PacketHeader {
 
 struct LobbyPlayerInfo {
 	uint16 sessionId;
+	PlayerWeaponType weaponType;
 };
 
 struct SCreateRoomPacket : public PacketHeader {
@@ -420,6 +425,15 @@ struct SLobbyRoomPlayerJoinedPacket : public PacketHeader {
 
 struct SLobbyRoomPlayerLeftPacket : public PacketHeader {
 	uint16 sessionId;
+};
+
+struct CSelectWeaponPacket : public PacketHeader {
+	PlayerWeaponType weaponType;
+};
+
+struct SLobbyWeaponSelectedPacket : public PacketHeader {
+	uint16 sessionId;
+	PlayerWeaponType weaponType;
 };
 
 struct SGameStartPacket : public PacketHeader {

@@ -259,6 +259,11 @@
     <ClInclude Include="..\common\zoneDef.hpp" />
     <ClInclude Include="..\common\markerDef.hpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\resources\data\chargeConfig.lua">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

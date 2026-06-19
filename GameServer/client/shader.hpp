@@ -623,9 +623,11 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
 	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
+	XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+	float      _pfd1;
 };
 }	// namespace ShadowMapCSMShader
 
@@ -684,9 +686,11 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
 	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
+	XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+	float      _pfd1;
 };
 }	// namespace ShadowMapSkinnedCSMShader
 
@@ -782,9 +786,11 @@ struct PerDrawcallData {
     XMFLOAT4X4 world;
 };
 struct PerFrameData {
-    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
     u32t       cascadeIdx;
     XMUINT3    _pfd0;
+    XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+    float      _pfd1;
 };
 }  // namespace TerrainShadowMapCSMShader
 
@@ -907,6 +913,10 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
+	// Unused by the GBuffer geometry pass, but mirrors pbrDeferred.hlsl's camPos so the
+	// shared pbrLighting.hlsli (camera-relative shadow space) compiles. Keep byte-aligned.
+	XMFLOAT3   camPos;
+	float      _padCam;
 };
 }	// namespace PBRDeferredGBufferShader
 
@@ -978,6 +988,10 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;
+	// Unused by the GBuffer geometry pass, but mirrors pbrDeferredSkinned.hlsl's camPos so
+	// the shared pbrLighting.hlsli (camera-relative shadow space) compiles. Keep byte-aligned.
+	XMFLOAT3   camPos;
+	float      _padCam;
 };
 }	// namespace PBRDeferredSkinnedGBufferShader
 
@@ -1005,6 +1019,7 @@ struct PerFrameData {
 	BindlessIndex idxGB2;
 	BindlessIndex idxGB3;
 	BindlessIndex idxDepth;
+	BindlessIndex idxGB4;   // linear view-space Z (posV.z), R32_FLOAT
 	// Debug
 	u32t       debugMode;
 	XMUINT3    _pad0;
@@ -1032,15 +1047,15 @@ struct PerFrameData {
 namespace TonemapResolveShader {
 
 // Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
-// 48 bytes. Layout finalized up-front (exposure/debug/bloom) so the cbuffer is
-// not re-packed as later Phase 2 features land.
+// 64 bytes.
 struct PerDrawcallData {
-	BindlessIndex idxSceneColor;   // HDR scene-color SRV
-	BindlessIndex idxBloom;        // bloom mip0 SRV (invalid => additive bloom is a no-op)
-	float         exposure;        // linear exposure multiplier applied before tonemapping
-	float         bloomIntensity;  // additive bloom strength (0 => off)
-	u32t          debugMode;       // GBuffer debug mode; !=0 => passthrough (skip tonemap)
+	BindlessIndex idxSceneColor;        // HDR scene-color SRV
+	BindlessIndex idxBloom;             // bloom mip0 SRV (invalid => additive bloom is a no-op)
+	float         exposure;             // linear exposure multiplier applied before tonemapping
+	float         bloomIntensity;       // additive bloom strength (0 => off)
+	u32t          debugMode;            // GBuffer debug mode; !=0 => passthrough (skip tonemap)
 	float         _pad;
+	BindlessIndex idxColorGradingLUT;   // 3D LUT SRV (idxRange<0 => grading is a no-op)
 };
 
 }	// namespace TonemapResolveShader

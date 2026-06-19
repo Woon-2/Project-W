@@ -25,6 +25,9 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.0)
 })
 
+-- Radial burst SFX, on the slash.
+skill:addEvent(100, "PlaySound", { sound = "sword_slash_7" })
+
 local onHitBase = OnHit({
     damage          = 2,
     vfxId           = 255,

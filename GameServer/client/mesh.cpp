@@ -1242,6 +1242,8 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
 ) {
     readHeadTag(ifs, "Geometry");
     const auto nodeCnt = readInteger(ifs, "NodeCnt");
+    const auto modelScale = readVec3(ifs, "ModelScale");
+    model.baseScale = DirectX::XMLoadFloat3(&modelScale);
     importTransform(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
     readTailTag(ifs, "Geometry");
 }
@@ -1429,6 +1431,10 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     auto& bone = (*model.skeleton.bones)[boneIdx];
     bone.name = readText(ifs, "Name");
+    // toDress(bind)는 모델 고유 scale이 베이크된 dress 공간 행렬, toLocal(inverse bind)은
+    // 그 역행렬이다. 추출기가 toLocal = inverse(toDress)로 기록하므로 스트림 값을 그대로
+    // 사용한다. (메시 정점도 추출 시 같은 dress 공간으로 베이크되어 임포트는 scale을
+    // 신경 쓸 필요가 없다 — graphicsArchitecture.md "모델 scale 베이크" 참고.)
     const auto toDress = readMatrix(ifs, "Dress");
     bone.toDress = DirectX::XMLoadFloat4x4(&toDress);
     const auto toLocal = readMatrix(ifs, "ToLocal");

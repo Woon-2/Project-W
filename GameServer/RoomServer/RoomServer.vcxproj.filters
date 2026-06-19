@@ -339,4 +339,9 @@
       <Filter>contents\etc</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\resources\data\chargeConfig.lua">
+      <Filter>contents\etc</Filter>
+    </None>
+  </ItemGroup>
 </Project>

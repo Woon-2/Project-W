@@ -43,6 +43,7 @@ struct LightData {
     XMFLOAT4 cascadeSplitsFarV = {};
     u32t cascadeCount = MAX_CSM_CASCADES;
     std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
+    mu::Vec3 cascadeCameraPos = {};  // camera eye for camera-relative cascade space (caster/receiver rebase)
 };
 
 struct CameraData {
@@ -100,7 +101,7 @@ struct Resources {
     // No CPU visibility feedback ring: static props need no anim/physics skip, so the
     // cull shader's per-instance feedback write lands in a throwaway scratch buffer.
     struct HiZPass {
-        static constexpr u32t MAX_HIZ_INSTANCES = 65'536u;
+        static constexpr u32t MAX_HIZ_INSTANCES = 120'000u;
 
         StructuredBuffer perInstanceDataCull;      // t0
         StructuredBuffer perInstanceDataCompact;   // t0
@@ -260,7 +261,7 @@ private:
     ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
     D3D12_VIEWPORT    viewport_{};
     D3D12_RECT        scissorRect_{};
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvGB_[4]{};
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvGB_[5]{};
     D3D12_CPU_DESCRIPTOR_HANDLE dsvGB_{};
     Fence* pFence_ = nullptr;
     ThreadPool*       threadPool_   = nullptr;

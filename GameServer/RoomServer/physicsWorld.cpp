@@ -41,6 +41,17 @@ void PhysicsWorld::unregisterScatter(ScatterHandle handle)
     worldColliders_.remove(handle);
 }
 
+bool PhysicsWorld::overlapsAnyScatterProp(mu::Vec3 queryPos, const BVH& queryWorldBVH) const
+{
+    constexpr float kPad = 2.f;
+    bool hit = false;
+    worldColliders_.forEach([&](const WorldCollider& wc) {
+        if (hit || wc.footprintReject(queryPos, kPad)) return;
+        if (wc.overlapsBVH(queryWorldBVH)) hit = true;
+    });
+    return hit;
+}
+
 void PhysicsWorld::unregisterBody(RigidBody* body)
 {
     auto it = std::ranges::find(entries_, body, &Entry::body);

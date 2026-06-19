@@ -134,6 +134,11 @@ public:
     virtual ~WorldCollider() = default;
     virtual bool footprintReject(mu::Vec3 bodyPos, float pad) const = 0;
     virtual int  generateContacts(RigidBody& dyn, const ContactSink& sink) const = 0;
+
+    // Body-less overlap query: does queryWorldBVH touch this collider's geometry?
+    // Used for spawn-position validation, not the per-step contact pipeline.
+    // Default: no-op (e.g. terrain does not block spawns; height is snapped separately).
+    virtual bool overlapsBVH(const BVH& queryWorldBVH) const { return false; }
 };
 
 // ---------------------------------------------------------------------------
@@ -188,6 +193,7 @@ public:
 
     bool footprintReject(mu::Vec3 bodyPos, float pad) const override;
     int  generateContacts(RigidBody& dyn, const ContactSink& sink) const override;
+    bool overlapsBVH(const BVH& queryWorldBVH) const override;
 
     bool empty() const { return insts_.empty(); }
 

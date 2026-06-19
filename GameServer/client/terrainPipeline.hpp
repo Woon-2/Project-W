@@ -37,6 +37,7 @@ struct LightData {
     XMFLOAT4   cascadeSplitsFarV = {};  // view-space far depth per cascade
     u32t       cascadeCount = MAX_CSM_CASCADES;
     std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
+    mu::Vec3   cascadeCameraPos = {};  // camera eye for camera-relative cascade space (caster/receiver rebase)
 };
 
 struct FrameData {
@@ -48,6 +49,7 @@ struct FrameData {
 struct DrawEvent {
     const TerrainData* terrain = nullptr;
     mu::Mat4x4         world   = {};    // world transform; default is identity
+    bool               shadowCulled = false;   // light-frustum culled (shadow pass only)
 };
 
 struct Resources {

@@ -24,9 +24,11 @@ cbuffer PerDrawcallData : register(b0) {
 };
 
 cbuffer PerFrameData : register(b1) {
-    float4x4 lightVP;       // current cascade's VP (updated per cascade pass)
+    float4x4 lightVP;       // current cascade's VP (maps CAMERA-RELATIVE world pos to light NDC)
     uint     cascadeIdx;
     uint3    _pfd0;
+    float3   camPos;        // camera world position for the camera-relative shadow rebase
+    float    _pfd1;
 };
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -42,8 +44,9 @@ VSOutput VSMain(
     uint   idxInst  : SV_InstanceID
 ) {
     VSOutput o;
-    float4 posW = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].world);
-    o.pos = mul(posW, lightVP);
+    float3 posW = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].world).xyz;
+    // Camera-relative shadow space: rebase by camPos to match the receiver side.
+    o.pos = mul(float4(posW - camPos, 1.0f), lightVP);
     o.uv  = uv;
     return o;
 }

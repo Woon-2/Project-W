@@ -96,6 +96,14 @@ public:
     void render(GFX& gfx) const;
     void stopContinuous();
 
+    // Destroys the particle at compact index `index` (into the particles()
+    // array, [0..activeCount()-1]) immediately. Reuses the standard death path:
+    // fires Death sub-emitter events at the particle's position (so a chained
+    // child effect, e.g. an explosion, spawns) and then swap-removes it.
+    // External control hook for the skill system (non-penetrating hitboxes);
+    // keeps the VFX/skill boundary to a single public call. Out-of-range = no-op.
+    void killParticle(int index);
+
     // Spawn particles at worldPos (used by ParticleEffect sub-emitter dispatch).
     void emitAt(int count, mu::Vec3 worldPos,
                 mu::Vec3 inheritVel   = {},
@@ -149,6 +157,11 @@ private:
     float        randomFloat(float lo, float hi);
     float        sampleArcAngle();
     void         spawnParticle();
+    // Fires Death sub-emitter events for pool_[i] then swap-removes it.
+    // Shared by update()'s lifetime<=0 path and the public killParticle().
+    // Does NOT advance the caller's loop index (the swapped-in particle at i
+    // must be re-processed).
+    void         killParticleAt(int i);
     void         emitScheduledBursts(float prevTime, float currTime);
     void         emitScheduledBurstsDet(float prevTime, float currTime);
     void         emitRateDet();

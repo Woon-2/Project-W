@@ -25,6 +25,7 @@ struct ServerSkeleton {
 // Server-side model: collision geometry + skeleton for animated hit detection.
 struct Model {
 	std::string    name;
+	mu::Vec3       baseScale{ 1.f, 1.f, 1.f };   // Unity root localScale; applied at runtime via body scale
 	BVH            bvh;
 	ServerSkeleton skeleton;
 };

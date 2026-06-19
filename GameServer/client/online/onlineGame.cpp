@@ -70,6 +70,37 @@ static constexpr int     kLagScaleDownFrames  = 100;
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
 
+static const mu::Vec4 kBarrierMagicBlockedColor{ 1.0f, 0.12f, 0.08f, 0.82f };
+static const mu::Vec4 kBarrierMagicPassableColor{ 0.10f, 0.48f, 1.0f, 0.72f };
+static constexpr float    kBarrierMagicMinDiameter = 8.f;
+static constexpr float    kBarrierMagicMaxDiameter = 24.f;
+static constexpr int      kBarrierMagicRenderOrder = 4;
+static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
+static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
+
+static bool isHobgoblinBarrierMarker(const MarkerDef& m) {
+	return m.type == "Wall" && (m.name == "WallHobgoblin_0" || m.name == "WallHobgoblin_1");
+}
+
+static float barrierMagicDiameter(const MarkerDef& m) {
+	const float wallHeight = std::fabs(m.scale.y());
+	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
+}
+
+static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
+	if (m.name == "WallHobgoblin_0") {
+		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
+	}
+	return mu::Vec3{};
+}
+
+static uint8 currentBarrierMagicState(const std::unordered_map<uint16, uint8>& zoneStates) {
+	for (const auto& [_, state] : zoneStates) {
+		if (state == 1) return 1;
+	}
+	return 0;
+}
+
 static constexpr float   kArrowRainRadius          = 4.75f;
 static constexpr int     kArrowVolleyCount          = 9;
 static constexpr float   kPiercingMultiRadius       = 2.0f;
@@ -158,13 +189,14 @@ void Game::setupStageVisual() {
 	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
 	clientZoneSystem_.build(chunkManager_.zones());
 	bindZoneHandlers();
+	rebuildBarrierMagicCircleQuads(currentBarrierMagicState(zoneStates_));
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
-	dirLight_.intensity = 6.6f;
+	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
@@ -2022,6 +2054,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.vfxByIdSize         = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
+		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos) {
+			INet::ClientApp::sound().playSfx3D(name, pos);
+		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,
 		// AttachType::Ground hitboxes, particle ground-conform/collision).
@@ -2153,10 +2189,11 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setAnimBlender(animSystem_, assetManager_);
 
 	if (goblin->model() && goblin->model()->ragdollDef) {
-		goblin->ragdoll().build(
+		goblin->ragdoll()->build(
 			goblin->model()->skeleton,
 			*goblin->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin->body().scale()
 		);
 	}
 
@@ -2202,6 +2239,65 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
 }
 
+// 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
+// (같은 리그를 공유하므로 goblinAnimations()/goblinHpBars_/idGoblinMap_ 등은 그대로 재사용).
+void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
+	auto hobgoblin = std::make_shared<Hobgoblin>();
+
+	hobgoblin->setId(hobgoblinInfo.objectId);
+	hobgoblin->setPos(DirectX::XMLoadFloat3(&hobgoblinInfo.pos));
+	hobgoblin->setOrient(DirectX::XMLoadFloat4(&hobgoblinInfo.orient));
+	hobgoblin->setScale(DirectX::XMLoadFloat3(&hobgoblinInfo.scale));
+	hobgoblin->setModel(assetManager_.modelHobgoblin());
+	hobgoblin->setAnimBlender(animSystem_, assetManager_);
+
+	if (hobgoblin->model() && hobgoblin->model()->ragdollDef) {
+		hobgoblin->ragdoll()->build(
+			hobgoblin->model()->skeleton,
+			*hobgoblin->model()->ragdollDef,
+			physicsWorld_,
+			hobgoblin->body().scale()
+		);
+	}
+
+	hobgoblin->setHp(hobgoblinInfo.hp);
+	hobgoblin->setMaxHp(hobgoblinInfo.maxHp);
+	hobgoblin->setFaction(Faction::Monsters);
+	hobgoblin->enableBVRendering();
+
+	hobgoblin->body().setMotionType(MotionType::Kinematic);
+	hobgoblin->body().setMass(40.f);
+	hobgoblin->body().setLinearDamping(0.f);
+	hobgoblin->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
+	}
+
+	hobgoblin->setRenderObjectId(nextRenderObjId_++);
+
+	// Register hobgoblin in skill system's object lookup table.
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = hobgoblin.get();
+	}
+
+	goblins_.push_back(hobgoblin);
+	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
+	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
+}
+
 void Game::createSnake(const ObjectInfo& info) {
 	auto snake = std::make_shared<Snake>();
 
@@ -2213,10 +2309,11 @@ void Game::createSnake(const ObjectInfo& info) {
 	snake->setAnimBlender(animSystem_, assetManager_);
 
 	if (snake->model() && snake->model()->ragdollDef) {
-		snake->ragdoll().build(
+		snake->ragdoll()->build(
 			snake->model()->skeleton,
 			*snake->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			snake->body().scale()
 		);
 	}
 
@@ -2268,10 +2365,11 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushroom->setAnimBlender(animSystem_, assetManager_);
 
 	if (mushroom->model() && mushroom->model()->ragdollDef) {
-		mushroom->ragdoll().build(
+		mushroom->ragdoll()->build(
 			mushroom->model()->skeleton,
 			*mushroom->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			mushroom->body().scale()
 		);
 	}
 
@@ -2377,6 +2475,45 @@ void Game::bindZoneHandlers() {
 	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
 }
 
+void Game::rebuildBarrierMagicCircleQuads(uint8 state) {
+	barrierMagicCircleQuads_.clear();
+
+	const bool blocked = (state == 1);
+	for (const auto& m : chunkManager_.markers()) {
+		if (!isHobgoblinBarrierMarker(m)) continue;
+
+		const float diameter = barrierMagicDiameter(m);
+		const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+		BarrierMagicCircleQuad quad{};
+		quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
+		           * mu::translate(circlePos);
+		quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+		quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
+		quad.sortPos = circlePos;
+		barrierMagicCircleQuads_.push_back(quad);
+	}
+}
+
+void Game::renderBarrierMagicCircleQuads() {
+	const Texture* tex = assetManager_.magicCircleTex();
+	if (!tex) return;
+
+	for (const auto& quad : barrierMagicCircleQuads_) {
+		gfx_.addDrawEvent(BillboardPipeline::DrawEvent{
+			.world = quad.world,
+			.pTex = tex,
+			.tint = quad.tint,
+			.blend = ps::BlendMode::Alpha,
+			.rotation3D = quad.rotation,
+			.alignment = ps::RendererModule::Alignment::Local,
+			.renderOrder = kBarrierMagicRenderOrder,
+			.sortMode = ps::RendererModule::SortMode::Distance,
+			.sortingFudge = -0.1f,
+			.sortPos = quad.sortPos,
+		});
+	}
+}
+
 // 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
 // "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
 // 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
@@ -2384,11 +2521,12 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
+	rebuildBarrierMagicCircleQuads(state);
+
 	if ( state == 1 ) {
 		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
 		for ( const auto& m : chunkManager_.markers() ) {
-			if ( m.type != "Wall" ) continue;
-			if ( m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1" ) continue;
+			if ( !isHobgoblinBarrierMarker(m) ) continue;
 
 			auto bar = std::make_shared<Cube>();
 			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
@@ -2550,8 +2688,8 @@ void Game::hideNpcs(const std::vector<uint16>& npcIds) {
 
 		auto& goblin = it->second;
 		goblin->setHidden(true);
-		if (goblin->ragdoll().isActive())
-			goblin->ragdoll().deactivate(physicsWorld_);
+		if (goblin->ragdoll()->isActive())
+			goblin->ragdoll()->deactivate(physicsWorld_);
 	}
 }
 
@@ -2723,7 +2861,7 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
-	Monster* monster = it->second;
+	Object* monster = it->second;
 
 	if (monster->isDead()) return;
 
@@ -2774,13 +2912,13 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	);
 	if (it == idMonsterMap_.end()) return;
 
-	Monster* npc = it->second;
+	Object* npc = it->second;
 	npc->setHp( newHp );
 	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
-	if (npc->ragdoll().isActive())
-		npc->ragdoll().deactivate(physicsWorld_);
+	if (npc->ragdoll()->isActive())
+		npc->ragdoll()->deactivate(physicsWorld_);
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
@@ -2936,6 +3074,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 접지 중력 게이팅: 이번 step의 terrain 접촉을 보고 로컬 플레이어 접지 판정 +
+		// 중력 게이트 설정(다음 step에 반영) + ground-snap. 물리 step 루프 안에서
+		// (렌더 프레임이 아니라) 호출해야 고정 timestep 의미가 유지된다.
+		if (player_) player_->updateGroundedGravityGate(physicsWorld_, effectiveInterval);
 		// 물리 적분 직후, 로컬 플레이어를 다른 플레이어와 reciprocal soft separation.
 		// (setCurrPos로 curr만 갱신 → 렌더 보간의 prev는 보존된다)
 		resolvePlayerSeparation(effectiveInterval);
@@ -3038,14 +3180,6 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				}
 			}
 
-			// 전투 효과음(3D, 대상의 월드 위치에서 재생). 카탈로그에 파일이 없으면 1회 경고만.
-			switch (pEv->type) {
-			case EventType::Hit:    INet::ClientApp::sound().playSfx3D("hit",    obj->renderState().pos); break;
-			case EventType::Death:  INet::ClientApp::sound().playSfx3D("death",  obj->renderState().pos); break;
-			case EventType::Attack: INet::ClientApp::sound().playSfx3D("attack", obj->renderState().pos); break;
-			default: break;
-			}
-
 			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
 
 			// 로컬 플레이어 사망 시 게임 레벨 플래그를 세운다. (standalone game.cpp의 playerDead_ 처리와 대응)
@@ -3124,10 +3258,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
 	{
-		auto activateRagdollIfPending = [&](Monster& g) {
+		auto activateRagdollIfPending = [&](Object& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -3162,8 +3296,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Monster& g) {
-			Ragdoll& rd = g.ragdoll();
+		auto syncRagdollToAnim = [&](Object& g) {
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -3470,6 +3604,7 @@ void Game::renderInGame() {
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	renderBarrierMagicCircleQuads();
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
@@ -3517,7 +3652,7 @@ void Game::renderInGame() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -3561,7 +3696,7 @@ void Game::renderInGame() {
 	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // ===========================================================================
@@ -3768,7 +3903,12 @@ void Game::refreshLobbyUI() {
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
 	for (const auto& p : lobbyPlayers_) {
-		vs.players.push_back(LobbyUI::PlayerSlot{ p.name, p.sessionId == hostId_ });
+		vs.players.push_back(LobbyUI::PlayerSlot{
+			p.name,
+			p.sessionId == hostId_,
+			p.sessionId == myId_,
+			p.weaponType
+		});
 	}
 	lobbyUI_.refresh(vs);
 
@@ -3785,6 +3925,7 @@ LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	cb.onCopyCode     = [this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; };
 	cb.onOpenSettings = [this]() { settingsPanel_.open(); };
 	cb.onQuit         = []() { PostQuitMessage(0); };
+	cb.onSelectWeapon = [this](int direction) { lobbySelectWeapon(direction); };
 	return cb;
 }
 
@@ -3868,7 +4009,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		pendingHandoff_ = false;
 		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
-		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_));
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_, selectedLobbyWeapon_));
 		INet::ClientApp::send();
 		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
 		return;
@@ -3978,7 +4119,7 @@ void Game::renderWaitingRoom() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -3996,7 +4137,7 @@ void Game::renderWaitingRoom() {
 	// 배경 카메라와 무관하게 각 캐릭터를 슬롯 전용 카메라로 RT 셀에 그린다(투명 배경).
 	const int filled = static_cast<int>(lobbyPlayers_.size());
 	gfx_.setLobbyPortraitActive(true);
-	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f), .iblIntensity = 0.0f });
+	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f), .iblIntensity = 0.92f });
 	// 정면-상단 키 라이트(고정 방향, 배경광과 무관하게 캐릭터를 일관되게 비춤). shadow는 GFX에서 off.
 	{
 		const mu::NVec3 keyDir(-0.25f, -0.5f, -0.83f);
@@ -4113,6 +4254,7 @@ void Game::lobbyLeaveRoom() {
 	isHost_ = false;
 	hostId_ = 0;
 	myId_   = 0;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
@@ -4146,6 +4288,27 @@ void Game::lobbyStartGame() {
 	gSharedLog << "[Lobby] 게임 시작 요청 전송\n";
 }
 
+void Game::lobbySelectWeapon(int direction) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+		return;
+	}
+
+	const int cur = std::clamp(static_cast<int>(selectedLobbyWeapon_), 0, 3);
+	const int next = (cur + (direction >= 0 ? 1 : 3)) % 4;
+	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == myId_) {
+			p.weaponType = selectedLobbyWeapon_;
+			break;
+		}
+	}
+
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSelectWeaponPacket(selectedLobbyWeapon_));
+	INet::ClientApp::send();
+	refreshLobbyUI();
+}
+
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
@@ -4153,15 +4316,16 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	myId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId), selectedLobbyWeapon_ });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
 	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
 }
 
-void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds) {
+void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos) {
 	if (!success) {
 		lobbyUI_.setMainMenuMessage(L"방을 찾을 수 없습니다");
 		gSharedLog << "[Lobby] 방 참가 실패\n";
@@ -4172,10 +4336,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 
 	lobbyPlayers_.clear();
-	for (uint16 id : playerIds) {
-		lobbyPlayers_.push_back({ id, lobbyDisplayName(id) });
+	for (const LobbyPlayerInfo& info : playerInfos) {
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		if (info.sessionId == myId_) {
+			selectedLobbyWeapon_ = info.weaponType;
+		}
 	}
 
 	lobbyState_ = LobbyState::WaitingRoom;
@@ -4184,14 +4352,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
-void Game::onLobbyPlayerJoined(uint16 sessionId) {
+void Game::onLobbyPlayerJoined(const LobbyPlayerInfo& info) {
 	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
-		[sessionId](const LobbyPlayer& p) { return p.sessionId == sessionId; });
+		[&info](const LobbyPlayer& p) { return p.sessionId == info.sessionId; });
 	if (!exists) {
-		lobbyPlayers_.push_back({ sessionId, lobbyDisplayName(sessionId) });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
 	}
 	refreshLobbyUI();
-	gSharedLog << "[Lobby] 플레이어 입장: " << sessionId << "\n";
+	gSharedLog << "[Lobby] 플레이어 입장: " << info.sessionId << "\n";
 }
 
 void Game::onLobbyPlayerLeft(uint16 sessionId) {
@@ -4205,6 +4373,24 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 
 	refreshLobbyUI();
 	gSharedLog << "[Lobby] 플레이어 퇴장: " << sessionId << "\n";
+}
+
+void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) {
+	const auto ordinal = static_cast<uint8>(weaponType);
+	if (ordinal > static_cast<uint8>(PlayerWeaponType::HeavyArrow)) {
+		return;
+	}
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == sessionId) {
+			p.weaponType = weaponType;
+			break;
+		}
+	}
+	if (sessionId == myId_) {
+		selectedLobbyWeapon_ = weaponType;
+	}
+	refreshLobbyUI();
 }
 
 void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
@@ -4377,10 +4563,8 @@ void Game::setupSkillDial(PlayerWeaponType weaponType) {
 void Game::onSkillCharge(uint16 playerId, uint8 slot, float charge) {
 	if (!player_) return;
 	if (playerId == static_cast<uint16>(player_->getId())) {
-		// setCharge reports the 0 -> 1 transition; the icon also pops + flips to its
-		// lit "ready" shader mode. Fire the audio cue on the transition.
-		if (skillDial_.setCharge(slot, charge))
-			INet::ClientApp::sound().playSfx("skill_ready", 1.f);
+		// setCharge pops the icon + flips it to its lit "ready" shader mode on the 0 -> 1 transition.
+		skillDial_.setCharge(slot, charge);
 	} else if (slot < SkillDialHUD::kSlots) {
 		teammateCharge_[playerId][slot] = charge;
 	}
@@ -4562,6 +4746,36 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	skillDial_.update(deltaTime.count() / 1000.f);
 	comboSecLeft_ = std::max(0.f, comboSecLeft_ - deltaTime.count() / 1000.f);   // local combo countdown
 
+	// DEV: arrow keys nudge the skill dial's resolution-relative pivot margin so a
+	// good position can be found live, without recompiling. Logs the settled
+	// fraction/pixel values on key release so repeated nudges are easy to read back.
+	if (skillDial_.visible() && !uiManager_.needsCursor()) {
+		const float dtSec = deltaTime.count() / 1000.f;
+		const bool  shift = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		const float speed = (shift ? 600.f : 120.f) * dtSec;   // px/sec, at current resolution
+
+		const float dx = (keyboardStateCurr_[VK_RIGHT] & 0x80) ? speed
+		                : (keyboardStateCurr_[VK_LEFT]  & 0x80) ? -speed : 0.f;
+		const float dy = (keyboardStateCurr_[VK_DOWN]   & 0x80) ? -speed
+		                : (keyboardStateCurr_[VK_UP]     & 0x80) ?  speed : 0.f;
+
+		const float w = static_cast<float>(gClientRect.right - gClientRect.left);
+		const float h = static_cast<float>(gClientRect.bottom - gClientRect.top);
+		if (dx != 0.f || dy != 0.f) skillDial_.nudgeMarginPx(dx, dy, w, h);
+
+		const bool anyDown     = ((keyboardStateCurr_[VK_LEFT] | keyboardStateCurr_[VK_RIGHT] |
+		                            keyboardStateCurr_[VK_UP]  | keyboardStateCurr_[VK_DOWN]) & 0x80) != 0;
+		const bool anyDownPrev = ((keyboardStatePrev_[VK_LEFT] | keyboardStatePrev_[VK_RIGHT] |
+		                            keyboardStatePrev_[VK_UP]  | keyboardStatePrev_[VK_DOWN]) & 0x80) != 0;
+		if (anyDownPrev && !anyDown) {
+			gSharedLog << "[SkillDial Tune] marginXFrac=" << skillDial_.marginXFrac()
+			           << " marginYFrac=" << skillDial_.marginYFrac()
+			           << " (px@" << w << "x" << h << ": "
+			           << w * skillDial_.marginXFrac() << ", " << h * skillDial_.marginYFrac() << ")\n";
+			dumpLog();
+		}
+	}
+
 	const float nowSec = std::chrono::duration<float>(
 		std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -4670,16 +4884,23 @@ void Game::cullObjects() {
 	}
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+// 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
+// 못한 채 방치(T-pose 등)될 수 있기 때문이다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
 			if (auto* blender = p->animBlender())
-				blender->setCulled(p->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && p->isFrustumCulled());
 		}
-		auto resetHiZ = [&](const std::shared_ptr<Monster>& m) {
+		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+			if (auto* blender = m->animBlender())
+				blender->setCulled(blender->hasEverUpdated() && m->isFrustumCulled());
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
@@ -4691,7 +4912,7 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);

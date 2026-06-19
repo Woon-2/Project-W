@@ -66,7 +66,10 @@ private:
 	
 	void cullObjects();
 	void cullObjectsForShadow();
-	void applyHiZCulling();
+	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
+	// (이전 이름: applyHiZCulling — 컬링 자체를 수행하는 게 아니라 readback 결과를
+	//  애니메이션 시스템으로 피드백하는 역할이라 이름을 바꿈)
+	void feedbackCullResultToAnim();
 
 	void setupMonsterHpBars();
 

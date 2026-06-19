@@ -31,6 +31,9 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 1.4)
 })
 
+-- Swing SFX, on the slash (first hitbox wave).
+skill:addEvent(120, "PlaySound", { sound = "slash_wave" })
+
 local onHit = OnHit({
     damage          = 20,
     vfxId           = 0,

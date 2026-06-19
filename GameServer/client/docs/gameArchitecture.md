@@ -135,14 +135,16 @@ render():
   uiManager_.render()
   gfx_.addFrameData() × 파이프라인 수
   gfx_.render()               — Hi-Z 5단계 compute + indirect draw + visibleFlags readback
-  applyHiZCulling()           — readback 결과로 setHiZCulled + AnimBlender::setCulled 갱신
+  feedbackCullResultToAnim()  — readback 결과로 setHiZCulled + AnimBlender::setCulled 갱신 (구 applyHiZCulling)
 ```
 
 **컬링 시스템 설계 원칙:**
 - `viewFrustumCulled`: DrawEvent 제출 차단 전용. Hi-Z와 무관.
 - `hiZCulled_`: Object::update()/AnimBlender 연산 스킵 전용. 1-frame delay.
 - `AnimBlender::setCulled(frustum || !hiZVisible)`: 두 플래그 통합해 AnimSystem 스킵 조건으로 사용.
-- `applyHiZCulling()` 한 곳에서만 animBlender 동기화 (`cullObjects()`에서 setCulled 직접 호출 금지).
+  단, `AnimBlender::hasEverUpdated() == false`(아직 한 번도 onCalcLocal이 안 불림)인 동안은
+  컬링 판정과 무관하게 `setCulled(false)`를 강제해 최초 1회 갱신을 보장한다.
+- `feedbackCullResultToAnim()` 한 곳에서만 animBlender 동기화 (`cullObjects()`에서 setCulled 직접 호출 금지).
 
 ---
 
@@ -229,6 +231,8 @@ skillSystem_.update()
 ```
 
 activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이유: finalXformData가 최신 포즈로 확정된 후 seed해야 올바른 초기 래그돌 자세가 된다.
+
+`buildPassengers`는 ragdoll body가 없는 **모든** 본을 어떤 body에 강체 바인딩한다(자손은 조상 body, 조상 없는 본은 무방향 BFS로 최근접 body). 바인딩 누락 시 그 본은 동결된 objectWorldMat 때문에 월드에 고정되어 메시가 늘어남 — 상세: `physicsArchitecture.md` "Passenger 본 커버리지 불변식".
 
 매 프레임 `syncRagdollToAnim`: ragdoll 물리 결과를 finalXformData에 덮어써 렌더링에 반영.
 

@@ -21,6 +21,7 @@ cbuffer PerDrawcallData : register(b0) {
     float bloomIntensity;
     uint  debugMode;
     float _pad;
+    int4  idxColorGradingLUT;     // 3D LUT bindless index; idxColorGradingLUT.x < 0 => no-op
 }
 
 // Fullscreen triangle — no vertex buffer needed.
@@ -66,6 +67,12 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     color *= exposure;
     color = acesFilmic(color);
     color = pow(abs(color), 1.0f / 2.2f);
+
+    // LDR color grading via 3D LUT (gamma-corrected sRGB space, so external .cube
+    // LUTs authored against an LDR signal line up without extra conversion).
+    if (idxColorGradingLUT.x >= 0) {
+        color = sampleBindless3D(idxColorGradingLUT, color);
+    }
 
     return float4(color, 1.0f);
 }

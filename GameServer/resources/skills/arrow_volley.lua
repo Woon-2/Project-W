@@ -58,6 +58,7 @@ for i = 0, count - 1 do
         attach              = VFXParticleAttach(11, i),
         applyAttachRotation = true,
         useParticleSize     = false,
+        penetrate           = false,   -- non-penetrating: each arrow particle dies on its first hit
         hitGroup            = i,
         hitGroupCooldownMs  = 550,
         onHit               = onHit

@@ -31,6 +31,10 @@ end
 -- All active particles in ParticleEffect[vfxId].system(systemIdx) receive hitboxes.
 -- When useParticleSize = true in the SpawnHitbox event, each particle's current visual size
 -- scales the OBB halfExtents defined in localOBBs (size=1.0 → halfExtents unchanged).
+-- SpawnHitbox field `penetrate` (default true) controls persistence:
+--   penetrate = false => non-penetrating: the source particle is destroyed on its first hit
+--   (and any Death sub-emitter -- e.g. an explosion -- fires at the impact point). VFXParticle
+--   hitboxes only; arrow.lua / arrow_volley.lua / energy_explosion_arrow.lua use it.
 function VFXParticleAttach(vfxId, systemIdx)
     return { type = "VFXParticle", vfxId = vfxId, systemIdx = systemIdx or 0 }
 end
@@ -83,6 +87,12 @@ end
 --       not here. PlayVFX only controls placement, orientation, and travel direction.
 -- Example -- forward 4m ground circle:   skill:addEvent(120,"PlayVFX",{ vfxId=7, offset=Vec3(0,0,4), groundLock=true })
 -- Example -- 45-degree fan to the left:   skill:addEvent(120,"PlayVFX",{ vfxId=8, offset=Vec3(0,0,2), orient={45,0,0} })
+
+-- PlaySound event parameters (skill:addEvent(ms, "PlaySound", { ... })):
+--   sound = <string>  -- logical name in the sound catalog (soundCatalog.cpp), e.g. "sword_slash_1"
+-- Plays a cosmetic 3D one-shot at the caster's position at the event time. Client-only:
+-- the server skips this event (no audio), so PlaySound never affects gameplay determinism.
+-- Example: skill:addEvent(200, "PlaySound", { sound = "sword_slash_1" })
 
 -- Helper: on-hit response definition.
 function OnHit(params)

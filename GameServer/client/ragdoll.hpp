@@ -50,7 +50,10 @@ public:
     // Build ragdoll from skeleton + def.  Allocates bodies and joints but does NOT
     // register them with the world — registration happens in activate().
     // Call once after Object creation.
-    void build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world);
+    // modelScale = model base scale x per-instance scale (= Object::scale()). Bone positions
+    // are scaled via objectWorldMat (seedFromFinalXforms/syncFromPose), so it is applied only to
+    // halfExtents/inertia, which do not go through boneWorldMat.
+    void build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world, mu::Vec3 modelScale);
 
     // Unregister all bodies/joints from world and release memory.
     // Joints are removed before bodies to prevent dangling pointer access.
@@ -125,6 +128,10 @@ private:
     std::vector<std::pair<RigidBody*, RigidBody*>> jointBodies_;  // parallel to joints_; built in build()
     std::vector<std::pair<RigidBody*, RigidBody*>> ignoredPairs_; // registered in activate(); cleared in deactivate()/destroy()
     std::vector<PassengerBone>                 passengers_;
+    // model base x per-instance scale (captured in build()); applied to ragdoll geometry so the
+    // skinned mesh stays scaled after activation (syncToFinalXforms) and bodies sit on the scaled
+    // skeleton (seed/syncFromPose use scaled capsuleOffset).
+    mu::Vec3 modelScale_{ 1.f, 1.f, 1.f };
     bool active_ = false;
 };
 

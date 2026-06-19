@@ -101,6 +101,15 @@ public:
     void  setUprightStiffness(float k) { uprightStiffness_ = k; }
     float uprightStiffness()     const { return uprightStiffness_; }
 
+    // Per-body gravity multiplier (engine-standard, mirrors Unity's
+    // Rigidbody.gravityScale). 1 = full world gravity, 0 = no gravity for this
+    // body. The integrate step multiplies the world gravity by this value, so a
+    // character controller can gate gravity off while grounded (eliminating the
+    // gravity-vs-contact micro-bounce) and restore it instantly when airborne.
+    // Only meaningful for Dynamic bodies.
+    void  setGravityScale(float s) { gravityScale_ = s; }
+    float gravityScale()     const { return gravityScale_; }
+
     // Coefficient of restitution (0 = perfectly inelastic, 1 = elastic).
     void setRestitution(float r)    { restitution_ = r; }
 
@@ -190,6 +199,7 @@ private:
     // --- Dynamic body properties (unused for Kinematic/Static) ---
     bool       rotationLocked_   = false;
     float      uprightStiffness_ = 0.f;
+    float      gravityScale_     = 1.f;   // per-body gravity multiplier (see setGravityScale)
     float      invMass_          = 0.f;
     float      restitution_    = 0.3f;
     float      friction_       = 0.5f;

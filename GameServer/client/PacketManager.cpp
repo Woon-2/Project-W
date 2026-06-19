@@ -121,6 +121,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSLobbyRoomPlayerLeftPacket( buffer, len );
 		break;
 
+	case PacketType::S_LobbyWeaponSelected:
+		handleSLobbyWeaponSelectedPacket( buffer, len );
+		break;
+
 	case PacketType::S_GameStart:
 		handleSGameStartPacket( buffer, len );
 		break;
@@ -157,6 +161,10 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 
 		case ObjectType::Goblin:
 			game->createGoblin(objInfo);
+			break;
+
+		case ObjectType::Hobgoblin:
+			game->createHobgoblin(objInfo);
 			break;
 
 		case ObjectType::Snake:
@@ -240,6 +248,10 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 		switch (objInfo.type) {
 		case ObjectType::Goblin:
 			game->createGoblin(objInfo);
+			break;
+
+		case ObjectType::Hobgoblin:
+			game->createHobgoblin(objInfo);
 			break;
 
 		case ObjectType::Snake:
@@ -363,24 +375,29 @@ void PacketManager::handleSJoinRoomPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SJoinRoomPacket*>(buffer);
 	std::string code( pkt->code, strnlen( pkt->code, sizeof( pkt->code ) ) );
 
-	std::vector<uint16> playerIds;
+	std::vector<LobbyPlayerInfo> playerInfos;
 	auto list = pkt->getPlayerList();
-	playerIds.reserve( list.count() );
+	playerInfos.reserve( list.count() );
 	for ( uint16 i = 0; i < list.count(); ++i ) {
-		playerIds.push_back( list[i].sessionId );
+		playerInfos.push_back( list[i] );
 	}
 
-	INet::ClientApp::onlineGame()->onLobbyJoined( pkt->success, pkt->hostId, pkt->myId, code, playerIds );
+	INet::ClientApp::onlineGame()->onLobbyJoined( pkt->success, pkt->hostId, pkt->myId, code, playerInfos );
 }
 
 void PacketManager::handleSLobbyRoomPlayerJoinedPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SLobbyRoomPlayerJoinedPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onLobbyPlayerJoined( pkt->info.sessionId );
+	INet::ClientApp::onlineGame()->onLobbyPlayerJoined( pkt->info );
 }
 
 void PacketManager::handleSLobbyRoomPlayerLeftPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SLobbyRoomPlayerLeftPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onLobbyPlayerLeft( pkt->sessionId );
+}
+
+void PacketManager::handleSLobbyWeaponSelectedPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SLobbyWeaponSelectedPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onLobbyWeaponSelected( pkt->sessionId, pkt->weaponType );
 }
 
 void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
@@ -463,12 +480,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode) {
+std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CEnterPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<CEnterPacket>();
 	strncpy_s(pkt->lobbyCode, lobbyCode.data(), _TRUNCATE);
+	pkt->weaponType = weaponType;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_Enter;
@@ -510,6 +528,19 @@ std::shared_ptr<SendBuffer> PacketManager::makeCLeaveRoomPacket() {
 	auto pkt = bw.reserve<PacketHeader>();
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_LeaveRoom;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCSelectWeaponPacket(PlayerWeaponType weaponType) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CSelectWeaponPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CSelectWeaponPacket>();
+	pkt->weaponType = weaponType;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_SelectWeapon;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

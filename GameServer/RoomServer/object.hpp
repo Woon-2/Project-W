@@ -54,7 +54,7 @@ public:
 	mu::NQuat orient() const { return body_.orient(); }
 
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 scale() const { return body_.scale(); }
+	mu::Vec3 scale() const { return instanceScale_; }
 
 	mu::Vec3 forward() const { return forward_; }
 	mu::Vec3 right() const { return right_; }
@@ -154,9 +154,16 @@ protected:
 	mu::Vec3 MU_CALLCONV calcSeparationForce( const std::vector<mu::Vec3>& nearby, float radius ) const;
 
 private:
+	// Compose model base scale x per-instance scale into body_ (mirrors client Object).
+	void applyCompositeScale();
+
 	float oldX_{};
 	float oldZ_{};
 	RigidBody body_{};
+
+	// body_.scale() = modelBaseScale_ * instanceScale_ (component-wise).
+	mu::Vec3 modelBaseScale_{ 1.f, 1.f, 1.f };   // setModel: pModel_->baseScale (model's own scale)
+	mu::Vec3 instanceScale_ { 1.f, 1.f, 1.f };   // setScale: per-instance gameplay scale
 
 	mu::Vec3 forward_{};
 	mu::Vec3 right_{};
@@ -193,15 +200,24 @@ private:
 
 class Player : public Object {
 public:
+	static constexpr int kSkillSlots = 3;
+
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
 
 	void setWeaponType(PlayerWeaponType weaponType) { weaponType_ = weaponType; }
 	PlayerWeaponType weaponType() const { return weaponType_; }
+	void resetSkillState() {
+		selectedSlot_ = 0;
+		for (int i = 0; i < kSkillSlots; ++i) {
+			skillCharge_[i] = 0.f;
+			cooldownEnd_[i] = Milliseconds{ 0.f };
+		}
+		comboCount_ = 0;
+		lastCreditMs_ = Milliseconds{ 0.f };
+	}
 
 	// --- Stack-charge skill state (server-authoritative) ---
-	static constexpr int kSkillSlots = 3;
-
 	uint8 selectedSlot() const { return selectedSlot_; }
 	void  setSelectedSlot(uint8 s) { selectedSlot_ = (s < kSkillSlots) ? s : 0; }
 
@@ -228,7 +244,7 @@ public:
 	void         setLastCreditMs(Milliseconds t) { lastCreditMs_ = t; }
 
 private:
-	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
 	uint8        selectedSlot_ = 0;
 	float        skillCharge_[kSkillSlots] = { 0.f, 0.f, 0.f };

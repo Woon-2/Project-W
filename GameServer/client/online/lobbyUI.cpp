@@ -118,6 +118,21 @@ std::vector<std::wstring> wrapToWidth(GFX* gfx, FontHandle* font,
     return out;
 }
 
+constexpr int weaponIndex(PlayerWeaponType weaponType) {
+    const int idx = static_cast<int>(weaponType);
+    return (idx >= 0 && idx < 4) ? idx : 0;
+}
+
+const wchar_t* weaponDisplayName(PlayerWeaponType weaponType) {
+    switch (weaponType) {
+    case PlayerWeaponType::Katana:       return L"검";
+    case PlayerWeaponType::SpearHook:    return L"창";
+    case PlayerWeaponType::CrystalWand:  return L"완드";
+    case PlayerWeaponType::HeavyArrow:   return L"활";
+    default:                             return L"검";
+    }
+}
+
 }   // namespace
 
 void LobbyUI::loadTextures(GFX& gfx) {
@@ -172,6 +187,38 @@ void LobbyUI::loadTextures(GFX& gfx) {
         .needsUploadInfo = false,
         .sampler         = Samplers::BilinearClamp
     });
+
+    gfx.addRequestTextureLoad(RequestTextureLoad{
+        .name            = "LobbyLeftButton",
+        .texturePath     = "../resources/UI/ui_left_button.dds",
+        .pDest           = &lobbyLeftButtonTex_,
+        .pTexHashMap     = &lobbyTexHashMap_,
+        .needsUploadInfo = false,
+        .sampler         = Samplers::BilinearClamp
+    });
+
+    const char* weaponIconPaths[4] = {
+        "../resources/UI/katana.dds",
+        "../resources/UI/spear-hook.dds",
+        "../resources/UI/crystal-wand.dds",
+        "../resources/UI/heavy-arrow.dds",
+    };
+    const char* weaponIconNames[4] = {
+        "LobbyWeaponKatana",
+        "LobbyWeaponSpearHook",
+        "LobbyWeaponCrystalWand",
+        "LobbyWeaponHeavyArrow",
+    };
+    for (int i = 0; i < 4; ++i) {
+        gfx.addRequestTextureLoad(RequestTextureLoad{
+            .name            = weaponIconNames[i],
+            .texturePath     = weaponIconPaths[i],
+            .pDest           = &lobbyWeaponIconTex_[i],
+            .pTexHashMap     = &lobbyTexHashMap_,
+            .needsUploadInfo = false,
+            .sampler         = Samplers::BilinearClamp
+        });
+    }
 
     // Process immediately while the in-game background load queue is still empty.
     gfx.loadRequestedAssets();
@@ -472,7 +519,7 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     const float storyW     = innerW * 0.4f - storyGap;  // story panel
     const float storyX     = pad + squadAreaW + storyGap;
     const float slotW      = (squadAreaW - 3.f * gap) / 4.f;
-    const float nameH      = 56.f;
+    const float nameH      = 92.f;
     const XMFLOAT4 slotPanelCol    = { 0.09f, 0.13f, 0.20f, 0.16f };  // character backdrop (near opaque)
     const XMFLOAT4 slotNameplateCol= { 0.05f, 0.08f, 0.13f, 0.78f };  // nameplate background
 
@@ -520,20 +567,64 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 
         const float nameY = slotsY + slotsH - nameH - 4.f;
         slotNameplateBgs_[i] = makeSolid(roomPanel, "nameplateBg",
-            x + 10.f, nameY, slotW - 20.f, 52.f, slotNameplateCol, 1);
+            x + 10.f, nameY, slotW - 20.f, 88.f, slotNameplateCol, 1);
         slotNameLabels_[i] = makeLabel(roomPanel, L"대기 중",
             x + 10.f, nameY, 18.f, slotW - 20.f, 28.f,
             textLight, UI::TextHAlign::Center, 3);
         slotHostBadgeLabels_[i] = makeLabel(roomPanel, L"",
-            x + 10.f, slotsY + slotsH - 30.f, 12.f, slotW - 20.f, 22.f,
+            x + 10.f, nameY + 66.f, 12.f, slotW - 20.f, 20.f,
             textMuted, UI::TextHAlign::Center, 3);
+
+        auto* weaponRoot = roomPanel->addChild(std::make_unique<UI::UIElement>());
+        weaponRoot->name = "weaponSelector";
+        weaponRoot->zOrder = 3;
+        applyRect(weaponRoot, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+            x + 14.f, nameY + 30.f, slotW - 28.f, 34.f);
+        slotWeaponRoots_[i] = weaponRoot;
+
+        const float weaponRowW = slotW - 28.f;
+        const float arrowW = 22.f;
+        const float iconSize = 28.f;
+        const float labelX = arrowW + iconSize + 8.f;
+        const float labelW = std::max(42.f, weaponRowW - labelX - arrowW - 4.f);
+
+        auto* prevBtn = static_cast<UI::Button*>(weaponRoot->addChild(std::make_unique<UI::Button>()));
+        prevBtn->name = "weaponPrev";
+        applyRect(prevBtn, UI::Anchors::TopLeft, UI::Pivots::TopLeft, 0.f, 4.f, arrowW, 26.f);
+        prevBtn->texNormal = lobbyLeftButtonTex_.res ? &lobbyLeftButtonTex_ : nullptr;
+        prevBtn->texTint        = { 0.95f, 0.97f, 1.f, 0.88f };
+        prevBtn->texTintHovered = { 1.15f, 1.15f, 1.f, 1.f };
+        prevBtn->texTintPressed = { 0.75f, 0.78f, 0.82f, 1.f };
+        prevBtn->onClick = [this]() { if (callbacks_.onSelectWeapon) callbacks_.onSelectWeapon(-1); };
+        slotWeaponPrevButtons_[i] = prevBtn;
+
+        auto* icon = weaponRoot->addChild(std::make_unique<UI::Image>());
+        icon->name = "weaponIcon";
+        applyRect(icon, UI::Anchors::TopLeft, UI::Pivots::TopLeft, arrowW + 4.f, 3.f, iconSize, iconSize);
+        icon->zOrder = 1;
+        slotWeaponIcons_[i] = static_cast<UI::Image*>(icon);
+
+        slotWeaponLabels_[i] = makeLabel(weaponRoot, L"", labelX, 3.f, 13.f, labelW, 28.f,
+            textLight, UI::TextHAlign::Center, 2);
+
+        auto* nextBtn = static_cast<UI::Button*>(weaponRoot->addChild(std::make_unique<UI::Button>()));
+        nextBtn->name = "weaponNext";
+        applyRect(nextBtn, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+            weaponRowW - arrowW, 4.f, arrowW, 26.f);
+        nextBtn->texNormal = lobbyLeftButtonTex_.res ? &lobbyLeftButtonTex_ : nullptr;
+        nextBtn->uvScaleBias = { -1.f, 1.f, 1.f, 0.f };
+        nextBtn->texTint        = { 0.95f, 0.97f, 1.f, 0.88f };
+        nextBtn->texTintHovered = { 1.15f, 1.15f, 1.f, 1.f };
+        nextBtn->texTintPressed = { 0.75f, 0.78f, 0.82f, 1.f };
+        nextBtn->onClick = [this]() { if (callbacks_.onSelectWeapon) callbacks_.onSelectWeapon(1); };
+        slotWeaponNextButtons_[i] = nextBtn;
 
         // Gold rectangular border around the host name (4 edges, zOrder 2). Hidden by
         // default; shown only for the host in refresh().
         const XMFLOAT4 borderCol = { 0.95f, 0.80f, 0.35f, 1.f };
         const float bpad = 4.f, bt = 2.f;
         const float bx = x + 10.f - bpad, by = nameY - bpad;
-        const float bw = (slotW - 20.f) + 2.f * bpad, bh = 28.f + 2.f * bpad;
+        const float bw = (slotW - 20.f) + 2.f * bpad, bh = 88.f + 2.f * bpad;
         slotNameBorders_[i][0] = makeSolid(roomPanel, "nameBorderT", bx, by, bw, bt, borderCol, 2);
         slotNameBorders_[i][1] = makeSolid(roomPanel, "nameBorderB", bx, by + bh - bt, bw, bt, borderCol, 2);
         slotNameBorders_[i][2] = makeSolid(roomPanel, "nameBorderL", bx, by, bt, bh, borderCol, 2);
@@ -819,6 +910,17 @@ void LobbyUI::refresh(const ViewState& s) {
             if (slotHostBadgeLabels_[i]) {
                 slotHostBadgeLabels_[i]->setText(player.isHost ? L"\U0001F451 호스트" : L"");
             }
+            if (slotWeaponRoots_[i]) slotWeaponRoots_[i]->visible = true;
+            const int widx = weaponIndex(player.weaponType);
+            if (slotWeaponIcons_[i]) {
+                slotWeaponIcons_[i]->texture = lobbyWeaponIconTex_[widx].res ? &lobbyWeaponIconTex_[widx] : nullptr;
+            }
+            if (slotWeaponLabels_[i]) {
+                slotWeaponLabels_[i]->setText(weaponDisplayName(player.weaponType));
+                slotWeaponLabels_[i]->setTextColor(textLight.x, textLight.y, textLight.z, textLight.w);
+            }
+            if (slotWeaponPrevButtons_[i]) slotWeaponPrevButtons_[i]->visible = player.isSelf;
+            if (slotWeaponNextButtons_[i]) slotWeaponNextButtons_[i]->visible = player.isSelf;
             for (auto* edge : slotNameBorders_[i]) {
                 if (edge) edge->visible = player.isHost;
             }
@@ -828,6 +930,7 @@ void LobbyUI::refresh(const ViewState& s) {
                 slotNameLabels_[i]->setTextColor(textMuted.x, textMuted.y, textMuted.z, textMuted.w);
             }
             if (slotHostBadgeLabels_[i]) slotHostBadgeLabels_[i]->setText(L"");
+            if (slotWeaponRoots_[i]) slotWeaponRoots_[i]->visible = false;
             for (auto* edge : slotNameBorders_[i]) {
                 if (edge) edge->visible = false;
             }

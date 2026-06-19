@@ -3292,6 +3292,35 @@ inline const Mat<4, 4> MU_CALLCONV persp(
     return dx::XMMatrixPerspectiveOffCenterLH(left, right, bottom, top, nearZ, farZ);
 }
 
+// Reversed-Z LH 퍼스펙티브 투영 (near -> depth 1.0, far -> depth 0.0).
+// XMMatrixPerspectiveFovLH는 표준 매핑(near->0, far->1)만 지원하므로 z/w 항을 직접 구성한다.
+// depth(z) = A + B/z 형태에서 depth(nearZ)=1, depth(farZ)=0이 되도록 풀면:
+//   A = nearZ / (nearZ - farZ), B = nearZ * farZ / (farZ - nearZ)
+inline const Mat<4, 4> MU_CALLCONV perspReversedZ(
+    Radian fov, float aspect, float nearZ, float farZ
+) __MathUtil_NOEXCEPT {
+    float sinFov = 0.f, cosFov = 0.f;
+    dx::XMScalarSinCos(&sinFov, &cosFov, 0.5f * static_cast<float>(fov));
+
+    const float height = cosFov / sinFov;
+    const float width = height / aspect;
+    const float a = nearZ / (nearZ - farZ);
+    const float b = nearZ * farZ / (farZ - nearZ);
+
+    return dx::XMMatrixSet(
+        width, 0.f,    0.f, 0.f,
+        0.f,   height, 0.f, 0.f,
+        0.f,   0.f,    a,   1.f,
+        0.f,   0.f,    b,   0.f
+    );
+}
+
+inline const Mat<4, 4> MU_CALLCONV perspReversedZ(
+    Degree fov, float aspect, float nearZ, float farZ
+) __MathUtil_NOEXCEPT {
+    return perspReversedZ(static_cast<Radian>(fov), aspect, nearZ, farZ);
+}
+
 inline const Mat<3, 3> MU_CALLCONV NQuat::mat3() const __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationQuaternion(quat_);
 }

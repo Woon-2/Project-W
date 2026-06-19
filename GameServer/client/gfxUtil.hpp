@@ -448,7 +448,8 @@ struct Texture {
 	enum class Type {
 		Tex2D,
 		Tex2DArray,
-		TexCube
+		TexCube,
+		Tex3D
 	};
 	ComPtr<ID3D12Resource> res;
 	std::shared_ptr<TextureUploadInfo> uploadInfo;	// UpdateTexture 함수의 대상이 되는 경우 생성 후 사용
@@ -481,6 +482,15 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
 	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
 	const D3D12_CLEAR_VALUE& optimizedClearValue
+);
+
+// 커스텀 3D 텍스처(Texture3D, 정육면체 size x size x size)를 생성한다.
+// color grading LUT처럼 작은 volume texture 용도로 사용한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자. idxSrv.idxRange는 etoi(Texture::Type::Tex3D)로 설정해야 한다.
+Texture createTexture3D( ID3D12Device* device, std::uint32_t size,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
 );
 
 // 특정한 width, height의 텍스처로 밉맵을 만들 때
