@@ -91,6 +91,7 @@ union SkillEventPayload {
     struct PlayAnimation {
         char  clipName[24];
         float blendTime;
+        u8t   attackIndex;   // mirror of client field (struct parity; server does not parse it)
     } playAnimation;
 
     struct PlayVFX {

@@ -275,6 +275,16 @@ void AnimBlenderGoblin::init(const Model* model, const std::vector<std::shared_p
 	framesBlended_.resize(skeleton().bones->size());
 	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
+
+	// 로드된 공격 클립만으로 순서 목록을 구성한다(lua attackIndex가 이 목록을 인덱싱).
+	// 레거시 단일 "Goblin_Attack"은 폴백으로 마지막에 둬 기존 에셋이 계속 동작하게 한다.
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Goblin_Attack1", "Goblin_Attack2", "Goblin_Attack3", "Goblin_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
 }
 
 void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
@@ -307,8 +317,8 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
 	}
 
-	if (cooldownAttack_ > 0ms) {
-		const auto durationAttack = targetClip("Goblin_Attack")->duration;
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
 		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
 		cooldownAttack_ -= deltaTime;
@@ -345,16 +355,18 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
 	updateFrames("Goblin_Idle",   animTimeIdle_);
 	updateFrames("Goblin_Walk",   animTimeWalk_);
-	updateFrames("Goblin_Attack", animTimeAttack_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
 	updateFrames("Goblin_Hit",    animTimeHit_);
 	updateFrames("Goblin_Death",  animTimeDeath_);
 
 	auto& localXforms  = localXformData();
 	auto& framesIdle   = curFrames("Goblin_Idle");
 	auto& framesWalk   = curFrames("Goblin_Walk");
-	auto& framesAttack = curFrames("Goblin_Attack");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
 	auto& framesHit    = curFrames("Goblin_Hit");
 	auto& framesDeath  = curFrames("Goblin_Death");
 
@@ -366,8 +378,8 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
 		// 그 다음 공격 애니메이션 우선도 높게 주기
-		else if (tAttack_ > 0.01f) {
-			auto& attackClip = targetClip("Goblin_Attack");
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
 			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
@@ -391,7 +403,7 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
 		}
@@ -415,8 +427,15 @@ void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds delta
 		break;
 
 	case EventType::Attack:
-		pOwner->animTimeAttack_ = 0s;
-		pOwner->cooldownAttack_ = 3000ms;
+		// attackIndex로 어떤 공격 클립을 재생할지 선택한다(목록 범위로 clamp).
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
 		break;
 
 	case EventType::Respawn:
@@ -439,6 +458,15 @@ void AnimBlenderSnake::init(const Model* model, const std::vector<std::shared_pt
 	framesBlended_.resize(skeleton().bones->size());
 	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
+
+	// 로드된 공격 클립만으로 순서 목록 구성(lua attackIndex가 인덱싱). 레거시 "Snake_Attack" 폴백.
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Snake_Attack1", "Snake_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
 }
 
 void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
@@ -466,8 +494,8 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
 	}
 
-	if (cooldownAttack_ > 0ms) {
-		const auto durationAttack = targetClip("Snake_Attack")->duration;
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
 		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
 		cooldownAttack_ -= deltaTime;
@@ -497,16 +525,18 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
 	updateFrames("Snake_Idle",   animTimeIdle_);
 	updateFrames("Snake_Walk",   animTimeWalk_);
-	updateFrames("Snake_Attack", animTimeAttack_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
 	updateFrames("Snake_Hit",    animTimeHit_);
 	updateFrames("Snake_Death",  animTimeDeath_);
 
 	auto& localXforms  = localXformData();
 	auto& framesIdle   = curFrames("Snake_Idle");
 	auto& framesWalk   = curFrames("Snake_Walk");
-	auto& framesAttack = curFrames("Snake_Attack");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
 	auto& framesHit    = curFrames("Snake_Hit");
 	auto& framesDeath  = curFrames("Snake_Death");
 
@@ -516,8 +546,8 @@ void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 			finalBakedClipId_    = deathClip->id;
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
-		else if (tAttack_ > 0.01f) {
-			auto& attackClip = targetClip("Snake_Attack");
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
 			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
@@ -540,7 +570,7 @@ void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
 		}
@@ -564,8 +594,14 @@ void AnimBlenderSnake::EventBus::receive(const BasicEvent* event, Seconds deltaT
 		break;
 
 	case EventType::Attack:
-		pOwner->animTimeAttack_ = 0s;
-		pOwner->cooldownAttack_ = 3000ms;
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
 		break;
 
 	case EventType::Respawn:
@@ -588,6 +624,15 @@ void AnimBlenderMushroom::init(const Model* model, const std::vector<std::shared
 	framesBlended_.resize(skeleton().bones->size());
 	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
+
+	// 로드된 공격 클립만으로 순서 목록 구성(lua attackIndex가 인덱싱). 레거시 "Mushroom_Attack" 폴백.
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Mushroom_Attack1", "Mushroom_Attack2", "Mushroom_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
 }
 
 void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
@@ -615,8 +660,8 @@ void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
 		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
 	}
 
-	if (cooldownAttack_ > 0ms) {
-		const auto durationAttack = targetClip("Mushroom_Attack")->duration;
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
 		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
 		cooldownAttack_ -= deltaTime;
@@ -646,16 +691,18 @@ void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
 	updateFrames("Mushroom_Idle",   animTimeIdle_);
 	updateFrames("Mushroom_Walk",   animTimeWalk_);
-	updateFrames("Mushroom_Attack", animTimeAttack_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
 	updateFrames("Mushroom_Hit",    animTimeHit_);
 	updateFrames("Mushroom_Death",  animTimeDeath_);
 
 	auto& localXforms  = localXformData();
 	auto& framesIdle   = curFrames("Mushroom_Idle");
 	auto& framesWalk   = curFrames("Mushroom_Walk");
-	auto& framesAttack = curFrames("Mushroom_Attack");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
 	auto& framesHit    = curFrames("Mushroom_Hit");
 	auto& framesDeath  = curFrames("Mushroom_Death");
 
@@ -665,8 +712,8 @@ void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
 			finalBakedClipId_    = deathClip->id;
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
-		else if (tAttack_ > 0.01f) {
-			auto& attackClip = targetClip("Mushroom_Attack");
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
 			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
@@ -689,7 +736,7 @@ void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
 				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
 		}
@@ -713,8 +760,14 @@ void AnimBlenderMushroom::EventBus::receive(const BasicEvent* event, Seconds del
 		break;
 
 	case EventType::Attack:
-		pOwner->animTimeAttack_ = 0s;
-		pOwner->cooldownAttack_ = 3000ms;
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
 		break;
 
 	case EventType::Respawn:
@@ -734,6 +787,14 @@ void AnimBlenderMushroom::EventBus::receive(const BasicEvent* event, Seconds del
 // 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
 // (모델의 바운딩 볼륨을 기반으로 게임 객체의 월드 변환을 적용한
 //  월드 공간 바운딩 볼륨을 따로 두어야 월드 공간 충돌 처리가 가능하다.)
+void Object::adoptAnimBlender(std::unique_ptr<AnimBlender> blender, AnimSystem& animSystem) {
+	if (renderState_.animBlender)
+		animSystem.untrackAnimBlender(renderState_.animBlender.get());
+	if (blender)
+		animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
 void Object::setModel(const Model* pModel){
 	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: 널 모델이 전달되었습니다.", false);
 	if (pModel == nullptr) {
@@ -1559,6 +1620,669 @@ void Mushroom::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetM
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
+
+// =========================================================================
+// [SCAFFOLD] Monster skill caster implementations (Bomber/Birdy/Slime/Treant).
+// Each is the AnimBlenderMushroom implementation copied with a different clip
+// prefix and attack-clip candidate list. Disabled behind `#if 0`; enable with
+// the matching [Name] guards in object.hpp + AssetManager + editor files.
+// =========================================================================
+
+#if 0  // [Bomber]
+void AnimBlenderBomber::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Bomber_Attack1", "Bomber_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
+}
+
+void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+	const auto speed = pOwner->velocity().len();
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Bomber_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Bomber_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
+	updateFrames("Bomber_Idle",   animTimeIdle_);
+	updateFrames("Bomber_Walk",   animTimeWalk_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
+	updateFrames("Bomber_Hit",    animTimeHit_);
+	updateFrames("Bomber_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Bomber_Idle");
+	auto& framesWalk   = curFrames("Bomber_Walk");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
+	auto& framesHit    = curFrames("Bomber_Hit");
+	auto& framesDeath  = curFrames("Bomber_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Bomber_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Bomber_Idle").get(),
+				targetClip("Bomber_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderBomber::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderBomber*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+	case EventType::Attack:
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
+		break;
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+	default:
+		break;
+	}
+}
+
+void Bomber::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderBomber>();
+	blender->init(assetManager.modelBomber(), assetManager.bomberAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+#endif // [Bomber]
+
+#if 0  // [Birdy]
+void AnimBlenderBirdy::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Birdy_Attack1", "Birdy_Attack2", "Birdy_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
+}
+
+void AnimBlenderBirdy::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+	const auto speed = pOwner->velocity().len();
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Birdy_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Birdy_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderBirdy::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
+	updateFrames("Birdy_Idle",   animTimeIdle_);
+	updateFrames("Birdy_Walk",   animTimeWalk_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
+	updateFrames("Birdy_Hit",    animTimeHit_);
+	updateFrames("Birdy_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Birdy_Idle");
+	auto& framesWalk   = curFrames("Birdy_Walk");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
+	auto& framesHit    = curFrames("Birdy_Hit");
+	auto& framesDeath  = curFrames("Birdy_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Birdy_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Birdy_Idle").get(),
+				targetClip("Birdy_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderBirdy::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderBirdy*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+	case EventType::Attack:
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
+		break;
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+	default:
+		break;
+	}
+}
+
+void Birdy::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderBirdy>();
+	blender->init(assetManager.modelBirdy(), assetManager.birdyAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+#endif // [Birdy]
+
+#if 0  // [Slime]
+void AnimBlenderSlime::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Slime_Attack1", "Slime_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
+}
+
+void AnimBlenderSlime::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+	const auto speed = pOwner->velocity().len();
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Slime_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Slime_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderSlime::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
+	updateFrames("Slime_Idle",   animTimeIdle_);
+	updateFrames("Slime_Walk",   animTimeWalk_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
+	updateFrames("Slime_Hit",    animTimeHit_);
+	updateFrames("Slime_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Slime_Idle");
+	auto& framesWalk   = curFrames("Slime_Walk");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
+	auto& framesHit    = curFrames("Slime_Hit");
+	auto& framesDeath  = curFrames("Slime_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Slime_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Slime_Idle").get(),
+				targetClip("Slime_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderSlime::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderSlime*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+	case EventType::Attack:
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
+		break;
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+	default:
+		break;
+	}
+}
+
+void Slime::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderSlime>();
+	blender->init(assetManager.modelSlime(), assetManager.slimeAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+#endif // [Slime]
+
+#if 0  // [Treant]  attackIndex mapping: 0=SpinKick, 1=Clap, 2=Punch
+void AnimBlenderTreant::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+
+	auto loaded = [&](const char* n) {
+		for (auto& c : anims) if (c->name == n) return true;
+		return false;
+	};
+	for (const char* name : { "Treant_SpinKick", "Treant_Clap", "Treant_Punch", "Treant_Attack" })
+		if (loaded(name)) attackClips_.push_back(name);
+	if (!attackClips_.empty()) currentAttackClip_ = attackClips_.front();
+}
+
+void AnimBlenderTreant::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+	const auto speed = pOwner->velocity().len();
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd   = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Treant_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Treant_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+		if (cooldownDeath_ > 0ms)
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		else
+			tDeath_ = 1.f;
+		cooldownDeath_ -= deltaTime;
+	}
+	else if (cooldownHit_ > 0ms) {
+		animTimeHit_ += deltaTime * 2.f;
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+}
+
+void AnimBlenderTreant::onCalcLocal(PassKey<AnimSystem>) {
+	const bool hasAttack = !currentAttackClip_.empty();
+
+	updateFrames("Treant_Idle",   animTimeIdle_);
+	updateFrames("Treant_Walk",   animTimeWalk_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
+	updateFrames("Treant_Hit",    animTimeHit_);
+	updateFrames("Treant_Death",  animTimeDeath_);
+
+	auto& localXforms  = localXformData();
+	auto& framesIdle   = curFrames("Treant_Idle");
+	auto& framesWalk   = curFrames("Treant_Walk");
+	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
+	auto& framesHit    = curFrames("Treant_Hit");
+	auto& framesDeath  = curFrames("Treant_Death");
+
+	if (mode_ == Mode::Baked) {
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Treant_Death");
+			finalBakedClipId_    = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_    = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
+		else {
+			float   weights[]   = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Treant_Idle").get(),
+				targetClip("Treant_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_    = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+	}
+	else /* if (mode_ == Mode::Keyframe) */ {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i],    tHit_);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i],  tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderTreant::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderTreant*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+	case EventType::Attack:
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			pOwner->cooldownAttack_ = 3000ms;
+		}
+		break;
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
+		break;
+	default:
+		break;
+	}
+}
+
+void Treant::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderTreant>();
+	blender->init(assetManager.modelTreant(), assetManager.treantAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+#endif // [Treant]
 
 // 거점 이벤트 처리: 고블린 핸들러에서 AnimBlender 포워딩·래그돌만 제거한 형태.
 // HP/사망 상태만 갱신한다(서버 권위; death 판정은 서버가 수행).

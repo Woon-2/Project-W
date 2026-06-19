@@ -327,6 +327,9 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                 std::strncpy(p.clipName, clipName.c_str(), sizeof(p.clipName) - 1);
                 p.clipName[sizeof(p.clipName) - 1] = '\0';
                 p.blendTime = blendTime;
+                // attackIndex selects which attack clip the target AnimBlender plays
+                // (index into its ordered attackClips_ list). Default 0 = first attack.
+                p.attackIndex = static_cast<u8t>(evTbl.get_or("attackIndex", 0));
                 break;
             }
             case SkillEventType::PlayVFX: {

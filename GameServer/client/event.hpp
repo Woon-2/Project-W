@@ -110,8 +110,14 @@ struct EvDeath : BasicEvent {
 struct EvAttack : BasicEvent {
 	EvAttack() : BasicEvent{EventType::Attack} {}
 	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
+	EvAttack(i32t attackerId, u8t attackIndex)
+		: BasicEvent{EventType::Attack}, attackerId{attackerId}, attackIndex{attackIndex} {}
 
 	i32t attackerId{-1};
+	// 어떤 공격 클립을 재생할지 선택하는 인덱스.
+	// AnimBlender가 보유한 공격 클립 순서 목록(attackClips_)의 인덱스로 해석된다.
+	// PlayAnimation 스킬 이벤트의 attackIndex에서 전파된다. 기본 0(첫 공격).
+	u8t  attackIndex{0};
 };
 struct EvRespawn : BasicEvent {
 	EvRespawn() : BasicEvent{EventType::Respawn} {}
