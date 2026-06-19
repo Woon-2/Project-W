@@ -119,6 +119,36 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelMushroom_
 	} );
 
+	// [SCAFFOLD] Monster skill-caster model loads. Enable per [Name] guard.
+#if 1  // [Bomber]
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bomber/bomber.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBomber_
+	} );
+#endif // [Bomber]
+#if 1  // [Birdy]  add ../resources/models/birdy/birdy.bin first
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/birdy/birdy.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBirdy_
+	} );
+#endif // [Birdy]
+#if 1  // [Slime]  add ../resources/models/slime/slime.bin first
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/slime/slime.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelSlime_
+	} );
+#endif // [Slime]
+#if 0  // [Treant]  add ../resources/models/treant/treant.bin first
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/treant/treant.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelTreant_
+	} );
+#endif // [Treant]
+
 	//gfx.addRequestTextureLoad( RequestTextureLoad{
 	//	.name = "PlayerHpLine",
 	//	.texturePath = "../resources/UI/player_hp_line.dds",
@@ -678,11 +708,31 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	}
 
 	auto tmpGoblinAnims   = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
-	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim", gfx);
-	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim", gfx);
+	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/animations/snakeAnimations.anim", gfx);
+	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/animations/mushroomAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
 	snakeAnimations_.reserve(tmpSnakeAnims.size());
 	mushroomAnimations_.reserve(tmpMushroomAnims.size());
+
+	// [SCAFFOLD] Monster skill-caster animation loads (part 1/3: load + reserve).
+	// Enable per [Name] guard together with parts 2/3 below and 3/3 in
+	// setupBakedAnimationIds(). The tmp* locals are visible to part 2/3.
+#if 1  // [Bomber]
+	auto tmpBomberAnims = loadAnimClipsFromFile("../resources/animations/bomberAnimations.anim", gfx);
+	bomberAnimations_.reserve(tmpBomberAnims.size());
+#endif // [Bomber]
+#if 1  // [Birdy]  add ../resources/animations/birdyAnimations.anim first
+	auto tmpBirdyAnims = loadAnimClipsFromFile("../resources/animations/birdyAnimations.anim", gfx);
+	birdyAnimations_.reserve(tmpBirdyAnims.size());
+#endif // [Birdy]
+#if 1  // [Slime]  add ../resources/animations/slimeAnimations.anim first
+	auto tmpSlimeAnims = loadAnimClipsFromFile("../resources/animations/slimeAnimations.anim", gfx);
+	slimeAnimations_.reserve(tmpSlimeAnims.size());
+#endif // [Slime]
+#if 0  // [Treant]  add ../resources/animations/treantAnimations.anim first
+	auto tmpTreantAnims = loadAnimClipsFromFile("../resources/animations/treantAnimations.anim", gfx);
+	treantAnimations_.reserve(tmpTreantAnims.size());
+#endif // [Treant]
 
 	// 공용 리소스(gfx.initSharedResources)는 호출부에서 미리 초기화되어 있어야 한다.
 	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
@@ -694,6 +744,24 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		snakeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	for (auto& clip : tmpMushroomAnims)
 		mushroomAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+
+	// [SCAFFOLD] Monster skill-caster animation loads (part 2/3: move into members).
+#if 1  // [Bomber]
+	for (auto& clip : tmpBomberAnims)
+		bomberAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+#endif // [Bomber]
+#if 1  // [Birdy]
+	for (auto& clip : tmpBirdyAnims)
+		birdyAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+#endif // [Birdy]
+#if 1  // [Slime]
+	for (auto& clip : tmpSlimeAnims)
+		slimeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+#endif // [Slime]
+#if 0  // [Treant]
+	for (auto& clip : tmpTreantAnims)
+		treantAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+#endif // [Treant]
 
 	// Re-runs player ids (harmless) and assigns goblin baked-anim ids.
 	setupBakedAnimationIds();
@@ -833,4 +901,17 @@ void AssetManager::setupBakedAnimationIds() {
 	for (auto& clip : mushroomAnimations_) {
 		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
+	// [SCAFFOLD] Monster skill-caster animation loads (part 3/3: baked ids).
+#if 1  // [Bomber]
+	for (auto& clip : bomberAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
+#endif // [Bomber]
+#if 1  // [Birdy]
+	for (auto& clip : birdyAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
+#endif // [Birdy]
+#if 1  // [Slime]
+	for (auto& clip : slimeAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
+#endif // [Slime]
+#if 0  // [Treant]
+	for (auto& clip : treantAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
+#endif // [Treant]
 }

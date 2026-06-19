@@ -138,6 +138,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(EnergyOrbPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData( TerrainPipeline::CameraData{
 		.view = view_,
 		.proj = proj_,

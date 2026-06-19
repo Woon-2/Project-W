@@ -125,8 +125,9 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char  clipName[24];  // null-terminated, max 23 chars
+        char  clipName[24];  // null-terminated, max 23 chars (documentation / readability)
         float blendTime;
+        u8t   attackIndex;   // selects which attack clip the AnimBlender plays (index into attackClips_)
     } playAnimation;
 
     struct PlayVFX {

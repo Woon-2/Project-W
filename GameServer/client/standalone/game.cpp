@@ -854,6 +854,8 @@ void Game::setupStage() {
 	editorRefs.debugBV     = &debugBVView_;
 	editorRefs.player      = player_;
 	editorRefs.goblin      = goblin_;
+	editorRefs.assetManager = &assetManager_;   // monster caster model/anim source (setMonsterCaster)
+	editorRefs.animSystem  = &animSystem_;       // (un)track blenders on caster hot-swap
 	editorRefs.hwnd        = ghWnd;
 	editorRefs.terrainHeightAt = groundSampler_.heightAt;
 	// UI 위젯(스킬 드롭다운) 재구성 시 GPU가 in-flight로 참조 중인 텍스트 텍스처를 해제하지 않도록

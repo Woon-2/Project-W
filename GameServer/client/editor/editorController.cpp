@@ -1,6 +1,8 @@
 #include "pch.hpp"
 #include "editorController.hpp"
 
+#include "../AssetManager.hpp"   // monster caster model/anim accessors (setMonsterCaster)
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -42,6 +44,8 @@ void Controller::init(const InitRefs& refs) {
     debugBV_     = refs.debugBV;
     player_      = refs.player;
     goblin_      = refs.goblin;
+    assetManager_ = refs.assetManager;
+    animSystem_  = refs.animSystem;
     hwnd_        = refs.hwnd;
     terrainHeightAt_ = refs.terrainHeightAt;
     flushGpu_    = refs.flushGpu;
@@ -162,6 +166,85 @@ std::shared_ptr<Object> Controller::targetObj() const {
     return player_;
 }
 
+void Controller::setMonsterCaster(CharacterKind kind) {
+    // Reuse the single monster object (goblin_) as the caster rig: swap its model and
+    // AnimBlender to the selected monster. Keeps the existing physics body / HP bar /
+    // render wiring (only the visual rig + animation change). The blender is built and
+    // init'd here (not via Object::setAnimBlender, which is hard-wired per class), then
+    // adopted by the object (which un-tracks the previous blender from the AnimSystem).
+    // Note: the ragdoll is not rebuilt for the new skeleton; death ragdoll on a swapped
+    // rig is out of scope for attack-pattern authoring.
+    if (!goblin_ || !assetManager_ || !animSystem_) return;
+    switch (kind) {
+#if 1  // [Goblin]
+    case CharacterKind::Goblin: {
+        goblin_->setModel(assetManager_->modelGoblin());
+        auto b = std::make_unique<AnimBlenderGoblin>();
+        b->init(assetManager_->modelGoblin(), assetManager_->goblinAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Goblin]
+#if 1  // [Mushroom]
+    case CharacterKind::Mushroom: {
+        goblin_->setModel(assetManager_->modelMushroom());
+        auto b = std::make_unique<AnimBlenderMushroom>();
+        b->init(assetManager_->modelMushroom(), assetManager_->mushroomAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Mushroom]
+#if 0  // [Snake]
+    case CharacterKind::Snake: {
+        goblin_->setModel(assetManager_->modelSnake());
+        auto b = std::make_unique<AnimBlenderSnake>();
+        b->init(assetManager_->modelSnake(), assetManager_->snakeAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Snake]
+#if 1  // [Birdy]
+    case CharacterKind::Birdy: {
+        goblin_->setModel(assetManager_->modelBirdy());
+        auto b = std::make_unique<AnimBlenderBirdy>();
+        b->init(assetManager_->modelBirdy(), assetManager_->birdyAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Birdy]
+#if 1  // [Bomber]
+    case CharacterKind::Bomber: {
+        goblin_->setModel(assetManager_->modelBomber());
+        auto b = std::make_unique<AnimBlenderBomber>();
+        b->init(assetManager_->modelBomber(), assetManager_->bomberAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Bomber]
+#if 1  // [Slime]
+    case CharacterKind::Slime: {
+        goblin_->setModel(assetManager_->modelSlime());
+        auto b = std::make_unique<AnimBlenderSlime>();
+        b->init(assetManager_->modelSlime(), assetManager_->slimeAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Slime]
+#if 0  // [Treant]
+    case CharacterKind::Treant: {
+        goblin_->setModel(assetManager_->modelTreant());
+        auto b = std::make_unique<AnimBlenderTreant>();
+        b->init(assetManager_->modelTreant(), assetManager_->treantAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+#endif // [Treant]
+    default:
+        // No active monster caster for this kind (its [Name] case is disabled).
+        break;
+    }
+}
+
 void Controller::positionDummyInFront() {
     auto c = casterObj();
     auto t = targetObj();
@@ -219,6 +302,11 @@ void Controller::selectCharacter(int idx) {
 
     if (casterKind_ == CharacterKind::Player) { casterId_ = 0; targetId_ = 1; }
     else                                      { casterId_ = 1; targetId_ = 0; }
+
+    // Monster caster: hot-swap goblin_ to this monster's model + AnimBlender so its
+    // attack skills animate on the right rig. No-op for Player (and for monster kinds
+    // whose [Name] case is still disabled).
+    if (casterKind_ != CharacterKind::Player) setMonsterCaster(casterKind_);
 
     resetCharacters();
 

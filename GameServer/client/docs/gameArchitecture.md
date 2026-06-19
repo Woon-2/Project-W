@@ -54,10 +54,18 @@
                              (Hit/Attack/Death/Respawn 애니메이션 일원화; 객체 갱신 이전에 처리)
                              패킷 핸들러(SleepEx)·스킬 시스템이 post한 이벤트를 처리한다.
 7. 이동 패킷 전송          — moveStateSendAcc_ >= moveStateSendInterval_(50ms)이면 sendMovePacket()
-8. Object::update()        — 플레이어(tPhysic 보간), 원격 플레이어(네트워크 보간 tNet), 고블린
+8. Object::update()        — 플레이어(tPhysic 보간), **원격 플레이어 + 몬스터(네트워크 보간 tNet)**
+   - 서버 위치로 구동되는 객체(원격 플레이어·몬스터)는 모두 `tNet = min(netInterpAcc_/netInterpDuration_, 1)`
+     로 보간한다. `netInterpAcc_`/`netInterpDuration_`은 `Object` 베이스 공용. S_Move(`movePlayer`/`moveGoblin`)
+     수신 시 `netInterpAcc_=0` 리셋 → 한 이동 간격에 걸쳐 prev→curr 보간 후 **curr에서 정지(clamp)**.
+     **주의:** 물리 step 클럭(`tPhysicInterpolation`)으로 보간하면 매 step마다 t가 0→1을 반복해, 이동이
+     드물거나 멈춘 객체가 prev↔curr를 진동(땅속↔공중 깜빡임)한다 — 몬스터가 이 버그를 겪다가 원격
+     플레이어와 동일한 tNet으로 통일해 해결.
 9. animSystem_.updatePriorities() / camera_ / dirLight_
 10. animSystem_.update()
 11. Ragdoll 활성화/동기화  — standalone과 동일한 패턴
+11.5 시체/에너지 오브        — 사망 시 migrateToCorpse → updateCorpses(래그돌 2.5s→오브 전환,
+                             pending charge 매칭, 흡수 완료 시 풀 반환) + orbSystem_.update(추적/흡수)
 12. HP 바 / HiZ 통계 / UI
 13. 파티클 시스템 update() + 디버그 BV view update + 발 흙먼지 파티클
 ```
@@ -237,3 +245,79 @@ activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이�
 매 프레임 `syncRagdollToAnim`: ragdoll 물리 결과를 finalXformData에 덮어써 렌더링에 반영.
 
 **Ragdoll 물리 파라미터:** Unity Inspector에서 뼈별로 설정 → `ModelExtractor.cs` 익스포트 → `.bin` 파일에 포함 → `importRagdollConfig(mesh.cpp)`로 `BoneBoxDef`에 로드.
+
+---
+
+### 에너지 오브 사망 연출 (시체 이관 / 풀링 / charge 매칭)
+
+몬스터 처치 보상 연출. 시체가 잠시 래그돌로 남았다가 서브메시별 **에너지 오브**로 변해 로컬
+플레이어에게 흡수되고, 흡수 타이밍에 스킬 charge HUD가 채워지며 몸에 색 물결이 퍼진다.
+렌더링(오브 셰이더, 흡수 물결 GB2 주입)은 `graphicsArchitecture.md` "몬스터 사망 에너지 오브
+연출" 절을 참조. 여기서는 **게임 레벨 라이프사이클**을 다룬다. (`online/onlineGame.{hpp,cpp}`,
+`energyOrbSystem.{hpp,cpp}`, `object.cpp` `BodyRipple`, `ui/skillDialHUD`.)
+
+**왜 시체를 이관하나(client-authored Corpse):** 사망 연출 도중 서버 리스폰 패킷이 도착하면
+같은 오브젝트가 부활해 연출이 끊긴다. 그래서 사망 처리 순간 `migrateToCorpse(obj, kind, npcId)`로
+오브젝트를 `Corpse`(`corpses_` 컨테이너)로 옮기고, 활성 몬스터 컨테이너(`idMonsterMap_`/
+`idGoblinMap_` 등 + `skillObjectById_`)에서 분리한다. 이후 서버 동기화와 무관하게 클라가 단독
+관리하며, **모든 오브가 흡수된 뒤에만** 시체가 사라진다(`orbSystem_.hasActiveOrbs(corpseId)`).
+
+**ID 처리 (꼬임·범람 방지):** 시체는 서버 동기화에서 떨어져 나온 client-authored 객체다. 시체가
+서버 npc id를 그대로 유지하면 서버가 그 npcId를 리스폰에 재사용할 때 매핑이 꼬이므로, 시체는
+서버 id와 겹치지 않는 **고정 sentinel `kDetachedCorpseId=0x40000000`** 로 `setId`된다(시체는
+어떤 id 맵에도 없어 조회되지 않으므로 모든 시체가 sentinel을 공유해도 안전 — per-corpse id 발급
+불필요 → 카운터 범람 없음). 원래 npcId는 `Corpse::origId`에 보존하고, `reinitFromPool`이 풀 복귀
+시 `setId(npcId)`로 서버 id를 복원한다.
+- **renderObjectId는 객체당 1회만 발급되어 평생 유지**된다(생성 시 1회; migrate/pool/reinit에서
+  재발급하지 않음). 단조 증가 카운터가 동시 생존 객체 간 유일성을 이미 보장하므로 재발급은 불필요
+  하고, 재발급하면 사망/리스폰 사이클마다 카운터가 치솟아 `maxRenderObjectId`(10000)를 초과한다.
+- **orb 연계 corpseId = 그 객체의 renderObjectId**(동시 활성 시체 간 유일, 모든 orb 흡수 후에만
+  재사용 가능) — 별도 카운터 없음.
+
+**중복 스폰 가드 (ghost 방지):** `S_Enter`와 `S_NpcSpawnBatch`(영역 스트리밍)가 같은 npc를 중복
+나열할 수 있다. 가드 없이 `createGoblin/Snake/Mushroom`이 또 생성하면, 이전 객체가 `goblins_`에
+남아 **렌더는 되지만 `idMonsterMap_`은 새 객체를 가리켜**, 이전 객체가 이동·피격을 전혀 못 받는
+**ghost**가 된다(제자리 동결·피격 무반응). 각 `create*`는 `idMonsterMap_`에 이미 있으면 생성을
+스킵한다(시체는 맵에 없으므로 죽은 npc의 정상 리스폰은 그대로 새 객체 생성). 리스폰은 `S_NpcRespawn`
+→ `onNpcRespawn`(풀 재사용)이 담당.
+
+**사망~리스폰 윈도우의 stray 패킷:** 시체로 이관하면 npcId가 `idMonsterMap_`에서 빠지므로,
+서버가 사망~리스폰 사이에 그 npcId로 보내는 in-flight 패킷이 `moveGoblin`/`onNpcAttack`에서
+"NPC not found" 에러를 낸다(시체 시스템 전에는 죽은 몬스터가 맵에 남아 `isDead()`로 조용히
+무시됐던 것의 회귀). 수정: `detachedNpcIds_`(현재 시체로 분리된 npcId 집합)에 migrate 시 insert,
+`onNpcRespawn` 진입 시 erase. 핸들러는 not-found일 때 이 집합에 있으면 **조용히 무시**, 없으면
+실제 에러로 로깅.
+
+**풀링:** 같은 오브젝트의 ID만 바꿔 재사용하면 서버 리스폰 시 쓸 오브젝트가 부족해진다.
+그래서 종류별 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`)을 두고, 리스폰은 풀에서 꺼내
+재초기화(`reinitFromPool`)한다. `monsterSpawnInfo_`/`respawnKind_`로 스폰 정보·종류를 보존한다.
+시체→풀 반환 시 HP 바도 함께 이동.
+
+**`updateCorpses(dt, tPhysicInterp)` 2-페이즈:**
+- **Ragdoll**(`kRagdollSeconds=2.5s`): 래그돌 물리를 유지(차밍 포인트). 순서 중요 —
+  `ragdoll->syncToFinalXforms` → `Object::update`(여기서 디버그 BV `worldBVs`를 **래그돌 포즈**로
+  재계산) → `rebuildBodyBVH`. update를 sync보다 먼저 부르면 BV가 직전 애니메이션 포즈로 계산돼
+  메시/물리(래그돌)와 어긋난다. 2.5s 경과 시 `spawnFromMonster`로 오브 생성 + 래그돌 비활성화 후
+  Orb 페이즈로 전환.
+- **Orb**: 오브가 모두 흡수될 때까지 대기(`hasActiveOrbs`). 끝나면 `returnMonsterToPool` 후 시체 제거.
+
+**EnergyOrbSystem 라이프사이클:** `spawnFromMonster(model, finalXforms, objWorld, totalCharge,
+slot, corpseId)` — 스키닝된 서브메시마다 1 오브, `totalCharge`를 오브 수로 N분할. 각 오브 상태머신
+`Forming`(morphT 0→1) → `Tracking`(가속 추적, 접근 시 응축) → `Absorbing` → `Dead`. `update(dt,
+playerPos)`가 추적/흡수를 진행하고, 흡수 순간 `onAbsorb(orb)` 콜백 호출.
+
+**charge 매칭(신규 패킷 없음):** charge는 서버 권위(`S_SkillCharge`)지만 HUD는 흡수에 맞춰
+점진적으로 채운다.
+- `onSkillCharge`에서 `delta = charge - prev[slot] > 0`이면 `pendingOrbCharges_`에 push(데미지
+  기여자 전원 로컬 연출).
+- `updateCorpses`가 pending charge를 **가장 최근의 미충전 Ragdoll 시체**와 시간창으로 매칭해 그
+  시체의 `totalCharge`로 확정(매칭 실패 시 HUD만 즉시 채우는 안전 폴백).
+- HUD는 `targetCharge`(서버 확정)와 `displayCharge`(표시)를 분리(`skillDialHUD`):
+  `onSkillCharge`는 target만 올리고, `onAbsorb`마다 `addDisplayCharge`로 display를 한 칸씩 채운다.
+
+**onAbsorb 처리:** ① `skillDial_.addDisplayCharge(slot, chargePerOrb)` — HUD 점진 채움. ② `player_->
+addBodyRipple(contactPoint, color)` — 흡수 물결. 단, 오브 HDR 색을 그대로 쓰면 GB2 UNORM 클램프로
+풀 채도가 되어 산만하므로 **정규화+탈채도+강도 하향**으로 부드럽게 보정해 전달.
+
+**알려진 한계:** 비-기여자(0 charge) 오브도 시각적으로 흡수됨; hobgoblin이 goblin 풀 공유(드문
+모델 혼재); 풀에 든 비활성 오브젝트의 animBlender는 계속 tick.

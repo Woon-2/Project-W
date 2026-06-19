@@ -8,9 +8,12 @@
 // Skill names here must match SkillAsset::name (compiled from resources/skills/*.lua);
 // the skill dropdown only shows names that actually exist in the SkillSystem registry.
 //
-// Player and Goblin are wired today. Additional monsters (Anubis, Fishman, ...)
-// can be appended once their models/skeletons are loaded by AssetManager and a
-// spawn branch is added; the mapping structure already supports them.
+// Player is wired today. Monster casters (Goblin, Mushroom, Snake, Birdy, Bomber,
+// Slime, Treant) are scaffolded but their kCharacterSkillMap entries are disabled
+// behind `#if 0` guards (see below). Enabling a monster requires uncommenting the
+// matching [Name] guards across object.*, AssetManager.*, editorController.cpp and
+// adding its model/anim resources. The CharacterKind enum values stay defined so
+// flipping a single entry's guard compiles cleanly.
 
 #include <string_view>
 #include <vector>
@@ -20,6 +23,12 @@ namespace Editor {
 enum class CharacterKind {
     Player,
     Goblin,
+    Mushroom,
+    Snake,
+    Birdy,
+    Bomber,
+    Slime,
+    Treant,
 };
 
 struct CharacterDef {
@@ -52,7 +61,34 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
         "PiercingCircleSlash",
         "PiercingMulti",
     } },
-    { CharacterKind::Goblin, "Goblin", {} },
+    // ---- Monster skill casters (disabled scaffolding) ----------------------
+    // Each entry's skills are the monster's attack lua names (resources/skills/
+    // *_attackN.lua -> SkillAsset::name). lua attackIndex selects the clip.
+    // Enable a monster by flipping ITS [Name] guard here AND in object.*,
+    // AssetManager.*, editorController.cpp (setMonsterCaster), then provide the
+    // model/anim resources. Resources already present: Goblin, Mushroom, Snake,
+    // Bomber. Missing (must be added): Birdy, Slime, Treant.
+#if 1  // [Goblin]
+    { CharacterKind::Goblin,   "Goblin",   { "Goblin_Attack1", "Goblin_Attack2", "Goblin_Attack3" } },
+#endif
+#if 1  // [Mushroom]
+    { CharacterKind::Mushroom, "Mushroom", { "Mushroom_Attack1", "Mushroom_Attack2" } },
+#endif
+#if 0  // [Snake]
+    { CharacterKind::Snake,    "Snake",    { "Snake_Attack1" } },
+#endif
+#if 1  // [Birdy]
+    { CharacterKind::Birdy,    "Birdy",    { "Birdy_Attack1", "Birdy_Attack2" } },
+#endif
+#if 1  // [Bomber]
+    { CharacterKind::Bomber,   "Bomber",   { "Bomber_Attack1" } },
+#endif
+#if 1  // [Slime]
+    { CharacterKind::Slime,    "Slime",    { "Slime_Attack1" } },
+#endif
+#if 0  // [Treant]
+    { CharacterKind::Treant,   "Treant",   { "Treant_SpinKick", "Treant_Clap", "Treant_Punch" } },
+#endif
 };
 
 }   // namespace Editor

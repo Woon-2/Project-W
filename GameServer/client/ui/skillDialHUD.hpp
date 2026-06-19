@@ -31,6 +31,15 @@ public:
     // can fire the "ready" cue (sound).
     bool setCharge(int slot, float charge);
 
+    // Stepwise display fill (energy-orb absorption). setChargeTarget records the
+    // server-authoritative value WITHOUT moving the displayed bar; addDisplayCharge
+    // raises the displayed bar by one absorbed orb (clamped to the target);
+    // syncDisplayToTarget snaps the display to the target (no-FX fallback). All
+    // return true on a 0 -> 1 stack crossing so callers can fire the ready cue.
+    void setChargeTarget(int slot, float target);
+    bool addDisplayCharge(int slot, float amount);
+    bool syncDisplayToTarget(int slot);
+
     // Wheel selection (wheel down = next, wheel up = prev).
     void selectNext();
     void selectPrev();
@@ -73,7 +82,8 @@ private:
 
     float slotCost_[kSlots]       = { 0.f, 0.f, 0.f };
     float slotCooldownMs_[kSlots] = { 0.f, 0.f, 0.f };
-    float charge_[kSlots]         = { 0.f, 0.f, 0.f };
+    float charge_[kSlots]         = { 0.f, 0.f, 0.f };  // displayed charge (fills as orbs absorb)
+    float targetCharge_[kSlots]   = { 0.f, 0.f, 0.f };  // server-authoritative target
     float cooldownEndSec_[kSlots] = { 0.f, 0.f, 0.f };
     float readyPulse_[kSlots]     = { 0.f, 0.f, 0.f };   // brief scale pop on 0->1 stack
 

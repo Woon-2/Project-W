@@ -150,7 +150,7 @@ void GFX::init() {
 	setD3DName(cmdQ_.Get(), "CommandQueue");
 
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
-	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 96u);
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
@@ -298,6 +298,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShaderMultiply", createBillboardShaderMultiply( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderPremultiplied", createBillboardShaderPremultiplied( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("EnergyOrbShader", createEnergyOrbShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("WindRingShader", createWindRingShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
@@ -355,6 +356,7 @@ void GFX::init() {
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsMeshParticlePipeline_.reserve(256u);
+	drawEventsEnergyOrbPipeline_.reserve(EnergyOrbPipeline::kMaxOrbDrawcalls);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
 	drawEventsBlendCGMeshPipeline_.reserve(256u);
 	drawEventsPiercingMeshPipeline_.reserve(256u);
@@ -559,6 +561,19 @@ void GFX::createSwapChain() {
 	);
 	resourcesMeshParticlePipeline_.perFrameData.init(
 		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
+	);
+
+	resourcesEnergyOrbPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( EnergyOrbShader::PerInstanceData ) * EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerInstanceData"
+	);
+	resourcesEnergyOrbPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( EnergyOrbShader::PerDrawcallData ), EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerDrawcallData"
+	);
+	resourcesEnergyOrbPipeline_.perFrameData.init(
+		device_.Get(), sizeof( EnergyOrbShader::PerFrameData ), backBuffers_.size(), "EnergyOrb_PerFrameData"
+	);
+	resourcesEnergyOrbPipeline_.boneData.init(
+		device_.Get(), sizeof( EnergyOrbShader::BoneData ) * 64'000u, backBuffers_.size(), "EnergyOrb_BoneData"
 	);
 	// Wind Ring Pipeline ----
 	resourcesWindRingPipeline_.perInstanceData.init(
@@ -1028,6 +1043,18 @@ void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
 	frameDataMeshParticlePipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const EnergyOrbPipeline::DrawEvent& drawEvent ) {
+	drawEventsEnergyOrbPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const EnergyOrbPipeline::CameraData& cameraData ) {
+	cameraDataEnergyOrbPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const EnergyOrbPipeline::FrameData& frameData ) {
+	frameDataEnergyOrbPipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent ) {
@@ -1980,6 +2007,23 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Energy orbs render into SceneColorHDR (so bloom catches them), not the backbuffer.
+	const D3D12_CPU_DESCRIPTOR_HANDLE energyOrbRtv = !SharedResources::SceneColor::sceneColorData.empty()
+		? SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].rtv
+		: backBufferRtvs_[backbufIdx];
+	auto energyOrbDispatcher = EnergyOrbPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "EnergyOrbShader" ),
+		cmdQ_, viewport, clRect,
+		energyOrbRtv, depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesEnergyOrbPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsEnergyOrbPipeline_ ),
+		cameraDataEnergyOrbPipeline_, frameDataEnergyOrbPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto windRingDispatcher = WindRingPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -2533,6 +2577,13 @@ void GFX::render() {
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxLight));
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxCopy));
 			}
+		}
+
+		// Energy orbs: additive HDR glow into SceneColorHDR (still a RENDER_TARGET at
+		// this point), depth-tested against scene depth, BEFORE bloom so they glow.
+		if (!SharedResources::SceneColor::sceneColorData.empty() && gBufferDebugMode_ == 0u) {
+			energyOrbDispatcher.updateGPUDataSingleThreaded();
+			energyOrbDispatcher.drawSingleThreaded();
 		}
 
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).

@@ -57,13 +57,14 @@
 1. GBuffer + **SceneColorHDR** clear (GB0~GB4 RTV + GBuffer DSV + SceneColorHDR RTV)
 1b. **(Hi-Z ON)** Occluder pass: `occluderPass(TerrainDeferred)` → `occluderPass(PBRDeferred)` — 지형 + 근거리 BVH prop을 position-only depth로 Hi-Z source depth에 기록 → Hi-Z mip pyramid build → `hiZPass(PBRDeferredSkinned)` + **`hiZPass(PBRDeferred)`** (cull/compact/command)
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
-3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동)
+3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동). 스킨드 GBuffer PS는 추가로 **흡수 물결(per-instance ripple)** emissive를 GB2에 가산(로컬 플레이어만; 아래 "몬스터 사망 에너지 오브 연출" 참조)
    - PBRDeferredSkinned/PBRDeferred 모두 Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw 실행. compute 셰이더 5종 + `cmdSig_`는 공유
    - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. visibility feedback ring/CPU readback **없음**(정적이라 anim/물리 스킵 불필요; cull u3 출력은 scratch로 폐기). 비-occludee는 `gBufferPass` direct
    - PBRDeferredSkinned Hi-Z: Cull→visibleFlags + visibility feedback 2-slot ring → CPU readback(1-frame delay, anim/물리 스킵용)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
+6b. **Energy orb 패스(EnergyOrbPipeline)** — `gBufferDebugMode_==0`일 때만. SceneColorHDR가 **아직 RENDER_TARGET 상태**일 때, 복사된 backbuffer scene depth(reversed-Z)로 depth-test하며 **가산(additive) HDR**로 렌더 → bloom 이전이라 발광/bloom이 산다. 몬스터 사망 시 서브메시별 에너지 오브(정점→구체 모핑, GS quad). 단일 스레드(`updateGPUDataSingleThreaded`/`drawSingleThreaded`)
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
 9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**
@@ -224,6 +225,8 @@ Light::updateCSMCascades()
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 > **주의:** GB2.rgb는 emissive 전용이다. `pbrDeferred.hlsl`·`pbrDeferredSkinned.hlsl`·`terrainDeferred.hlsl` 모두 `lightAccum = emissive`(지형/스킨드 모두)로 기록해야 한다. 과거 스킨드 셰이더만 `globalAmbient*albedo`를 굽던 버그가 있었고(이중 ambient: GB2 상수 ambient + lighting 패스 IBL), 셋 다 emissive-only로 통일했다.
+>
+> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. 단, **GB2는 UNORM이라 emissive가 [0,1]로 클램프**된다 — HDR 물결이 불가능하므로 트리거 측(`onlineGame` onAbsorb)에서 색을 정규화·탈채도·강도 하향해 부드러운 워시로 보정한다(아래 절 참조).
 
 **Normal Oct Encoding (`pbrLighting.hlsli`):**
 - `octEncode(float3 n)` — view-space unit normal → float2 [0,1]
@@ -333,6 +336,51 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
 - **resize:** SceneColor·Bloom은 eraseX→addX로 재생성(IBL 맵은 해상도 무관·정적 유지).
 - 지형 청색기 등 "차가운 룩"은 IBL/fog/톤매퍼가 아니라 **조명 리그(중립 태양 + 파란 하늘 ambient)** 의
   아트디렉션 이슈다. 보정은 `dirLight_.color`를 warm하게(예: (1.0,0.95,0.86)) — Phase 2 노브로는 해결 안 됨.
+
+#### 몬스터 사망 에너지 오브 연출 (EnergyOrbPipeline + 흡수 물결)
+
+몬스터 처치 보상 연출. 시체가 서브메시별 **자체 발광 에너지 오브**로 변해 로컬 플레이어에게
+흡수되고, 흡수 타이밍에 스킬 charge HUD가 채워지며 플레이어 몸에 색 물결이 퍼진다. 게임 레벨
+라이프사이클(시체 이관/풀링/charge 매칭)은 `gameArchitecture.md`의 동명 절을 참조; 여기서는 **렌더링**만 다룬다.
+
+**파일:** `energyOrbPipeline.hpp/cpp` + `energyOrb.hlsl`(오브 렌더), `pbrDeferredSkinned.hlsl`(흡수 물결).
+
+**오브 렌더(EnergyOrbPipeline):** MeshParticlePipeline 복제 + GS quad.
+- VS: 죽은 서브메시 정점을 **사망 포즈 본 팔레트(boneData t2, 파이프라인 전용 StructuredBuffer)** 로
+  스키닝 → `hash(SV_VertexID)`로 구한 단위 구체 내부 점을 목표로 `morphT`(0→1) 보간. 즉 정점이
+  서브메시 표면에서 한 구체로 모여든다. 구체 중심은 서브메시 첫 정점의 LBS 스키닝 결과(서브메시마다
+  독립된 조각).
+- GS: point → 카메라향 quad(billboard `GSMain` 패턴, POINTLIST 토폴로지).
+- PS: `lerp(서브메시 albedo, 랜덤 HDR 색, morphT)` × 원형 radial falloff → **SceneColorHDR에 가산**.
+  즉 색도 시체색→발광색으로 모핑된다.
+- PSO: additive blend, CullNone, reversed-Z(`DepthFunc=GREATER_EQUAL`, depth write off). **렌더 위치는
+  deferred lighting 직후 ~ SceneColorHDR→SRV 전환/bloom 직전**(render 순서 6b) — 그래야 bloom이 걸린다.
+- 과대 발광 억제: 가까워질수록(추적 후반) 오브 월드 크기를 축소하는 **응축 스케일**(EnergyOrbSystem
+  `renderScale`)로 원근 팽창 + 가산 코어 bloom 블롭을 막는다. HDR 강도/포인트 크기도 보수적으로.
+
+**흡수 물결(pbrDeferredSkinned.hlsl):** 오브가 흡수되면 충돌점에서 색 물결이 몸 표면으로 퍼진다.
+- 데이터 위치 = **per-instance**(`PerInstanceData`의 `ripplePosAge[4]`/`rippleColorIntensity[4]`/
+  `rippleCount`). per-drawcall(Material CB)이 아닌 이유: **같은 모델의 여러 플레이어가 한 드로우콜의
+  인스턴스로 묶이므로** per-drawcall로는 "내 플레이어만"을 구분할 수 없다. 비-플레이어/원격 플레이어는
+  `rippleCount=0` → 셰이더 비용 0.
+- VS가 `instIdx`(nointerpolation)를 PS로 전달 → PS가 `gInstances[instIdx]`의 ripple을 읽어 **가우시안
+  확장 링**(`band = exp(-d*d)`)을 GB2 emissive에 가산. `exp(-d*d)`로 제곱을 직접 계산하는 이유는
+  `pow(음수, 2)`가 `exp(2·log(neg))=NaN`이 되어 bloom 검은 사각형을 유발하기 때문(아래 GGX NaN 절과 동일 함정).
+- 앵커는 월드 고정점이 아니라 **본체 위치 기준 오프셋**으로 저장(Object `BodyRipple`)해 매 프레임 live
+  pos에 재앵커 → 플레이어가 이동/달려도 링이 몸을 따라간다. 수명 `kBodyRippleLife`(1.0s) == HLSL `RIPPLE_LIFE`.
+- **GB2 UNORM 클램프** 때문에 HDR 물결이 불가하므로, 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색
+  혼합(탈채도)+강도 하향(0.5)해 산만하지 않은 부드러운 워시로 보정한다. 진짜 HDR 물결을 원하면 오브처럼
+  별도 가산 HDR 패스로 분리해야 한다(미구현).
+
+**커맨드 리스트 풀:** EnergyOrb 디스패처가 RenderingSlave cmdlist를 추가 소비하므로 `cmdListPool_`
+RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI 디스패처가 alloc 실패해 해당 패스가
+통째로 누락되는 버그가 있었음).
+
+**드로우콜 용량 상한:** 오브 1개 = 서브메시 1개 = 드로우콜 1개이고, per-instance/per-drawcall 버퍼는
+고정 크기다(`EnergyOrbPipeline::kMaxOrbDrawcalls`=512, `gfx.cpp`의 버퍼 sizing과 공유). 동시 다수
+사망으로 오브가 이 수를 넘으면 `perDrawcallData.cbuffers[idx]` 가 vector 범위를 벗어나 **액세스 위반**이
+났다. 해결: Dispatcher 생성자에서 초과분을 truncate(로그) + draw 루프에 방어 가드. 초과 오브는 그 프레임
+드롭(graceful degrade).
 
 #### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)
 
