@@ -356,20 +356,19 @@ private:
 	std::vector<PooledMonster> mushroomPool_;
 	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
 	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
-	u32t nextCorpseId_ = 1u;
 
-	// ID range separation: a corpse is a client-authored object detached from server
-	// sync, but it used to keep the server npc id, so it aliased the (reused) live
-	// entity once the server respawned that id -> "id 꼬임" / NPC-not-found bugs. On
-	// migration the corpse is reassigned an id from a disjoint client-only high range
-	// (server npc/object ids are small uint16, far below this), so it can never collide
-	// with a server-synced id. The original npc id is preserved in Corpse::origId.
-	static constexpr i32t kCorpseObjIdBase = 0x40000000;
-	i32t nextCorpseObjId_ = kCorpseObjIdBase;
+	// Network id for a detached corpse. A corpse is client-authored and absent from every
+	// id map (idMonsterMap_/idPlayerMap_/skillObjectById_), so it is never looked up by id —
+	// every corpse can share ONE fixed sentinel in a range disjoint from server npc ids
+	// (small uint16). No per-corpse id allocation -> no counter overflow. The corpse keeps
+	// its renderObjectId (stable per object) and reuses it as the orb-association corpseId.
+	// On respawn reinitFromPool restores the real server npc id. origId preserves the npc id.
+	static constexpr i32t kDetachedCorpseId = 0x40000000;
 	// npc ids whose live entity is currently detached as a corpse (no active mapping).
 	// Server packets (move/attack) for these arrive during the death->respawn window
 	// and are silently ignored instead of logged as "NPC not found". Erased on respawn.
 	std::unordered_set<uint16> detachedNpcIds_;
+
 	// Detach a dead monster into corpses_ with a fresh RenderObjectId; removes it from
 	// the active server-synced containers (carrying its HP bar). Returns the corpse id.
 	u32t migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId);

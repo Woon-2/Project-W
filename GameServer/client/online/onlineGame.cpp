@@ -211,8 +211,9 @@ void Game::setupStageVisual() {
 		stageFocus_ = chunkManager_.worldCenter();
 	}
 
-	// 전시 캐릭터(스킨드)의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다.
-	gfx_.setMaxRenderObjectId(1000u);
+	// 스킨드 객체의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다. renderObjectId는
+	// 객체당 1회만 발급되고(풀 재사용 시에도 유지) 범람하지 않으므로, 동시 객체 수 + 여유분으로 잡는다.
+	gfx_.setMaxRenderObjectId(10000u);
 
 	// release: 워커가 이 신호를 보고 Phase 2 로드를 시작한다(GFX 로딩 직렬화).
 	stageVisualReady_.store(true, std::memory_order_release);
@@ -2179,6 +2180,14 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 }
 
 void Game::createGoblin(const ObjectInfo& goblinInfo) {
+	// Idempotent against duplicate spawn packets. S_Enter and S_NpcSpawnBatch can both list
+	// the same npc (e.g. the player streams in/out of an area whose monsters already exist).
+	// Re-creating would orphan the previous object in goblins_ (still rendered) while
+	// idMonsterMap_ points to the new one — a "ghost" that gets neither moves nor hits, so it
+	// freezes/sinks and ignores damage. Skip if this id is already live (corpses are absent
+	// from idMonsterMap_, so a genuine respawn of a dead npc still creates a fresh object).
+	if (idMonsterMap_.count(goblinInfo.objectId)) return;
+
 	auto goblin = std::make_shared<Goblin>();
 
 	goblin->setId(goblinInfo.objectId);
@@ -2244,6 +2253,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 // 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
 // (같은 리그를 공유하므로 goblinAnimations()/goblinHpBars_/idGoblinMap_ 등은 그대로 재사용).
 void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
+	if (idMonsterMap_.count(hobgoblinInfo.objectId)) return;   // skip duplicate spawn (see createGoblin)
 	auto hobgoblin = std::make_shared<Hobgoblin>();
 
 	hobgoblin->setId(hobgoblinInfo.objectId);
@@ -2303,6 +2313,7 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 }
 
 void Game::createSnake(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
 	auto snake = std::make_shared<Snake>();
 
 	snake->setId(info.objectId);
@@ -2361,6 +2372,7 @@ void Game::createSnake(const ObjectInfo& info) {
 }
 
 void Game::createMushroom(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
 	auto mushroom = std::make_shared<Mushroom>();
 
 	mushroom->setId(info.objectId);
@@ -2426,10 +2438,13 @@ void Game::createMushroom(const ObjectInfo& info) {
 // corpse animation is never cut short by a respawn packet.
 
 u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId) {
-	obj->setRenderObjectId(nextRenderObjId_++);  // fresh id: never alias a pooled reuse in Hi-Z
-	// Reassign the network/game id into the client-only corpse range so the detached
-	// corpse can never collide with a server-synced id (incl. a respawn that reuses npcId).
-	obj->setId(nextCorpseObjId_++);
+	// Keep the object's renderObjectId (it is stable per object and the monotonic counter
+	// already guarantees no two live objects share one — no need to burn a fresh id here,
+	// which would let the counter overflow over many death/respawn cycles).
+	// Reassign the network/game id to the fixed detached-corpse sentinel so the corpse can
+	// never collide with a server-synced id (incl. a respawn that reuses npcId). Corpses are
+	// not looked up by id, so a shared sentinel is safe and needs no per-corpse allocation.
+	obj->setId(kDetachedCorpseId);
 	detachedNpcIds_.insert(npcId);
 
 	// Freeze the detached body. It no longer receives server moves (advanceState), so the
@@ -2444,7 +2459,10 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 	c.obj      = obj;
 	c.kind     = kind;
 	c.origId   = npcId;
-	c.corpseId = nextCorpseId_++;
+	// Reuse the (stable, unique-per-object) renderObjectId as the orb-association id: a
+	// corpse is exactly one object, so it is unique among concurrently-active corpses, and
+	// it is freed for reuse only after all orbs are absorbed. No separate counter to overflow.
+	c.corpseId = obj->renderObjectId();
 	c.phase    = Corpse::Phase::Ragdoll;
 	c.age      = 0.f;
 
@@ -2477,6 +2495,16 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 	if (static_cast<size_t>(npcId) < skillObjectById_.size())
 		skillObjectById_[npcId] = nullptr;
 
+	// A corpse is not a barrier: drop any stale barrier registration so the raw pointer in
+	// barrierObjects_ can't outlive this object's current role (and so a pooled reuse does
+	// not inherit barrierActive_). setNpcBarrier re-adds it if the server re-enables one.
+	if (obj->isBarrierActive()) {
+		obj->setBarrierActive(false);
+		barrierObjects_.erase(
+			std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj.get()),
+			barrierObjects_.end());
+	}
+
 	const u32t cid = c.corpseId;
 	corpses_.push_back(std::move(c));
 	return cid;
@@ -2505,12 +2533,16 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	const std::shared_ptr<Object> obj = pm.obj;
 
 	obj->setId(npcId);
-	obj->setPos(pos);
+	obj->setPos(pos);                       // snaps prev = curr (stable interpolation base)
 	obj->setHp(hp);
 	obj->setMaxHp(hp);
 	obj->setHidden(false);
 	obj->setHiddenByOrb(false);
-	obj->setRenderObjectId(nextRenderObjId_++);
+	obj->setDead(false);                    // reused corpse: clear death state up front
+	obj->body().setLinearVel(mu::Vec3{});   // drop any stale death-frame velocity
+	obj->netInterpAcc_ = 0s;                // start network interpolation fresh
+	// Keep the pooled object's renderObjectId (stable per object) — do NOT allocate a fresh
+	// one, or the counter would climb every respawn and eventually exceed maxRenderObjectId.
 	if (obj->ragdoll() && obj->ragdoll()->isActive())
 		obj->ragdoll()->deactivate(physicsWorld_);
 	obj->body().setMotionType(MotionType::Kinematic);
@@ -2552,7 +2584,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 
 void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 	const float dtSec = std::chrono::duration<float>(deltaTime).count();
-	constexpr float kRagdollSeconds = 1.2f;   // hold the ragdoll before dissolving
+	constexpr float kRagdollSeconds = 1.5f;   // hold the ragdoll before dissolving
 	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
 
 	// Credit queued charges to the most-recent uncharged ragdoll corpse.
@@ -3074,6 +3106,9 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	monster->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	monster->setOrient(DirectX::XMLoadFloat4(&orient));
 	monster->setVelocity(DirectX::XMLoadFloat3(&velocity));
+	// Restart network interpolation for this move (mirrors movePlayer). Without this the
+	// monster would interpolate on the physics clock and oscillate between prev/curr.
+	monster->netInterpAcc_ = 0s;
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
@@ -3123,8 +3158,16 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 		npc->setHiddenByOrb( false );
 		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 		holdEvent( eventList_, EvRespawn( npcId ) );
+		// Clear a pending death-ragdoll: if a lethal hit arrived this frame (EvDeath set
+		// ragdollPendingActivation) and the respawn revives the npc in place before the
+		// justDied loop runs, the loop would otherwise still activate the ragdoll and
+		// migrate this now-alive monster into a corpse — removing it from idMonsterMap_ so
+		// it receives neither moves nor hits. Clearing the pending flag prevents that.
+		npc->setRagdollPendingActivation( false );
 		if (npc->ragdoll() && npc->ragdoll()->isActive())
 			npc->ragdoll()->deactivate(physicsWorld_);
+		npc->body().setLinearVel( mu::Vec3{} );   // drop any stale death-frame velocity
+		npc->netInterpAcc_ = 0s;                   // restart network interpolation cleanly
 		npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 		return;
 	}
@@ -3453,9 +3496,23 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		obj->update( deltaTime, tNet );
 	}
 
-	for (auto& goblin   : goblins_)   goblin->update(deltaTime, tPhysicInterpolation);
-	for (auto& snake    : snakes_)    snake->update(deltaTime, tPhysicInterpolation);
-	for (auto& mushroom : mushrooms_) mushroom->update(deltaTime, tPhysicInterpolation);
+	// Monsters are server-position-driven (S_Move) just like remote players, so they use
+	// the same NETWORK interpolation, not the physics-step clock. tNet ramps 0->1 over one
+	// move interval and clamps at 1, holding at curr when moves stop — this is what prevents
+	// the prev<->curr oscillation (sink/reappear) the physics clock caused for idle/sparse
+	// monsters. (Same shape as the remote-player loop above.)
+	auto updateMonstersNet = [&](auto& container) {
+		for (auto& m : container) {
+			m->netInterpAcc_ += deltaTime;
+			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
+			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
+				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
+			m->update(deltaTime, tNet);
+		}
+	};
+	updateMonstersNet(goblins_);
+	updateMonstersNet(snakes_);
+	updateMonstersNet(mushrooms_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);

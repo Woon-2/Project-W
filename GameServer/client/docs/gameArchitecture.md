@@ -54,7 +54,13 @@
                              (Hit/Attack/Death/Respawn 애니메이션 일원화; 객체 갱신 이전에 처리)
                              패킷 핸들러(SleepEx)·스킬 시스템이 post한 이벤트를 처리한다.
 7. 이동 패킷 전송          — moveStateSendAcc_ >= moveStateSendInterval_(50ms)이면 sendMovePacket()
-8. Object::update()        — 플레이어(tPhysic 보간), 원격 플레이어(네트워크 보간 tNet), 고블린
+8. Object::update()        — 플레이어(tPhysic 보간), **원격 플레이어 + 몬스터(네트워크 보간 tNet)**
+   - 서버 위치로 구동되는 객체(원격 플레이어·몬스터)는 모두 `tNet = min(netInterpAcc_/netInterpDuration_, 1)`
+     로 보간한다. `netInterpAcc_`/`netInterpDuration_`은 `Object` 베이스 공용. S_Move(`movePlayer`/`moveGoblin`)
+     수신 시 `netInterpAcc_=0` 리셋 → 한 이동 간격에 걸쳐 prev→curr 보간 후 **curr에서 정지(clamp)**.
+     **주의:** 물리 step 클럭(`tPhysicInterpolation`)으로 보간하면 매 step마다 t가 0→1을 반복해, 이동이
+     드물거나 멈춘 객체가 prev↔curr를 진동(땅속↔공중 깜빡임)한다 — 몬스터가 이 버그를 겪다가 원격
+     플레이어와 동일한 tNet으로 통일해 해결.
 9. animSystem_.updatePriorities() / camera_ / dirLight_
 10. animSystem_.update()
 11. Ragdoll 활성화/동기화  — standalone과 동일한 패턴
@@ -256,13 +262,24 @@ activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이�
 `idGoblinMap_` 등 + `skillObjectById_`)에서 분리한다. 이후 서버 동기화와 무관하게 클라가 단독
 관리하며, **모든 오브가 흡수된 뒤에만** 시체가 사라진다(`orbSystem_.hasActiveOrbs(corpseId)`).
 
-**ID 영역 분리 (id 꼬임 방지):** 시체는 서버 동기화에서 떨어져 나온 client-authored 객체다.
-초기 구현은 시체가 **서버 npc id를 그대로 유지**해서, 서버가 그 npcId를 리스폰에 재사용하면 시체와
-살아있는 리스폰 객체가 **같은 네트워크 id**를 공유해 매핑이 꼬였다(스킬 타겟·BV·라우팅 오작동).
-수정: `migrateToCorpse`가 시체에 **client 전용 고영역 id**(`kCorpseObjIdBase=0x40000000`+카운터,
-서버 id는 작은 uint16이라 절대 겹치지 않음)를 새로 부여(`setId`)하고, 새 RenderObjectId도 부여한다.
-원래 npcId는 `Corpse::origId`에만 보존한다. 풀로 돌아간 뒤 `reinitFromPool`이 `setId(npcId)`로
-다시 서버 id로 되돌린다(고영역 id는 시체 상태일 때만 한시적).
+**ID 처리 (꼬임·범람 방지):** 시체는 서버 동기화에서 떨어져 나온 client-authored 객체다. 시체가
+서버 npc id를 그대로 유지하면 서버가 그 npcId를 리스폰에 재사용할 때 매핑이 꼬이므로, 시체는
+서버 id와 겹치지 않는 **고정 sentinel `kDetachedCorpseId=0x40000000`** 로 `setId`된다(시체는
+어떤 id 맵에도 없어 조회되지 않으므로 모든 시체가 sentinel을 공유해도 안전 — per-corpse id 발급
+불필요 → 카운터 범람 없음). 원래 npcId는 `Corpse::origId`에 보존하고, `reinitFromPool`이 풀 복귀
+시 `setId(npcId)`로 서버 id를 복원한다.
+- **renderObjectId는 객체당 1회만 발급되어 평생 유지**된다(생성 시 1회; migrate/pool/reinit에서
+  재발급하지 않음). 단조 증가 카운터가 동시 생존 객체 간 유일성을 이미 보장하므로 재발급은 불필요
+  하고, 재발급하면 사망/리스폰 사이클마다 카운터가 치솟아 `maxRenderObjectId`(10000)를 초과한다.
+- **orb 연계 corpseId = 그 객체의 renderObjectId**(동시 활성 시체 간 유일, 모든 orb 흡수 후에만
+  재사용 가능) — 별도 카운터 없음.
+
+**중복 스폰 가드 (ghost 방지):** `S_Enter`와 `S_NpcSpawnBatch`(영역 스트리밍)가 같은 npc를 중복
+나열할 수 있다. 가드 없이 `createGoblin/Snake/Mushroom`이 또 생성하면, 이전 객체가 `goblins_`에
+남아 **렌더는 되지만 `idMonsterMap_`은 새 객체를 가리켜**, 이전 객체가 이동·피격을 전혀 못 받는
+**ghost**가 된다(제자리 동결·피격 무반응). 각 `create*`는 `idMonsterMap_`에 이미 있으면 생성을
+스킵한다(시체는 맵에 없으므로 죽은 npc의 정상 리스폰은 그대로 새 객체 생성). 리스폰은 `S_NpcRespawn`
+→ `onNpcRespawn`(풀 재사용)이 담당.
 
 **사망~리스폰 윈도우의 stray 패킷:** 시체로 이관하면 npcId가 `idMonsterMap_`에서 빠지므로,
 서버가 사망~리스폰 사이에 그 npcId로 보내는 in-flight 패킷이 `moveGoblin`/`onNpcAttack`에서

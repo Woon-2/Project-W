@@ -44,7 +44,9 @@ public:
         mu::Vec3   contactPoint  = { 0.f, 0.f, 0.f };  // world pos at absorption (ripple anchor)
         u32t       corpseId      = 0u;         // owning corpse (so the corpse knows when its orbs are gone)
         State      state         = State::Forming;
-        float      stateTime     = 0.f;
+        float      stateTime     = 0.f;      // time in the current state
+        float      age           = 0.f;      // total lifetime (failsafe so an orb that can't
+                                             // catch the player is force-absorbed, never leaks)
     };
 
     // Spawns one orb per submesh of the monster model, using the death-pose final

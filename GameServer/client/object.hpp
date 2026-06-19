@@ -561,6 +561,15 @@ public:
 	void MU_CALLCONV addBodyRipple(mu::Vec3 contactPosW, mu::Vec3 colorHDR, float intensity = 1.f);
 	const std::vector<BodyRipple>& bodyRipples() const { return bodyRipples_; }
 
+	// Network interpolation state for server-position-driven objects (remote players
+	// AND monsters). Each S_Move resets netInterpAcc_ to 0; the owner calls update()
+	// with t = min(netInterpAcc_ / netInterpDuration_, 1), so render lerps prev->curr
+	// over one move interval and HOLDS at curr once moves stop. This avoids the
+	// prev<->curr oscillation that the physics-step clock (tPhysicInterpolation)
+	// produces when moves are sparse/stopped (it cycles 0->1 every physics step).
+	Seconds netInterpDuration_{ 1s / 20.f };
+	Seconds netInterpAcc_{ 0s };
+
 	// BV rendering color for collision visualization.
 	// Default green: no collision. Red: terrain-object. Blue: object-object.
 	void MU_CALLCONV setBVColor(mu::Vec4 color) { bvColor_ = color; }
@@ -644,10 +653,8 @@ public:
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
 
-	// 원격 플레이어 네트워크 보간 상태. 로컬 플레이어에서는 사용되지 않음.
-	// onlineGame.cpp의 Game 루프에서 관리됨.
-	Seconds netInterpDuration_{ 1s / 20.f };
-	Seconds netInterpAcc_{ 0s };
+	// netInterpDuration_ / netInterpAcc_ are now on Object (shared by remote players
+	// and monsters — both are server-position-driven and need network interpolation).
 
 private:
 	EventBus eventBus_{};

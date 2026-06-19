@@ -376,6 +376,12 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
 RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI 디스패처가 alloc 실패해 해당 패스가
 통째로 누락되는 버그가 있었음).
 
+**드로우콜 용량 상한:** 오브 1개 = 서브메시 1개 = 드로우콜 1개이고, per-instance/per-drawcall 버퍼는
+고정 크기다(`EnergyOrbPipeline::kMaxOrbDrawcalls`=512, `gfx.cpp`의 버퍼 sizing과 공유). 동시 다수
+사망으로 오브가 이 수를 넘으면 `perDrawcallData.cbuffers[idx]` 가 vector 범위를 벗어나 **액세스 위반**이
+났다. 해결: Dispatcher 생성자에서 초과분을 truncate(로그) + draw 루프에 방어 가드. 초과 오브는 그 프레임
+드롭(graceful degrade).
+
 #### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)
 
 파일: `pbrDeferredSkinnedPipeline.hpp/cpp`

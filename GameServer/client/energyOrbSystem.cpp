@@ -8,18 +8,22 @@
 namespace {
 
 // Lifecycle timing / motion knobs (tuned in M6).
-constexpr float kFormingTime  = 0.85f;  // seconds for vertices -> sphere
-constexpr float kStartSpeed   = 1.5f;   // tracking speed at Forming->Tracking
-constexpr float kAccel        = 22.f;   // tracking acceleration (m/s^2)
-constexpr float kMaxSpeed     = 13.f;   // tracking max speed (m/s)
+constexpr float kFormingTime  = 1.25f;  // seconds for vertices -> sphere
+constexpr float kStartSpeed   = 4.5f;   // tracking speed at Forming->Tracking
+constexpr float kAccel        = 30.f;   // tracking acceleration (m/s^2)
+constexpr float kMaxSpeed     = 25.f;   // tracking max speed (m/s)
 constexpr float kAbsorbRadius = 0.7f;   // distance to player center that counts as a hit
 constexpr float kAbsorbTime   = 0.18f;  // Absorbing state duration
 constexpr float kTargetHeight = 1.1f;   // aim at the player's chest, not feet
+constexpr float kMaxOrbLifetime = 8.0f; // failsafe: force-absorb a still-tracking orb past
+                                        // this age so it can never linger (e.g. a player
+                                        // fleeing faster than kMaxSpeed) and leave its owning
+                                        // corpse stuck in corpses_, never returned to the pool
 
 constexpr float kSphereRadius = 0.32f;
 constexpr float kPointSize    = 0.04f;
-constexpr float kColorMinI    = 2.0f;   // HDR intensity range (kept modest: hundreds of
-constexpr float kColorMaxI    = 3.8f;   // additive quads stack into a bright core already)
+constexpr float kColorMinI    = 1.6f;   // HDR intensity range (kept modest: hundreds of
+constexpr float kColorMaxI    = 2.7f;   // additive quads stack into a bright core already)
 
 // Condense the orb as it nears the player. Without this the fixed-world-size quads
 // swell on screen via perspective (the player sits near the camera) and the dense
@@ -117,6 +121,7 @@ void EnergyOrbSystem::update(float dtSec, const mu::Vec3& playerPos) {
 
     for (auto& orb : orbs_) {
         orb.stateTime += dtSec;
+        orb.age       += dtSec;
         switch (orb.state) {
         case State::Forming: {
             orb.morphT = std::clamp(orb.stateTime / kFormingTime, 0.f, 1.f);
@@ -135,8 +140,10 @@ void EnergyOrbSystem::update(float dtSec, const mu::Vec3& playerPos) {
             // Condense as it approaches (counter perspective swell + read as compression).
             const float u = std::clamp((dist - kAbsorbRadius) / (kCondenseStartDist - kAbsorbRadius), 0.f, 1.f);
             orb.renderScale = kCondenseMinScale + (1.f - kCondenseMinScale) * u;
-            if (dist <= kAbsorbRadius) {
-                orb.contactPoint = orb.sphereCenter;
+            // Absorb on contact, or force-absorb past the lifetime failsafe (so the orb — and
+            // the corpse waiting on it — can never get stuck if the player outruns it).
+            if (dist <= kAbsorbRadius || orb.age >= kMaxOrbLifetime) {
+                orb.contactPoint = (dist <= kAbsorbRadius) ? orb.sphereCenter : target;
                 orb.state        = State::Absorbing;
                 orb.stateTime    = 0.f;
                 if (onAbsorb) onAbsorb(orb);
