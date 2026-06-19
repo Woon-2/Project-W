@@ -24,12 +24,20 @@ skill:addEvent(0, "PlayAnimation", {
 -- The explosion VFX and every blast hitbox share this exact point.
 local impact = Vec3(0.0, 0.0, 5.0)
 
-skill:addEvent(150, "PlayVFX", {
+skill:addEvent(0, "PlayVFX", {
     vfxId  = 8,
     offset = impact,
     groundSnap = true,
     particleCollision = "GroundStop"
 })
+
+-- Dark-magic cast SFX. Fired at cast start (t=0) to match PlayVFX. It must NOT be
+-- placed later: this skill is interruptible, and a terminated instance skips its
+-- remaining timeline events -- so on consecutive casts a follow-up cast (or a
+-- server-rejected predicted cast, both via interruptAll) could end the instance
+-- before a 150ms event fired, leaving the VFX (t=0) visible but the sound silent.
+-- durationMs/fadeMs fade the clip out so it does not outlast the effect.
+skill:addEvent(0, "PlaySound", { sound = "red_energy", durationMs = 900, fadeMs = 200 })
 
 local onHitBase = OnHit({
     damage          = 40,

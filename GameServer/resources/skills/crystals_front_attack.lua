@@ -35,6 +35,9 @@ skill:addEvent(150, "PlayVFX", {
     particleConform = "SnapAndAlign"
 })
 
+-- Ice crystals erupt SFX, with the VFX.
+skill:addEvent(150, "PlaySound", { sound = "ice_front_attack" })
+
 local onHit = OnHit({
     damage          = 42,
     vfxId           = 255,

@@ -421,6 +421,7 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                 p.soundName[sizeof(p.soundName) - 1] = '\0';
                 p.maxDurationMs = static_cast<u16t>(evTbl.get_or("durationMs", 0));
                 p.fadeMs        = static_cast<u16t>(evTbl.get_or("fadeMs", 0));
+                p.volume        = evTbl.get_or("volume", 1.0f);
                 break;
             }
             case SkillEventType::ModifyStat: {

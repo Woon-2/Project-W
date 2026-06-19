@@ -32,6 +32,17 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	{ "arrow_charge",      "../resources/audio/sfx/bow/arrow_charge.mp3",      Bus::Sfx, false, false, 1.0f },
 	{ "charge_shoot",      "../resources/audio/sfx/bow/charge_shoot.mp3",      Bus::Sfx, false, false, 1.0f },
 	{ "charge_explosion",  "../resources/audio/sfx/bow/charge_explosion.mp3",  Bus::Sfx, false, false, 1.0f },
+
+	// --- Wand skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "quake",             "../resources/audio/sfx/wand/quake.mp3",            Bus::Sfx, false, false, 1.0f },
+	{ "ice_crossfade",     "../resources/audio/sfx/wand/ice_crossfade.mp3",    Bus::Sfx, false, false, 1.0f },
+	{ "ice_front_attack",  "../resources/audio/sfx/wand/ice_front_attack.wav", Bus::Sfx, false, false, 1.0f },
+	{ "red_energy",        "../resources/audio/sfx/wand/red_energy.mp3",       Bus::Sfx, false, false, 2.0f },
+
+	// --- Spear skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "spear1",            "../resources/audio/sfx/spear/spear1.mp3",          Bus::Sfx, false, false, 1.0f },
+	{ "spear2",            "../resources/audio/sfx/spear/spear2.mp3",          Bus::Sfx, false, false, 1.0f },
+	{ "spear3",            "../resources/audio/sfx/spear/spear3.mp3",          Bus::Sfx, false, false, 1.0f },
 });
 
 }	// namespace

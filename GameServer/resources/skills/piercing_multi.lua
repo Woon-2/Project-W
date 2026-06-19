@@ -61,6 +61,24 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Multi-stab barrage: one short stab SFX per visual wave (10 waves, 60ms apart, in
+-- sync with the particle bursts at PlayVFX + 0.06*wave). To keep the rapid repeats
+-- from clashing when they overlap:
+--   * rotate spear1/2/3 so adjacent stabs use different samples (no identical-sample
+--     phasing/flam, and no same-name dedupe drops),
+--   * cut each to a short punchy hit (durationMs+fadeMs) so at most ~2 overlap,
+--   * lower the per-stab volume so the overlap does not blow out.
+-- (Basic Piercing still plays spear1 at full catalog volume -- event volume is local.)
+local stabSounds = { "spear1", "spear2", "spear3" }
+for w = 0, 9 do
+    skill:addEvent(100 + w * 60, "PlaySound", {
+        sound      = stabSounds[(w % 3) + 1],
+        durationMs = 90,
+        fadeMs     = 50,
+        volume     = 0.6
+    })
+end
+
 local onHit = OnHit({
     damage          = 8,
     vfxId           = 255,

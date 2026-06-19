@@ -1078,7 +1078,7 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
 | PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
 | PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
-| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24] + `maxDurationMs`/`fadeMs` u16) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=..., durationMs=, fadeMs=}`. `durationMs>0`이면 시작 후 그만큼 뒤 `fadeMs`로 페이드아웃(사운드가 짧은 이펙트보다 길게 남지 않게; 예 arrow_rain). 서버는 미지원 이벤트로 스킵(결정론 무영향) |
+| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24] + `maxDurationMs`/`fadeMs` u16 + `volume` float) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=..., durationMs=, fadeMs=, volume=}`. `durationMs>0`이면 시작 후 그만큼 뒤 `fadeMs`로 페이드아웃(사운드가 짧은 이펙트보다 길게 남지 않게; 예 arrow_rain). `volume`(0..1, 기본 1)은 이벤트별 게인—카탈로그 defaultVolume과 별개라 같은 음을 다른 스킬에서 다른 크기로(예 PiercingMulti 난무 0.6) 재생 가능. 서버는 미지원 이벤트로 스킵(결정론 무영향) |
 | PlaySound 디스패치 (caster `renderState().pos`에서 `ctx.playSound` 호출) | `skill/skillSystem.cpp` `dispatchEvent` PlaySound case | `SkillDispatchContext::playSound` 콜백(클라=`playSfx3D`, 서버=null no-op) |
 | PlaySound 콜백 바인딩 | `standalone/game.cpp` / `online/onlineGame.cpp` skillCtx 셋업 | `skillCtx_.playSound = [](name,pos){ sound().playSfx3D }` |
 | 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
@@ -1146,7 +1146,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **백엔드:** miniaudio (단일 헤더, `client/sound/miniaudio.h` — 외부 참조, 수정 금지)
 **엔진 추상화:** `client/sound/soundManager.hpp` / `soundManager.cpp`
 **카탈로그:** `client/sound/soundCatalog.hpp` / `soundCatalog.cpp`
-**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3` + `sfx/bow/*.mp3`(스킬음)
+**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3` + `sfx/bow/*.mp3` + `sfx/wand/*` + `sfx/spear/*.mp3`(스킬음, mp3/wav 혼용)
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
@@ -1164,6 +1164,8 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | (제거됨) 전투/HUD 플레이스홀더 SFX | — | hit/death/attack(이벤트 루프 디스패치)·skill_hit·ui_hover·skill_ready 카탈로그+.wav+코드 일괄 제거(2026-06-19 정리). 현재 SFX = ui_click + PlaySound 스킬음만 |
 | 스킬 SFX(검 4종) | `sound/soundCatalog.cpp`(`sword_slash_1`/`sword_slash_finish`/`sword_slash_7`/`slash_wave`, .mp3), 각 `resources/skills/*.lua` PlaySound | PlaySound 이벤트 경유 스윙음. SwordSlash(sword_slash@100ms)·Slash7(sword_slash_7@100ms)·SlashWave(slash_wave@120ms)·SlashCombo(slash_1 150/550/750 + finish 1250). 단일 스윙=1회, 콤보=히트박스 웨이브별 |
 | 스킬 SFX(활 5종) | `sound/soundCatalog.cpp`(`arrow_default`/`arrow_rain`/`arrow_charge`/`charge_shoot`/`charge_explosion`, .mp3, `sfx/bow/`) | Arrow·ArrowVolley=`arrow_default` lua PlaySound@120(발사), ArrowRain=`arrow_rain`@120(durationMs 1200/fadeMs 200 — 레인 종료에 맞춰 페이드아웃). EnergyExplosionArrow=차징(`arrow_charge` lua@120) + 발사(`charge_shoot`)·폭발(`charge_explosion`)은 `setChildSpawnCallback` 이벤트 구동(타임라인 아닌 실제 spawn 시점). |
+| 스킬 SFX(완드 4종) | `sound/soundCatalog.cpp`(`quake`/`ice_crossfade`/`ice_front_attack`/`red_energy`, `sfx/wand/`, mp3+wav), 각 `resources/skills/*.lua` PlaySound | 전부 PlayVFX 시점 @150ms lua PlaySound 단발. Spikes=`quake`, CrystalsCrossFade=`ice_crossfade`, CrystalsFrontAttack=`ice_front_attack`, RedEnergyExplosion=`red_energy`(red_energy.mp3; **PlaySound@0**=PlayVFX와 동일 캐스트 시작; durationMs/fadeMs로 페이드아웃). ⚠️PlaySound를 캐스트 시작보다 늦게 두면 interruptible 스킬에서 연속 캐스트·서버 거부 롤백(`interruptAll`) 시 종료된 인스턴스가 그 이벤트를 스킵→VFX는 떠도 소리 누락. 캐스트음은 0ms 권장.
+| 스킬 SFX(창 3종) | `sound/soundCatalog.cpp`(`spear1`/`spear2`/`spear3`, `sfx/spear/`, mp3), 각 `resources/skills/piercing*.lua` PlaySound | Piercing(기본)=`spear1`@100, PiercingSlash(dial0)=`spear2`@100, PiercingCircleSlash(dial1)=`spear3`@100. **PiercingMulti(dial2 난무)=웨이브별 스탭음**: lua 루프로 10발(100+60*w ms, 파티클 버스트 동기) spear1/2/3 로테이션 + durationMs90/fadeMs50 컷 + volume0.6 → 겹침(위상간섭·음량누적·mud) 방지 | **주의: lua `sound=`는 파일명이 아니라 카탈로그 논리이름**(확장자 없이; findSound가 논리이름→경로 매핑) |
 | 3D 리스너 갱신 | `online/onlineGame.cpp` `camera_.update` 직후, `standalone/game.cpp` `camera_.updateGFX` 직전 | 매 프레임 카메라 추종 |
 | 볼륨 설정값 | `ui/settingsPanel.hpp` `GameSettings` masterVolume/bgmVolume/sfxVolume(%) | 영속 설정 |
 | 볼륨 설정 UI | `ui/settingsPanel.cpp` "사운드" 그룹(makeStepperRow ×3) | 투명도 행과 동일 스텝퍼 패턴 |

@@ -23,6 +23,9 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.0)
 })
 
+-- Spear wide circle-slash SFX, on the sweep.
+skill:addEvent(100, "PlaySound", { sound = "spear3" })
+
 local onHitBase = OnHit({
     damage          = 4,
     vfxId           = 255,

@@ -24,8 +24,11 @@ skill:addEvent(150, "PlayVFX", {
     groundLock = true
 })
 
+-- Quake SFX, as the spikes erupt.
+skill:addEvent(150, "PlaySound", { sound = "quake" })
+
 local onHitBase = OnHit({
-    damage          = 2,
+    damage          = 20,
     vfxId           = 255,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)

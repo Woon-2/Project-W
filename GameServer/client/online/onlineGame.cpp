@@ -2063,8 +2063,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
 		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
-		skillCtx_.playSound = [](const char* name, mu::Vec3 pos, float maxMs, float fadeMs) {
-			INet::ClientApp::sound().playSfx3D(name, pos, 1.f, maxMs, fadeMs);
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos, float maxMs, float fadeMs, float vol) {
+			INet::ClientApp::sound().playSfx3D(name, pos, vol, maxMs, fadeMs);
 		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,

@@ -232,7 +232,7 @@ struct SkillDispatchContext {
     // maxDurationMs > 0 fades the voice out that many ms after it starts (over fadeMs),
     // so a sound never outlasts a short-lived effect; 0 plays the file to its end.
     std::function<void(const char* soundName, mu::Vec3 pos,
-                       float maxDurationMs, float fadeMs)> playSound = nullptr;
+                       float maxDurationMs, float fadeMs, float volume)> playSound = nullptr;
 };
 
 // ---------------------------------------------------------------------------
