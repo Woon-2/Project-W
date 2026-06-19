@@ -127,7 +127,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelBomber_
 	} );
 #endif // [Bomber]
-#if 0  // [Birdy]  add ../resources/models/birdy/birdy.bin first
+#if 1  // [Birdy]  add ../resources/models/birdy/birdy.bin first
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/birdy/birdy.bin",
 		.pTexHashMap = &texHashMap_,
@@ -721,7 +721,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	auto tmpBomberAnims = loadAnimClipsFromFile("../resources/animations/bomberAnimations.anim", gfx);
 	bomberAnimations_.reserve(tmpBomberAnims.size());
 #endif // [Bomber]
-#if 0  // [Birdy]  add ../resources/animations/birdyAnimations.anim first
+#if 1  // [Birdy]  add ../resources/animations/birdyAnimations.anim first
 	auto tmpBirdyAnims = loadAnimClipsFromFile("../resources/animations/birdyAnimations.anim", gfx);
 	birdyAnimations_.reserve(tmpBirdyAnims.size());
 #endif // [Birdy]
@@ -750,7 +750,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	for (auto& clip : tmpBomberAnims)
 		bomberAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Bomber]
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 	for (auto& clip : tmpBirdyAnims)
 		birdyAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Birdy]
@@ -905,7 +905,7 @@ void AssetManager::setupBakedAnimationIds() {
 #if 1  // [Bomber]
 	for (auto& clip : bomberAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Bomber]
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 	for (auto& clip : birdyAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Birdy]
 #if 1  // [Slime]

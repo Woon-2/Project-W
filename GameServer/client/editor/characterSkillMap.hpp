@@ -77,7 +77,7 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
 #if 0  // [Snake]
     { CharacterKind::Snake,    "Snake",    { "Snake_Attack1" } },
 #endif
-#if 0  // [Birdy]
+#if 1  // [Birdy]
     { CharacterKind::Birdy,    "Birdy",    { "Birdy_Attack1", "Birdy_Attack2" } },
 #endif
 #if 1  // [Bomber]

@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name            = "Goblin_Attack3"
-skill.totalDurationMs = 2400
+skill.totalDurationMs = 2000
 skill.interruptible   = true
 
 skill:addEvent(0, "PlayAnimation", {
@@ -13,7 +13,7 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(1000, "SpawnHitbox", {
+skill:addEvent(700, "SpawnHitbox", {
     slot                = 0,
     localOBBs           = { OBB(0.05, -0.5, -0.45, 0.15, 0.15, 0.6, 0, -39, 0) },
     attach              = BoneAttach("R_w"),   -- placeholder: tune per skeleton in editor
@@ -23,9 +23,9 @@ skill:addEvent(1000, "SpawnHitbox", {
     onHit               = OnHit({ damage = 15, vfxId = 255, impulseStrength = 900.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(1500, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1200, "DestroyHitbox", { slot = 0 })
 
-skill:addEvent(1700, "SpawnHitbox", {
+skill:addEvent(1400, "SpawnHitbox", {
     slot                = 1,
     localOBBs           = { OBB(0.05, -0.5, -0.45, 0.15, 0.15, 0.6, 0, -39, 0) },
     attach              = BoneAttach("R_w"),   -- placeholder: tune per skeleton in editor
@@ -35,6 +35,6 @@ skill:addEvent(1700, "SpawnHitbox", {
     onHit               = OnHit({ damage = 15, vfxId = 255, impulseStrength = 900.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(2200, "DestroyHitbox", { slot = 1 })
+skill:addEvent(1900, "DestroyHitbox", { slot = 1 })
 
 return skill

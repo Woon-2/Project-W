@@ -231,7 +231,7 @@ private:
 };
 #endif // [Bomber]
 
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 class AnimBlenderBirdy : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -793,7 +793,7 @@ private:
 };
 #endif // [Bomber]
 
-#if 0  // [Birdy]  NO resources yet: add models/birdy/birdy.bin + animations/birdyAnimations.anim
+#if 1  // [Birdy]  NO resources yet: add models/birdy/birdy.bin + animations/birdyAnimations.anim
 //        expected clips: Birdy_Idle, Birdy_Walk, Birdy_Attack1, Birdy_Attack2, Birdy_Hit, Birdy_Death
 class Birdy : public Object {
 public:

@@ -102,7 +102,7 @@ public:
 	const Model* modelBomber()  const { return &modelBomber_; }
 	const std::vector<std::shared_ptr<AnimClip>>& bomberAnimations()  const { return bomberAnimations_; }
 #endif // [Bomber]
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 	const Model* modelBirdy()   const { return &modelBirdy_; }
 	const std::vector<std::shared_ptr<AnimClip>>& birdyAnimations()   const { return birdyAnimations_; }
 #endif // [Birdy]
@@ -134,7 +134,7 @@ private:
 	Model modelBomber_{};
 	std::vector<std::shared_ptr<AnimClip>> bomberAnimations_{};
 #endif // [Bomber]
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 	Model modelBirdy_{};
 	std::vector<std::shared_ptr<AnimClip>> birdyAnimations_{};
 #endif // [Birdy]

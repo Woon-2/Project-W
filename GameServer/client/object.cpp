@@ -1824,7 +1824,7 @@ void Bomber::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMan
 }
 #endif // [Bomber]
 
-#if 0  // [Birdy]
+#if 1  // [Birdy]
 void AnimBlenderBirdy::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());

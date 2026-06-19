@@ -203,7 +203,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Snake]
-#if 0  // [Birdy]
+#if 1  // [Birdy]
     case CharacterKind::Birdy: {
         goblin_->setModel(assetManager_->modelBirdy());
         auto b = std::make_unique<AnimBlenderBirdy>();
