@@ -41,16 +41,21 @@ public:
         float      morphT        = 0.f;        // 0 = mesh pose, 1 = collapsed sphere
         float      speed         = 0.f;        // current tracking speed (m/s)
         mu::Vec3   contactPoint  = { 0.f, 0.f, 0.f };  // world pos at absorption (ripple anchor)
+        u32t       corpseId      = 0u;         // owning corpse (so the corpse knows when its orbs are gone)
         State      state         = State::Forming;
         float      stateTime     = 0.f;
     };
 
     // Spawns one orb per submesh of the monster model, using the death-pose final
     // bone transforms (deep-copied). totalCharge is split evenly across the orbs.
+    // corpseId tags every spawned orb so the owning corpse can detect completion.
     void spawnFromMonster(const Model& model,
                           std::span<const mu::Mat4x4> finalXforms,
                           const mu::Mat4x4& objWorld,
-                          float totalCharge, int slot);
+                          float totalCharge, int slot, u32t corpseId = 0u);
+
+    // True while at least one (non-dead) orb belonging to corpseId is still alive.
+    bool hasActiveOrbs(u32t corpseId) const;
 
     // Advances all orbs. playerPos is the live local-player world position.
     void update(float dtSec, const mu::Vec3& playerPos);

@@ -34,7 +34,7 @@ mu::Vec3 hueToRGB(float h) {
 void EnergyOrbSystem::spawnFromMonster(const Model& model,
                                        std::span<const mu::Mat4x4> finalXforms,
                                        const mu::Mat4x4& objWorld,
-                                       float totalCharge, int slot) {
+                                       float totalCharge, int slot, u32t corpseId) {
     // Count skinned submeshes first so charge can be split evenly.
     int orbCount = 0;
     for (const auto& mwd : model.meshWithDressXforms) {
@@ -62,14 +62,34 @@ void EnergyOrbSystem::spawnFromMonster(const Model& model,
                 orb.albedo = &mesh.materialSets[0].materials[si].mapAlbedo;
             orb.boneSnapshot.assign(finalXforms.begin(), finalXforms.end());
             orb.objWorldAtDeath = objWorld;
-            orb.sphereCenter = rootW + mu::Vec3{
-                rand(-0.35f, 0.35f), kTargetHeight + rand(-0.2f, 0.4f), rand(-0.35f, 0.35f) };
+            // Sphere center = this submesh's first vertex skinned by the death pose, so
+            // each submesh collapses to its own world point (corpse breaks into pieces).
+            mu::Vec3 center = rootW + mu::Vec3{ 0.f, kTargetHeight, 0.f };  // fallback
+            if (subMesh.hasFirstVertex) {
+                const mu::Vec3 localPos = mu::Vec3(DirectX::XMLoadFloat3(&subMesh.firstVertexPos));
+                const int   bi[4] = { subMesh.firstVertexBones.x, subMesh.firstVertexBones.y,
+                                      subMesh.firstVertexBones.z, subMesh.firstVertexBones.w };
+                const float bw[4] = { subMesh.firstVertexWeights.x, subMesh.firstVertexWeights.y,
+                                      subMesh.firstVertexWeights.z, subMesh.firstVertexWeights.w };
+                mu::Vec3 dressPos{ 0.f, 0.f, 0.f };
+                float wsum = 0.f;
+                for (int k = 0; k < 4; ++k) {
+                    if (bw[k] <= 0.f) continue;
+                    if (bi[k] < 0 || static_cast<size_t>(bi[k]) >= finalXforms.size()) continue;
+                    dressPos = dressPos + mu::Vec3(mu::Vec4(localPos, 1.f) * finalXforms[bi[k]]) * bw[k];
+                    wsum += bw[k];
+                }
+                if (wsum > 1e-4f)
+                    center = mu::Vec3(mu::Vec4(dressPos * (1.f / wsum), 1.f) * objWorld);
+            }
+            orb.sphereCenter = center;
             orb.sphereRadius = kSphereRadius;
             orb.colorHDR     = hueToRGB(rand(0.f, 1.f)) * rand(kColorMinI, kColorMaxI);
             orb.pointSize    = kPointSize;
             orb.vertexCount  = subMesh.ibView.SizeInBytes / static_cast<u32t>(sizeof(u16t));
             orb.chargePerOrb = chargePerOrb;
             orb.slot         = slot;
+            orb.corpseId     = corpseId;
             orb.morphT       = 0.f;
             orb.speed        = 0.f;
             orb.state        = State::Forming;
@@ -77,6 +97,12 @@ void EnergyOrbSystem::spawnFromMonster(const Model& model,
             orbs_.push_back(std::move(orb));
         }
     }
+}
+
+bool EnergyOrbSystem::hasActiveOrbs(u32t corpseId) const {
+    for (const auto& orb : orbs_)
+        if (orb.corpseId == corpseId && orb.state != State::Dead) return true;
+    return false;
 }
 
 void EnergyOrbSystem::update(float dtSec, const mu::Vec3& playerPos) {

@@ -336,8 +336,10 @@ private:
 	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
 	enum class MonsterKind { Goblin, Snake, Mushroom };
+	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
 	struct Corpse {
 		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
+		UI::ProgressBar* hpBar = nullptr;   // hidden during death; returns to the pool with obj
 		MonsterKind kind   = MonsterKind::Goblin;
 		uint16 origId      = 0;             // server npc id this corpse came from
 		u32t   corpseId    = 0;             // unique id for orb <-> corpse association
@@ -348,16 +350,21 @@ private:
 		int    slot        = 0;
 	};
 	std::vector<Corpse> corpses_;
-	std::vector<std::shared_ptr<Goblin>>   goblinPool_;
-	std::vector<std::shared_ptr<Snake>>    snakePool_;
-	std::vector<std::shared_ptr<Mushroom>> mushroomPool_;
-	std::unordered_map<uint16, MonsterKind> respawnKind_;  // npc id -> kind (respawn routing)
+	std::vector<PooledMonster> goblinPool_;
+	std::vector<PooledMonster> snakePool_;
+	std::vector<PooledMonster> mushroomPool_;
+	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
+	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
 	u32t nextCorpseId_ = 1u;
-	// Detach a dead monster into corpses_ and a fresh RenderObjectId; removes it from
-	// the active server-synced containers. Returns the new corpse's id.
+	// Detach a dead monster into corpses_ with a fresh RenderObjectId; removes it from
+	// the active server-synced containers (carrying its HP bar). Returns the corpse id.
 	u32t migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId);
 	// Advances corpses (ragdoll hold -> orb dissolve -> pool return) each frame.
-	void updateCorpses(float dtSec);
+	void updateCorpses(Milliseconds deltaTime, float tPhysicInterp);
+	// Reuse a pooled object for a respawn (true), or report the pool empty (false).
+	bool reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, int32 hp);
+	// Return a finished corpse's object + HP bar to the per-kind pool for reuse.
+	void returnMonsterToPool(Corpse& corpse);
 	// Charge credits awaiting their corpse (S_SkillCharge may arrive before migration).
 	struct PendingOrbCharge { int slot = 0; float delta = 0.f; float age = 0.f; };
 	std::vector<PendingOrbCharge> pendingOrbCharges_;

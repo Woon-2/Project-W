@@ -739,7 +739,13 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
     // 정점 버퍼들 구축
     readHeadTag(ifs, "VertexBuffers");
-    
+
+    // Keep the position/skinning vertex arrays alive until the submesh section so the
+    // energy-orb death FX can cache each submesh's first vertex (SubMesh::firstVertex*).
+    std::vector<XMFLOAT3> positionsCache;
+    std::vector<XMINT4>   boneIndicesCache;
+    std::vector<XMFLOAT4> boneWeightsCache;
+
     for (;;) {
         const auto str = readString(ifs);
         if (isTailTag(str, "VertexBuffers")) {
@@ -750,7 +756,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
         // Positions: float3
         if (tag == "Positions") {
-            auto positions = readVec3s(ifs);
+            positionsCache = readVec3s(ifs);
+            const auto& positions = positionsCache;
 
             auto vbPosition = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
             setD3DName(vbPosition.Get(), name + "_VB_Position"s);
@@ -885,7 +892,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
         }
         // boneIndices: uint4
         else if (tag == "BoneIndices") {
-            auto boneIndices = readInt4s(ifs);
+            boneIndicesCache = readInt4s(ifs);
+            const auto& boneIndices = boneIndicesCache;
 
             auto vbBoneIndices = createBufferResource(device, nullptr, boneIndices.size() * sizeof(XMUINT4), BufferCreationType::VertexBuffer);
             setD3DName(vbBoneIndices.Get(), name + "_VB_BoneIndices"s);
@@ -910,7 +918,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
         }
         // boneWeights: float4
         else if (tag == "BoneWeights") {
-            auto boneWeights = readVec4s(ifs);
+            boneWeightsCache = readVec4s(ifs);
+            const auto& boneWeights = boneWeightsCache;
 
             auto vbBoneWeights = createBufferResource(device, nullptr, boneWeights.size() * sizeof(XMFLOAT4), BufferCreationType::VertexBuffer);
             setD3DName(vbBoneWeights.Get(), name + "_VB_BoneWeights"s);
@@ -939,6 +948,14 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             );
         }
     }
+
+    // Cache each submesh's first vertex (energy-orb sphere centering) from its first index.
+    auto cacheSubmeshFirstVertex = [&](SubMesh& sm, u32t firstIdx, bool valid) {
+        if (!valid) return;
+        if (firstIdx < positionsCache.size())   { sm.firstVertexPos = positionsCache[firstIdx]; sm.hasFirstVertex = true; }
+        if (firstIdx < boneIndicesCache.size())  sm.firstVertexBones   = boneIndicesCache[firstIdx];
+        if (firstIdx < boneWeightsCache.size())  sm.firstVertexWeights = boneWeightsCache[firstIdx];
+    };
 
     // 서브메시들 구축
     readHeadTag(ifs, "Submeshes");
@@ -970,6 +987,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                     .Format = DXGI_FORMAT_R16_UINT
                 }
             );
+            cacheSubmeshFirstVertex(mesh.subMeshes.back(),
+                indices.empty() ? 0u : static_cast<u32t>(indices[0]), !indices.empty());
 
             mesh.ibs.push_back(std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
@@ -999,6 +1018,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                     .Format = DXGI_FORMAT_R16_UINT
                 }
             );
+            cacheSubmeshFirstVertex(mesh.subMeshes.back(),
+                indices.empty() ? 0u : static_cast<u32t>(indices[0]), !indices.empty());
 
             mesh.ibs.push_back(std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));

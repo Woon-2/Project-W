@@ -2237,6 +2237,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId]    = goblin;
 	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
+	respawnKind_[goblinInfo.objectId]      = MonsterKind::Goblin;
+	monsterSpawnInfo_[goblinInfo.objectId] = goblinInfo;
 }
 
 // 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
@@ -2296,6 +2298,8 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 	goblins_.push_back(hobgoblin);
 	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
 	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
+	respawnKind_[hobgoblinInfo.objectId]      = MonsterKind::Goblin;
+	monsterSpawnInfo_[hobgoblinInfo.objectId] = hobgoblinInfo;
 }
 
 void Game::createSnake(const ObjectInfo& info) {
@@ -2352,6 +2356,8 @@ void Game::createSnake(const ObjectInfo& info) {
 	snakes_.push_back(snake);
 	idSnakeMap_[info.objectId]    = snake;
 	idMonsterMap_[info.objectId]  = snake.get();
+	respawnKind_[info.objectId]      = MonsterKind::Snake;
+	monsterSpawnInfo_[info.objectId] = info;
 }
 
 void Game::createMushroom(const ObjectInfo& info) {
@@ -2408,6 +2414,189 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushrooms_.push_back(mushroom);
 	idMushroomMap_[info.objectId]   = mushroom;
 	idMonsterMap_[info.objectId]    = mushroom.get();
+	respawnKind_[info.objectId]      = MonsterKind::Mushroom;
+	monsterSpawnInfo_[info.objectId] = info;
+}
+
+// === Client-authored corpse pipeline =======================================
+// A dead monster is detached from server-synced containers into corpses_ (with a
+// fresh RenderObjectId, carrying its HP bar). The corpse holds its ragdoll for a
+// few seconds, then dissolves into energy orbs, and is removed only after every
+// orb is absorbed. Respawns borrow a fresh object from a per-kind pool so the
+// corpse animation is never cut short by a respawn packet.
+
+u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId) {
+	obj->setRenderObjectId(nextRenderObjId_++);  // fresh id: never alias a pooled reuse in Hi-Z
+	Corpse c;
+	c.obj      = obj;
+	c.kind     = kind;
+	c.origId   = npcId;
+	c.corpseId = nextCorpseId_++;
+	c.phase    = Corpse::Phase::Ragdoll;
+	c.age      = 0.f;
+
+	auto grabBar = [&](auto& barMap) {
+		if (auto it = barMap.find(npcId); it != barMap.end()) {
+			c.hpBar = it->second.hpBar;
+			if (c.hpBar) c.hpBar->visible = false;
+			barMap.erase(it);
+		}
+	};
+
+	switch (kind) {
+	case MonsterKind::Goblin:
+		grabBar(goblinHpBars_);
+		idGoblinMap_.erase(npcId);
+		std::erase(goblins_, std::static_pointer_cast<Goblin>(obj));
+		break;
+	case MonsterKind::Snake:
+		grabBar(snakeHpBars_);
+		idSnakeMap_.erase(npcId);
+		std::erase(snakes_, std::static_pointer_cast<Snake>(obj));
+		break;
+	case MonsterKind::Mushroom:
+		grabBar(mushroomHpBars_);
+		idMushroomMap_.erase(npcId);
+		std::erase(mushrooms_, std::static_pointer_cast<Mushroom>(obj));
+		break;
+	}
+	idMonsterMap_.erase(npcId);
+	if (static_cast<size_t>(npcId) < skillObjectById_.size())
+		skillObjectById_[npcId] = nullptr;
+
+	const u32t cid = c.corpseId;
+	corpses_.push_back(std::move(c));
+	return cid;
+}
+
+void Game::returnMonsterToPool(Corpse& corpse) {
+	PooledMonster pm{ corpse.obj, corpse.hpBar };
+	switch (corpse.kind) {
+	case MonsterKind::Goblin:   goblinPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Snake:    snakePool_.push_back(std::move(pm));    break;
+	case MonsterKind::Mushroom: mushroomPool_.push_back(std::move(pm)); break;
+	}
+}
+
+bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, int32 hp) {
+	std::vector<PooledMonster>* pool = nullptr;
+	switch (kind) {
+	case MonsterKind::Goblin:   pool = &goblinPool_;   break;
+	case MonsterKind::Snake:    pool = &snakePool_;    break;
+	case MonsterKind::Mushroom: pool = &mushroomPool_; break;
+	}
+	if (!pool || pool->empty()) return false;
+
+	PooledMonster pm = std::move(pool->back());
+	pool->pop_back();
+	const std::shared_ptr<Object> obj = pm.obj;
+
+	obj->setId(npcId);
+	obj->setPos(pos);
+	obj->setHp(hp);
+	obj->setMaxHp(hp);
+	obj->setHidden(false);
+	obj->setHiddenByOrb(false);
+	obj->setRenderObjectId(nextRenderObjId_++);
+	if (obj->ragdoll() && obj->ragdoll()->isActive())
+		obj->ragdoll()->deactivate(physicsWorld_);
+	obj->body().setMotionType(MotionType::Kinematic);
+
+	UI::ProgressBar* bar = pm.hpBar;
+	if (bar) bar->visible = false;
+
+	switch (kind) {
+	case MonsterKind::Goblin: {
+		auto g = std::static_pointer_cast<Goblin>(obj);
+		goblins_.push_back(g);
+		idGoblinMap_[npcId] = g;
+		if (bar) goblinHpBars_[npcId] = { g.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Snake: {
+		auto s = std::static_pointer_cast<Snake>(obj);
+		snakes_.push_back(s);
+		idSnakeMap_[npcId] = s;
+		if (bar) snakeHpBars_[npcId] = { s.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Mushroom: {
+		auto m = std::static_pointer_cast<Mushroom>(obj);
+		mushrooms_.push_back(m);
+		idMushroomMap_[npcId] = m;
+		if (bar) mushroomHpBars_[npcId] = { m.get(), bar, 2.5f };
+		break;
+	}
+	}
+	idMonsterMap_[npcId] = obj.get();
+	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
+		skillObjectById_.resize(npcId + 1u, nullptr);
+	skillObjectById_[npcId] = obj.get();
+	respawnKind_[npcId] = kind;
+	holdEvent(eventList_, EvRespawn(npcId));
+	return true;
+}
+
+void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
+	const float dtSec = std::chrono::duration<float>(deltaTime).count();
+	constexpr float kRagdollSeconds = 1.2f;   // hold the ragdoll before dissolving
+	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
+
+	// Credit queued charges to the most-recent uncharged ragdoll corpse.
+	for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
+		cit->age += dtSec;
+		Corpse* best = nullptr;
+		for (auto& c : corpses_) {
+			if (c.phase != Corpse::Phase::Ragdoll || c.orbsSpawned || c.totalCharge > 0.f) continue;
+			if (!best || c.age < best->age) best = &c;
+		}
+		if (best) {
+			best->totalCharge += cit->delta;
+			best->slot = cit->slot;
+			cit = pendingOrbCharges_.erase(cit);
+		} else if (cit->age > kChargeWindow) {
+			skillDial_.syncDisplayToTarget(cit->slot);  // no corpse arrived: fill HUD immediately
+			cit = pendingOrbCharges_.erase(cit);
+		} else {
+			++cit;
+		}
+	}
+
+	for (auto it = corpses_.begin(); it != corpses_.end(); ) {
+		Corpse& c = *it;
+		c.age += dtSec;
+		Object& o = *c.obj;
+		if (c.phase == Corpse::Phase::Ragdoll) {
+			// Drive finalXforms from the ragdoll bodies BEFORE Object::update, so that
+			// Object::update rebuilds renderState_.worldBVs (the debug BV boxes) from the
+			// ragdoll pose — not the stale animation pose left by animSystem_.update().
+			// (Otherwise the BV tracks the death animation while the mesh/physics flop.)
+			if (o.ragdoll() && o.ragdoll()->isActive() && o.animBlender() && o.model())
+				o.ragdoll()->syncToFinalXforms(
+					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world);
+			o.update(deltaTime, tPhysicInterp);
+			if (o.ragdoll() && o.ragdoll()->isActive())
+				o.rebuildBodyBVH();
+			if (c.age >= kRagdollSeconds && !c.orbsSpawned && o.animBlender() && o.model()) {
+				const auto& fx = o.animBlender()->finalXformData();
+				orbSystem_.spawnFromMonster(*o.model(),
+					std::span<const mu::Mat4x4>(fx.data(), fx.size()),
+					o.renderState().world, c.totalCharge, c.slot, c.corpseId);
+				c.orbsSpawned = true;
+				c.phase = Corpse::Phase::Orb;
+				if (o.ragdoll() && o.ragdoll()->isActive())
+					o.ragdoll()->deactivate(physicsWorld_);
+			}
+			++it;
+		} else {  // Orb phase: keep the corpse alive until all its orbs are absorbed.
+			if (!orbSystem_.hasActiveOrbs(c.corpseId)) {
+				returnMonsterToPool(c);
+				it = corpses_.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
 }
 
 void Game::createStronghold(const ObjectInfo& info) {
@@ -2905,22 +3094,39 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
-	auto it = idMonsterMap_.find(npcId);
-	DISPLAY_ERROR_STR( it != idMonsterMap_.end(),
-		"[Game Error] Game::onNpcRespawn: NPC not found.\n",
-		false
-	);
-	if (it == idMonsterMap_.end()) return;
+	// Still active (e.g. temporarily hidden via S_NpcHide, never killed): revive in place.
+	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
+		Object* npc = it->second;
+		npc->setHp( newHp );
+		npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
+		npc->setHiddenByOrb( false );
+		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
+		holdEvent( eventList_, EvRespawn( npcId ) );
+		if (npc->ragdoll() && npc->ragdoll()->isActive())
+			npc->ragdoll()->deactivate(physicsWorld_);
+		npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
+		return;
+	}
 
-	Object* npc = it->second;
-	npc->setHp( newHp );
-	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
-	npc->setHiddenByOrb( false );   // re-show after the energy-orb dissolve
-	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
+	// Detached into a client-authored corpse on death: spawn a fresh instance so the
+	// corpse animation keeps running. Reuse a pooled object if available, else create.
+	const MonsterKind kind = respawnKind_.count(npcId) ? respawnKind_.at(npcId) : MonsterKind::Goblin;
+	const mu::Vec3    pos  = DirectX::XMLoadFloat3( &spawnPos );
+	if (reinitFromPool(kind, npcId, pos, newHp)) return;
+
+	// Pool empty (corpse still animating): create a new monster from stored spawn info.
+	ObjectInfo info{};
+	if (auto si = monsterSpawnInfo_.find(npcId); si != monsterSpawnInfo_.end()) info = si->second;
+	info.objectId = npcId;
+	info.pos      = spawnPos;
+	info.hp       = newHp;
+	info.maxHp    = (info.maxHp > newHp) ? info.maxHp : newHp;
+	switch (kind) {
+	case MonsterKind::Goblin:   createGoblin(info);   break;
+	case MonsterKind::Snake:    createSnake(info);    break;
+	case MonsterKind::Mushroom: createMushroom(info); break;
+	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
-	if (npc->ragdoll()->isActive())
-		npc->ragdoll()->deactivate(physicsWorld_);
-	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
 void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
@@ -3253,40 +3459,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		};
 	}
 
-	// Match queued death snapshots with queued charge credits (order-independent),
-	// spawning one orb group per contributed kill; expire stale unmatched entries.
-	{
-		const float orbDt = std::chrono::duration<float>(deltaTime).count();
-		constexpr float kOrbMatchWindow = 0.6f;
-		for (auto& c : pendingOrbCharges_) c.age += orbDt;
-		for (auto& d : pendingOrbDeaths_)  d.age += orbDt;
-		for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
-			auto best = pendingOrbDeaths_.end();
-			for (auto dit = pendingOrbDeaths_.begin(); dit != pendingOrbDeaths_.end(); ++dit)
-				if (best == pendingOrbDeaths_.end() || dit->age < best->age) best = dit;
-			if (best != pendingOrbDeaths_.end()) {
-				orbSystem_.spawnFromMonster(*best->model,
-					std::span<const mu::Mat4x4>(best->snapshot.data(), best->snapshot.size()),
-					best->world, cit->delta, cit->slot);
-				if (best->monster) best->monster->setHiddenByOrb(true);  // corpse -> orbs
-				pendingOrbDeaths_.erase(best);
-				cit = pendingOrbCharges_.erase(cit);
-			} else {
-				++cit;
-			}
-		}
-		for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
-			if (cit->age > kOrbMatchWindow) {
-				skillDial_.syncDisplayToTarget(cit->slot);   // never matched: fill now
-				cit = pendingOrbCharges_.erase(cit);
-			} else {
-				++cit;
-			}
-		}
-		std::erase_if(pendingOrbDeaths_, [](const PendingOrbDeath& d) { return d.age > kOrbMatchWindow; });
-	}
-
-	// Energy orb death FX: orbs track the live player position and absorb on contact.
+	// Energy orb death FX: advance orbs (tracking + absorption) toward the live player.
+	// Charge credits are matched to corpses in updateCorpses(); see below.
 	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
 
 	camera_.update(deltaTime);
@@ -3301,50 +3475,32 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 애니메이션 업데이트
 	animSystem_.update(0.01s);
 
-	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
+	// Death migration: activate the ragdoll for monsters that died this frame, then
+	// detach them into client-authored corpses so a server respawn can't cut the death
+	// animation short. Collected first to avoid mutating the active vectors mid-iteration.
+	// (finalXformData is valid here, right after animSystem_.update().)
 	{
-		auto activateRagdollIfPending = [&](Object& g) {
+		std::vector<std::pair<std::shared_ptr<Object>, MonsterKind>> justDied;
+		auto activateAndCollect = [&](const std::shared_ptr<Object>& objPtr, MonsterKind kind) {
+			Object& g = *objPtr;
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
 			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
-				g.animBlender()->finalXformData(),
-				g.model()->skeleton,
-				g.renderState().world
-			);
+				g.animBlender()->finalXformData(), g.model()->skeleton, g.renderState().world);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
-
-			// Energy orb death FX: spawn one glowing orb per submesh from the death
-			// pose. The bone palette is deep-copied by spawnFromMonster, so it stays
-			// valid after the ragdoll takes over. (M4 replaces the placeholder
-			// charge/slot with damage-contributor matching from onSkillCharge.)
-			if (g.model() && g.animBlender()) {
-				const auto& fx = g.animBlender()->finalXformData();
-				PendingOrbDeath pd;
-				pd.model = g.model();
-				pd.monster = &g;
-				pd.snapshot.assign(fx.begin(), fx.end());  // deep copy: survives ragdoll takeover
-				pd.world = g.renderState().world;
-				pendingOrbDeaths_.push_back(std::move(pd));
-			}
 
 			// Apply death velocity so the ragdoll flies in the knockback direction.
 			const mu::Vec3 initVel = g.ragdollInitVelocity();
 			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) {
-					if (rb.body) rb.body->setLinearVel(initVel);
-				}
+				for (auto& rb : rd.bones()) if (rb.body) rb.body->setLinearVel(initVel);
 				g.setRagdollInitVelocity(mu::Vec3{});
 			}
-
 			// Per-bone random noise impulse, biased toward the death velocity direction.
-			// velDir * kNoiseBias + randomUnit * (1-kNoiseBias) gives a cosine-like
-			// distribution: closer to velDir is more probable, but still varied.
 			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f)
-			    ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
+			const mu::Vec3 velDir = (initVel.len2() > 0.01f) ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
 			for (const auto& rb : rd.bones()) {
 				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
 				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
@@ -3353,23 +3509,19 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
 				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
 			}
+			justDied.emplace_back(objPtr, kind);
 		};
 
-		auto syncRagdollToAnim = [&](Object& g) {
-			Ragdoll& rd = *g.ragdoll();
-			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
-			rd.syncToFinalXforms(
-				g.animBlender()->finalXformData(),
-				g.model()->skeleton,
-				g.renderState().world
-			);
-			g.rebuildBodyBVH();
-		};
+		for (auto& goblin   : goblins_)   activateAndCollect(goblin,   MonsterKind::Goblin);
+		for (auto& snake    : snakes_)    activateAndCollect(snake,    MonsterKind::Snake);
+		for (auto& mushroom : mushrooms_) activateAndCollect(mushroom, MonsterKind::Mushroom);
 
-		for (auto& goblin   : goblins_)   { activateRagdollIfPending(*goblin);   syncRagdollToAnim(*goblin); }
-		for (auto& snake    : snakes_)    { activateRagdollIfPending(*snake);    syncRagdollToAnim(*snake); }
-		for (auto& mushroom : mushrooms_) { activateRagdollIfPending(*mushroom); syncRagdollToAnim(*mushroom); }
+		for (auto& [objPtr, kind] : justDied)
+			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
 	}
+
+	// Advance client-authored corpses: ragdoll hold -> orb dissolve -> pool return.
+	updateCorpses(deltaTime, tPhysicInterpolation);
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -3652,9 +3804,14 @@ void Game::renderInGame() {
 		obj->render( gfx_ );
 	}
 
-	for (auto& goblin   : goblins_)   if (!goblin->isHiddenByOrb())   goblin->render(gfx_);
-	for (auto& snake    : snakes_)    if (!snake->isHiddenByOrb())    snake->render(gfx_);
-	for (auto& mushroom : mushrooms_) if (!mushroom->isHiddenByOrb()) mushroom->render(gfx_);
+	for (auto& goblin   : goblins_)   goblin->render(gfx_);
+	for (auto& snake    : snakes_)    snake->render(gfx_);
+	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
+
+	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
+	// (orb phase is drawn by orbSystem_.submitDrawEvents).
+	for (auto& c : corpses_)
+		if (c.phase == Corpse::Phase::Ragdoll && c.obj) c.obj->render(gfx_);
 
 	for (auto& sh : strongholds_) {
 		if (sh->isDead()) continue;   // hide destroyed structure (isDead set by EvDeath)
