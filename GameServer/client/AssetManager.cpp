@@ -120,7 +120,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	// [SCAFFOLD] Monster skill-caster model loads. Enable per [Name] guard.
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/bomber/bomber.bin",
 		.pTexHashMap = &texHashMap_,
@@ -134,7 +134,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelBirdy_
 	} );
 #endif // [Birdy]
-#if 0  // [Slime]  add ../resources/models/slime/slime.bin first
+#if 1  // [Slime]  add ../resources/models/slime/slime.bin first
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/slime/slime.bin",
 		.pTexHashMap = &texHashMap_,
@@ -708,8 +708,8 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	}
 
 	auto tmpGoblinAnims   = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
-	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim", gfx);
-	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim", gfx);
+	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/animations/snakeAnimations.anim", gfx);
+	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/animations/mushroomAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
 	snakeAnimations_.reserve(tmpSnakeAnims.size());
 	mushroomAnimations_.reserve(tmpMushroomAnims.size());
@@ -717,7 +717,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	// [SCAFFOLD] Monster skill-caster animation loads (part 1/3: load + reserve).
 	// Enable per [Name] guard together with parts 2/3 below and 3/3 in
 	// setupBakedAnimationIds(). The tmp* locals are visible to part 2/3.
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	auto tmpBomberAnims = loadAnimClipsFromFile("../resources/animations/bomberAnimations.anim", gfx);
 	bomberAnimations_.reserve(tmpBomberAnims.size());
 #endif // [Bomber]
@@ -725,7 +725,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	auto tmpBirdyAnims = loadAnimClipsFromFile("../resources/animations/birdyAnimations.anim", gfx);
 	birdyAnimations_.reserve(tmpBirdyAnims.size());
 #endif // [Birdy]
-#if 0  // [Slime]  add ../resources/animations/slimeAnimations.anim first
+#if 1  // [Slime]  add ../resources/animations/slimeAnimations.anim first
 	auto tmpSlimeAnims = loadAnimClipsFromFile("../resources/animations/slimeAnimations.anim", gfx);
 	slimeAnimations_.reserve(tmpSlimeAnims.size());
 #endif // [Slime]
@@ -746,7 +746,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		mushroomAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 
 	// [SCAFFOLD] Monster skill-caster animation loads (part 2/3: move into members).
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	for (auto& clip : tmpBomberAnims)
 		bomberAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Bomber]
@@ -754,7 +754,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	for (auto& clip : tmpBirdyAnims)
 		birdyAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Birdy]
-#if 0  // [Slime]
+#if 1  // [Slime]
 	for (auto& clip : tmpSlimeAnims)
 		slimeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Slime]
@@ -902,13 +902,13 @@ void AssetManager::setupBakedAnimationIds() {
 		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
 	// [SCAFFOLD] Monster skill-caster animation loads (part 3/3: baked ids).
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	for (auto& clip : bomberAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Bomber]
 #if 0  // [Birdy]
 	for (auto& clip : birdyAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Birdy]
-#if 0  // [Slime]
+#if 1  // [Slime]
 	for (auto& clip : slimeAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Slime]
 #if 0  // [Treant]

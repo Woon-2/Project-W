@@ -71,7 +71,7 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
 #if 1  // [Goblin]
     { CharacterKind::Goblin,   "Goblin",   { "Goblin_Attack1", "Goblin_Attack2", "Goblin_Attack3" } },
 #endif
-#if 0  // [Mushroom]
+#if 1  // [Mushroom]
     { CharacterKind::Mushroom, "Mushroom", { "Mushroom_Attack1", "Mushroom_Attack2" } },
 #endif
 #if 0  // [Snake]
@@ -80,10 +80,10 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
 #if 0  // [Birdy]
     { CharacterKind::Birdy,    "Birdy",    { "Birdy_Attack1", "Birdy_Attack2" } },
 #endif
-#if 0  // [Bomber]
+#if 1  // [Bomber]
     { CharacterKind::Bomber,   "Bomber",   { "Bomber_Attack1" } },
 #endif
-#if 0  // [Slime]
+#if 1  // [Slime]
     { CharacterKind::Slime,    "Slime",    { "Slime_Attack1" } },
 #endif
 #if 0  // [Treant]

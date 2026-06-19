@@ -396,6 +396,21 @@
     <ClCompile Include="piercingSlashMeshPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="sound\soundManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="sound\soundCatalog.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="sound\miniaudio_impl.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\ScrollView.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\skillDialHUD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -788,6 +803,21 @@
     <ClInclude Include="piercingSlashMaterial.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="sound\soundManager.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="sound\soundCatalog.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="sound\miniaudio.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\ScrollView.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\skillDialHUD.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -956,6 +986,45 @@
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
     <None Include="..\resources\skills\tornado_shot.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\birdy_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\birdy_attack2.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\bomber_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\goblin_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\goblin_attack2.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\goblin_attack3.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\mushroom_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\mushroom_attack2.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\slime_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\snake_attack1.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\treant_clap.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\treant_punch.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\treant_spinkick.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
   </ItemGroup>

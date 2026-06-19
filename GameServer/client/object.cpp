@@ -996,7 +996,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -1004,7 +1004,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}
+	}*/
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {
@@ -1628,7 +1628,7 @@ void Mushroom::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetM
 // the matching [Name] guards in object.hpp + AssetManager + editor files.
 // =========================================================================
 
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 void AnimBlenderBomber::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
@@ -1956,7 +1956,7 @@ void Birdy::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMana
 }
 #endif // [Birdy]
 
-#if 0  // [Slime]
+#if 1  // [Slime]
 void AnimBlenderSlime::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());

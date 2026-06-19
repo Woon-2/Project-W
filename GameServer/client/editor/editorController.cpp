@@ -185,7 +185,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Goblin]
-#if 0  // [Mushroom]
+#if 1  // [Mushroom]
     case CharacterKind::Mushroom: {
         goblin_->setModel(assetManager_->modelMushroom());
         auto b = std::make_unique<AnimBlenderMushroom>();
@@ -212,7 +212,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Birdy]
-#if 0  // [Bomber]
+#if 1  // [Bomber]
     case CharacterKind::Bomber: {
         goblin_->setModel(assetManager_->modelBomber());
         auto b = std::make_unique<AnimBlenderBomber>();
@@ -221,7 +221,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Bomber]
-#if 0  // [Slime]
+#if 1  // [Slime]
     case CharacterKind::Slime: {
         goblin_->setModel(assetManager_->modelSlime());
         auto b = std::make_unique<AnimBlenderSlime>();

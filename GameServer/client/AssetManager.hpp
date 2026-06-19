@@ -98,7 +98,7 @@ public:
 
 	// [SCAFFOLD] Monster skill-caster accessors. Enable with the matching [Name]
 	// guards (members below + the load calls in AssetManager.cpp).
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	const Model* modelBomber()  const { return &modelBomber_; }
 	const std::vector<std::shared_ptr<AnimClip>>& bomberAnimations()  const { return bomberAnimations_; }
 #endif // [Bomber]
@@ -106,7 +106,7 @@ public:
 	const Model* modelBirdy()   const { return &modelBirdy_; }
 	const std::vector<std::shared_ptr<AnimClip>>& birdyAnimations()   const { return birdyAnimations_; }
 #endif // [Birdy]
-#if 0  // [Slime]
+#if 1  // [Slime]
 	const Model* modelSlime()   const { return &modelSlime_; }
 	const std::vector<std::shared_ptr<AnimClip>>& slimeAnimations()   const { return slimeAnimations_; }
 #endif // [Slime]
@@ -130,7 +130,7 @@ private:
 	Model modelSnake_{};
 	Model modelMushroom_{};
 	// [SCAFFOLD] Monster skill-caster model + animation members.
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 	Model modelBomber_{};
 	std::vector<std::shared_ptr<AnimClip>> bomberAnimations_{};
 #endif // [Bomber]
@@ -138,7 +138,7 @@ private:
 	Model modelBirdy_{};
 	std::vector<std::shared_ptr<AnimClip>> birdyAnimations_{};
 #endif // [Birdy]
-#if 0  // [Slime]
+#if 1  // [Slime]
 	Model modelSlime_{};
 	std::vector<std::shared_ptr<AnimClip>> slimeAnimations_{};
 #endif // [Slime]

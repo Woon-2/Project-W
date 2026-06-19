@@ -194,7 +194,7 @@ private:
 // Disabled behind `#if 0`; enable together with the matching [Name] guards.
 // =========================================================================
 
-#if 0  // [Bomber]
+#if 1  // [Bomber]
 class AnimBlenderBomber : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -268,7 +268,7 @@ private:
 };
 #endif // [Birdy]
 
-#if 0  // [Slime]
+#if 1  // [Slime]
 class AnimBlenderSlime : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -738,7 +738,7 @@ private:
 // indexes the AnimBlender's attackClips_ list (see object.cpp init()).
 // =========================================================================
 
-#if 0  // [Bomber]  resources present: models/bomber/bomber.bin + animations/bomberAnimations.anim
+#if 1  // [Bomber]  resources present: models/bomber/bomber.bin + animations/bomberAnimations.anim
 //        expected clips: Bomber_Idle, Bomber_Walk, Bomber_Attack1, Bomber_Hit, Bomber_Death
 class Bomber : public Object {
 public:
@@ -798,7 +798,7 @@ private:
 };
 #endif // [Birdy]
 
-#if 0  // [Slime]  NO resources yet: add models/slime/slime.bin + animations/slimeAnimations.anim
+#if 1  // [Slime]  NO resources yet: add models/slime/slime.bin + animations/slimeAnimations.anim
 //        expected clips: Slime_Idle, Slime_Walk, Slime_Attack1, Slime_Hit, Slime_Death
 class Slime : public Object {
 public:

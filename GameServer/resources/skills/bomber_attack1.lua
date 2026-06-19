@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name            = "Bomber_Attack1"
-skill.totalDurationMs = 900
+skill.totalDurationMs = 1000
 skill.interruptible   = true
 
 skill:addEvent(0, "PlayAnimation", {
@@ -13,16 +13,16 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(400, "SpawnHitbox", {
+skill:addEvent(750, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 1.0, 0.8, 0.8, 0.8, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),   -- placeholder: tune per skeleton in editor
+    localOBBs           = { OBB(0.0, 0.0, 0.15, 0.3, 0.3, 0.45, 0, 0, 0) },
+    attach              = BoneAttach("head_jnt"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 0,
+    hitGroupCooldownMs  = 700,
     onHit               = OnHit({ damage = 18, impulseStrength = 1000.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(620, "DestroyHitbox", { slot = 0 })
+skill:addEvent(950, "DestroyHitbox", { slot = 0 })
 
 return skill
