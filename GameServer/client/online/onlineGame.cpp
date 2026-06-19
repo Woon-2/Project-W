@@ -2427,6 +2427,19 @@ void Game::createMushroom(const ObjectInfo& info) {
 
 u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId) {
 	obj->setRenderObjectId(nextRenderObjId_++);  // fresh id: never alias a pooled reuse in Hi-Z
+	// Reassign the network/game id into the client-only corpse range so the detached
+	// corpse can never collide with a server-synced id (incl. a respawn that reuses npcId).
+	obj->setId(nextCorpseObjId_++);
+	detachedNpcIds_.insert(npcId);
+
+	// Freeze the detached body. It no longer receives server moves (advanceState), so the
+	// stale prev != curr left by the death-frame move (e.g. knockback launching curr up
+	// while prev is on the ground) makes interpolatePos = lerp(prev, curr, t) oscillate
+	// renderState_.world every frame as t cycles 0->1 — the corpse's BV/cull bounds (and
+	// orb spawn anchor) sink and pop back up repeatedly. snapToCurrent() pins prev = curr.
+	obj->body().setLinearVel(mu::Vec3{});
+	obj->body().snapToCurrent();
+
 	Corpse c;
 	c.obj      = obj;
 	c.kind     = kind;
@@ -3047,6 +3060,9 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto it = idMonsterMap_.find(npcId);
 	if (it == idMonsterMap_.end()) {
+		// Detached as a corpse (dead, awaiting respawn): in-flight server moves for it are
+		// expected — ignore silently. Pre-corpse this was a dead monster left in the map.
+		if (detachedNpcIds_.count(npcId)) return;
 		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
@@ -3061,11 +3077,12 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
-	DISPLAY_ERROR_STR( idMonsterMap_.count(npcId) > 0,
-		"[Game Error] Game::onNpcAttack: NPC not found.\n",
-		false
-	);
-	if (idMonsterMap_.count(npcId) == 0) return;
+	if (idMonsterMap_.count(npcId) == 0) {
+		// Detached as a corpse (dead, awaiting respawn): ignore stray attack packets silently.
+		if (detachedNpcIds_.count(npcId)) return;
+		DISPLAY_ERROR_STR(false, "[Game Error] Game::onNpcAttack: NPC not found.\n", false);
+		return;
+	}
 	holdEvent( eventList_, EvAttack( npcId ) );
 }
 
@@ -3094,6 +3111,10 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
+	// This npc id is live again — clear any "detached as corpse" mark (covers all three
+	// respawn sub-paths below: revive-in-place / pool reuse / fresh create).
+	detachedNpcIds_.erase(npcId);
+
 	// Still active (e.g. temporarily hidden via S_NpcHide, never killed): revive in place.
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
 		Object* npc = it->second;

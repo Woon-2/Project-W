@@ -19,6 +19,13 @@ namespace EnergyOrbShader {
 // quads with an HDR color. M2 adds death-pose skinning + vertex->sphere morph.
 namespace EnergyOrbPipeline {
 
+// GPU resource capacity: max orbs (= submesh drawcalls) rendered in one frame. Each
+// orb consumes one per-instance entry + one per-drawcall CB slot, so the fixed-size
+// perInstanceData / perDrawcallData buffers (sized to this in gfx.cpp) bound how many
+// orbs can be drawn. Excess orbs in a frame are dropped (logged) rather than overrun
+// the buffers. Keep large enough to cover bursts of simultaneous deaths.
+inline constexpr u32t kMaxOrbDrawcalls = 512u;
+
 struct CameraData {
     mu::Mat4x4 view;
     mu::Mat4x4 proj;

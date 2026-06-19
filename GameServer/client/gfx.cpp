@@ -356,7 +356,7 @@ void GFX::init() {
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsMeshParticlePipeline_.reserve(256u);
-	drawEventsEnergyOrbPipeline_.reserve(256u);
+	drawEventsEnergyOrbPipeline_.reserve(EnergyOrbPipeline::kMaxOrbDrawcalls);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
 	drawEventsBlendCGMeshPipeline_.reserve(256u);
 	drawEventsPiercingMeshPipeline_.reserve(256u);
@@ -564,10 +564,10 @@ void GFX::createSwapChain() {
 	);
 
 	resourcesEnergyOrbPipeline_.perInstanceData.init(
-		device_.Get(), sizeof( EnergyOrbShader::PerInstanceData ) * 256u, backBuffers_.size(), "EnergyOrb_PerInstanceData"
+		device_.Get(), sizeof( EnergyOrbShader::PerInstanceData ) * EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerInstanceData"
 	);
 	resourcesEnergyOrbPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof( EnergyOrbShader::PerDrawcallData ), 256u, backBuffers_.size(), "EnergyOrb_PerDrawcallData"
+		device_.Get(), sizeof( EnergyOrbShader::PerDrawcallData ), EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerDrawcallData"
 	);
 	resourcesEnergyOrbPipeline_.perFrameData.init(
 		device_.Get(), sizeof( EnergyOrbShader::PerFrameData ), backBuffers_.size(), "EnergyOrb_PerFrameData"

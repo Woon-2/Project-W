@@ -252,9 +252,24 @@ activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이�
 
 **왜 시체를 이관하나(client-authored Corpse):** 사망 연출 도중 서버 리스폰 패킷이 도착하면
 같은 오브젝트가 부활해 연출이 끊긴다. 그래서 사망 처리 순간 `migrateToCorpse(obj, kind, npcId)`로
-오브젝트를 **새 ID·새 RenderObjectId**를 부여한 `Corpse`(`corpses_` 컨테이너)로 옮기고, 활성
-몬스터 컨테이너(`idMonsterMap_` 등)에서 분리한다. 이후 서버 동기화와 무관하게 클라가 단독
+오브젝트를 `Corpse`(`corpses_` 컨테이너)로 옮기고, 활성 몬스터 컨테이너(`idMonsterMap_`/
+`idGoblinMap_` 등 + `skillObjectById_`)에서 분리한다. 이후 서버 동기화와 무관하게 클라가 단독
 관리하며, **모든 오브가 흡수된 뒤에만** 시체가 사라진다(`orbSystem_.hasActiveOrbs(corpseId)`).
+
+**ID 영역 분리 (id 꼬임 방지):** 시체는 서버 동기화에서 떨어져 나온 client-authored 객체다.
+초기 구현은 시체가 **서버 npc id를 그대로 유지**해서, 서버가 그 npcId를 리스폰에 재사용하면 시체와
+살아있는 리스폰 객체가 **같은 네트워크 id**를 공유해 매핑이 꼬였다(스킬 타겟·BV·라우팅 오작동).
+수정: `migrateToCorpse`가 시체에 **client 전용 고영역 id**(`kCorpseObjIdBase=0x40000000`+카운터,
+서버 id는 작은 uint16이라 절대 겹치지 않음)를 새로 부여(`setId`)하고, 새 RenderObjectId도 부여한다.
+원래 npcId는 `Corpse::origId`에만 보존한다. 풀로 돌아간 뒤 `reinitFromPool`이 `setId(npcId)`로
+다시 서버 id로 되돌린다(고영역 id는 시체 상태일 때만 한시적).
+
+**사망~리스폰 윈도우의 stray 패킷:** 시체로 이관하면 npcId가 `idMonsterMap_`에서 빠지므로,
+서버가 사망~리스폰 사이에 그 npcId로 보내는 in-flight 패킷이 `moveGoblin`/`onNpcAttack`에서
+"NPC not found" 에러를 낸다(시체 시스템 전에는 죽은 몬스터가 맵에 남아 `isDead()`로 조용히
+무시됐던 것의 회귀). 수정: `detachedNpcIds_`(현재 시체로 분리된 npcId 집합)에 migrate 시 insert,
+`onNpcRespawn` 진입 시 erase. 핸들러는 not-found일 때 이 집합에 있으면 **조용히 무시**, 없으면
+실제 에러로 로깅.
 
 **풀링:** 같은 오브젝트의 ID만 바꿔 재사용하면 서버 리스폰 시 쓸 오브젝트가 부족해진다.
 그래서 종류별 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`)을 두고, 리스폰은 풀에서 꺼내

@@ -39,7 +39,16 @@ Dispatcher::Dispatcher(
     rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
     rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
     rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool"))
-{}
+{
+    // Cap to the GPU buffer capacity so update (perInstanceData/boneData stage) and draw
+    // (perDrawcallData.cbuffers[idx]) never overrun their fixed-size buffers. Dropping
+    // excess orbs degrades gracefully instead of an out-of-bounds access violation.
+    if (drawEvents_.size() > kMaxOrbDrawcalls) {
+        gSharedLog << "[EnergyOrb] " << drawEvents_.size() << " orbs exceed capacity "
+                   << kMaxOrbDrawcalls << "; dropping the surplus this frame.\n";
+        drawEvents_.resize(kMaxOrbDrawcalls);
+    }
+}
 
 void Dispatcher::updateGPUDataSingleThreaded() {
     if (drawEvents_.empty()) return;
@@ -137,8 +146,12 @@ void Dispatcher::drawSingleThreaded() {
     pResources_->perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
     u32t idxDrawcall = 0u;
+    const u32t drawcallCap = static_cast<u32t>(pResources_->perDrawcallData.cbuffers.size());
 
     for (const auto& e : drawEvents_) {
+        // Defensive: never index past the allocated per-drawcall CBs (capacity is also
+        // enforced by the constructor's truncation; this guards against any mismatch).
+        if (idxDrawcall >= drawcallCap) break;
         // Lazily build the pipeline-specific VB view array: Position + skinning attrs.
         if (e.pMesh->vbViewsByPipeline.find("EnergyOrbPipeline") == e.pMesh->vbViewsByPipeline.end()) {
             auto& views = e.pMesh->vbViewsByPipeline["EnergyOrbPipeline"];
