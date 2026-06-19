@@ -176,7 +176,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
     // rig is out of scope for attack-pattern authoring.
     if (!goblin_ || !assetManager_ || !animSystem_) return;
     switch (kind) {
-#if 0  // [Goblin]
+#if 1  // [Goblin]
     case CharacterKind::Goblin: {
         goblin_->setModel(assetManager_->modelGoblin());
         auto b = std::make_unique<AnimBlenderGoblin>();

@@ -68,7 +68,7 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
     // AssetManager.*, editorController.cpp (setMonsterCaster), then provide the
     // model/anim resources. Resources already present: Goblin, Mushroom, Snake,
     // Bomber. Missing (must be added): Birdy, Slime, Treant.
-#if 0  // [Goblin]
+#if 1  // [Goblin]
     { CharacterKind::Goblin,   "Goblin",   { "Goblin_Attack1", "Goblin_Attack2", "Goblin_Attack3" } },
 #endif
 #if 0  // [Mushroom]
