@@ -515,3 +515,14 @@ Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin
 - **래그돌 (`Ragdoll::build(..., modelScale)`):** `halfExtents`·관성·`capsuleOffset`에 합성 scale을 곱하고 `Ragdoll::modelScale_`에 저장한다. 본 위치는 `objectWorldMat`(= `renderState().world`, scale 포함)이 처리한다. **활성 시 메시 크기 유지:** `syncToFinalXforms`는 `boneWorldMat = scale(modelScale_)·makeRigidMat(...)`로 scale을 주입해야 한다 — rigid 행렬만 쓰면 `finalXform·world`에서 `objectWorldMat`의 scale이 상쇄되어 메시가 unscaled로 돌아간다(크기 원복 버그). 회전 추출(`extractOrient`)은 basis를 정규화해 scale-safe하게 하고, `syncFromPoseDFS`는 seed와 동일하게 `boneOrigin + orient.rotate(capsuleOffset)`로 통일한다. joint anchor는 `activate`의 `resetAnchors`가 seed된 scaled body 위치에서 재계산하므로 자동 scaled.
 - **서버(RoomServer):** `ModelScale`을 읽어 `setModel`에서 동일하게 흡수(`Object`에 `modelBaseScale_`/`instanceScale_` 대칭 도입). `updateAnimBones`의 `entityWorld`에 `scale(body_.scale())`을 추가하고, 본-부착 BV의 `halfExtents`에 scale을 별도로 곱한다(`transformOBBByMatrix`는 center만 변환하고 회전은 정규화한 basis에서 추출). scale은 모델 고정값이라 네트워크 전송 불필요(클라/서버 동일 `.bin`).
 - **제약:** **균일(uniform) scale만 지원**(x=y=z) — shear 및 비균일 회전추출 이슈 회피. **포맷에 `ModelScale` 필드가 추가되어 모든 `.bin`(클라+서버) 재추출 필요.**
+
+#### 스킨드 메시 노드 변환 베이크 (skinned node dressXform → 정점)
+
+위 모델 scale은 **모델 루트(root) localScale**을 다루지만, **스킨드 메시 노드 자체(SkinnedMeshRenderer 트랜스폼)의 변환**은 별개 문제다. FBX 임포트 시 일부 에셋은 SMR 노드에 회전(예: snake — Z/Y-up 변환의 X축 90°)이나 단위 스케일(예: birdy/Isys — cm→m의 0.01)이 남는다.
+
+- **증상:** snake가 바닥에 누워야 하는데 90° 서 있고, birdy 말단이 늘어남. **본 팔레트 수학·bind pose·애니메이션 정합은 정상**(frame-0 skin 행렬 특이값 전부 1.0)인데도 깨진다.
+- **원인 (곱셈 순서/공간 불일치):** 본 팔레트(`finalXformData`=`toLocal·animDress`)는 **root 기준 dress 공간**에서 만들어지는데, 스킨드 정점은 **raw mesh-local**이고, 런타임 스킨드 셰이더는 `posW = position·anim·world`(`world = meshXform·objWorld`, `meshXform`=노드 DressMatrix) 순서로 곱한다. 즉 `meshXform`이 본 변형 **뒤**에 적용되어, 노드에 회전/스케일이 있으면 정점 공간과 팔레트 공간이 어긋난다. 올바른 순서는 `position·meshXform·anim·objWorld`(먼저 dress로 옮긴 뒤 스킨). `meshXform=I`인 모델(goblin/player 등)만 우연히 정상 동작했다.
+- **Fix (`ModelExtractor.cs`, 옵션 C):** 스킨드 메시는 노드 변환 `D = root.worldToLocal·node.localToWorld`를 정점(position=affine, normal=inverse-transpose, tangent=D)에 미리 구워 dress 공간으로 옮기고, 노드 `LocalMatrix`/`DressMatrix`를 **항등으로 기록**한다(`ExtractMesh(mesh, bakeXform)`). bounds도 베이크 정점 기준 재계산. 그러면 런타임이 `position(dress)·anim·I·objWorld`로 본 팔레트를 올바른 공간에서 적용한다. **정적 메시는 변경 없음**(노드 변환을 `meshXform`으로 유지, 정점은 raw mesh-local).
+- **모델 root scale과 무관:** `D`는 `root.worldToLocal`로 root 자신의 transform(스케일 포함)을 상쇄하므로 노드의 **상대** 변환만 굽는다. 모델 root scale은 여전히 `ModelScale`→`baseScale`→body scale 경로로 분리 적용된다(§4 베이크 폐기 사유인 "애니메이션 scale 채널 충돌"은 root scale 문제였고, 여기 노드 변환은 bind 고정값이라 무관).
+- **런타임/셰이더/서버 변경 0.** 서버 추출기는 정점을 저장하지 않아 영향 없음(서버 `.bin` 재추출 불필요).
+- **재추출 필요(클라):** 스킨드 노드가 비항등인 모델만 — `snake.bin`(90° 회전), `birdy.bin`·`Isys.bin`(0.01 스케일). 노드가 항등인 나머지 스킨드 모델(goblin/player/Hobgoblin/bomber/mushroom/slime/treant/Grandbaum)은 베이크가 no-op이라 기존 `.bin` 그대로 유효(포맷 불변).

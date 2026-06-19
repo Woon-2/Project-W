@@ -304,16 +304,57 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "TextureMapping");
     }
 
-    void ExtractMesh(Mesh mesh)
+    // bakeXform != null(스킨드 메시)이면 노드의 dress 변환을 정점에 미리 굽는다.
+    // (position은 affine point, normal은 inverse-transpose, tangent는 D로 변환)
+    void ExtractMesh(Mesh mesh, Matrix4x4? bakeXform = null)
     {
         ExtractUtil.WriteHeadTag(geometryWriter, "Mesh");
 
         mesh.RecalculateTangents();
 
+        // 정점/방향 데이터 준비 (스킨드면 dress 공간으로 베이크)
+        Vector3[] positions = mesh.vertices;
+        Vector3[] normalsArr = mesh.normals;
+        Vector4[] tangents4 = mesh.tangents;
+
+        if (bakeXform.HasValue)
+        {
+            Matrix4x4 D = bakeXform.Value;
+            Matrix4x4 N = D.inverse.transpose;   // 노멀은 inverse-transpose로 변환
+            if (positions != null && positions.Length > 0)
+                positions = ExtractUtil.BakePositions(positions, D);
+            if (normalsArr != null && normalsArr.Length > 0)
+                normalsArr = ExtractUtil.BakeDirections(normalsArr, N);
+            if (tangents4 != null && tangents4.Length > 0)
+            {
+                Vector4[] bakedT = new Vector4[tangents4.Length];
+                for (int i = 0; i < tangents4.Length; i++)
+                {
+                    Vector3 t = D.MultiplyVector(new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z)).normalized;
+                    bakedT[i] = new Vector4(t.x, t.y, t.z, tangents4[i].w);   // w(부호) 보존
+                }
+                tangents4 = bakedT;
+            }
+        }
+
         // =========================
-        // AABB 추출
+        // AABB 추출 (베이크된 정점 기준으로 재계산)
         // =========================
-        Bounds bounds = mesh.bounds;
+        Bounds bounds;
+        if (bakeXform.HasValue && positions != null && positions.Length > 0)
+        {
+            Vector3 mn = positions[0], mx = positions[0];
+            for (int i = 1; i < positions.Length; i++)
+            {
+                mn = Vector3.Min(mn, positions[i]);
+                mx = Vector3.Max(mx, positions[i]);
+            }
+            bounds = new Bounds((mn + mx) * 0.5f, mx - mn);
+        }
+        else
+        {
+            bounds = mesh.bounds;
+        }
 
         ExtractUtil.WriteHeadTag(geometryWriter, "Bounds");
         ExtractUtil.WriteVector(geometryWriter, "Center", bounds.center);
@@ -324,19 +365,19 @@ public class ModelExtractorWindow : EditorWindow
 
         // 버텍스 버퍼들 추출
         ExtractUtil.WriteHeadTag(geometryWriter, "VertexBuffers");
-        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", mesh.vertices);
+        if ((positions != null) && (positions.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", positions);
         if ((mesh.colors != null) && (mesh.colors.Length > 0)) ExtractUtil.WriteColors(geometryWriter, "Colors", mesh.colors);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", mesh.normals);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)
-            && (mesh.tangents != null) && (mesh.tangents.Length > 0)
+        if ((normalsArr != null) && (normalsArr.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", normalsArr);
+        if ((normalsArr != null) && (normalsArr.Length > 0)
+            && (tangents4 != null) && (tangents4.Length > 0)
         )
         {
-            Vector3[] tangents = new Vector3[mesh.tangents.Length];
-            Vector3[] bitangents = new Vector3[mesh.tangents.Length];
-            for (int i = 0; i < mesh.tangents.Length; i++)
+            Vector3[] tangents = new Vector3[tangents4.Length];
+            Vector3[] bitangents = new Vector3[tangents4.Length];
+            for (int i = 0; i < tangents4.Length; i++)
             {
-                tangents[i] = new Vector3(mesh.tangents[i].x, mesh.tangents[i].y, mesh.tangents[i].z);
-                bitangents[i] = Vector3.Normalize(Vector3.Cross(mesh.normals[i], tangents[i])) * mesh.tangents[i].w;
+                tangents[i] = new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z);
+                bitangents[i] = Vector3.Normalize(Vector3.Cross(normalsArr[i], tangents[i])) * tangents4[i].w;
             }
             ExtractUtil.WriteVectors(geometryWriter, "Tangents", tangents);
             ExtractUtil.WriteVectors(geometryWriter, "Bitangents", bitangents);
@@ -500,11 +541,8 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteHeadTag(geometryWriter, "Node");
         ExtractUtil.WriteString(geometryWriter, ExtractUtil.ReplaceWhiteSpace(xform.gameObject.name));
 
-        // 변환 추출
-        ExtractUtil.WriteLocalMatrix(geometryWriter, "LocalMatrix", xform);
-        ExtractUtil.WriteDressMatrix(geometryWriter, "DressMatrix", root, xform);
-
-        // 메시 추출
+        // 메시/렌더러 판별을 변환 행렬 기록보다 먼저 한다.
+        // 스킨드 메시는 노드 변환 처리 방식이 달라(아래 참조) 행렬을 쓰기 전에 알아야 한다.
         MeshRenderer meshRenderer = xform.gameObject.GetComponent<MeshRenderer>();
         MeshFilter meshFilter = xform.gameObject.GetComponent<MeshFilter>();
         SkinnedMeshRenderer skinnedMeshRenderer = xform.gameObject.GetComponent<SkinnedMeshRenderer>();
@@ -514,6 +552,7 @@ public class ModelExtractorWindow : EditorWindow
         bool skinnedMeshRendererUsable = IsRendererUsable(skinnedMeshRenderer);
 
         Mesh mesh = null;
+        bool isSkinnedMesh = false;
         if (meshRenderer && meshFilter && meshRendererUsable)
         {
             mesh = meshFilter.sharedMesh;
@@ -521,6 +560,7 @@ public class ModelExtractorWindow : EditorWindow
         else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
+            isSkinnedMesh = true;
             boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
             for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
             {
@@ -542,9 +582,31 @@ public class ModelExtractorWindow : EditorWindow
             }
         }
 
+        // 변환 추출
+        // 스킨드 메시는 본 팔레트(toDress/toLocal, root 기준 dress 공간)가 정점 변형을 책임진다.
+        // 그런데 런타임 스킨드 셰이더는 position·anim·meshXform 순서로 곱하므로(meshXform=노드
+        // DressMatrix), 노드 자체에 회전/스케일이 있으면 그 변환이 본 변형 '뒤'에 적용되어
+        // 정점(mesh-local) 공간과 본 팔레트(dress) 공간이 어긋난다 — snake가 90° 서거나 birdy
+        // 말단이 늘어나는 원인. 따라서 노드 변환 D(= root.worldToLocal·node.localToWorld)를 정점에
+        // 미리 구워 dress 공간으로 옮기고, 노드 행렬은 항등으로 기록한다. 이러면 런타임이
+        // position(dress)·anim·I 로 본 팔레트를 올바른 공간에서 적용한다. 정적 메시는 기존대로
+        // 노드 변환을 meshXform으로 유지한다(정점은 raw mesh-local).
+        Matrix4x4? bakeXform = null;
+        if (isSkinnedMesh)
+        {
+            bakeXform = root.worldToLocalMatrix * xform.localToWorldMatrix;
+            ExtractUtil.WriteMatrix(geometryWriter, "LocalMatrix", Matrix4x4.identity);
+            ExtractUtil.WriteMatrix(geometryWriter, "DressMatrix", Matrix4x4.identity);
+        }
+        else
+        {
+            ExtractUtil.WriteLocalMatrix(geometryWriter, "LocalMatrix", xform);
+            ExtractUtil.WriteDressMatrix(geometryWriter, "DressMatrix", root, xform);
+        }
+
         if (mesh != null)
         {
-            ExtractMesh(mesh);
+            ExtractMesh(mesh, bakeXform);
         }
 
         // --- MaterialSetSelector 지원 ---
