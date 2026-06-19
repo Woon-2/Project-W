@@ -1009,6 +1009,14 @@ struct PerInstanceData {
 	i32t bakedClipId;
 	i32t bakedClipFrame;
 	i32t padding;
+	// Energy-orb absorption ripples (body-surface emissive wave). Local effect:
+	// only the absorbing player has rippleCount>0; all others default to 0.
+	// Layout must match pbrDeferredSkinned.hlsl PerInstanceData (tight-packed
+	// StructuredBuffer; float4 arrays avoid alignment ambiguity).
+	XMFLOAT4 ripplePosAge[4];          // xyz = contact world pos, w = age (sec)
+	XMFLOAT4 rippleColorIntensity[4];  // rgb = HDR color, w = intensity
+	u32t     rippleCount;
+	XMUINT3  ripplePad;
 };
 
 struct PerDrawcallData {

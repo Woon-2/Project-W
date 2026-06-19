@@ -752,7 +752,19 @@ void Object::setModel(const Model* pModel){
 // @param deltaTime 마지막 프레임으로부터 경과한 시간
 // @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 //		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
+// Absorption-ripple lifetime (seconds). Must match RIPPLE_LIFE in pbrDeferredSkinned.hlsl
+// so the CPU evicts a ripple exactly when the shader's time-fade reaches zero.
+static constexpr float kBodyRippleLife = 1.0f;
+
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
+	// Age + evict absorption ripples first, independent of cull/hidden state, so a
+	// triggered ripple always plays out even if the body is briefly culled.
+	if (!bodyRipples_.empty()) {
+		const float dt = Seconds(deltaTime).count();
+		for (auto& r : bodyRipples_) r.age += dt;
+		std::erase_if(bodyRipples_, [](const BodyRipple& r) { return r.age >= kBodyRippleLife; });
+	}
+
 	if (hidden_) return;   // hidden NPC: skip interpolation/anim entirely (S_NpcHide; restored on respawn)
 	const auto& prev = body_.prev();
 	const auto& curr = body_.curr();
@@ -840,6 +852,14 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	}
 }
 
+void MU_CALLCONV Object::addBodyRipple(mu::Vec3 contactPosW, mu::Vec3 colorHDR, float intensity) {
+	// Evict the oldest when full so the newest absorption is always shown.
+	if (bodyRipples_.size() >= static_cast<std::size_t>(kMaxBodyRipples))
+		bodyRipples_.erase(bodyRipples_.begin());
+	// Store relative to the current body position; render re-anchors to the live pos.
+	bodyRipples_.push_back(BodyRipple{ contactPosW - renderState_.pos, colorHDR, 0.f, intensity });
+}
+
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	if (hidden_) return;   // hidden NPC: not drawn (no corpse). Cleared on respawn.
 	const auto pModel = renderState_.pModel;
@@ -879,7 +899,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 				if (useDeferred) {
 					if (isSkinned) {
-						gfx.addDrawEvent(PBRDeferredSkinnedPipeline::DrawEvent{
+						auto de = PBRDeferredSkinnedPipeline::DrawEvent{
 							.world             = meshXform * offsetXform * renderState_.world,
 							.boneXforms        = renderState_.animBlender->finalXformData(),
 							.mesh              = &mesh,
@@ -895,7 +915,19 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 							.worldCullMin       = cullMin,
 							.worldCullMax       = cullMax,
 							.hasWorldCullBounds = hasCullBounds,
-						});
+						};
+						// Energy-orb absorption ripples (local player body wave). Empty for
+						// every other skinned object -> rippleCount 0 -> no shader cost.
+						const int nr = std::min<int>(static_cast<int>(bodyRipples_.size()),
+							PBRDeferredSkinnedPipeline::DrawEvent::kMaxRipples);
+						for (int r = 0; r < nr; ++r) {
+							const auto& br = bodyRipples_[r];
+							// Re-anchor to the live body position so the ring tracks the player.
+							de.ripplePosAge[r]         = mu::Vec4(renderState_.pos + br.offset, br.age);
+							de.rippleColorIntensity[r] = mu::Vec4(br.colorHDR, br.intensity);
+						}
+						de.rippleCount = static_cast<u32t>(nr);
+						gfx.addDrawEvent(std::move(de));
 					}
 					else {
 						gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{

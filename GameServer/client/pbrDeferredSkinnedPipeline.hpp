@@ -75,6 +75,15 @@ struct DrawEvent {
     mu::Vec3 worldCullMax{};
     bool     hasWorldCullBounds = false;
 
+    // Energy-orb absorption ripples (body-surface emissive wave). Only the local
+    // player ever sets rippleCount>0; all other instances default to 0 (no effect).
+    // Excluded from operator<=> so a ripple-carrying instance still batches with its
+    // material group — the ripples are written per-instance, not per-drawcall.
+    static constexpr int kMaxRipples = 4;   // must match shader MAX_ABSORB_RIPPLES
+    mu::Vec4 ripplePosAge[kMaxRipples]{};          // xyz = contact world pos, w = age (sec)
+    mu::Vec4 rippleColorIntensity[kMaxRipples]{};  // rgb = HDR color, w = intensity
+    u32t     rippleCount = 0u;
+
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
         if (e == std::strong_ordering::equal) {

@@ -40,6 +40,7 @@ public:
         int        slot          = 0;
         float      morphT        = 0.f;        // 0 = mesh pose, 1 = collapsed sphere
         float      speed         = 0.f;        // current tracking speed (m/s)
+        float      renderScale   = 1.f;        // world-size multiplier (condense as it nears the player)
         mu::Vec3   contactPoint  = { 0.f, 0.f, 0.f };  // world pos at absorption (ripple anchor)
         u32t       corpseId      = 0u;         // owning corpse (so the corpse knows when its orbs are gone)
         State      state         = State::Forming;

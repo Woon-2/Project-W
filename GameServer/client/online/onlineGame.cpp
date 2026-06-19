@@ -3455,7 +3455,17 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (!orbSystem_.onAbsorb) {
 		orbSystem_.onAbsorb = [this](const EnergyOrbSystem::Orb& orb) {
 			skillDial_.addDisplayCharge(orb.slot, orb.chargePerOrb);
-			// M5: trigger the body ripple at orb.contactPoint tinted by orb.colorHDR.
+			// M5: emissive ripple across the local player's body at the contact point.
+			// The orb color is HDR (bright); GB2 is UNORM so it would clamp to a vivid,
+			// busy full-saturation ring. Soften it: normalize the hue to peak 1, mix
+			// toward white (pastel), and feed a modest intensity -> a subtle wash.
+			if (player_) {
+				const auto cf   = orb.colorHDR.getXmf();
+				const float peak = std::max({ cf.x, cf.y, cf.z, 1e-4f });
+				mu::Vec3 soft = orb.colorHDR * (1.f / peak);                  // hue, peak = 1
+				soft = mu::lerp(soft, mu::Vec3{ 1.f, 1.f, 1.f }, 0.3f);       // desaturate
+				player_->addBodyRipple(orb.contactPoint, soft, 0.25f);        // gentle intensity
+			}
 		};
 	}
 

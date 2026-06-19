@@ -17,9 +17,16 @@ constexpr float kAbsorbTime   = 0.18f;  // Absorbing state duration
 constexpr float kTargetHeight = 1.1f;   // aim at the player's chest, not feet
 
 constexpr float kSphereRadius = 0.32f;
-constexpr float kPointSize    = 0.045f;
-constexpr float kColorMinI    = 3.0f;   // HDR intensity range
-constexpr float kColorMaxI    = 6.5f;
+constexpr float kPointSize    = 0.04f;
+constexpr float kColorMinI    = 2.0f;   // HDR intensity range (kept modest: hundreds of
+constexpr float kColorMaxI    = 3.8f;   // additive quads stack into a bright core already)
+
+// Condense the orb as it nears the player. Without this the fixed-world-size quads
+// swell on screen via perspective (the player sits near the camera) and the dense
+// additive core blooms into a big blob. Shrinking the world size as it approaches
+// counters the swell and reads as energy compressing into the body.
+constexpr float kCondenseStartDist = 3.5f;  // begin shrinking within this range of the player
+constexpr float kCondenseMinScale  = 0.5f;  // world-size scale at contact
 
 // Fully-saturated hue -> RGB (h in [0,1)).
 mu::Vec3 hueToRGB(float h) {
@@ -125,6 +132,9 @@ void EnergyOrbSystem::update(float dtSec, const mu::Vec3& playerPos) {
             orb.speed = std::min(orb.speed + kAccel * dtSec, kMaxSpeed);
             mu::Vec3 toTarget = target - orb.sphereCenter;
             const float dist = toTarget.len();
+            // Condense as it approaches (counter perspective swell + read as compression).
+            const float u = std::clamp((dist - kAbsorbRadius) / (kCondenseStartDist - kAbsorbRadius), 0.f, 1.f);
+            orb.renderScale = kCondenseMinScale + (1.f - kCondenseMinScale) * u;
             if (dist <= kAbsorbRadius) {
                 orb.contactPoint = orb.sphereCenter;
                 orb.state        = State::Absorbing;
@@ -137,6 +147,9 @@ void EnergyOrbSystem::update(float dtSec, const mu::Vec3& playerPos) {
             break;
         }
         case State::Absorbing: {
+            // Shrink to nothing so the orb visibly pops into the body rather than
+            // lingering as a large quad at the contact point.
+            orb.renderScale = kCondenseMinScale * std::max(0.f, 1.f - orb.stateTime / kAbsorbTime);
             if (orb.stateTime >= kAbsorbTime) orb.state = State::Dead;
             break;
         }
@@ -158,10 +171,10 @@ void EnergyOrbSystem::submitDrawEvents(GFX& gfx) const {
             .pAlbedo      = orb.albedo,
             .boneXforms   = std::span<const mu::Mat4x4>(orb.boneSnapshot),
             .sphereCenter = orb.sphereCenter,
-            .sphereRadius = orb.sphereRadius,
+            .sphereRadius = orb.sphereRadius * orb.renderScale,
             .colorHDR     = orb.colorHDR,
             .morphT       = orb.morphT,
-            .pointSize    = orb.pointSize,
+            .pointSize    = orb.pointSize * orb.renderScale,
             .vertexCount  = orb.vertexCount,
         });
     }

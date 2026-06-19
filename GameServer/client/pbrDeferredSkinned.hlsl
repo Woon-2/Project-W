@@ -1,5 +1,13 @@
 #define MAX_CSM_CASCADES 4
 
+// Energy-orb absorption ripple knobs. RIPPLE_LIFE must match Object::kBodyRippleLife
+// (object.cpp) so the CPU evicts a ripple exactly when this time-fade hits zero.
+#define MAX_ABSORB_RIPPLES 4
+#define RIPPLE_SPEED       3.0f   // ring expansion speed (m/s)
+#define RIPPLE_WIDTH       0.35f  // gaussian ring band thickness (m)
+#define RIPPLE_LIFE        1.0f   // ripple lifetime (s)
+#define RIPPLE_MAX_RADIUS  2.2f   // spatial cutoff radius (m)
+
 struct PerInstanceData {
     float4x4 world;
     float4x4 wvp;
@@ -10,6 +18,11 @@ struct PerInstanceData {
     int bakedClipId;
     int bakedClipFrame;
     int padding;
+    // Absorption ripples — layout must match PBRDeferredSkinnedGBufferShader::PerInstanceData.
+    float4 ripplePosAge[MAX_ABSORB_RIPPLES];          // xyz = contact world pos, w = age (sec)
+    float4 rippleColorIntensity[MAX_ABSORB_RIPPLES];  // rgb = HDR color, w = intensity
+    uint   rippleCount;
+    uint3  ripplePad;
 };
 
 struct Material {
@@ -37,6 +50,7 @@ struct VSOutput {
     float3 tangentV   : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
     float2 uv         : UV;
+    nointerpolation uint instIdx : INSTIDX;  // gInstances index (for per-instance ripples in PS)
 };
 
 // GBuffer output: 5 render targets
@@ -178,6 +192,7 @@ VSOutput VSMain(
         ret.bitangentV = mul(animBitangent.xyz, gInstances[idx].wvNormal);
     }
     ret.uv = uv;
+    ret.instIdx = idx;
 
     return ret;
 }
@@ -229,6 +244,25 @@ GBufferOutput PSMain(VSOutput input) {
     // pass (matches pbrDeferred.hlsl). Baking globalAmbient here too would double the
     // ambient on skinned meshes (constant ambient in GB2 + IBL added by the lighting pass).
     float3 lightAccum = emissive;
+
+    // --- Energy-orb absorption ripple (additive emissive ring across the body) ---
+    // Each absorbed orb spawns an expanding ring of its HDR color. Only the local
+    // player carries ripples (rippleCount>0); everything else skips the loop. Stored
+    // in GB2 emissive -> the deferred lighting pass promotes it to HDR and bloom
+    // picks it up. GB2 is UNORM so the ring peak saturates to a bright hue.
+    uint rippleCount = gInstances[input.instIdx].rippleCount;
+    [loop]
+    for (uint ri = 0u; ri < rippleCount; ++ri) {
+        float4 pa = gInstances[input.instIdx].ripplePosAge[ri];
+        float4 ci = gInstances[input.instIdx].rippleColorIntensity[ri];
+        float dist  = length(input.posW - pa.xyz);
+        float ringR = pa.w * RIPPLE_SPEED;
+        float d     = (dist - ringR) / RIPPLE_WIDTH;
+        float band  = exp(-d * d);   // gaussian ring (squared directly: avoids pow(neg) NaN)
+        float tFade = saturate(1.0f - pa.w / RIPPLE_LIFE);
+        float sFade = saturate(1.0f - dist / RIPPLE_MAX_RADIUS);
+        lightAccum += ci.rgb * (ci.w * band * tFade * sFade);
+    }
 
     GBufferOutput o;
     o.gb0 = float4(albedo.rgb, ao);
