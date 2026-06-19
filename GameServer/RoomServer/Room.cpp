@@ -381,6 +381,8 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	// Clients build the same walls locally so the predicted player collides.
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -449,6 +451,8 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -518,6 +522,8 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -1334,6 +1340,30 @@ void Room::updateTacticalAI(Milliseconds dt) {
 
 	if (!moveInfos.empty())
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
+
+	// 전 NPC(보스 + 전 부대원) 처치 시 아레나 가상 벽을 1회 해제 → 플레이어 후퇴 허용.
+	if (arenaWallsActive_ && allTacticalCombatantsDead())
+		teardownArenaWalls();
+}
+
+// 보스(platoonLeader_)가 사망했고 모든 부대원(tacticalNpcs_)도 사망했는지. 보스가 먼저
+// 죽어도 Confused로 살아남은 부대원이 1명이라도 있으면 false(전 NPC 처치 후에만 벽 해제).
+bool Room::allTacticalCombatantsDead() const {
+	if (!platoonLeader_ || platoonLeader_->hp() > 0) return false;
+	for (const auto& npc : tacticalNpcs_)
+		if (npc && npc->hp() > 0) return false;
+	return true;
+}
+
+// 아레나 가상 벽 해제: 서버 배리어 바디를 물리에서 제거(~Room()과 동일 패턴)하고, 클라엔
+// S_ZoneState(.,0)을 broadcast한다(클라 onZoneState가 로컬 벽 제거). 1회성(arenaWallsActive_ off).
+void Room::teardownArenaWalls() {
+	for (const auto& b : barriers_)
+		if (b) physicsWorld_.unregisterBody(&b->body());
+	barriers_.clear();
+	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
+	arenaWallsActive_ = false;
+	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
 }
 
 TacticalNpc* Room::findTacticalNpcById(uint32_t id) const {
@@ -1592,7 +1622,7 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
 		makeBase(bossPos), bossCfg, std::make_unique<GoblinMidBossTactic>());
-	registerBody(*platoonLeader_);
+	registerBody(*platoonLeader_, assetManager_->modelHobgoblin());   // 보스는 Hobgoblin 모델
 	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 	platoonLeaderObjType_ = ObjectType::Hobgoblin;   // 클라에 Hobgoblin 모델로 통지(ObjectInfo.type)

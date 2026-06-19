@@ -104,4 +104,14 @@ repeat Z:
   - `assetManager_` backref를 init에서 캐시(런타임 배리어용 cube 모델).
 - **클라(`Online::Game`):** `onZoneState(zoneId, 1)` → `chunkManager_.markers()`에서 같은 Wall 마커로 **로컬 Static Cube** 생성(`physicsWorld_.registerBody`, **렌더 안 함=가상의 벽**, `barriers_`). state==0 → 제거. 예측 로컬 플레이어가 벽에 막힘.
 - **왜 양쪽:** online 플레이어 이동은 클라 예측+서버 검증이라, 실제 차단은 클라 배리어가, 권위/타 엔티티는 서버 배리어가 담당.
-- **한계:** 중도 입장 클라는 S_ZoneState를 못 받아 벽 미생성(거점 중도입장 한계와 동일). 벽 제거(보스 처치 시) 미연결 — 현재 영구 유지. zone 태그(`midboss_arena`)·마커 이름은 오서링과 정확히 일치해야 함.
+- **한계:** 중도 입장 클라는 S_ZoneState를 못 받아 벽 미생성(거점 중도입장 한계와 동일). zone 태그(`midboss_arena`)·마커 이름은 오서링과 정확히 일치해야 함.
+  - ~~벽 제거(보스 처치 시) 미연결 — 현재 영구 유지.~~ → **해결됨(§12 참조).**
+
+## 12. As-Built — 아레나 벽 해제 (전 NPC 처치 시, 2026-06)
+
+전술 전투 종료 시 가상 벽을 내려 플레이어가 아레나 밖으로 후퇴할 수 있게 한다. §11의 "벽 제거 미연결" 한계 해소.
+- **해제 조건:** 보스(`platoonLeader_`) 사망 **AND** 전 부대원(`tacticalNpcs_`) 사망. 보스가 먼저 죽고 부대원이 `Confused`로 살아남으면 그 전원을 마저 처치해야 해제(사용자 확정 정책).
+- **감지 위치(`Room::updateTacticalAI` 말미):** `arenaWallsActive_ && allTacticalCombatantsDead()` → `teardownArenaWalls()`. 사망 NPC 시체는 `tacticalNpcs_`에 잔존해 매 틱 계속 검사되므로 별도 폴링 불필요.
+- **`teardownArenaWalls()`:** 서버 `barriers_` 바디를 `physicsWorld_.unregisterBody` 후 clear(`~Room()`과 동일 패턴) + `S_ZoneState(activeArenaZoneId_, 0)` broadcast. **새 패킷·새 클라 코드 없음** — 클라 `onZoneState`의 기존 `state==0` 분기(`onlineGame.cpp`)가 로컬 벽을 제거.
+- **활성 추적 상태(`Room`):** 진입 핸들러 3종이 `S_ZoneState(.,1)` 직후 `activeArenaZoneId_`/`arenaWallsActive_` 기록. 동시 인카운터 없음(진입 가드 + zone 1회성)이라 단일 상태로 충분. `arenaWallsActive_`는 해제 시 false로 내려 1회성 보장.
+- **퇴화 데이터 안전:** 스폰 마커 부재로 인카운터 미생성(`platoonLeader_==nullptr`) 시 `allTacticalCombatantsDead()`가 false → 벽 유지(기존 동작과 동일).

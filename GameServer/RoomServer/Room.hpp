@@ -197,6 +197,8 @@ private:
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
 	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
+	void teardownArenaWalls();                 // 전 NPC 처치 시 아레나 가상 벽 해제(barriers_ 파괴 + S_ZoneState(.,0))
+	bool allTacticalCombatantsDead() const;    // 보스 사망 AND 전 부대원 사망이면 true
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateMonsterAI(Milliseconds dt);
@@ -232,6 +234,8 @@ private:
 	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
 	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
 	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
+	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
+	bool                       arenaWallsActive_{ false };  // 서버 배리어가 올라가 있고 아직 해제 안 됨(1회성 가드)
 	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
