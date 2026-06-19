@@ -538,6 +538,29 @@ public:
 	void setHiZCulled(bool v)       { hiZCulled_ = v; }
 	bool isHiZCulled() const        { return hiZCulled_; }
 
+	// When true the mesh is not rendered: the corpse has dissolved into energy orbs.
+	void setHiddenByOrb(bool v)     { hiddenByOrb_ = v; }
+	bool isHiddenByOrb() const      { return hiddenByOrb_; }
+
+	// --- Energy-orb absorption ripples (body-surface emissive wave) ---
+	// When an energy orb is absorbed, a ripple is spawned at the contact point and
+	// fed into this object's deferred-skinned per-instance data. The shader renders
+	// an expanding emissive ring of colorHDR across the mesh surface (GB2 emissive,
+	// auto-bloomed). Local effect: only the absorbing player accumulates ripples.
+	// Ripples are aged in update() and evicted when older than the shader's lifetime.
+	struct BodyRipple {
+		// Anchor stored relative to the object position at trigger time, so the ring
+		// follows the body as the player moves (re-anchored to the live position each
+		// frame in render) instead of staying pinned to a world point.
+		mu::Vec3 offset{};
+		mu::Vec3 colorHDR{ 1.f, 1.f, 1.f };
+		float    age       = 0.f;
+		float    intensity = 1.f;
+	};
+	static constexpr int kMaxBodyRipples = 4;   // must match shader MAX_ABSORB_RIPPLES
+	void MU_CALLCONV addBodyRipple(mu::Vec3 contactPosW, mu::Vec3 colorHDR, float intensity = 1.f);
+	const std::vector<BodyRipple>& bodyRipples() const { return bodyRipples_; }
+
 	// BV rendering color for collision visualization.
 	// Default green: no collision. Red: terrain-object. Blue: object-object.
 	void MU_CALLCONV setBVColor(mu::Vec4 color) { bvColor_ = color; }
@@ -584,7 +607,9 @@ protected:
 
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;
+	bool     hiddenByOrb_             = false;  // corpse dissolved into energy orbs
 	bool     shadowLightFrustumCulled_ = false;
+	std::vector<BodyRipple> bodyRipples_{};     // active absorption ripples (local player)
 	mu::Vec4 bvColor_{ 0.f, 1.f, 0.f, 1.f };
 
 private:

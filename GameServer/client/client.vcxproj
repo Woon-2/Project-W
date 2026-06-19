@@ -177,6 +177,8 @@
     <ClCompile Include="piercingSlashMeshPipeline.cpp" />
     <ClCompile Include="piercingSlashMaterial.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
+    <ClCompile Include="energyOrbPipeline.cpp" />
+    <ClCompile Include="energyOrbSystem.cpp" />
     <ClCompile Include="windRingPipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -352,6 +354,8 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
+    <ClInclude Include="energyOrbPipeline.hpp" />
+    <ClInclude Include="energyOrbSystem.hpp" />
     <ClInclude Include="physicsTestObject.hpp" />
     <ClInclude Include="windRingPipeline.hpp" />
     <ClInclude Include="smokeBlendCGPipeline.hpp" />
@@ -466,6 +470,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="meshParticle.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="energyOrb.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

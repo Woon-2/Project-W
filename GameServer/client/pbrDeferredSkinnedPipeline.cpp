@@ -875,6 +875,11 @@ void Dispatcher::gBufferUpdate() {
         perInstanceData[i].worldNormal    = mu::inverse(mu::Mat3x3(e.world)).getXmf();
         perInstanceData[i].bakedClipId    = e.bakedClipId;
         perInstanceData[i].bakedClipFrame = e.bakedClipFrame;
+        perInstanceData[i].rippleCount    = e.rippleCount;
+        for (int r = 0; r < DrawEvent::kMaxRipples; ++r) {
+            perInstanceData[i].ripplePosAge[r]         = e.ripplePosAge[r].getXmf();
+            perInstanceData[i].rippleColorIntensity[r] = e.rippleColorIntensity[r].getXmf();
+        }
         if (e.bakedClipId == -1) {
             boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
         }
@@ -1202,6 +1207,11 @@ void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
             pOut[i].worldNormal    = mu::inverse(mu::Mat3x3(e.world)).getXmf();
             pOut[i].bakedClipId    = e.bakedClipId;
             pOut[i].bakedClipFrame = e.bakedClipFrame;
+            pOut[i].rippleCount    = e.rippleCount;
+            for (int r = 0; r < DrawEvent::kMaxRipples; ++r) {
+                pOut[i].ripplePosAge[r]         = e.ripplePosAge[r].getXmf();
+                pOut[i].rippleColorIntensity[r] = e.rippleColorIntensity[r].getXmf();
+            }
         }
         latch.count_down();
     });

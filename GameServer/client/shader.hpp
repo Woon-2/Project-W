@@ -41,6 +41,7 @@ ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, 
 ComPtr<ID3D12PipelineState> createBillboardShaderMultiply(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShaderPremultiplied(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createEnergyOrbShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createWindRingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -387,6 +388,42 @@ struct PerFrameData {
 };
 
 }	// namespace MeshParticleShader
+
+// EnergyOrbShader
+namespace EnergyOrbShader {
+
+// 112B, 16B-aligned
+// world: row-major — CPU transposes (mu::transpose().getXmf()) before upload
+struct PerInstanceData {
+	XMFLOAT4X4 world;              // 64B  death-time object world
+	XMFLOAT4   colorAndSize;       // 16B  rgb = HDR emissive color, a = point size
+	XMFLOAT4   sphereCenterRadius; // 16B  xyz = orb center (world), w = sphere radius
+	u32t       rootBoneOffset;     // 4B   index into the bone palette
+	float      morphT;             // 4B   0 = mesh pose, 1 = collapsed sphere
+	u32t       vertexCount;        // 4B   submesh vertex count (hash normalization)
+	float      pad;                // 4B
+};
+
+// 32B
+struct PerDrawcallData {
+	BindlessIndex idxAlbedo;           // 16B  submesh albedo (idxRange < 0 = none)
+	u32t          firstInstanceOffset; // 4B
+	XMUINT3       pad0;                // 12B
+};
+
+// 80B, 16B-aligned
+struct PerFrameData {
+	XMFLOAT4X4 vp;         // 64B  row-major
+	XMFLOAT3   cameraPosW; // 12B
+	float      padding0;   // 4B
+};
+
+// 64B — one skinning matrix per bone (death-pose snapshot), row-major.
+struct BoneData {
+	XMFLOAT4X4 transform;
+};
+
+}	// namespace EnergyOrbShader
 
 // WindRingShader
 namespace WindRingShader {
@@ -972,6 +1009,14 @@ struct PerInstanceData {
 	i32t bakedClipId;
 	i32t bakedClipFrame;
 	i32t padding;
+	// Energy-orb absorption ripples (body-surface emissive wave). Local effect:
+	// only the absorbing player has rippleCount>0; all others default to 0.
+	// Layout must match pbrDeferredSkinned.hlsl PerInstanceData (tight-packed
+	// StructuredBuffer; float4 arrays avoid alignment ambiguity).
+	XMFLOAT4 ripplePosAge[4];          // xyz = contact world pos, w = age (sec)
+	XMFLOAT4 rippleColorIntensity[4];  // rgb = HDR color, w = intensity
+	u32t     rippleCount;
+	XMUINT3  ripplePad;
 };
 
 struct PerDrawcallData {

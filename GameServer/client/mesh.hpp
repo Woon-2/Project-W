@@ -41,6 +41,15 @@ struct MaterialSet {
 struct SubMesh {
 	std::string name;
 	D3D12_INDEX_BUFFER_VIEW ibView;
+
+	// CPU-cached first vertex of this submesh (the vertex its first index refers to),
+	// used by the energy-orb death FX: skinned by the death-pose bone palette it gives
+	// each submesh its own world-space collapse point so the corpse breaks into several
+	// separate orbs. hasFirstVertex is false for non-skinned / unindexed meshes.
+	XMFLOAT3 firstVertexPos{};
+	XMINT4   firstVertexBones{};
+	XMFLOAT4 firstVertexWeights{};
+	bool     hasFirstVertex = false;
 };
 
 // 정점 버퍼들과 인덱스 버퍼들, 그리고 재질 정보들을 저장하는 구조체
