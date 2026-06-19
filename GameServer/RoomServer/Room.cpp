@@ -316,18 +316,28 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// Rear walls: build a Static collider from each named "Wall" marker.
-	// 동시에 Wall 위치를 누적해 스포너 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
+	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	// Mid-boss encounter: dynamically spawn the boss + squads, then notify clients
@@ -394,18 +404,28 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
+	// Wall 마커: 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallGrandbaum_0" && m.name != "WallGrandbaum_1"
 		    && m.name != "WallGrandbaum_2") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
@@ -465,18 +485,28 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
+	// Wall 마커(있으면): 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallIsys_0" && m.name != "WallIsys_1"
 		    && m.name != "WallIsys_2") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
@@ -958,6 +988,16 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 		          << ", dist: " << horizDist << "m) → 허용치로 클램프\n";
 	}
 
+	// ── 아레나 후방 Wall 일방향 클램프(권위 미러) ────────────────────────
+	// 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는 플레이어만 평면으로 되돌린다. 안쪽으로
+	// 들어오기·측면 이동은 통과(입장 자유). felt collision은 클라 예측(resolveArenaWallLeash)이
+	// 담당하고, 여기선 치트 방지용 권위. 넉백 중(isMoveClampExempt)은 면제.
+	if (arenaWallsActive_ && !session->isMoveClampExempt()) {
+		constexpr float kArenaWallMargin = 0.5f;   // footprint 여유(플레이어 반경 근사)
+		for (const OneWayWall& w : arenaWalls_)
+			newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+	}
+
 	player->setPos(newPos);
 	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 	player->setPosUpdateMs(elapsedMs_);
@@ -1358,6 +1398,7 @@ bool Room::allTacticalCombatantsDead() const {
 // 아레나 가상 벽 해제: 서버 배리어 바디를 물리에서 제거(~Room()과 동일 패턴)하고, 클라엔
 // S_ZoneState(.,0)을 broadcast한다(클라 onZoneState가 로컬 벽 제거). 1회성(arenaWallsActive_ off).
 void Room::teardownArenaWalls() {
+	arenaWalls_.clear();
 	for (const auto& b : barriers_)
 		if (b) physicsWorld_.unregisterBody(&b->body());
 	barriers_.clear();

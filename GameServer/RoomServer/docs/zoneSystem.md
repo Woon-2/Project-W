@@ -106,6 +106,7 @@ repeat Z:
 - **왜 양쪽:** online 플레이어 이동은 클라 예측+서버 검증이라, 실제 차단은 클라 배리어가, 권위/타 엔티티는 서버 배리어가 담당.
 - **한계:** 중도 입장 클라는 S_ZoneState를 못 받아 벽 미생성(거점 중도입장 한계와 동일). zone 태그(`midboss_arena`)·마커 이름은 오서링과 정확히 일치해야 함.
   - ~~벽 제거(보스 처치 시) 미연결 — 현재 영구 유지.~~ → **해결됨(§12 참조).**
+- **⚠️ 양방향 물리 벽(이 절)은 §13에서 후방 Wall 일방향 벽으로 대체됨** — 첫 진입자가 입구를 봉인해 다인 파티원이 입장 못 하던 버그 때문. 현재 `spawnBarrierFromMarker` 미호출(클라도 Cube 벽 미생성).
 
 ## 12. As-Built — 아레나 벽 해제 (전 NPC 처치 시, 2026-06)
 
@@ -115,3 +116,22 @@ repeat Z:
 - **`teardownArenaWalls()`:** 서버 `barriers_` 바디를 `physicsWorld_.unregisterBody` 후 clear(`~Room()`과 동일 패턴) + `S_ZoneState(activeArenaZoneId_, 0)` broadcast. **새 패킷·새 클라 코드 없음** — 클라 `onZoneState`의 기존 `state==0` 분기(`onlineGame.cpp`)가 로컬 벽을 제거.
 - **활성 추적 상태(`Room`):** 진입 핸들러 3종이 `S_ZoneState(.,1)` 직후 `activeArenaZoneId_`/`arenaWallsActive_` 기록. 동시 인카운터 없음(진입 가드 + zone 1회성)이라 단일 상태로 충분. `arenaWallsActive_`는 해제 시 false로 내려 1회성 보장.
 - **퇴화 데이터 안전:** 스폰 마커 부재로 인카운터 미생성(`platoonLeader_==nullptr`) 시 `allTacticalCombatantsDead()`가 false → 벽 유지(기존 동작과 동일).
+- **§13 연동:** 물리 벽이 후방 Wall 일방향 벽으로 대체된 뒤에도 본 해제 로직은 그대로 — `teardownArenaWalls()`의 `S_ZoneState(.,0)`이 이제 "일방향 벽 off"를 의미해 전원 자유 후퇴를 허용한다(추가로 `arenaWalls_.clear()`). `barriers_` 정리 루프는 아레나 벽 미생성으로 no-op.
+
+## 13. As-Built — 아레나 후방 Wall 일방향 벽(2026-06)
+
+§11의 양방향 물리 벽은 Enter 트리거가 첫 진입자 1명에게 발동→즉시 봉인하므로 **2~4인 파티의 후발 주자가 입구에 막혀 입장 불가**한 버그가 있었다. → **일방향 벽**(들어오기 자유, 나가기 차단)으로 대체.
+
+**1차 시도(폐기):** 경계를 트리거 Zone 볼륨으로 삼음. 그러나 `Arena_*` Zone은 *트리거*용으로 작게 author돼, 플레이어가 트리거 영역에 갇혀 **전투 구역까지 못 가는** 버그(런타임 확인). → Zone-경계 폐기, 아래 Wall-기반으로 전환.
+
+**확정 기하(사용자 검증):** Hobgoblin 아레나는 **코리도형**으로 벽 마커가 **양 끝에 2개**(`WallHobgoblin_0`/`_1` = 입구·출구). 안쪽(전투 구역)은 두 벽 사이.
+
+- **방식:** 각 후방 Wall 마커를 **수평(XZ) 일방향 슬랩**으로 변환. 두 벽 모두 "바깥(중점에서 멀어지는 쪽)으로 나가기"만 차단 → 플레이어는 두 벽 사이에 갇히고(전투 구역 포함) 입장·전진·측면은 자유. felt collision은 클라 예측(`Game::resolveArenaWallLeash`), 권위는 서버(`Room::move()`)가 미러.
+- **interior 기준점 = 두 벽 중점**(`wallSum/wallCount`, 핸들러가 스폰 fallback으로도 쓰는 값). 코리도라 중점이 두 벽 사이 = 확실한 안쪽. outward = `dot(normal, center-mid) >= 0 ? normal : -normal`.
+- **일방향(stateless, old→new):** old가 안쪽이고 new가 footprint 안에서 바깥으로 넘어가면 평면으로 클램프(XZ만, **Y 보존**). 밖→안(입장)·측면 통과. committed 래치 불필요(횡단 방향으로 일방향 성립).
+- **공유 수학(`common/arenaWall.hpp`, 신규):** `OneWayWall{center,outward,widthDir,halfWidth}` + `makeOneWayWall(marker, interiorRef)`(얇은 수평축=법선, scale*0.5=half) + `clampOneWayWall(old,new,wall,radius)`.
+- **서버:** 아레나 핸들러 3종이 Wall 마커 중점 계산 후 `arenaWalls_`(슬랩)에 캐시(+슬랩 outward/halfWidth 로그). `Room::move()` 텔레포트 클램프 직후 `arenaWallsActive_ && !isMoveClampExempt()`이면 각 슬랩에 `clampOneWayWall`. `teardownArenaWalls()`가 `arenaWalls_.clear()`.
+- **클라(`Online::Game`):** `onZoneState(.,1)`이 zone tag(`Arena_X`) → Wall prefix(`WallX`) 도출 → 해당 마커들로 슬랩 빌드·캐시(`arenaWalls_`)(Hobgoblin 전용 `isHobgoblinBarrierMarker` 한계도 일반화). `resolveArenaWallLeash`를 물리 step 루프 **뒤** 프레임당 1회 호출(직전 프레임 `arenaPrevPlayerPos_` 대비, `setCurrPos`+`moveChange_`). 장식용 마법진은 유지.
+- **신규 패킷 없음:** 기존 `S_ZoneState`(1=벽 on, 0=off) 재사용. §12 해제(전 NPC 처치)가 그대로 연동(0 → 양측 `arenaWalls_` clear).
+- **⚠️ 부호 검증:** 진입 시 서버·클라가 각 슬랩 outward를 로그. 전진이 막히고 후퇴가 되면 outward 부호 반대 → interior 기준점 재확인.
+- **빌드:** RoomServer + client Debug x64 그린(2026-06, 오류 0; 클라 기존 무해 C4244 3건 외 경고 0).

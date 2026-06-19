@@ -1425,3 +1425,150 @@ GrandBaum·Isis는 이미 3-arg 생성자로 명시 주입했지만, 홉고블�
 ### 검증
 - `GrandBaum`(대문자 B)·`Isis` 대소문자 구분 잔여 검색 → 대상 파일 0건(과거 DEVLOG 이력 제외).
 - `RoomServer`(Debug|x64) 빌드 통과 — 리네임 파일·인클루드·프로젝트 등록 정합 확인.
+
+---
+
+### 2026.06.19 ~ 06.20
+## [feat] 아레나 가상 벽 해제 — 전 NPC 처치 시 후퇴 허용
+## [feat] 아레나 후방 Wall 일방향 벽 — 다인 입장 + 후퇴 차단
+
+**커밋:** 해제 `d3d23592` / 일방향 벽 (미커밋)
+**수정 파일:** `common/arenaWall.hpp`(신규), `common/zoneDef.hpp`, `RoomServer/zone.hpp`,
+`RoomServer/Room.{hpp,cpp}`, `client/online/onlineGame.{hpp,cpp}`, `RoomServer/docs/zoneSystem.md`
+
+전술 전투 아레나의 "보이지 않는 벽"을 두 방향으로 개선했다: ① 전투를 끝내면(전 NPC 처치) 벽이 내려가
+후퇴 가능, ② 양방향 물리 벽을 후방 Wall **일방향** 벽으로 바꿔 다인 파티의 후발 주자가 입장 가능하면서
+후퇴는 여전히 차단.
+
+---
+
+### [1] 전 NPC 처치 시 벽 해제 (`d3d23592`)
+
+기존엔 아레나 진입 시 벽이 서고 `S_ZoneState(zoneId,1)` broadcast로 클라도 벽을 세웠으나, **전투를 끝내도
+벽을 내리는 경로가 없어 영구 유지**됐다(zoneSystem.md에 미연결로 명시돼 있던 항목).
+
+**감지·해제:**
+- `Room::updateTacticalAI()` 말미에서 `arenaWallsActive_ && allTacticalCombatantsDead()`이면 `teardownArenaWalls()`.
+- `allTacticalCombatantsDead()` = **보스(`platoonLeader_`) 사망 AND 전 부대원(`tacticalNpcs_`) 사망**.
+  보스가 먼저 죽고 부대원이 `Confused`로 살아남으면 그 전원을 마저 잡아야 해제(정책 확정).
+- 사망 NPC는 물리에서만 빠지고 `tacticalNpcs_`엔 시체로 남아 매 틱 계속 검사되므로 별도 폴링 불필요.
+
+```cpp
+bool Room::allTacticalCombatantsDead() const {
+    if (!platoonLeader_ || platoonLeader_->hp() > 0) return false;
+    for (const auto& npc : tacticalNpcs_)
+        if (npc && npc->hp() > 0) return false;
+    return true;
+}
+```
+
+`teardownArenaWalls()`는 `S_ZoneState(activeArenaZoneId_, 0)`을 broadcast → 클라 `onZoneState`의 0 분기가
+자기 벽을 제거. **신규 패킷 0개**(기존 S_ZoneState 재사용).
+
+**동반 수정(기존 머지 버그):** `temp_server` 브랜치가 빌드 불가였음 — `spawnTacticalGoblinEncounter`의
+`registerBody` 람다가 2-인수(`Object&, const Model*`)인데 보스 등록이 `registerBody(*platoonLeader_)`로
+모델 인수 누락(C2064). 직전 "홉고블린 모델 적용" 커밋이 trooper 람다만 바꾸고 보스 호출을 빠뜨림.
+→ `registerBody(*platoonLeader_, assetManager_->modelHobgoblin())`로 수정.
+
+---
+
+### [2] 일방향 벽 — 문제와 설계 여정
+
+**문제:** 양방향 물리 벽은 Enter 트리거가 **첫 진입자 1명**에게 발동→즉시 봉인하므로, 2~4인 파티에서
+**뒤따라오던 나머지가 입구에 막혀 입장 불가**.
+
+**1차 시도(폐기) — 경계=트리거 Zone:** 가둠을 위치 기반 리시로 바꾸되 경계를 `Arena_*` Zone 볼륨으로
+삼음. 그러나 Zone은 *트리거*용으로 작게 author돼, 플레이어가 트리거 영역에 갇혀 **전투 구역까지 못 가는**
+버그(런타임 확인). → Zone-경계 폐기.
+
+**전환 — 역할 분리:** Zone = 전투 시작 트리거(그대로), **후방 Wall 마커 = 가둠**. Hobgoblin 아레나는
+**코리도**로, 벽 마커가 **양 끝에 2개**(`WallHobgoblin_0`/`_1` = 입구·출구)이고 안쪽(전투 구역)은 두 벽
+사이. 측면은 지형이 막으므로 후방 Wall 두 개만 일방향으로 처리하면 충분.
+
+---
+
+### [3] 일방향 판정 수학 (`common/arenaWall.hpp` 신규)
+
+벽 하나를 **"중심 + 법선(outward) + 폭"** 의 **수평 반평면**으로 추상화. 모든 벡터 Y=0 — 벽은 수직이고
+수평 이동만 제약(점프·낙하·지형 불간섭).
+
+**슬랩 생성 `makeOneWayWall(marker, interiorRef)`:**
+- 벽 로컬 X/Z축을 월드로 회전·Y제거·정규화. `m.scale`은 벽 full 크기 → half-extents = `scale*0.5`
+  (`barrierMagicDiameter`가 `scale.y()`를 벽 높이로 쓰는 데서 확인).
+- **얇은 수평축 = 법선**(슬랩의 막는 면은 최소 두께축에 수직). 넓은 축 = widthDir·halfWidth(footprint).
+- **outward 부호 = interiorRef(두 벽 중점)에서 멀어지는 쪽**:
+  ```cpp
+  toWall  = m.pos - interiorRef;
+  outward = dot(normal, toWall) >= 0 ? normal : -normal;
+  ```
+
+**판정·클램프 `clampOneWayWall(old, new, wall, radius)`** — old/new를 outward축에 사영:
+```cpp
+sOld = dot(old - center, outward);   // 음수=안쪽, 양수=바깥
+sNew = dot(new - center, outward);
+lat  = |dot(new - center, widthDir)|;
+if (sOld <= eps && sNew > 0 && lat <= halfWidth + radius)
+    new -= outward * (sNew + eps);   // 평면 살짝 안쪽으로(XZ만, Y 보존)
+```
+
+`sOld`/`sNew`(부호 있는 거리)만으로 4경우가 갈리며, 이게 **상태 없는 일방향**의 핵심:
+
+| old → new | sOld | sNew | 결과 |
+|---|---|---|---|
+| 안 → 안 (전진/배회) | ≤0 | ≤0 | **통과** |
+| 안 → **밖** (후퇴) | ≤0 | >0 | **차단**(평면으로) |
+| 밖 → 안 (입장) | >0 | ≤0 | **통과** |
+| 밖 → 밖 | >0 | >0 | **통과** |
+
+→ "안→밖 횡단"만 막힌다. **committed 플래그 불필요** — `old`(직전 위치)가 곧 상태.
+(폐기한 Zone-리시는 `arenaCommitted_` 래치가 필요했음.) footprint(`lat≤halfWidth`)는 `sNew>0`일 때만
+검사되므로 안쪽 깊은 플레이어는 무관. `push=sNew+eps`로 평면 살짝 안쪽에 둬 재트리거 떨림 방지.
+outward가 수평이라 Y는 자동 보존.
+
+---
+
+### [4] 서버·클라 동기화
+
+이 게임은 **위치 권위가 클라**(자기 위치를 예측·계산해 `C_Move`로 송신, 서버는 7m/패킷 텔레포트
+클램프만)다. 따라서 "막히는 느낌"은 클라에서 나야 하고, 일방향 벽도 **클라(예측)+서버(권위)** 양쪽에
+두되 같은 `arenaWall.hpp` 수학을 공유해 어긋나지 않게 했다.
+
+**클라 `Game::resolveArenaWallLeash`** — 물리 step 루프 **뒤 프레임당 1회**(정적 벽이라 sub-step 불요).
+`old=arenaPrevPlayerPos_`(직전 프레임), `new=player_->pos()`. 막히면 `setCurrPos`(curr만 → 렌더 보간 prev
+보존) + `moveChange_=true`(보정 위치를 C_Move로 전파). 켜질 때(`onZoneState(1)`) `arenaPrevPlayerPos_`을
+현재 위치로 초기화.
+
+**서버 `Room::move()`** — `oldPos`(직전 서버 위치) vs 패킷 `newPos`에 동일 클램프. 클라가 정직하면 대개
+no-op → **치트 방지 백스톱**. 넉백 중(`isMoveClampExempt`)은 면제(ShieldWall 강제 이동과 충돌 방지).
+
+```
+[클라] 입력→물리→resolveArenaWallLeash(클램프)→setCurrPos
+        └ moveChange_ ─▶ C_Move ─▶ [서버] move(): old vs new 동일 클램프(권위)
+                                     → setPos → S_Move ─▶ 타 클라(보간)
+```
+
+프레임 단위 old→new라 터널링 우려가 있으나 7m/패킷 + 60fps로 프레임당 이동이 작아 실질 안전.
+
+---
+
+### [5] 코리도 기하 검증
+
+**interior=두 벽 중점**인 이유: 코리도라 중점이 **반드시 두 벽 사이**=확실한 안쪽. 핸들러가 스폰
+fallback으로 쓰는 `wallSum/wallCount` 재사용. 두 벽 각각 outward가 "중점에서 멀어지는 쪽" → 각자 자기
+끝(바깥)을 향함 → 플레이어는 두 벽 사이(전투 구역 포함)에 갇히고 전진·입장·측면은 자유.
+
+**실측 로그 검증(인게임):**
+```
+WallHobgoblin_1 at (4971.2, 52.6, 4983.8)   outward=(-0.906, -0.423) halfWidth=82.5
+WallHobgoblin_0 at (5078,   54,  5071)       outward=( 0.665,  0.747) halfWidth=82.5
+HobgoblinSpawner at (5024.86, 41.1, 5023.5)
+```
+- 두 벽 중점 (5024.6, 5027.4) ≈ 스폰 (5024.86, 5023.5) → interior 기준점이 전투 중심에 위치. ✓
+- 각 outward·(center−중점) > 0 (Wall_1 +66.8, Wall_0 +68.1) → 둘 다 바깥(자기 끝)을 향함,
+  두 outward 약 157°(거의 반대). ✓
+- 스폰은 두 벽 모두의 안쪽(outward와 내적 < 0) → 전투 구역까지 자유 전진. ✓
+  → 인게임 **전진 자유 + 후퇴 차단** 확인.
+
+진단 로그 `[Zone] one-way wall '...' outward=(x,z) halfWidth=...`를 서버·클라가 출력 →
+**outward 부호 오판(전진 막히고 후퇴되면)** 시 즉시 진단·수정 가능. ⚠️ Grandbaum/Isys(벽 3개)는
+레이아웃이 코리도가 아닐 수 있어 동일 로그로 별도 검증 필요(중점-interior 가정 점검).

@@ -2514,39 +2514,74 @@ void Game::renderBarrierMagicCircleQuads() {
 	}
 }
 
-// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
-// "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
-// 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
+// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해 양끝 후방 Wall
+// 일방향 슬랩을 빌드한다(zone tag로 Wall prefix 도출, 두 벽 중점이 interior 기준점). state==0이면
+// 해제. 물리 벽은 만들지 않는다 — 후퇴 차단은 resolveArenaWallLeash의 위치 클램프가 담당한다.
 void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
-	rebuildBarrierMagicCircleQuads(state);
+	rebuildBarrierMagicCircleQuads(state);   // 장식용 마법진(마커 기반, 충돌과 무관)
 
+	arenaWalls_.clear();
 	if ( state == 1 ) {
-		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
-		for ( const auto& m : chunkManager_.markers() ) {
-			if ( !isHobgoblinBarrierMarker(m) ) continue;
-
-			auto bar = std::make_shared<Cube>();
-			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
-			bar->setFaction( Faction::Neutral );
-			bar->setPos( m.pos );
-			bar->setOrient( m.orient );
-			bar->setScale( m.scale );
-			bar->body().setMotionType( MotionType::Static );
-			bar->body().snapToCurrent();
-			physicsWorld_.registerBody( &bar->body(), [p = bar.get()]() { p->rebuildBodyBVH(); } );
-			barriers_.push_back( std::move( bar ) );
-
-			std::cout << "[Zone] local wall built: '" << m.name << "' at ("
-			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+		// zone id로 tag를 찾아 Wall prefix("Wall"+<Arena_ 뒷부분>)를 도출 → 해당 Wall 마커들로
+		// 양끝 일방향 슬랩을 빌드. interior 기준점 = 그 마커들의 중점(두 벽 사이).
+		std::string prefix;
+		for ( const auto& z : chunkManager_.zones() ) {
+			if ( z.id != static_cast<int>( zoneId ) ) continue;
+			constexpr char kArenaTag[] = "Arena_";
+			if ( z.tag.rfind( kArenaTag, 0 ) == 0 )
+				prefix = "Wall" + z.tag.substr( sizeof( kArenaTag ) - 1 );   // "Arena_Hobgoblin" -> "WallHobgoblin"
+			break;
 		}
+		if ( !prefix.empty() ) {
+			std::vector<const MarkerDef*> wallMarkers;
+			mu::Vec3 wallSum{};
+			for ( const auto& m : chunkManager_.markers() ) {
+				if ( m.type != "Wall" || m.name.rfind( prefix, 0 ) != 0 ) continue;
+				wallMarkers.push_back( &m );
+				wallSum += m.pos;
+			}
+			if ( !wallMarkers.empty() ) {
+				const mu::Vec3 mid = wallSum / static_cast<float>( wallMarkers.size() );
+				for ( const MarkerDef* wm : wallMarkers ) {
+					OneWayWall w = makeOneWayWall( *wm, mid );
+					arenaWalls_.push_back( w );
+					std::cout << "[Zone] local one-way wall '" << wm->name << "' outward=("
+					          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+				}
+			}
+		}
+		arenaLeashActive_ = !arenaWalls_.empty();
+		if ( player_ ) arenaPrevPlayerPos_ = player_->pos();
+		if ( !arenaLeashActive_ )
+			std::cout << "[Zone] WARN: zone " << zoneId << " produced no arena walls\n";
 	}
 	else {
-		for ( auto& b : barriers_ ) physicsWorld_.unregisterBody( &b->body() );
-		barriers_.clear();
+		arenaLeashActive_ = false;
 	}
+}
+
+// 아레나 후방 Wall 일방향 벽: 직전 프레임 위치 대비, 양끝 Wall을 바깥으로 통과하려는 로컬
+// 플레이어만 평면으로 되돌린다(XZ만, Y 보존). 안쪽 입장·측면 이동은 통과 → 후발 파티원이 벽에
+// 막히지 않는다. setCurrPos만 보정 → 임펄스 튕김 없음, 결과는 C_Move로 전파. 프레임당 1회.
+void Game::resolveArenaWallLeash() {
+	if ( !arenaLeashActive_ || !player_ || playerDead_ ) {
+		if ( player_ ) arenaPrevPlayerPos_ = player_->pos();   // 비활성 중에도 prev는 추적해 둔다
+		return;
+	}
+
+	const mu::Vec3 cur = player_->pos();
+	mu::Vec3 np = cur;
+	for ( const OneWayWall& w : arenaWalls_ )
+		np = clampOneWayWall( arenaPrevPlayerPos_, np, w, kPlayerSeparationRadius );
+
+	if ( np.x() != cur.x() || np.z() != cur.z() ) {
+		player_->setCurrPos( np );   // XZ만 보정(clampOneWayWall이 Y 보존)
+		moveChange_ = true;
+	}
+	arenaPrevPlayerPos_ = player_->pos();
 }
 
 void Game::removePlayer( i32t playerId ) {
@@ -3086,6 +3121,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
+
+	// 아레나 후방 Wall 일방향 벽: 직전 프레임 대비 양끝 Wall을 바깥으로 통과하려는 로컬 플레이어를
+	// 평면으로 되돌린다(정적 벽이라 sub-step 불필요, 프레임당 1회). 입장·전진·측면은 통과.
+	resolveArenaWallLeash();
 
 	if (physicsStepsDone >= kMaxPhysicsStepsPerFrame) {
 		++consecutiveLagFrames_;

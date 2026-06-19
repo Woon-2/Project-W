@@ -10,6 +10,7 @@
 #include "mushroom.hpp"
 #include "stronghold.hpp"
 #include "zone.hpp"
+#include "../common/arenaWall.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "broadPhase.hpp"
@@ -235,7 +236,8 @@ private:
 	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
 	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
 	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
-	bool                       arenaWallsActive_{ false };  // 서버 배리어가 올라가 있고 아직 해제 안 됨(1회성 가드)
+	bool                       arenaWallsActive_{ false };  // 일방향 벽이 올라가 있고 아직 해제 안 됨(1회성 가드)
+	std::vector<OneWayWall>    arenaWalls_;                 // 양끝 후방 Wall 일방향 슬랩(move() 권위 클램프 대상)
 	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
