@@ -25,6 +25,13 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	{ "sword_slash_finish", "../resources/audio/sfx/sword/sword_slash_finish.mp3", Bus::Sfx, false, false, 1.0f },
 	{ "sword_slash_7",      "../resources/audio/sfx/sword/sword_slash_7.mp3",      Bus::Sfx, false, false, 1.0f },
 	{ "slash_wave",         "../resources/audio/sfx/sword/slash_wave.mp3",         Bus::Sfx, false, false, 1.0f },
+
+	// --- Bow skill SFX (positional; timeline PlaySound + particle-spawn hooks) ---
+	{ "arrow_default",     "../resources/audio/sfx/bow/arrow_default.mp3",     Bus::Sfx, false, false, 1.0f },
+	{ "arrow_rain",        "../resources/audio/sfx/bow/arrow_rain.mp3",        Bus::Sfx, false, false, 1.0f },
+	{ "arrow_charge",      "../resources/audio/sfx/bow/arrow_charge.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "charge_shoot",      "../resources/audio/sfx/bow/charge_shoot.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "charge_explosion",  "../resources/audio/sfx/bow/charge_explosion.mp3",  Bus::Sfx, false, false, 1.0f },
 });
 
 }	// namespace

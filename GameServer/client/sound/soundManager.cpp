@@ -47,6 +47,8 @@ struct SoundManager::Impl {
 	struct Voice {
 		ma_sound sound{};
 		bool     inUse = false;
+		float    stopAtSec  = -1.f;  // clockSec at which to fade-stop this voice; <0 = play to end
+		float    stopFadeMs = 0.f;   // fade length used when the scheduled stop fires
 	};
 	Voice voices[kSfxVoiceCount]{};
 
@@ -184,7 +186,8 @@ struct SoundManager::Impl {
 	// Starts a one-shot voice from the pool. Returns false if the pool is full
 	// (the sound is simply dropped) or the file failed to load.
 	bool startOneShot(const snd::CatalogEntry& e, bool spatial, float volume,
-	                  bool hasPos, float px, float py, float pz) {
+	                  bool hasPos, float px, float py, float pz,
+	                  float maxDurationMs = 0.f, float fadeMs = 0.f) {
 		int idx = -1;
 		for (int i = 0; i < kSfxVoiceCount; ++i) {
 			if (!voices[i].inUse) { idx = i; break; }
@@ -223,6 +226,9 @@ struct SoundManager::Impl {
 		}
 		ma_sound_start(&v.sound);
 		v.inUse = true;
+		// Schedule a fade-out so a long file does not outlast a short effect.
+		v.stopAtSec  = (maxDurationMs > 0.f) ? (clockSec + maxDurationMs * 0.001f) : -1.f;
+		v.stopFadeMs = fadeMs;
 		return true;
 	}
 };
@@ -289,11 +295,22 @@ void SoundManager::update(float deltaSeconds) {
 
 	impl_->clockSec += deltaSeconds;
 
-	// Reclaim finished one-shot voices.
+	// Fire scheduled fade-stops (sounds cut to match a finite effect duration).
 	for (auto& v : impl_->voices) {
-		if (v.inUse && ma_sound_at_end(&v.sound)) {
+		if (v.inUse && v.stopAtSec >= 0.f && impl_->clockSec >= v.stopAtSec) {
+			if (v.stopFadeMs > 0.f)
+				ma_sound_stop_with_fade_in_milliseconds(&v.sound, static_cast<ma_uint64>(v.stopFadeMs));
+			else
+				ma_sound_stop(&v.sound);
+			v.stopAtSec = -1.f;   // fired once; the voice is reclaimed below when it actually stops
+		}
+	}
+	// Reclaim voices that have finished (natural end) or whose scheduled fade-stop completed.
+	for (auto& v : impl_->voices) {
+		if (v.inUse && !ma_sound_is_playing(&v.sound)) {
 			ma_sound_uninit(&v.sound);
 			v.inUse = false;
+			v.stopAtSec = -1.f;
 		}
 	}
 	// Reclaim any BGM slot whose (possibly faded-out) playback has stopped. A
@@ -376,13 +393,14 @@ void SoundManager::playSfx(std::string_view name, float volume) {
 	impl_->startOneShot(*e, /*spatial*/false, volume, /*hasPos*/false, 0, 0, 0);
 }
 
-void MU_CALLCONV SoundManager::playSfx3D(std::string_view name, mu::Vec3 worldPos, float volume) {
+void MU_CALLCONV SoundManager::playSfx3D(std::string_view name, mu::Vec3 worldPos, float volume,
+                                         float maxDurationMs, float fadeMs) {
 	if (!impl_->enabled) return;
 	const snd::CatalogEntry* e = snd::findSound(name);
 	if (!e) { impl_->warnOnce(name); return; }
 	if (!impl_->sfxAllowed(name)) return;
 	impl_->startOneShot(*e, /*spatial*/true, volume, /*hasPos*/true,
-	                    worldPos.x(), worldPos.y(), worldPos.z());
+	                    worldPos.x(), worldPos.y(), worldPos.z(), maxDurationMs, fadeMs);
 }
 
 void MU_CALLCONV SoundManager::setListener(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 up) {

@@ -657,7 +657,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         if (ctx.playSound) {
             const Object* owner = lookupObject(ctx, inst.ownerObjectId);
             const mu::Vec3 pos = owner ? owner->renderState().pos : mu::Vec3{ 0.f, 0.f, 0.f };
-            ctx.playSound(ev.payload.playSound.soundName, pos);
+            ctx.playSound(ev.payload.playSound.soundName, pos,
+                          static_cast<float>(ev.payload.playSound.maxDurationMs),
+                          static_cast<float>(ev.payload.playSound.fadeMs));
         }
         break;
     }

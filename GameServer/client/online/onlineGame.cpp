@@ -1838,6 +1838,14 @@ void Game::setParticle()
 		energyExplosionArrowEffect_.bindSubEmitter( 0, 0, 1 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 0, 2 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 1, 3 );
+
+		// Positional SFX on the real spawn: arrow launch (child 1) and explosion
+		// (child 2). Fires at the actual impact/max-range point and time, so the
+		// explosion sound stays in sync whether the arrow hits or flies its range.
+		energyExplosionArrowEffect_.setChildSpawnCallback([](int child, const mu::Vec3& pos) {
+			if (child == 1)      INet::ClientApp::sound().playSfx3D("charge_shoot", pos);
+			else if (child == 2) INet::ClientApp::sound().playSfx3D("charge_explosion", pos);
+		});
 	}
 
 	// TornadoShot: same visual as Tornado Continuous, moved forward each frame via setOrigin().
@@ -2055,8 +2063,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
 		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
-		skillCtx_.playSound = [](const char* name, mu::Vec3 pos) {
-			INet::ClientApp::sound().playSfx3D(name, pos);
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos, float maxMs, float fadeMs) {
+			INet::ClientApp::sound().playSfx3D(name, pos, 1.f, maxMs, fadeMs);
 		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,

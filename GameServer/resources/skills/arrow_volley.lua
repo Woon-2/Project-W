@@ -40,6 +40,9 @@ skill:addEvent(120, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Bow release SFX, on the volley shot.
+skill:addEvent(120, "PlaySound", { sound = "arrow_default" })
+
 local onHit = OnHit({
     damage          = 28,
     vfxId           = 255,

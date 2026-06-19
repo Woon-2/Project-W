@@ -49,8 +49,11 @@ public:
 
 	// ---- Sound effects (one-shot, fire-and-forget from a fixed voice pool) ----
 	void playSfx(std::string_view name, float volume = 1.f);                 // 2D
+	// maxDurationMs > 0 schedules a fade-out (over fadeMs) that many ms after the
+	// voice starts, so a one-shot can be cut to match a short effect; 0 = play full.
 	void MU_CALLCONV playSfx3D(std::string_view name, mu::Vec3 worldPos,     // positional
-	                           float volume = 1.f);
+	                           float volume = 1.f,
+	                           float maxDurationMs = 0.f, float fadeMs = 0.f);
 
 	// ---- 3D listener: set once per frame from the camera before update() ----
 	void MU_CALLCONV setListener(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 up);

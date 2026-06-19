@@ -47,6 +47,12 @@ skill:addEvent(120, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Charge build-up SFX, starts with the charge VFX (1.6s root emit).
+-- Shoot ("charge_shoot", on Arrow spawn) and explosion ("charge_explosion", on
+-- Hit spawn) are fired event-driven from the particle spawn hook (game.cpp /
+-- onlineGame.cpp setChildSpawnCallback) so they land on the real launch/impact.
+skill:addEvent(120, "PlaySound", { sound = "arrow_charge" })
+
 local onHitBase = OnHit({
     damage          = 60,
     vfxId           = 255,

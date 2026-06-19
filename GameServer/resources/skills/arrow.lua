@@ -33,6 +33,9 @@ skill:addEvent(120, "PlayVFX", {
     advance = Vec3(0.0, 0.0, 1.0)
 })
 
+-- Bow release SFX, on the shot.
+skill:addEvent(120, "PlaySound", { sound = "arrow_default" })
+
 local onHit = OnHit({
     damage          = 10,
     vfxId           = 255,

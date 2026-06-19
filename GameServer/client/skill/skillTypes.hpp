@@ -159,6 +159,8 @@ union SkillEventPayload {
 
     struct PlaySound {
         char soundName[24];  // sound-catalog logical name, null-terminated (max 23 chars)
+        u16t maxDurationMs;  // 0 = play to the file's natural end; else fade-stop this many ms after start
+        u16t fadeMs;         // fade-out length applied when maxDurationMs elapses (0 = hard cut)
     } playSound;
 
     struct SendGameplayEvent {

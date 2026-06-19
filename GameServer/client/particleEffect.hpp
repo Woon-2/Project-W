@@ -4,6 +4,7 @@
 #include "particleSystem.hpp"
 #include <vector>
 #include <random>
+#include <functional>
 
 class GFX;
 
@@ -90,6 +91,15 @@ public:
     void bindSubEmitter(int parentIdx, int subEmitterCfgIdx, int childIdx,
                         bool flattenSourceVelocityY = false);
 
+    // Cosmetic hook fired when a sub-emitter child system spawns, at the spawn
+    // position (world). Fired once per parent trigger event (not per burst), so a
+    // multi-burst child plays the hook exactly once. Lets the skill glue play
+    // launch/impact SFX without coupling the VFX layer to the sound system.
+    // Null = no-op (default).
+    void setChildSpawnCallback(std::function<void(int childIdx, const mu::Vec3& pos)> cb) {
+        onChildSpawn_ = std::move(cb);
+    }
+
 private:
     struct Entry {
         ParticleSystem ps;
@@ -102,6 +112,7 @@ private:
     std::vector<Entry>                  systems_;
     std::vector<SubEmitterBinding>      subEmitterBindings_;
     std::vector<PendingSubEmitterBurst> pendingBursts_;
+    std::function<void(int childIdx, const mu::Vec3& pos)> onChildSpawn_;  // optional spawn hook
     std::mt19937                        rng_{ std::random_device{}() };
     mu::Vec3                            advanceForward_ = { 0.f, 0.f, 1.f };
     const GroundSampler*                ground_ = nullptr;  // non-owning terrain query (optional)

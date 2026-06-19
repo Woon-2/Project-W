@@ -663,7 +663,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `particleSystem.hpp` | `ParticleSystem`, `Particle` (`trail` ring buffer 포함, kMaxTrailSegments=32), `TrailPoint`, `SubEmitterEvent`. 결정론 모드 API: `setGameplayConfig()`, `setDeterministicSeed()`, `deterministic()` |
 | `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()`, det 모드: `emitScheduledBurstsDet()`, `emitRateDet()` |
 | `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous`. `SubEmitterBinding`, `PendingSubEmitterBurst` |
-| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()`, `setDeterministicSeed()` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()`, `setChildSpawnCallback()`, `setDeterministicSeed()` |
 | `../common/particleGameplay.hpp` | `pg::` 결정론 코어 (클라/서버 공유): `DetRng`(SplitMix64 카운터 PRNG), `GameplayConfig`, `sampleSpawn()`, `evaluateParticles()`(서버 해석적 평가), `importGameplayConfig()`. 설계: `docs/particleHitboxDeterminism.md` |
 | `../common/simpleJson.{hpp,cpp}` | (client/에서 이동) flat-vector DOM JSON 파서 — 클라 임포터 + 서버 게임플레이 설정 로드 공용 |
 
@@ -686,6 +686,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 - `SubEmitterBinding` — parentIdx + subEmitterCfgIdx + childIdx 연결 레코드
 - `PendingSubEmitterBurst` — 활성 burst-sequence 인스턴스; 시간 시뮬레이션으로 Unity burst 타이밍 재현
 - `ParticleEffect::bindSubEmitter(parentIdx, cfgIdx, childIdx)` — 자식 시스템 등록; 이후 play()에서 자식 자동 재생 차단, update()에서 ParentEvent → PendingBurst 변환
+- `ParticleEffect::setChildSpawnCallback(cb(childIdx,pos))` — 서브이미터 자식 스폰 시 월드 위치로 콜백(부모 이벤트당 1회, burst 수와 무관). VFX↔사운드 디커플링 훅(예: 화살 발사/폭발 SFX를 실제 launch/impact 시점에 재생)
 
 **MainModule 주요 필드:**
 - `duration` — 한 사이클 길이(초); 0 = 시간 제한 없음
@@ -820,7 +821,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `piercingSlashEffect_` | PiercingSlash — `SM_VFX_Slash_01_HD` 메시 + PiercingSlashMeshPipeline (MatPiercingSlash), `PS_VFX_Slash_ParticleSystems.json` / `M_VFX_Slash_Fire.json` |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
-| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템(game.cpp `bindSubEmitter` 기준): [0] Charge(16), [1] Arrow StretchedBillboard(32, Charge.Death 서브이미터), [2] Hit(16, Arrow.Death), [3] HitWhiteBG(16, Arrow.Death). Lua `addVFX` 테이블([0]Charge [1]Arrow [2]Hit)과 인덱스 일치. 화살 비관통 트리거=`VFXParticleAttach(13,1)`, 폭발 판정=`(13,2)` |
+| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템(game.cpp `bindSubEmitter` 기준): [0] Charge(16), [1] Arrow StretchedBillboard(32, Charge.Death 서브이미터), [2] Hit(16, Arrow.Death), [3] HitWhiteBG(16, Arrow.Death). Lua `addVFX` 테이블([0]Charge [1]Arrow [2]Hit)과 인덱스 일치. 화살 비관통 트리거=`VFXParticleAttach(13,1)`, 폭발 판정=`(13,2)`. **SFX 훅**: `setChildSpawnCallback`(game/onlineGame)로 child1(Arrow) 스폰=`charge_shoot`, child2(Hit) 스폰=`charge_explosion` 재생 → 명중/최대사거리 양쪽 동기. 차징음=`arrow_charge` lua PlaySound@120 |
 | `tornadoEffect_` | 토네이도 연속 이펙트. 4 시스템 (`Par_TornadoContinous_ParticleSystems.json`): [0] 메인 링 (`Par_TornadoContinous`, MatWindRing), [1] 하단 링 (`/Bottom`, MatWindRing), [2] 링 라이즈 (`/RingRise`, MatWindRing), [3] 버스트 점 (`/Par_BurstParticles`, MatUnlit Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
@@ -1077,7 +1078,7 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
 | PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
 | PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
-| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24]) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=...}`. 서버는 미지원 이벤트로 스킵(결정론 무영향) |
+| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24] + `maxDurationMs`/`fadeMs` u16) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=..., durationMs=, fadeMs=}`. `durationMs>0`이면 시작 후 그만큼 뒤 `fadeMs`로 페이드아웃(사운드가 짧은 이펙트보다 길게 남지 않게; 예 arrow_rain). 서버는 미지원 이벤트로 스킵(결정론 무영향) |
 | PlaySound 디스패치 (caster `renderState().pos`에서 `ctx.playSound` 호출) | `skill/skillSystem.cpp` `dispatchEvent` PlaySound case | `SkillDispatchContext::playSound` 콜백(클라=`playSfx3D`, 서버=null no-op) |
 | PlaySound 콜백 바인딩 | `standalone/game.cpp` / `online/onlineGame.cpp` skillCtx 셋업 | `skillCtx_.playSound = [](name,pos){ sound().playSfx3D }` |
 | 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
@@ -1145,7 +1146,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **백엔드:** miniaudio (단일 헤더, `client/sound/miniaudio.h` — 외부 참조, 수정 금지)
 **엔진 추상화:** `client/sound/soundManager.hpp` / `soundManager.cpp`
 **카탈로그:** `client/sound/soundCatalog.hpp` / `soundCatalog.cpp`
-**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3`(스킬음)
+**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3` + `sfx/bow/*.mp3`(스킬음)
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
@@ -1153,7 +1154,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `SoundManager::Bus` enum | `sound/soundManager.hpp` | Bgm / Sfx / Ui — master 하위 sound group |
 | `SoundManager::Impl` | `sound/soundManager.cpp` | `ma_engine` + 버스 그룹 + BGM 2슬롯(크로스페이드) + SFX voice 풀(32) + warnOnce |
 | `playBgm/stopBgm` | `sound/soundManager.cpp` | 스트리밍 BGM, 페이드/크로스페이드 |
-| `playSfx/playSfx3D` | `sound/soundManager.cpp` | voice 풀 기반 one-shot. 3D는 월드 위치 spatialization |
+| `playSfx/playSfx3D` | `sound/soundManager.cpp` | voice 풀 기반 one-shot. 3D는 월드 위치 spatialization. `playSfx3D(name,pos,vol,maxDurationMs,fadeMs)` — maxDurationMs>0이면 시작 후 그만큼 뒤 fade-stop 예약(Voice `stopAtSec`/`stopFadeMs`, `update()`에서 발화→`!ma_sound_is_playing`로 회수) |
 | `setListener` | `sound/soundManager.cpp` | 카메라 eye/forward/up → miniaudio 리스너 (좌-손 패닝 핸디드니스는 Stage4 튜닝 대상) |
 | `miniaudio_impl.cpp` | `sound/miniaudio_impl.cpp` | `MINIAUDIO_IMPLEMENTATION` 전용 TU. **PCH NotUsing** (vcxproj), `MA_NO_ENCODING` |
 | `findSound(name)` | `sound/soundCatalog.cpp` | 논리이름→{경로,버스,loop,stream,기본볼륨} 테이블 조회 |
@@ -1162,6 +1163,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | UI 클릭음 훅 | `ui/widgets/Button.hpp` `sClickSfx`(정적), `online/onlineGame.cpp` `enterLobby`에서 1회 바인딩 | UI 레이어 ↔ 사운드 백엔드 디커플링 |
 | (제거됨) 전투/HUD 플레이스홀더 SFX | — | hit/death/attack(이벤트 루프 디스패치)·skill_hit·ui_hover·skill_ready 카탈로그+.wav+코드 일괄 제거(2026-06-19 정리). 현재 SFX = ui_click + PlaySound 스킬음만 |
 | 스킬 SFX(검 4종) | `sound/soundCatalog.cpp`(`sword_slash_1`/`sword_slash_finish`/`sword_slash_7`/`slash_wave`, .mp3), 각 `resources/skills/*.lua` PlaySound | PlaySound 이벤트 경유 스윙음. SwordSlash(sword_slash@100ms)·Slash7(sword_slash_7@100ms)·SlashWave(slash_wave@120ms)·SlashCombo(slash_1 150/550/750 + finish 1250). 단일 스윙=1회, 콤보=히트박스 웨이브별 |
+| 스킬 SFX(활 5종) | `sound/soundCatalog.cpp`(`arrow_default`/`arrow_rain`/`arrow_charge`/`charge_shoot`/`charge_explosion`, .mp3, `sfx/bow/`) | Arrow·ArrowVolley=`arrow_default` lua PlaySound@120(발사), ArrowRain=`arrow_rain`@120(durationMs 1200/fadeMs 200 — 레인 종료에 맞춰 페이드아웃). EnergyExplosionArrow=차징(`arrow_charge` lua@120) + 발사(`charge_shoot`)·폭발(`charge_explosion`)은 `setChildSpawnCallback` 이벤트 구동(타임라인 아닌 실제 spawn 시점). |
 | 3D 리스너 갱신 | `online/onlineGame.cpp` `camera_.update` 직후, `standalone/game.cpp` `camera_.updateGFX` 직전 | 매 프레임 카메라 추종 |
 | 볼륨 설정값 | `ui/settingsPanel.hpp` `GameSettings` masterVolume/bgmVolume/sfxVolume(%) | 영속 설정 |
 | 볼륨 설정 UI | `ui/settingsPanel.cpp` "사운드" 그룹(makeStepperRow ×3) | 투명도 행과 동일 스텝퍼 패턴 |

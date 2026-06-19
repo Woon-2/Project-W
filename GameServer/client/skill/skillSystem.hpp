@@ -229,7 +229,10 @@ struct SkillDispatchContext {
     // to SoundManager::playSfx3D; the server / headless paths leave it null (no-op),
     // so PlaySound never affects gameplay determinism. soundName indexes the sound
     // catalog and is valid only for the duration of the call (points into the asset).
-    std::function<void(const char* soundName, mu::Vec3 pos)> playSound = nullptr;
+    // maxDurationMs > 0 fades the voice out that many ms after it starts (over fadeMs),
+    // so a sound never outlasts a short-lived effect; 0 plays the file to its end.
+    std::function<void(const char* soundName, mu::Vec3 pos,
+                       float maxDurationMs, float fadeMs)> playSound = nullptr;
 };
 
 // ---------------------------------------------------------------------------
