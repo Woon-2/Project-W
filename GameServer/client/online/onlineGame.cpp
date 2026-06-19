@@ -2915,6 +2915,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	Object* npc = it->second;
 	npc->setHp( newHp );
 	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
+	npc->setHiddenByOrb( false );   // re-show after the energy-orb dissolve
 	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
 	holdEvent( eventList_, EvRespawn( npcId ) );
 	if (npc->ragdoll()->isActive())
@@ -3244,6 +3245,50 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 연출 존 판정 (로컬 예측 플레이어 위치 기준, 패킷 없음).
 	clientZoneSystem_.update(player_->pos());
 
+	// Bind the absorb -> HUD-charge callback once.
+	if (!orbSystem_.onAbsorb) {
+		orbSystem_.onAbsorb = [this](const EnergyOrbSystem::Orb& orb) {
+			skillDial_.addDisplayCharge(orb.slot, orb.chargePerOrb);
+			// M5: trigger the body ripple at orb.contactPoint tinted by orb.colorHDR.
+		};
+	}
+
+	// Match queued death snapshots with queued charge credits (order-independent),
+	// spawning one orb group per contributed kill; expire stale unmatched entries.
+	{
+		const float orbDt = std::chrono::duration<float>(deltaTime).count();
+		constexpr float kOrbMatchWindow = 0.6f;
+		for (auto& c : pendingOrbCharges_) c.age += orbDt;
+		for (auto& d : pendingOrbDeaths_)  d.age += orbDt;
+		for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
+			auto best = pendingOrbDeaths_.end();
+			for (auto dit = pendingOrbDeaths_.begin(); dit != pendingOrbDeaths_.end(); ++dit)
+				if (best == pendingOrbDeaths_.end() || dit->age < best->age) best = dit;
+			if (best != pendingOrbDeaths_.end()) {
+				orbSystem_.spawnFromMonster(*best->model,
+					std::span<const mu::Mat4x4>(best->snapshot.data(), best->snapshot.size()),
+					best->world, cit->delta, cit->slot);
+				if (best->monster) best->monster->setHiddenByOrb(true);  // corpse -> orbs
+				pendingOrbDeaths_.erase(best);
+				cit = pendingOrbCharges_.erase(cit);
+			} else {
+				++cit;
+			}
+		}
+		for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
+			if (cit->age > kOrbMatchWindow) {
+				skillDial_.syncDisplayToTarget(cit->slot);   // never matched: fill now
+				cit = pendingOrbCharges_.erase(cit);
+			} else {
+				++cit;
+			}
+		}
+		std::erase_if(pendingOrbDeaths_, [](const PendingOrbDeath& d) { return d.age > kOrbMatchWindow; });
+	}
+
+	// Energy orb death FX: orbs track the live player position and absorb on contact.
+	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
+
 	camera_.update(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
@@ -3270,6 +3315,20 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
+
+			// Energy orb death FX: spawn one glowing orb per submesh from the death
+			// pose. The bone palette is deep-copied by spawnFromMonster, so it stays
+			// valid after the ragdoll takes over. (M4 replaces the placeholder
+			// charge/slot with damage-contributor matching from onSkillCharge.)
+			if (g.model() && g.animBlender()) {
+				const auto& fx = g.animBlender()->finalXformData();
+				PendingOrbDeath pd;
+				pd.model = g.model();
+				pd.monster = &g;
+				pd.snapshot.assign(fx.begin(), fx.end());  // deep copy: survives ragdoll takeover
+				pd.world = g.renderState().world;
+				pendingOrbDeaths_.push_back(std::move(pd));
+			}
 
 			// Apply death velocity so the ragdoll flies in the knockback direction.
 			const mu::Vec3 initVel = g.ragdollInitVelocity();
@@ -3593,9 +3652,9 @@ void Game::renderInGame() {
 		obj->render( gfx_ );
 	}
 
-	for (auto& goblin   : goblins_)   goblin->render(gfx_);
-	for (auto& snake    : snakes_)    snake->render(gfx_);
-	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
+	for (auto& goblin   : goblins_)   if (!goblin->isHiddenByOrb())   goblin->render(gfx_);
+	for (auto& snake    : snakes_)    if (!snake->isHiddenByOrb())    snake->render(gfx_);
+	for (auto& mushroom : mushrooms_) if (!mushroom->isHiddenByOrb()) mushroom->render(gfx_);
 
 	for (auto& sh : strongholds_) {
 		if (sh->isDead()) continue;   // hide destroyed structure (isDead set by EvDeath)
@@ -3631,6 +3690,7 @@ void Game::renderInGame() {
 	tornadoMuzzleEffect_.render(gfx_);
 	tornadoHitEffect_.render(gfx_);
 	dustParticleSystem_.render(gfx_);
+	orbSystem_.submitDrawEvents(gfx_);
 	debugBVView_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{
@@ -4563,8 +4623,15 @@ void Game::setupSkillDial(PlayerWeaponType weaponType) {
 void Game::onSkillCharge(uint16 playerId, uint8 slot, float charge) {
 	if (!player_) return;
 	if (playerId == static_cast<uint16>(player_->getId())) {
-		// setCharge pops the icon + flips it to its lit "ready" shader mode on the 0 -> 1 transition.
-		skillDial_.setCharge(slot, charge);
+		// Server-authoritative target; the displayed bar fills as energy orbs are
+		// absorbed (matchPendingOrbSpawns + onAbsorb). delta < 0 (spend) reflects now.
+		skillDial_.setChargeTarget(slot, charge);
+		const float delta = charge - prevServerCharge_[slot];
+		prevServerCharge_[slot] = charge;
+		if (delta > 0.f)
+			pendingOrbCharges_.push_back(PendingOrbCharge{ static_cast<int>(slot), delta, 0.f });
+		else
+			skillDial_.syncDisplayToTarget(slot);
 	} else if (slot < SkillDialHUD::kSlots) {
 		teammateCharge_[playerId][slot] = charge;
 	}

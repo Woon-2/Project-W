@@ -43,6 +43,7 @@ void SkillDialHUD::configure(unsigned weaponOrdinal,
         slotCost_[i]       = slotCost[i];
         slotCooldownMs_[i] = slotCooldownMs[i];
         charge_[i]         = 0.f;
+        targetCharge_[i]   = 0.f;
         cooldownEndSec_[i] = 0.f;
     }
     selected_  = 0;
@@ -58,6 +59,22 @@ bool SkillDialHUD::setCharge(int slot, float charge) {
     const bool becameReady = (prevStacks < 1 && newStacks >= 1);
     if (becameReady) readyPulse_[slot] = 0.45f;   // trigger the scale pop
     return becameReady;
+}
+
+void SkillDialHUD::setChargeTarget(int slot, float target) {
+    if (slot < 0 || slot >= kSlots) return;
+    targetCharge_[slot] = target;
+}
+
+bool SkillDialHUD::addDisplayCharge(int slot, float amount) {
+    if (slot < 0 || slot >= kSlots) return false;
+    const float capped = std::min(charge_[slot] + amount, targetCharge_[slot]);
+    return setCharge(slot, capped);   // reuse the 0 -> 1 ready-pulse logic
+}
+
+bool SkillDialHUD::syncDisplayToTarget(int slot) {
+    if (slot < 0 || slot >= kSlots) return false;
+    return setCharge(slot, targetCharge_[slot]);
 }
 
 void SkillDialHUD::selectNext() { selected_ = (selected_ + 1) % kSlots;         rotTarget_ -= kStepDeg; }

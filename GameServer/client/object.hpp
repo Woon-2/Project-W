@@ -366,6 +366,10 @@ public:
 	void setHiZCulled(bool v)       { hiZCulled_ = v; }
 	bool isHiZCulled() const        { return hiZCulled_; }
 
+	// When true the mesh is not rendered: the corpse has dissolved into energy orbs.
+	void setHiddenByOrb(bool v)     { hiddenByOrb_ = v; }
+	bool isHiddenByOrb() const      { return hiddenByOrb_; }
+
 	// BV rendering color for collision visualization.
 	// Default green: no collision. Red: terrain-object. Blue: object-object.
 	void MU_CALLCONV setBVColor(mu::Vec4 color) { bvColor_ = color; }
@@ -412,6 +416,7 @@ protected:
 
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;
+	bool     hiddenByOrb_             = false;  // corpse dissolved into energy orbs
 	bool     shadowLightFrustumCulled_ = false;
 	mu::Vec4 bvColor_{ 0.f, 1.f, 0.f, 1.f };
 

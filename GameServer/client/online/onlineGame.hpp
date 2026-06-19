@@ -32,6 +32,7 @@
 #include "../particleSystem.hpp"
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
+#include "../energyOrbSystem.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../debugBVView.hpp"
@@ -326,6 +327,23 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
+
+	// --- Energy orb death FX (monster-death reward animation) ---
+	EnergyOrbSystem orbSystem_{};
+	// Death-pose snapshots and charge credits are queued separately (S_SkillHit and
+	// S_SkillCharge arrive in any order) and matched each frame to spawn orbs only
+	// for monsters this client contributed damage to ("contributor-only" local FX).
+	struct PendingOrbDeath {
+		const Model* model = nullptr;
+		Object* monster = nullptr;          // corpse to hide once orbs spawn
+		std::vector<mu::Mat4x4> snapshot;   // death-pose bone palette (deep copy)
+		mu::Mat4x4 world;
+		float age = 0.f;
+	};
+	struct PendingOrbCharge { int slot = 0; float delta = 0.f; float age = 0.f; };
+	std::vector<PendingOrbDeath>  pendingOrbDeaths_;
+	std::vector<PendingOrbCharge> pendingOrbCharges_;
+	float prevServerCharge_[3] = { 0.f, 0.f, 0.f };  // last S_SkillCharge per slot (delta calc)
 
 	// --- Stack-charge skill HUD ---
 	SkillDialHUD skillDial_{};
