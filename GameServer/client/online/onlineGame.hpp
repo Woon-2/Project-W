@@ -328,20 +328,38 @@ private:
 
 	bool playerDead_{};
 
-	// --- Energy orb death FX (monster-death reward animation) ---
+	// --- Energy orb death FX: client-authored corpse pipeline ---
+	// On death a monster is DETACHED from server sync into a corpse (gets a fresh
+	// RenderObjectId). The corpse stays a ragdoll for kCorpseRagdollSeconds, then
+	// dissolves into energy orbs, and is only removed once all its orbs are absorbed.
+	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
+	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
-	// Death-pose snapshots and charge credits are queued separately (S_SkillHit and
-	// S_SkillCharge arrive in any order) and matched each frame to spawn orbs only
-	// for monsters this client contributed damage to ("contributor-only" local FX).
-	struct PendingOrbDeath {
-		const Model* model = nullptr;
-		Object* monster = nullptr;          // corpse to hide once orbs spawn
-		std::vector<mu::Mat4x4> snapshot;   // death-pose bone palette (deep copy)
-		mu::Mat4x4 world;
-		float age = 0.f;
+	enum class MonsterKind { Goblin, Snake, Mushroom };
+	struct Corpse {
+		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
+		MonsterKind kind   = MonsterKind::Goblin;
+		uint16 origId      = 0;             // server npc id this corpse came from
+		u32t   corpseId    = 0;             // unique id for orb <-> corpse association
+		float  age         = 0.f;           // seconds since death
+		enum class Phase { Ragdoll, Orb } phase = Phase::Ragdoll;
+		bool   orbsSpawned = false;
+		float  totalCharge = 0.f;           // credited charge (0 if not a contributor)
+		int    slot        = 0;
 	};
+	std::vector<Corpse> corpses_;
+	std::vector<std::shared_ptr<Goblin>>   goblinPool_;
+	std::vector<std::shared_ptr<Snake>>    snakePool_;
+	std::vector<std::shared_ptr<Mushroom>> mushroomPool_;
+	std::unordered_map<uint16, MonsterKind> respawnKind_;  // npc id -> kind (respawn routing)
+	u32t nextCorpseId_ = 1u;
+	// Detach a dead monster into corpses_ and a fresh RenderObjectId; removes it from
+	// the active server-synced containers. Returns the new corpse's id.
+	u32t migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId);
+	// Advances corpses (ragdoll hold -> orb dissolve -> pool return) each frame.
+	void updateCorpses(float dtSec);
+	// Charge credits awaiting their corpse (S_SkillCharge may arrive before migration).
 	struct PendingOrbCharge { int slot = 0; float delta = 0.f; float age = 0.f; };
-	std::vector<PendingOrbDeath>  pendingOrbDeaths_;
 	std::vector<PendingOrbCharge> pendingOrbCharges_;
 	float prevServerCharge_[3] = { 0.f, 0.f, 0.f };  // last S_SkillCharge per slot (delta calc)
 
