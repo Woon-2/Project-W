@@ -13,16 +13,16 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(300, "SpawnHitbox", {
+skill:addEvent(250, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 0.2, 0.6, 0.5, 0.7, 0, 0, 0) },
-    attach              = BoneAttach("Claw.R"),   -- placeholder: tune per skeleton in editor
+    localOBBs           = { OBB(0.0, 0.0, 0.2, 0.5, 0.5, 0.5, 0, 0, 0) },
+    attach              = BoneAttach("Claw.L"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 0,
+    hitGroupCooldownMs  = 700,
     onHit               = OnHit({ damage = 11, impulseStrength = 650.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(500, "DestroyHitbox", { slot = 0 })
+skill:addEvent(650, "DestroyHitbox", { slot = 0 })
 
 return skill

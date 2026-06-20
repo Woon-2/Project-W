@@ -194,7 +194,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Mushroom]
-#if 0  // [Snake]
+#if 1  // [Snake]
     case CharacterKind::Snake: {
         goblin_->setModel(assetManager_->modelSnake());
         auto b = std::make_unique<AnimBlenderSnake>();
