@@ -102,7 +102,7 @@ skill:addEvent(750, "SpawnHitbox", {
     localOBBs           = { OBB(0.0, 0.85, -1.6, 0.3, 1.25, 0.8, 0, 67, -17) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 0,
+    hitGroup            = 2,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })
@@ -112,7 +112,7 @@ skill:addEvent(750, "SpawnHitbox", {
     localOBBs           = { OBB(0.0, -0.15, -0.75, 0.3, 1.55, 1.2, 5, 43, -15) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 0,
+    hitGroup            = 2,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })
@@ -122,7 +122,7 @@ skill:addEvent(750, "SpawnHitbox", {
     localOBBs           = { OBB(0.0, -0.4, 0.2, 0.3, 1.5, 1.2, 10, -7, -10) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 0,
+    hitGroup            = 2,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })
@@ -132,7 +132,7 @@ skill:addEvent(750, "SpawnHitbox", {
     localOBBs           = { OBB(0.05, 0.1, 1.45, 0.3, 1.5, 1.2, 6, -38, -5) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 0,
+    hitGroup            = 3,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })
@@ -142,7 +142,7 @@ skill:addEvent(1250, "SpawnHitbox", {
     localOBBs           = { OBB(0.4, -0.95, -0.75, 0.65, 1.15, 2.3, 0, 50, 0) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 1,
+    hitGroup            = 3,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })
@@ -152,7 +152,7 @@ skill:addEvent(1250, "SpawnHitbox", {
     localOBBs           = { OBB(0.4, 1.1, 0.7, 0.65, 1.15, 2.3, 0, 50, 0) },
     attach              = BoneAttach("spine_01"),
     applyAttachRotation = true,
-    hitGroup            = 1,
+    hitGroup            = 3,
     hitGroupCooldownMs  = 300,
     onHit               = onHit
 })

@@ -46,7 +46,7 @@ local hitboxBase = {
     attach             = BoneAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup           = 0,
-    hitGroupCooldownMs = 600,
+    hitGroupCooldownMs = 350,
     onHit              = onHitDefBase
 }
 
