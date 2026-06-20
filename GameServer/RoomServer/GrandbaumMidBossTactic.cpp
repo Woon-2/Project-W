@@ -374,7 +374,9 @@ void GrandbaumMidBossTactic::updateBossMelee( Seconds dt, Room& room, PlatoonLea
         }
 
         if ( ( target->player()->pos() - leader.pos() ).len2() <= attackRangeSq ) {
-            leader.applyHitToSession( target, leader.getAttackDamage() );
+            // Skill-based attack (varied + damageScale); legacy direct-damage only if no roster.
+            if ( !leader.castSkillAttack( room ) )
+                leader.applyHitToSession( target, leader.getAttackDamage() );
         }
 
         bossMeleeState_ = BossMeleeState::AttackRecover;

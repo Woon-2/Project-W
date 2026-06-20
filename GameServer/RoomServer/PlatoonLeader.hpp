@@ -29,6 +29,9 @@ public:
 
     void MU_CALLCONV setFacing( mu::Vec3 dir );
     void             applyHitToSession( GameSession* session, float damage );
+    // Casts a random skill attack (boss reuses its base-monster skill roster + damageScale).
+    // Returns false if no skills are registered, so the tactic falls back to direct-damage melee.
+    bool             castSkillAttack( Room& room );
 
 private:
     std::vector<TacticalSquad*>     squads_;

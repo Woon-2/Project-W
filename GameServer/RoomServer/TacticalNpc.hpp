@@ -4,6 +4,7 @@
 #include "object.hpp"
 #include <vector>
 #include <cstdint>
+#include <string>
 
 class Room;
 class GameSession;
@@ -71,6 +72,17 @@ struct TacticalNpcConfig {
     Seconds attackRecoverTime{ 0.8f };
     float separationRadius  = 3.f;
     float separationWeight  = 0.5f;
+    // Multiplier applied to skill-based attack damage (oh.damage * coeff * scale).
+    // Troopers stay at 1.0; bosses raise this so a baseline monster skill still hits hard.
+    float attackDamageScale = 1.f;
+};
+
+// A skill-based attack option for a tactical NPC: the skill asset to cast plus the
+// server anim clip key to play, so the hitbox bone transforms track the skill timeline.
+// Mirrors Npc::NpcAttack (kept separate per the explicit per-class pattern).
+struct TacticalNpcAttack {
+    uint32      skillId = 0;
+    std::string clipKey;
 };
 
 /*---------------------------------
@@ -125,6 +137,12 @@ public:
     void       setObjType( ObjectType t )     { objType_ = t; }
     void MU_CALLCONV reviveAt( mu::Vec3 pos );
 
+    // Skill-based attack roster (mirrors Npc). registerTacticalNpcBody populates this
+    // per objType so a tactical NPC casts the same varied attacks as its field counterpart.
+    void addAttack( uint32 skillId, std::string clipKey );   // skillId==0 -> skipped (keeps legacy fallback)
+    bool hasSkillAttacks() const { return !attacks_.empty(); }
+    void setAttackDamageScale( float s ) { attackDamageScale_ = s; }
+
 protected:
     void applyConfig( const TacticalNpcConfig& cfg );
     void transitionTo( TacticalNpcState next );
@@ -162,6 +180,8 @@ protected:
     mu::Vec3    computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 targetFacing ) const;
     void        moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing );
     void        recordHit( uint16 targetId, int32 newHp );
+    // Uniform-random pick over the registered skill attacks (caller must ensure non-empty).
+    const TacticalNpcAttack& pickAttack() const;
 
     TacticalNpcState state_{ TacticalNpcState::Idle };
     TacticalCommand  pendingCmd_{};
@@ -195,6 +215,10 @@ protected:
     Seconds attackRecoverTime_{ 0.8f };
     float separationRadius_{ 3.f };
     float separationWeight_{ 0.5f };
+
+    std::vector<TacticalNpcAttack> attacks_;          // skill-based attacks (empty => legacy melee)
+    bool                           attackCast_{ false };   // one skill cast per windup
+    float                          attackDamageScale_{ 1.f };
 
     float speedMult_{ 1.f };
     bool  slotSettled_{ false };   // 슬롯 안착 래치(히스테리시스): true면 모터 제동 유지(떨림 방지)

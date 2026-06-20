@@ -218,7 +218,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                            Milliseconds initialElapsed, u32t seed) {
+                            Milliseconds initialElapsed, u32t seed, float damageScale) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
@@ -226,8 +226,9 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     if (idx < 0) return -1;
 
     SkillInstance& inst = instancePool_.instances[idx];
-    inst.elapsed = initialElapsed;
-    inst.seed    = seed;
+    inst.elapsed     = initialElapsed;
+    inst.seed        = seed;
+    inst.damageScale = damageScale;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
@@ -929,7 +930,7 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (!ctx.clientPredictionOnly && instPtr && oh.damage != 0) {
             holdEvent((*ctx.evList), EvSkillHit{
                 hr.targetObjectId,
-                static_cast<int32>(oh.damage * hr.damageCoeff),
+                static_cast<int32>(oh.damage * hr.damageCoeff * instPtr->damageScale),
                 instPtr->ownerObjectId,
                 instPtr->asset ? instPtr->asset->id : 0u
             });

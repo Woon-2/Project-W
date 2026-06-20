@@ -24,6 +24,7 @@
 #include "birdy.hpp"
 #include "slime.hpp"
 #include "treant.hpp"
+#include <span>
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -1355,7 +1356,7 @@ bool Room::npcSkillActive(int32 ownerObjectId) const {
 	return skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId));
 }
 
-void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed) {
+void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale) {
 	if (skillAssetId == 0) return;
 	Object* owner = (ownerObjectId >= 0 && ownerObjectId < static_cast<int32>(objectById_.size()))
 		? objectById_[ownerObjectId] : nullptr;
@@ -1366,7 +1367,7 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 	SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
 	bindGroundQueries(ctx);
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerObjectId),
-	                                      ctx, Milliseconds{ 0.f }, skillSeed);
+	                                      ctx, Milliseconds{ 0.f }, skillSeed, damageScale);
 	clearEvents(skillEvList_);
 	if (instIdx < 0) return;
 
@@ -1961,7 +1962,8 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	TacticalNpcConfig bossCfg{
 		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
-		.separationRadius = 4.f, .separationWeight = 0.3f
+		.separationRadius = 4.f, .separationWeight = 0.3f,
+		.attackDamageScale = 3.0f   // boss reuses the Treant skill roster but hits ~3x harder
 	};
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
@@ -2028,7 +2030,8 @@ void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	TacticalNpcConfig bossCfg{
 		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
-		.separationRadius = 4.f, .separationWeight = 0.3f
+		.separationRadius = 4.f, .separationWeight = 0.3f,
+		.attackDamageScale = 3.0f   // boss reuses the Birdy skill roster but hits ~3x harder
 	};
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
@@ -2152,10 +2155,54 @@ void Room::clearShieldWallBlockers() {
 
 // ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
 
+namespace {
+// One skill attack option: which skill asset to cast, which anim clip drives it, and
+// the registered clip key. Shared data so tactical NPCs cast the same varied attacks
+// as their field (Npc) counterparts (skill/clip names match setupGoblin/etc.).
+struct AttackDef { const char* skillName; const char* clipSrc; const char* clipKey; };
+
+// Boss variants reuse a base monster's rig + skills (Hobgoblin→Goblin, Grandbaum→Treant,
+// Isys→Birdy). Map the render objType to the base whose roster it draws from.
+ObjectType attackBaseType(ObjectType t) {
+	switch (t) {
+	case ObjectType::Hobgoblin: return ObjectType::Goblin;
+	case ObjectType::Grandbaum: return ObjectType::Treant;
+	case ObjectType::Isys:      return ObjectType::Birdy;
+	default:                    return t;
+	}
+}
+
+std::span<const AttackDef> attackRosterFor(ObjectType baseType) {
+	static const AttackDef goblin[]   = { {"Goblin_Attack1","Goblin_Attack1","Attack1"},
+	                                      {"Goblin_Attack2","Goblin_Attack2","Attack2"},
+	                                      {"Goblin_Attack3","Goblin_Attack3","Attack3"} };
+	static const AttackDef snake[]    = { {"Snake_Attack1","Snake_Attack1","Attack1"} };
+	static const AttackDef mushroom[] = { {"Mushroom_Attack1","Mushroom_Attack1","Attack1"},
+	                                      {"Mushroom_Attack2","Mushroom_Attack2","Attack2"} };
+	static const AttackDef bomber[]   = { {"Bomber_Attack1","Bomber_Attack1","Attack1"} };
+	static const AttackDef birdy[]    = { {"Birdy_Attack1","Birdy_Attack1","Attack1"},
+	                                      {"Birdy_Attack2","Birdy_Attack2","Attack2"} };
+	static const AttackDef slime[]    = { {"Slime_Attack1","Slime_Attack1","Attack1"} };
+	static const AttackDef treant[]   = { {"Treant_SpinKick","Treant_SpinKick","SpinKick"},
+	                                      {"Treant_Clap","Treant_Clap","Clap"},
+	                                      {"Treant_Punch","Treant_Punch","Punch"} };
+	switch (baseType) {
+	case ObjectType::Snake:    return snake;
+	case ObjectType::Mushroom: return mushroom;
+	case ObjectType::Bomber:   return bomber;
+	case ObjectType::Birdy:    return birdy;
+	case ObjectType::Slime:    return slime;
+	case ObjectType::Treant:   return treant;
+	case ObjectType::Goblin:
+	default:                   return goblin;
+	}
+}
+} // namespace
+
 // 전술 NPC 바디(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록. type으로 모델·애니셋·클립이름을
 // 선택해 부대별로 다른 몬스터(슬라임/뱀/버디/바머 등)를 외형 그대로 스폰한다. 보스 변종은 같은 리그를
 // 공유한다: Hobgoblin→Goblin 애니, Grandbaum→Treant 애니, Isys→Birdy 애니.
-void Room::registerTacticalNpcBody(Object& obj, ObjectType type) {
+void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
 	const Model* model = nullptr;
 	const std::vector<ServerAnimClip>* anims = nullptr;
 	const char* prefix = "Goblin";   // 클립 이름 접두어(= 애니셋의 몬스터 이름)
@@ -2183,6 +2230,16 @@ void Room::registerTacticalNpcBody(Object& obj, ObjectType type) {
 	obj.animController().registerClip("Idle", findServerAnimClip(*anims, p + "_Idle"));
 	obj.animController().registerClip("Walk", findServerAnimClip(*anims, p + "_Walk"));
 	obj.animController().registerClip("Die",  findServerAnimClip(*anims, p + "_Death"));
+	// Full per-type attack clip roster + skill attacks so a tactical NPC casts the same
+	// varied skills as its field counterpart (skill hitboxes are authoritative; the AI
+	// picks one at random per swing via TacticalNpc::pickAttack). Boss variants reuse the
+	// base monster's roster (Hobgoblin→Goblin, etc.).
+	for (const AttackDef& a : attackRosterFor(attackBaseType(type))) {
+		obj.animController().registerClip(a.clipKey, findServerAnimClip(*anims, a.clipSrc));
+		obj.addAttack(skillIdByName(a.skillName), a.clipKey);
+	}
+	// Legacy generic "Attack" alias kept for the direct-damage fallback / any path that
+	// switches to a non-keyed attack clip.
 	if (type == ObjectType::Treant || type == ObjectType::Grandbaum)
 		obj.animController().registerClip("Attack", findServerAnimClip(*anims, "Treant_SpinKick"));
 	else

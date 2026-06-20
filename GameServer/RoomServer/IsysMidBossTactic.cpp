@@ -399,7 +399,9 @@ bool IsysMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, Platoo
             return true;
         }
         if ( dist <= leader.getAttackRange() ) {
-            leader.applyHitToSession( target, leader.getAttackDamage() );
+            // Skill-based attack (varied + damageScale); legacy direct-damage only if no roster.
+            if ( !leader.castSkillAttack( room ) )
+                leader.applyHitToSession( target, leader.getAttackDamage() );
         }
         bossPersonalTimer_ = 0s;
         bossPersonalState_ = BossPersonalState::AttackRecover;

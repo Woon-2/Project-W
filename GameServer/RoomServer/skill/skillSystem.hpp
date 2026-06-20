@@ -125,6 +125,11 @@ struct SkillInstance {
     // Per-cast deterministic seed received via C_SkillStart (mirrors client).
     u32t              seed          = 0;
 
+    // Per-caster damage multiplier applied on top of oh.damage * damageCoeff.
+    // Lets a strong caster (e.g. a tactical boss) reuse a baseline monster skill
+    // while still hitting for its own (higher) damage. 1.0 = unchanged.
+    float             damageScale   = 1.0f;
+
     // World anchor captured at skill start (caster position + yaw). Used by
     // AttachType::Ground hitboxes to place planted, terrain-snapped OBBs.
     // Mirrors client SkillInstance::castAnchor for identical hit positions.
@@ -290,7 +295,7 @@ public:
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
                    u32t seed = 0);
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                   Milliseconds initialElapsed, u32t seed = 0);
+                   Milliseconds initialElapsed, u32t seed = 0, float damageScale = 1.0f);
 
     void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);
     void update(Milliseconds dt, SkillDispatchContext& ctx);

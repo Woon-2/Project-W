@@ -94,7 +94,7 @@ public:
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
 	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
 	// (ownerId = NPC id, elapsedMs = 0) so clients play the matching VFX/animation.
-	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed);
+	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale = 1.0f);
 	// True while ownerObjectId has a live skill instance (NPC AI holds its attack).
 	bool npcSkillActive(int32 ownerObjectId) const;
 	// Resolve a skill asset id by name from the shared registry (0 if absent).
@@ -224,7 +224,7 @@ private:
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
 	// 전술 NPC 바디 셋업(type별 모델/애니/클립 선택) + 물리/objectById_ 등록. type이 클라 렌더 모델을 결정.
-	void registerTacticalNpcBody(Object& obj, ObjectType type);
+	void registerTacticalNpcBody(TacticalNpc& obj, ObjectType type);
 	// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. NPC별 objType()으로 모델 라우팅.
 	void broadcastEncounterSpawn();
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform

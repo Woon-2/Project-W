@@ -21,10 +21,41 @@
 
 ## 공용 바디 등록 헬퍼
 
-`Room::registerTacticalNpcBody(Object&, ObjectType)`가 type별로 모델/애니셋/클립이름을 선택한다(3개 인카운터에
+`Room::registerTacticalNpcBody(TacticalNpc&, ObjectType)`가 type별로 모델/애니셋/클립이름을 선택한다(3개 인카운터에
 중복돼 있던 registerBody 람다를 통합). 보스 변종은 같은 리그를 공유: Hobgoblin→Goblin 애니, Grandbaum→Treant
-애니, Isys→Birdy 애니. 라이브 클립은 "Idle" 고정(전술 NPC는 switchClip 미사용, 클라가 속도로 모션 추론)이나
-Idle/Walk/Die/Attack을 정확한 이름으로 등록해 본-부착 피격 BVH가 null 클립으로 동결되는 것을 방지한다.
+애니, Isys→Birdy 애니. Idle/Walk/Die를 정확한 이름으로 등록해 본-부착 피격 BVH가 null 클립으로 동결되는 것을
+방지한다. 공격 클립·스킬은 아래 "확률적 다중공격"에서 로스터로 일괄 등록한다.
+
+## 확률적 다중공격 (스킬 시스템 전환, 2026-06-21)
+
+이전엔 모든 TacticalNpc(부대원·보스)가 레거시 단일 `setHp`/`applyHitToSession`으로 **항상 같은 공격**만 했다
+(일반 `Npc`는 이미 스킬 기반 확률 다중공격 보유). 본 변경으로 TacticalNpc도 일반 Npc와 동일하게 **스킬 기반
+확률 공격**을 하도록 전환했다.
+
+- **TacticalNpc 공격 메커니즘 복제**(`TacticalNpc.hpp/.cpp`): `TacticalNpcAttack{skillId, clipKey}` +
+  `attacks_`/`addAttack`/`pickAttack`(균등 랜덤, thread_local mt19937)/`hasSkillAttacks` + `attackCast_`
+  (windup당 1회 시전, `transitionTo(AttackWindup)`에서 리셋). `updateAttackWindup`이 윈드업 시작 시
+  `pickAttack`→`switchClip(clipKey)`→`room.skillStartInternal(id, skillId, seed, attackDamageScale_)`로 시전
+  (히트박스가 권위적 데미지, 레거시 setHp 제거). `updateAttackRecover`는 `npcSkillActive`인 동안 recover 유지
+  (늦은 히트박스 본 정확). 스킬 미등록(`attacks_` 비면) 시 레거시 setHp 폴백 유지. (사용자 결정: 공용 헬퍼
+  추출 대신 per-class 복제.)
+- **공격 로스터 데이터**(`Room.cpp` 익명 namespace): `AttackDef{skillName, clipSrc, clipKey}` +
+  `attackRosterFor(ObjectType)` 정적 테이블(Goblin 3 / Mushroom·Birdy 2 / Snake·Bomber·Slime 1 / Treant 3).
+  `attackBaseType`가 보스→기본 몬스터 매핑(Hobgoblin→Goblin, Grandbaum→Treant, Isys→Birdy). `setupX`(일반 Npc)와
+  내용 동일(향후 통합 가능). `registerTacticalNpcBody`가 이 로스터로 공격 클립 등록 + `addAttack`.
+- **보스 스킬 전환**(`PlatoonLeader` + 3 MidBossTactic): 보스는 `TacticalNpc::updateAttackWindup`가 아니라
+  `IMidBossTactic::update`로 공격하므로 별도 배선. `PlatoonLeader::castSkillAttack(room)`(pickAttack→switchClip→
+  skillStartInternal, 미등록 시 false) 추가. `GoblinMidBossTactic`/`IsysMidBossTactic`의 `updateBossPersonalCombat`,
+  `GrandbaumMidBossTactic`의 `updateBossMelee`에서 윈드업 종료 시 `applyHitToSession` 대신
+  `if(!leader.castSkillAttack(room)) applyHitToSession(...)`.
+- **캐스터별 데미지 배율**(스킬 시스템): `SkillInstance.damageScale`(기본 1.0) + `startSkill(... seed, damageScale)`
+  오버로드 + `Room::skillStartInternal(..., damageScale)`. 데미지 = `oh.damage * damageCoeff * damageScale`
+  (`RoomServer/skill/skillSystem.cpp`). `TacticalNpcConfig.attackDamageScale`(트루퍼 1.0, 보스 3.0)로 보스가 기본
+  몬스터 스킬을 재사용하면서도 강한 데미지(레거시 boss 40 / trooper 12 ≈ 3.3x 근사). 일반 Npc 호출은 기본값 1.0.
+- **클라 무변경**: tactical NPC도 동일 `createX`로 스폰돼 `skillObjectById_`/`idMonsterMap_`에 등록되므로
+  `onSkillStart(ownerId)`가 id로 해석해 스킬 VFX + AnimBlender 공격 클립을 자동 렌더.
+- **한계**: Snake/Bomber/Slime은 공격 lua가 1개뿐이라 다양화 불가(콘텐츠 추가 필요). 보스는 전용 스킬 없이 기본
+  몬스터 로스터 재사용(전용 보스 스킬은 lua 저작 + objType별 로스터 분기 필요).
 
 ## 전용 보스 모델 (Grandbaum / Isys)
 

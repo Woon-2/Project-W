@@ -4,10 +4,14 @@
 #include "GameSession.hpp"
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 /*-----------------------------
       파일 범위 헬퍼 함수
 -----------------------------*/
+
+// Mirrors Npc.cpp's per-thread RNG (uniform attack selection).
+static thread_local std::mt19937 s_rng{ std::random_device{}() };
 
 // 0~1 사이의 균등 분포 해시값 반환. 입력이 같으면 항상 같은 값, 입력이 다르면 거의 항상 다른 값.
 static float hash01( uint32 v ) {
@@ -59,7 +63,19 @@ void TacticalNpc::applyConfig( const TacticalNpcConfig& cfg ) {
     attackRecoverTime_ = cfg.attackRecoverTime;
     separationRadius_ = cfg.separationRadius;
     separationWeight_ = cfg.separationWeight;
+    attackDamageScale_ = cfg.attackDamageScale;
     setHp( static_cast<int32>(cfg.maxHp) );
+}
+
+void TacticalNpc::addAttack( uint32 skillId, std::string clipKey ) {
+    if ( skillId == 0 ) return;   // skill not found in registry -> skip (keeps legacy fallback intact)
+    attacks_.push_back( { skillId, std::move( clipKey ) } );
+}
+
+const TacticalNpcAttack& TacticalNpc::pickAttack() const {
+    // Uniform random selection over the registered attacks (multi-attack monsters).
+    std::uniform_int_distribution<size_t> dist( 0, attacks_.size() - 1 );
+    return attacks_[dist( s_rng )];
 }
 
 // ─── 접근자 ───────────────────────────────────────────────────────────────────
@@ -156,6 +172,7 @@ void TacticalNpc::transitionTo( TacticalNpcState next ) {
     }
     if ( next == TacticalNpcState::AttackWindup ) {
         windupTimer_ = 0s;
+        attackCast_  = false;
     }
     if ( next == TacticalNpcState::AttackRecover ) {
         recoverTimer_ = 0s;
@@ -684,6 +701,27 @@ void TacticalNpc::updateAttackWindup( Seconds dt, Room& room ) {
         return;
     }
 
+    // Skill-based attack (preferred): cast once at the start of the windup. The skill's
+    // own timeline (PlayAnimation + SpawnHitbox) supplies the telegraph and hit; its
+    // hitbox applies damage authoritatively (no direct setHp). Multi-attack monsters pick
+    // a random attack here. AttackRecover holds the NPC until the skill finishes so the
+    // server hitbox bones stay valid (see updateAttackRecover). Mirrors Npc::updateAttackWindup.
+    if ( hasSkillAttacks() ) {
+        if ( !attackCast_ ) {
+            setFacingDir( *this, target->player()->pos() - pos() );
+            const TacticalNpcAttack& atk = pickAttack();
+            if ( !atk.clipKey.empty() ) animController().switchClip( atk.clipKey );
+            const uint32 seed = std::random_device{}();
+            room.skillStartInternal( static_cast<int32>( getId() ), atk.skillId, seed, attackDamageScale_ );
+            attackCast_ = true;
+        }
+        windupTimer_ += dt;
+        if ( windupTimer_ >= attackWindupTime_ )
+            transitionTo( TacticalNpcState::AttackRecover );
+        return;
+    }
+
+    // ===== Legacy fallback: direct-damage melee (no registered skill) =====
     windupTimer_ += dt;
     if ( windupTimer_ >= attackWindupTime_ ) {
         mu::Vec3 targetPos = target->player()->pos();
@@ -732,7 +770,10 @@ void TacticalNpc::updateAttackRecover( Seconds dt, Room& room ) {
 
     recoverTimer_ += dt;
 
-    if ( recoverTimer_ >= attackRecoverTime_ ) {
+    // Skill-based NPCs hold AttackRecover (and the cast attack clip) until the skill
+    // instance finishes, so the server hitbox bones stay valid for late hitboxes.
+    if ( recoverTimer_ >= attackRecoverTime_ &&
+         !( hasSkillAttacks() && room.npcSkillActive( static_cast<int32>( getId() ) ) ) ) {
         if ( (pos() - target->player()->pos()).len2() <= attackRange_ * attackRange_ && canEnterAttackSlot( room ) ) {
             transitionTo( TacticalNpcState::AttackWindup );
         }
