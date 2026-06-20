@@ -96,24 +96,15 @@ public:
 	const Model* modelSnake()    const { return &modelSnake_; }
 	const Model* modelMushroom() const { return &modelMushroom_; }
 
-	// [SCAFFOLD] Monster skill-caster accessors. Enable with the matching [Name]
-	// guards (members below + the load calls in AssetManager.cpp).
-#if 1  // [Bomber]
+	// Monster skill-caster model/anim accessors.
 	const Model* modelBomber()  const { return &modelBomber_; }
 	const std::vector<std::shared_ptr<AnimClip>>& bomberAnimations()  const { return bomberAnimations_; }
-#endif // [Bomber]
-#if 1  // [Birdy]
 	const Model* modelBirdy()   const { return &modelBirdy_; }
 	const std::vector<std::shared_ptr<AnimClip>>& birdyAnimations()   const { return birdyAnimations_; }
-#endif // [Birdy]
-#if 1  // [Slime]
 	const Model* modelSlime()   const { return &modelSlime_; }
 	const std::vector<std::shared_ptr<AnimClip>>& slimeAnimations()   const { return slimeAnimations_; }
-#endif // [Slime]
-#if 1  // [Treant]
 	const Model* modelTreant()  const { return &modelTreant_; }
 	const std::vector<std::shared_ptr<AnimClip>>& treantAnimations()  const { return treantAnimations_; }
-#endif // [Treant]
 
 private:
 	void setupBakedAnimationIds();
@@ -129,23 +120,15 @@ private:
 	Model modelHobgoblin_{};
 	Model modelSnake_{};
 	Model modelMushroom_{};
-	// [SCAFFOLD] Monster skill-caster model + animation members.
-#if 1  // [Bomber]
+	// Monster skill-caster model + animation members.
 	Model modelBomber_{};
 	std::vector<std::shared_ptr<AnimClip>> bomberAnimations_{};
-#endif // [Bomber]
-#if 1  // [Birdy]
 	Model modelBirdy_{};
 	std::vector<std::shared_ptr<AnimClip>> birdyAnimations_{};
-#endif // [Birdy]
-#if 1  // [Slime]
 	Model modelSlime_{};
 	std::vector<std::shared_ptr<AnimClip>> slimeAnimations_{};
-#endif // [Slime]
-#if 1  // [Treant]
 	Model modelTreant_{};
 	std::vector<std::shared_ptr<AnimClip>> treantAnimations_{};
-#endif // [Treant]
 	Skybox skyboxMaterial_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};

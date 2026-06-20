@@ -1653,14 +1653,8 @@ void Mushroom::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetM
 	renderState_.animBlender = std::move(blender);
 }
 
-// =========================================================================
-// [SCAFFOLD] Monster skill caster implementations (Bomber/Birdy/Slime/Treant).
-// Each is the AnimBlenderMushroom implementation copied with a different clip
-// prefix and attack-clip candidate list. Disabled behind `#if 0`; enable with
-// the matching [Name] guards in object.hpp + AssetManager + editor files.
-// =========================================================================
-
-#if 1  // [Bomber]
+// Monster skill-caster implementations (Bomber/Birdy/Slime/Treant). Each is the
+// AnimBlenderMushroom implementation with a different clip prefix + attack-clip list.
 void AnimBlenderBomber::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
@@ -1822,9 +1816,7 @@ void Bomber::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMan
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
-#endif // [Bomber]
 
-#if 1  // [Birdy]
 void AnimBlenderBirdy::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
@@ -1986,9 +1978,7 @@ void Birdy::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMana
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
-#endif // [Birdy]
 
-#if 1  // [Slime]
 void AnimBlenderSlime::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
@@ -2150,9 +2140,8 @@ void Slime::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMana
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
-#endif // [Slime]
 
-#if 1  // [Treant]  attackIndex mapping: 0=SpinKick, 1=Clap, 2=Punch
+// Treant attackIndex mapping: 0=SpinKick, 1=Clap, 2=Punch
 void AnimBlenderTreant::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
@@ -2314,7 +2303,6 @@ void Treant::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMan
 	animSystem.trackAnimBlender(blender.get());
 	renderState_.animBlender = std::move(blender);
 }
-#endif // [Treant]
 
 // 거점 이벤트 처리: 고블린 핸들러에서 AnimBlender 포워딩·래그돌만 제거한 형태.
 // HP/사망 상태만 갱신한다(서버 권위; death 판정은 서버가 수행).

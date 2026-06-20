@@ -176,7 +176,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
     // rig is out of scope for attack-pattern authoring.
     if (!goblin_ || !assetManager_ || !animSystem_) return;
     switch (kind) {
-#if 1  // [Goblin]
     case CharacterKind::Goblin: {
         goblin_->setModel(assetManager_->modelGoblin());
         auto b = std::make_unique<AnimBlenderGoblin>();
@@ -184,8 +183,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Goblin]
-#if 1  // [Mushroom]
     case CharacterKind::Mushroom: {
         goblin_->setModel(assetManager_->modelMushroom());
         auto b = std::make_unique<AnimBlenderMushroom>();
@@ -193,8 +190,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Mushroom]
-#if 1  // [Snake]
     case CharacterKind::Snake: {
         goblin_->setModel(assetManager_->modelSnake());
         auto b = std::make_unique<AnimBlenderSnake>();
@@ -202,8 +197,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Snake]
-#if 1  // [Birdy]
     case CharacterKind::Birdy: {
         goblin_->setModel(assetManager_->modelBirdy());
         auto b = std::make_unique<AnimBlenderBirdy>();
@@ -211,8 +204,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Birdy]
-#if 1  // [Bomber]
     case CharacterKind::Bomber: {
         goblin_->setModel(assetManager_->modelBomber());
         auto b = std::make_unique<AnimBlenderBomber>();
@@ -220,8 +211,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Bomber]
-#if 1  // [Slime]
     case CharacterKind::Slime: {
         goblin_->setModel(assetManager_->modelSlime());
         auto b = std::make_unique<AnimBlenderSlime>();
@@ -229,8 +218,6 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Slime]
-#if 1  // [Treant]
     case CharacterKind::Treant: {
         goblin_->setModel(assetManager_->modelTreant());
         auto b = std::make_unique<AnimBlenderTreant>();
@@ -238,9 +225,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
-#endif // [Treant]
     default:
-        // No active monster caster for this kind (its [Name] case is disabled).
         break;
     }
 }

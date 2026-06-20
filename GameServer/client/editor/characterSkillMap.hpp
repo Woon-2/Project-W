@@ -61,34 +61,18 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
         "PiercingCircleSlash",
         "PiercingMulti",
     } },
-    // ---- Monster skill casters (disabled scaffolding) ----------------------
+    // ---- Monster skill casters -------------------------------------------
     // Each entry's skills are the monster's attack lua names (resources/skills/
     // *_attackN.lua -> SkillAsset::name). lua attackIndex selects the clip.
-    // Enable a monster by flipping ITS [Name] guard here AND in object.*,
-    // AssetManager.*, editorController.cpp (setMonsterCaster), then provide the
-    // model/anim resources. Resources already present: Goblin, Mushroom, Snake,
-    // Bomber. Missing (must be added): Birdy, Slime, Treant.
-#if 1  // [Goblin]
+    // To add a monster: append an entry here, add its model/anim to AssetManager,
+    // its class + AnimBlender to object.*, and a case to setMonsterCaster.
     { CharacterKind::Goblin,   "Goblin",   { "Goblin_Attack1", "Goblin_Attack2", "Goblin_Attack3" } },
-#endif
-#if 1  // [Mushroom]
     { CharacterKind::Mushroom, "Mushroom", { "Mushroom_Attack1", "Mushroom_Attack2" } },
-#endif
-#if 1  // [Snake]
     { CharacterKind::Snake,    "Snake",    { "Snake_Attack1" } },
-#endif
-#if 1  // [Birdy]
     { CharacterKind::Birdy,    "Birdy",    { "Birdy_Attack1", "Birdy_Attack2" } },
-#endif
-#if 1  // [Bomber]
     { CharacterKind::Bomber,   "Bomber",   { "Bomber_Attack1" } },
-#endif
-#if 1  // [Slime]
     { CharacterKind::Slime,    "Slime",    { "Slime_Attack1" } },
-#endif
-#if 1  // [Treant]
     { CharacterKind::Treant,   "Treant",   { "Treant_SpinKick", "Treant_Clap", "Treant_Punch" } },
-#endif
 };
 
 }   // namespace Editor

@@ -189,12 +189,8 @@ private:
 	std::string currentAttackClip_{};
 };
 
-// =========================================================================
-// [SCAFFOLD] AnimBlenders for monster skill casters (see Object classes above).
-// Disabled behind `#if 0`; enable together with the matching [Name] guards.
-// =========================================================================
-
-#if 1  // [Bomber]
+// Monster skill-caster AnimBlenders (Bomber / Birdy / Slime / Treant). Same shape
+// as AnimBlenderGoblin; only the clip prefix + attack-clip list differ (set in init).
 class AnimBlenderBomber : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -229,9 +225,7 @@ private:
 	std::vector<std::string> attackClips_{};
 	std::string currentAttackClip_{};
 };
-#endif // [Bomber]
 
-#if 1  // [Birdy]
 class AnimBlenderBirdy : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -266,9 +260,7 @@ private:
 	std::vector<std::string> attackClips_{};
 	std::string currentAttackClip_{};
 };
-#endif // [Birdy]
 
-#if 1  // [Slime]
 class AnimBlenderSlime : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -303,9 +295,7 @@ private:
 	std::vector<std::string> attackClips_{};
 	std::string currentAttackClip_{};
 };
-#endif // [Slime]
 
-#if 1  // [Treant]
 class AnimBlenderTreant : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -340,7 +330,6 @@ private:
 	std::vector<std::string> attackClips_{};
 	std::string currentAttackClip_{};
 };
-#endif // [Treant]
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
@@ -755,23 +744,8 @@ private:
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
-// =========================================================================
-// [SCAFFOLD] Monster skill casters (Bomber / Birdy / Slime / Treant)
-// -------------------------------------------------------------------------
-// Each monster is the Goblin/Mushroom pattern, copied per the per-monster
-// class policy. They are disabled behind `#if 0` guards. To enable one,
-// flip ITS guard to `#if 1` in EVERY file tagged with the same [Name]:
-//   object.hpp (this Object class + AnimBlender<Name>),
-//   object.cpp (AnimBlender<Name> impl + <Name>::setAnimBlender),
-//   AssetManager.hpp/.cpp (model + anim members/loads),
-//   editor/characterSkillMap.hpp (kCharacterSkillMap entry),
-//   editor/editorController.cpp (setMonsterCaster case).
-// Clip naming: "<Name>_Idle/Walk/<Attack...>/Hit/Death". lua attackIndex
-// indexes the AnimBlender's attackClips_ list (see object.cpp init()).
-// =========================================================================
-
-#if 1  // [Bomber]  resources present: models/bomber/bomber.bin + animations/bomberAnimations.anim
-//        expected clips: Bomber_Idle, Bomber_Walk, Bomber_Attack1, Bomber_Hit, Bomber_Death
+// Monster skill-caster Object classes (Bomber / Birdy / Slime / Treant).
+// Each is the Goblin/Mushroom pattern (EventBus + Ragdoll); only the name differs.
 class Bomber : public Object {
 public:
 	Bomber() = default;
@@ -798,10 +772,7 @@ private:
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
-#endif // [Bomber]
 
-#if 1  // [Birdy]  NO resources yet: add models/birdy/birdy.bin + animations/birdyAnimations.anim
-//        expected clips: Birdy_Idle, Birdy_Walk, Birdy_Attack1, Birdy_Attack2, Birdy_Hit, Birdy_Death
 class Birdy : public Object {
 public:
 	Birdy() = default;
@@ -828,10 +799,7 @@ private:
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
-#endif // [Birdy]
 
-#if 1  // [Slime]  NO resources yet: add models/slime/slime.bin + animations/slimeAnimations.anim
-//        expected clips: Slime_Idle, Slime_Walk, Slime_Attack1, Slime_Hit, Slime_Death
 class Slime : public Object {
 public:
 	Slime() = default;
@@ -858,10 +826,7 @@ private:
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
-#endif // [Slime]
 
-#if 1  // [Treant]  NO resources yet: add models/treant/treant.bin + animations/treantAnimations.anim
-//        expected clips: Treant_Idle, Treant_Walk, Treant_SpinKick, Treant_Clap, Treant_Punch, Treant_Hit, Treant_Death
 class Treant : public Object {
 public:
 	Treant() = default;
@@ -888,7 +853,6 @@ private:
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
-#endif // [Treant]
 
 // 거점(Stronghold): 데미지를 받는 정적 구조물. 고블린/플레이어처럼 EventBus로
 // Hit/Death/Respawn을 일관되게 처리하되, 애니메이션이 없으므로 AnimBlender는 갖지 않는다
