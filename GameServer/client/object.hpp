@@ -305,7 +305,7 @@ private:
 };
 #endif // [Slime]
 
-#if 0  // [Treant]
+#if 1  // [Treant]
 class AnimBlenderTreant : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -860,7 +860,7 @@ private:
 };
 #endif // [Slime]
 
-#if 0  // [Treant]  NO resources yet: add models/treant/treant.bin + animations/treantAnimations.anim
+#if 1  // [Treant]  NO resources yet: add models/treant/treant.bin + animations/treantAnimations.anim
 //        expected clips: Treant_Idle, Treant_Walk, Treant_SpinKick, Treant_Clap, Treant_Punch, Treant_Hit, Treant_Death
 class Treant : public Object {
 public:

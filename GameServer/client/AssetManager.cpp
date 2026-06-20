@@ -141,7 +141,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelSlime_
 	} );
 #endif // [Slime]
-#if 0  // [Treant]  add ../resources/models/treant/treant.bin first
+#if 1  // [Treant]  add ../resources/models/treant/treant.bin first
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/treant/treant.bin",
 		.pTexHashMap = &texHashMap_,
@@ -729,7 +729,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	auto tmpSlimeAnims = loadAnimClipsFromFile("../resources/animations/slimeAnimations.anim", gfx);
 	slimeAnimations_.reserve(tmpSlimeAnims.size());
 #endif // [Slime]
-#if 0  // [Treant]  add ../resources/animations/treantAnimations.anim first
+#if 1  // [Treant]  add ../resources/animations/treantAnimations.anim first
 	auto tmpTreantAnims = loadAnimClipsFromFile("../resources/animations/treantAnimations.anim", gfx);
 	treantAnimations_.reserve(tmpTreantAnims.size());
 #endif // [Treant]
@@ -758,7 +758,7 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	for (auto& clip : tmpSlimeAnims)
 		slimeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Slime]
-#if 0  // [Treant]
+#if 1  // [Treant]
 	for (auto& clip : tmpTreantAnims)
 		treantAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 #endif // [Treant]
@@ -911,7 +911,7 @@ void AssetManager::setupBakedAnimationIds() {
 #if 1  // [Slime]
 	for (auto& clip : slimeAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Slime]
-#if 0  // [Treant]
+#if 1  // [Treant]
 	for (auto& clip : treantAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
 #endif // [Treant]
 }

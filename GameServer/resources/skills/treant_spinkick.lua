@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name            = "Treant_SpinKick"
-skill.totalDurationMs = 1100
+skill.totalDurationMs = 1600
 skill.interruptible   = true
 
 skill:addEvent(0, "PlayAnimation", {
@@ -14,16 +14,38 @@ skill:addEvent(0, "PlayAnimation", {
 })
 
 -- Wide sweep box for a spinning kick.
-skill:addEvent(450, "SpawnHitbox", {
+skill:addEvent(600, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 1.0, 1.4, 0.7, 1.4, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),   -- placeholder: tune per skeleton in editor
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.5, 0.7, 0.5, 0, 0, 0) },
+    attach              = BoneAttach("TreantLThigh"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 0,
+    hitGroupCooldownMs  = 1200,
     onHit               = OnHit({ damage = 20, impulseStrength = 1100.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(700, "DestroyHitbox", { slot = 0 })
+skill:addEvent(600, "SpawnHitbox", {
+    slot                = 1,
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.5, 0.7, 0.5, 0, 0, 0) },
+    attach              = BoneAttach("TreantLCalf"),   -- placeholder: tune per skeleton in editor
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 1200,
+    onHit               = OnHit({ damage = 20, impulseStrength = 1100.0, impulseDir = Vec3(0, 0, 1) })
+})
+
+skill:addEvent(600, "SpawnHitbox", {
+    slot                = 2,
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.5, 0.7, 0.5, 0, 0, 0) },
+    attach              = BoneAttach("TreantLFoot"),   -- placeholder: tune per skeleton in editor
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 1200,
+    onHit               = OnHit({ damage = 20, impulseStrength = 1100.0, impulseDir = Vec3(0, 0, 1) })
+})
+
+skill:addEvent(1400, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1400, "DestroyHitbox", { slot = 1 })
+skill:addEvent(1400, "DestroyHitbox", { slot = 2 })
 
 return skill

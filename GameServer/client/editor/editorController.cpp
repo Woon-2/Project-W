@@ -230,7 +230,7 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         break;
     }
 #endif // [Slime]
-#if 0  // [Treant]
+#if 1  // [Treant]
     case CharacterKind::Treant: {
         goblin_->setModel(assetManager_->modelTreant());
         auto b = std::make_unique<AnimBlenderTreant>();

@@ -1028,7 +1028,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -1036,7 +1036,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}
+	}*/
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {
@@ -2152,7 +2152,7 @@ void Slime::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMana
 }
 #endif // [Slime]
 
-#if 0  // [Treant]  attackIndex mapping: 0=SpinKick, 1=Clap, 2=Punch
+#if 1  // [Treant]  attackIndex mapping: 0=SpinKick, 1=Clap, 2=Punch
 void AnimBlenderTreant::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());

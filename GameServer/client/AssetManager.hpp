@@ -110,7 +110,7 @@ public:
 	const Model* modelSlime()   const { return &modelSlime_; }
 	const std::vector<std::shared_ptr<AnimClip>>& slimeAnimations()   const { return slimeAnimations_; }
 #endif // [Slime]
-#if 0  // [Treant]
+#if 1  // [Treant]
 	const Model* modelTreant()  const { return &modelTreant_; }
 	const std::vector<std::shared_ptr<AnimClip>>& treantAnimations()  const { return treantAnimations_; }
 #endif // [Treant]
@@ -142,7 +142,7 @@ private:
 	Model modelSlime_{};
 	std::vector<std::shared_ptr<AnimClip>> slimeAnimations_{};
 #endif // [Slime]
-#if 0  // [Treant]
+#if 1  // [Treant]
 	Model modelTreant_{};
 	std::vector<std::shared_ptr<AnimClip>> treantAnimations_{};
 #endif // [Treant]

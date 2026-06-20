@@ -4,7 +4,7 @@
 
 local skill = Skill()
 skill.name            = "Treant_Punch"
-skill.totalDurationMs = 900
+skill.totalDurationMs = 1500
 skill.interruptible   = true
 
 skill:addEvent(0, "PlayAnimation", {
@@ -13,16 +13,16 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(380, "SpawnHitbox", {
+skill:addEvent(950, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 1.3, 0.8, 0.8, 1.0, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),   -- placeholder: tune per skeleton in editor
+    localOBBs           = { OBB(-0.3, 0.0, 0.0, 0.55, 0.4, 0.45, 0, 0, 0) },
+    attach              = BoneAttach("TreantRPalm"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 0,
-    onHit               = OnHit({ damage = 19, impulseStrength = 1050.0, impulseDir = Vec3(0, 0, 1) })
+    hitGroupCooldownMs  = 500,
+    onHit               = OnHit({ damage = 22, impulseStrength = 1000.0, impulseDir = Vec3(0, 0, 1) })
 })
 
-skill:addEvent(600, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1200, "DestroyHitbox", { slot = 0 })
 
 return skill
