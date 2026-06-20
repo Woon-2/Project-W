@@ -18,6 +18,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCMovePacket(session, buffer, len);
 		break;
 
+	case PacketType::C_DebugTeleport:
+		handleCDebugTeleportPacket(session, buffer, len);
+		break;
+
 	case PacketType::C_MouseMove:
 		handleCMouseMovePacket(session, buffer, len);
 		break;
@@ -60,6 +64,14 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 	
 	session->room()->doAsync([session, cMvPktClone]() {
 		session->room()->move(session->id(), cMvPktClone);
+	});
+}
+
+void PacketManager::handleCDebugTeleportPacket(GameSession* session, byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<CDebugTeleportPacket*>(buffer);
+	const DirectX::XMFLOAT3 pos = pkt->pos;
+	session->room()->doAsync([session, pos]() {
+		session->room()->debugTeleport(session->id(), pos);
 	});
 }
 

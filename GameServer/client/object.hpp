@@ -854,6 +854,25 @@ private:
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
+// Grandbaum: Treant 변종 미드보스 보스. 같은 리그/애니(Treant_*)·EventBus·래그돌을 그대로 상속하고
+// 전용 모델(modelGrandbaum)만 쓴다(Hobgoblin이 Goblin을 확장하는 관계와 동일).
+class Grandbaum : public Treant {
+public:
+	Grandbaum() = default;
+	Grandbaum(Object&& base) : Treant(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
+// Isys: Birdy 변종 미드보스 보스. 같은 리그/애니(Birdy_*)·EventBus·래그돌을 상속하고 전용 모델(modelIsys)만 쓴다.
+class Isys : public Birdy {
+public:
+	Isys() = default;
+	Isys(Object&& base) : Birdy(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
 // 거점(Stronghold): 데미지를 받는 정적 구조물. 고블린/플레이어처럼 EventBus로
 // Hit/Death/Respawn을 일관되게 처리하되, 애니메이션이 없으므로 AnimBlender는 갖지 않는다
 // (setAnimBlender 미오버라이드 → renderState_.animBlender == nullptr).

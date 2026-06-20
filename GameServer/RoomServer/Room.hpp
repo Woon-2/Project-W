@@ -84,6 +84,8 @@ public:
 	void enter(GameSession* session);
 	void leave(GameSession* session);
 	void move(int32 sessionId, CMovePacket* cMvPkt);
+	// 디버그 전용: 안티치트 클램프를 우회해 플레이어를 pos로 즉시 이동(아레나 zone 트리거 테스트).
+	void debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 clientMs);
 	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
@@ -221,7 +223,10 @@ private:
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
-	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
+	// 전술 NPC 바디 셋업(type별 모델/애니/클립 선택) + 물리/objectById_ 등록. type이 클라 렌더 모델을 결정.
+	void registerTacticalNpcBody(Object& obj, ObjectType type);
+	// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. NPC별 objType()으로 모델 라우팅.
+	void broadcastEncounterSpawn();
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	void teardownArenaWalls();                 // 전 NPC 처치 시 아레나 가상 벽 해제(barriers_ 파괴 + S_ZoneState(.,0))
 	bool allTacticalCombatantsDead() const;    // 보스 사망 AND 전 부대원 사망이면 true

@@ -19,6 +19,8 @@ enum class PacketType : uint16 {
 	C_Move,
 	S_Move,
 
+	C_DebugTeleport,   // 디버그 전용: 안티치트 클램프를 우회해 플레이어를 임의 좌표로 이동(아레나 텔레포트 테스트)
+
 	C_MouseMove,
 	S_MouseMove,
 
@@ -174,6 +176,12 @@ struct SLeavePacket : public PacketHeader {
 struct CMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT3 velocity;
+};
+
+// 디버그 전용 텔레포트. 서버가 C_Move의 7m/패킷 클램프를 우회해 플레이어를 pos로 즉시 이동시킨다
+// (아레나 zone 트리거 테스트용). 이후 S_Move로 다른 클라에 전파된다.
+struct CDebugTeleportPacket : public PacketHeader {
+	DirectX::XMFLOAT3 pos;
 };
 
 struct SMovePacket : public PacketHeader {

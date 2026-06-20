@@ -191,6 +191,14 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createTreant(objInfo);
 			break;
 
+		case ObjectType::Grandbaum:
+			game->createGrandbaum(objInfo);
+			break;
+
+		case ObjectType::Isys:
+			game->createIsys(objInfo);
+			break;
+
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
 			break;
@@ -292,6 +300,14 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 
 		case ObjectType::Treant:
 			game->createTreant(objInfo);
+			break;
+
+		case ObjectType::Grandbaum:
+			game->createGrandbaum(objInfo);
+			break;
+
+		case ObjectType::Isys:
+			game->createIsys(objInfo);
 			break;
 
 		default:
@@ -493,6 +509,20 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCDebugTeleportPacket(DirectX::XMFLOAT3 pos) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CDebugTeleportPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CDebugTeleportPacket>();
+	pkt->pos = pos;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_DebugTeleport;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

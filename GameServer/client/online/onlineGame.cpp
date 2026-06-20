@@ -2517,6 +2517,18 @@ void Game::createTreant(const ObjectInfo& info) {
 	configureNetMonster(std::make_shared<Treant>(), info, assetManager_.modelTreant(), MonsterKind::Treant, 120.f);
 }
 
+// Grandbaum/Isys 미드보스: 전용 모델로 스폰하되 corpse/래그돌/에너지오브 정합을 위해 변종 베이스의
+// MonsterKind(Treant/Birdy)로 라우팅한다(newMonsters_ corpse 파이프라인이 해당 kind를 처리).
+void Game::createGrandbaum(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	configureNetMonster(std::make_shared<Grandbaum>(), info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f);
+}
+
+void Game::createIsys(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	configureNetMonster(std::make_shared<Isys>(), info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f);
+}
+
 // === Client-authored corpse pipeline =======================================
 // A dead monster is detached from server-synced containers into corpses_ (with a
 // fresh RenderObjectId, carrying its HP bar). The corpse holds its ragdoll for a
@@ -2577,6 +2589,14 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		idMushroomMap_.erase(npcId);
 		std::erase(mushrooms_, std::static_pointer_cast<Mushroom>(obj));
 		break;
+	case MonsterKind::Bomber:
+	case MonsterKind::Birdy:
+	case MonsterKind::Slime:
+	case MonsterKind::Treant:
+		// Newer kinds share the generic newMonsters_ pool + newMonsterHpBars_ (no per-type map).
+		grabBar(newMonsterHpBars_);
+		std::erase(newMonsters_, obj);
+		break;
 	}
 	idMonsterMap_.erase(npcId);
 	if (static_cast<size_t>(npcId) < skillObjectById_.size())
@@ -2603,6 +2623,12 @@ void Game::returnMonsterToPool(Corpse& corpse) {
 	case MonsterKind::Goblin:   goblinPool_.push_back(std::move(pm));   break;
 	case MonsterKind::Snake:    snakePool_.push_back(std::move(pm));    break;
 	case MonsterKind::Mushroom: mushroomPool_.push_back(std::move(pm)); break;
+	case MonsterKind::Bomber:
+	case MonsterKind::Birdy:
+	case MonsterKind::Slime:
+	case MonsterKind::Treant:
+		newMonsterPool_[static_cast<size_t>(corpse.kind)].push_back(std::move(pm));
+		break;
 	}
 }
 
@@ -2612,6 +2638,12 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	case MonsterKind::Goblin:   pool = &goblinPool_;   break;
 	case MonsterKind::Snake:    pool = &snakePool_;    break;
 	case MonsterKind::Mushroom: pool = &mushroomPool_; break;
+	case MonsterKind::Bomber:
+	case MonsterKind::Birdy:
+	case MonsterKind::Slime:
+	case MonsterKind::Treant:
+		pool = &newMonsterPool_[static_cast<size_t>(kind)];
+		break;
 	}
 	if (!pool || pool->empty()) return false;
 
@@ -2659,6 +2691,14 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 		if (bar) mushroomHpBars_[npcId] = { m.get(), bar, 2.5f };
 		break;
 	}
+	case MonsterKind::Bomber:
+	case MonsterKind::Birdy:
+	case MonsterKind::Slime:
+	case MonsterKind::Treant:
+		// Pooled object keeps its concrete type — funnel back into the shared newMonsters_ path.
+		newMonsters_.push_back(obj);
+		if (bar) newMonsterHpBars_[npcId] = { obj.get(), bar, 2.5f };
+		break;
 	}
 	idMonsterMap_[npcId] = obj.get();
 	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
@@ -3313,6 +3353,10 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	case MonsterKind::Goblin:   createGoblin(info);   break;
 	case MonsterKind::Snake:    createSnake(info);    break;
 	case MonsterKind::Mushroom: createMushroom(info); break;
+	case MonsterKind::Bomber:   createBomber(info);   break;
+	case MonsterKind::Birdy:    createBirdy(info);    break;
+	case MonsterKind::Slime:    createSlime(info);    break;
+	case MonsterKind::Treant:   createTreant(info);   break;
 	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
@@ -3733,6 +3777,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& goblin   : goblins_)   activateAndCollect(goblin,   MonsterKind::Goblin);
 		for (auto& snake    : snakes_)    activateAndCollect(snake,    MonsterKind::Snake);
 		for (auto& mushroom : mushrooms_) activateAndCollect(mushroom, MonsterKind::Mushroom);
+		// Newer kinds live in the shared newMonsters_ pool — recover each kind from respawnKind_
+		// (id is still the live npc id here, before migrateToCorpse swaps in the corpse sentinel).
+		for (auto& m : newMonsters_) {
+			auto it = respawnKind_.find(static_cast<uint16>(m->getId()));
+			if (it == respawnKind_.end()) continue;  // kind unknown -> skip defensively
+			activateAndCollect(m, it->second);
+		}
 
 		for (auto& [objPtr, kind] : justDied)
 			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
@@ -4934,6 +4985,31 @@ void Game::sendMovePacket() {
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
+bool Game::findZoneCenter(const std::string& tag, mu::Vec3& out) const {
+	for (const auto& z : chunkManager_.zones()) {
+		if (z.tag != tag || z.volumes.empty()) continue;
+		out = z.volumes[0].center;
+		return true;
+	}
+	return false;
+}
+
+void Game::debugTeleportToArena(const std::string& tag) {
+	if (!player_) return;
+	mu::Vec3 center{};
+	if (!findZoneCenter(tag, center)) {
+		std::cout << "[DebugTeleport] zone '" << tag << "' not found\n";
+		return;
+	}
+	// Local prediction: snap the player to the zone center (prev == curr via setPos), drop velocity.
+	player_->setPos(center);
+	player_->setVelocity(mu::Vec3{});
+	moveChange_ = true;
+	// Authoritative jump: the server applies this without the 7m/packet clamp, so its zone Enter fires.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCDebugTeleportPacket(center.getXmf()));
+	std::cout << "[DebugTeleport] -> '" << tag << "' (" << center.x() << ", " << center.y() << ", " << center.z() << ")\n";
+}
+
 void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
@@ -5147,6 +5223,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
 		gfx_.cycleGBufferDebugMode();
 	}
+
+	// F5/F6/F7: debug teleport to each arena to test the mid-boss encounters.
+	if ( (keyboardStateCurr_[VK_F5] & 0x80) && !(keyboardStatePrev_[VK_F5] & 0x80) )
+		debugTeleportToArena( "Arena_Hobgoblin" );
+	if ( (keyboardStateCurr_[VK_F6] & 0x80) && !(keyboardStatePrev_[VK_F6] & 0x80) )
+		debugTeleportToArena( "Arena_Grandbaum" );
+	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
+		debugTeleportToArena( "Arena_Isys" );
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.

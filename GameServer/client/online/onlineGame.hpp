@@ -85,6 +85,9 @@ public:
 	void createBirdy(const ObjectInfo& info);
 	void createSlime(const ObjectInfo& info);
 	void createTreant(const ObjectInfo& info);
+	// Mid-boss bosses: dedicated models, routed through the Treant/Birdy corpse kind so death FX work.
+	void createGrandbaum(const ObjectInfo& info);
+	void createIsys(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -138,6 +141,11 @@ private:
 
 	void sendMovePacket();
 	void sendMouseMovePacket();
+	// Debug teleport (F5/F6/F7): jump the player to an arena zone center to test mid-boss triggers.
+	// Looks up the zone center by tag, sets the local predicted pos, and sends C_DebugTeleport so the
+	// server moves its authoritative pos (bypassing the anti-cheat clamp) and the zone Enter fires.
+	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
+	void debugTeleportToArena(const std::string& tag);
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
@@ -380,6 +388,10 @@ private:
 	std::vector<PooledMonster> goblinPool_;
 	std::vector<PooledMonster> snakePool_;
 	std::vector<PooledMonster> mushroomPool_;
+	// Newer monster kinds (Bomber/Birdy/Slime/Treant) share newMonsters_ at runtime, but the
+	// corpse->respawn pool must reuse an object of the SAME kind (a Bomber must not respawn as a
+	// Slime). Keyed by MonsterKind index instead of a named vector per type. Sized to the enum.
+	std::array<std::vector<PooledMonster>, 7> newMonsterPool_;
 	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
 	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
 

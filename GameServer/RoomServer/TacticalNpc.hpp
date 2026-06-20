@@ -119,6 +119,10 @@ public:
     bool              isChargeComplete()     const { return chargeComplete_; }
 
     void setSquadId( int32 id ) { squadId_ = id; }
+    // Per-NPC client model identity. The encounter sets this so S_NpcSpawnBatch tells each
+    // client which monster model to render (e.g. a Grandbaum squad spawns as Slime/Snake, not Goblin).
+    ObjectType objType()                const { return objType_; }
+    void       setObjType( ObjectType t )     { objType_ = t; }
     void MU_CALLCONV reviveAt( mu::Vec3 pos );
 
 protected:
@@ -181,6 +185,7 @@ protected:
     int32            confusedWanderStep_{ 0 };
     mu::Vec3         spawnPos_{};
     int32            squadId_{ -1 };
+    ObjectType       objType_{ ObjectType::Goblin };   // client render model identity (default Goblin)
 
     float maxHp_{ 100.f };
     float moveSpeed_{ 4.f };

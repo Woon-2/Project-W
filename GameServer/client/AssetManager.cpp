@@ -141,6 +141,18 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelTreant_
 	} );
 
+	// Mid-boss variant models (share Treant/Birdy rigs; rendered for Grandbaum/Isys bosses).
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/treant/Grandbaum.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelGrandbaum_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/birdy/Isys.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelIsys_
+	} );
+
 	//gfx.addRequestTextureLoad( RequestTextureLoad{
 	//	.name = "PlayerHpLine",
 	//	.texturePath = "../resources/UI/player_hp_line.dds",

@@ -2435,6 +2435,22 @@ void Treant::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetMan
 	renderState_.animBlender = std::move(blender);
 }
 
+// Grandbaum: Treant와 동일 리그/클립을 재사용하되 전용 modelGrandbaum로 굽는다(Hobgoblin↔Goblin과 동일).
+void Grandbaum::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderTreant>();
+	blender->init(assetManager.modelGrandbaum(), assetManager.treantAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
+// Isys: Birdy와 동일 리그/클립을 재사용하되 전용 modelIsys로 굽는다.
+void Isys::setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+	auto blender = std::make_unique<AnimBlenderBirdy>();
+	blender->init(assetManager.modelIsys(), assetManager.birdyAnimations());
+	animSystem.trackAnimBlender(blender.get());
+	renderState_.animBlender = std::move(blender);
+}
+
 // 거점 이벤트 처리: 고블린 핸들러에서 AnimBlender 포워딩·래그돌만 제거한 형태.
 // HP/사망 상태만 갱신한다(서버 권위; death 판정은 서버가 수행).
 void Stronghold::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {

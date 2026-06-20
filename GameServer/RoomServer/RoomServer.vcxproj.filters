@@ -156,6 +156,21 @@
     <ClCompile Include="TacticalGoblin.cpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
     </ClCompile>
+    <ClCompile Include="TacticalSlime.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalSnake.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalBirdy.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalBomber.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalTreant.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
     <ClCompile Include="MidBossTacticBase.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
@@ -295,6 +310,21 @@
     </ClInclude>
     <ClInclude Include="TacticalGoblin.hpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSlime.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSnake.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalBirdy.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalBomber.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalTreant.hpp">
+      <Filter>contents\tacticalNpc</Filter>
     </ClInclude>
     <ClInclude Include="IMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
