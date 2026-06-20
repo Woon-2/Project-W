@@ -156,6 +156,29 @@ AI 상태 전환 시점에 `animController_.switchClip()` 호출:
 | AttackWindup | attack |
 | Dead | die (loop=false) |
 
+#### 불변식: live clip을 절대 null로 만들지 말 것
+
+서버 피격/충돌 BVH는 **본-부착**이라 `Object::updateAnimBones()`로만 갱신되고, 이 함수는
+`animController_.clip == nullptr`이면 **조기 리턴**한다. 따라서 live clip이 null이 되면
+본-부착 worldBVH가 마지막 포즈에 **동결**되어, Dynamic 바디가 중력으로 적분돼도 BVH가
+따라가지 못한다 → 지형 접촉이 사라져 **몬스터가 지형을 뚫고 가라앉고 동시에 피격 불가**가 된다
+(권위 위치 자체가 어긋나므로 클라 렌더 보간으로는 못 고침).
+
+이를 보장하기 위한 규칙:
+- **`AnimController::switchClip(key)`는 null로 등록된 클립으로 전환하지 않는다**(현재 유효 클립
+  유지). 누락 애니메이션 키 하나가 물리/피격 BVH를 바디에서 떼어내는 사고를 차단한다.
+- **다중공격 클립**: 공격은 `*_Attack1/2/3`로 분리됨(클립 수 = 서로 다른 공격 수,
+  client `characterSkillMap.hpp` 참고). `setup{Goblin/Snake/Mushroom}`에서 존재하는 공격 클립을
+  전부 `Attack1/2/3` 키로 등록하되, 현재 서버는 단일 `"Attack"` 키만 재생하므로 임시로
+  `"Attack" → *_Attack1`로 하드코딩한다. 클라가 스킬 기반 공격 전환을 마치면 `transitionTo`의
+  `switchClip("Attack")`를 attackIndex 기반 선택으로, `S_NpcAttack`에 index를 실어 교체할 것.
+- **`Npc::reviveAt`는 `state_=Idle`를 직접 대입(transitionTo 우회)하므로** 사망 시 바뀐 "Die"
+  클립이 안 풀린다 → 부활 NPC가 엎드린 사망 포즈로 굳는다. reviveAt에서 `switchClip("Idle")`를
+  명시 호출해 리셋한다(초기 `setupGoblin`과 동일 패턴).
+
+> ⚠️ 새 몬스터/상태/공격을 추가할 때: 등록하는 모든 클립 키가 `.anim`에 실제 존재하는지 확인하고,
+> `state_`를 직접 대입하는 경로(부활/스폰)에서는 클립을 명시적으로 리셋할 것.
+
 ---
 
 ## 오브젝트 ID 시스템

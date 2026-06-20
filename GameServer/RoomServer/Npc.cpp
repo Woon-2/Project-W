@@ -626,6 +626,11 @@ void MU_CALLCONV Npc::reviveAt(mu::Vec3 pos) {
     groupReactTimer_  = -1s;
     idleTimer_        = randomRange(minIdleTime_, maxIdleTime_);
     state_            = NpcState::Idle;
+    // state_를 직접 대입하므로 transitionTo의 switchClip가 안 불린다. 사망 시 "Die"로 바뀐
+    // 클립을 명시적으로 Idle로 되돌리지 않으면, 부활한 NPC(hp>0)가 엎드린 사망 포즈로 굳어
+    // 본-부착 피격 BVH가 지면을 파고든 채 남는다(다음 진짜 Idle 전이까지). 초기화(setupGoblin)와
+    // 동일하게 여기서 직접 Idle 클립으로 리셋한다.
+    animController().switchClip("Idle");
 }
 
 void Npc::onHitImpulse() {

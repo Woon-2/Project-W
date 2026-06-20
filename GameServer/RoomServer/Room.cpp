@@ -76,7 +76,14 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.setModel(level.assetManager->modelGoblin());
 	g.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 	g.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-	g.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+	// 다중공격: 공격 클립을 전부 등록한다(클립 수 = 서로 다른 공격 수, characterSkillMap.hpp 참고).
+	// 클라가 레거시 공격 → 스킬 시스템 기반 공격으로 전환 중이며, 완료되면 서버도 attackIndex로
+	// 클립을 선택하도록 transitionTo의 switchClip("Attack")를 교체할 예정.
+	// TODO(스킬전환): 현재는 임시로 항상 첫 공격 클립(Goblin_Attack1)만 재생한다.
+	g.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+	g.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+	g.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+	g.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
@@ -96,7 +103,9 @@ void Room::setupSnake(Snake& s, const Level& level) {
 	s.setModel(level.assetManager->modelSnake());
 	s.animController().registerClip("Idle",   findServerAnimClip(anims, "Snake_Idle"));
 	s.animController().registerClip("Walk",   findServerAnimClip(anims, "Snake_Walk"));
-	s.animController().registerClip("Attack", findServerAnimClip(anims, "Snake_Attack"));
+	// 다중공격: 클립 전부 등록(현재 Snake는 Attack1 하나). 임시로 첫 클립만 재생. (setupGoblin 주석 참고)
+	s.animController().registerClip("Attack1", findServerAnimClip(anims, "Snake_Attack1"));
+	s.animController().registerClip("Attack",  findServerAnimClip(anims, "Snake_Attack1")); // 임시 재생용
 	s.animController().registerClip("Die",    findServerAnimClip(anims, "Snake_Death"));
 	s.animController().switchClip("Idle");
 	s.applySnakeConfig();
@@ -116,7 +125,10 @@ void Room::setupMushroom(Mushroom& m, const Level& level) {
 	m.setModel(level.assetManager->modelMushroom());
 	m.animController().registerClip("Idle",   findServerAnimClip(anims, "Mushroom_Idle"));
 	m.animController().registerClip("Walk",   findServerAnimClip(anims, "Mushroom_Walk"));
-	m.animController().registerClip("Attack", findServerAnimClip(anims, "Mushroom_Attack"));
+	// 다중공격: 클립 전부 등록(Mushroom_Attack1/2). 임시로 첫 클립만 재생. (setupGoblin 주석 참고)
+	m.animController().registerClip("Attack1", findServerAnimClip(anims, "Mushroom_Attack1"));
+	m.animController().registerClip("Attack2", findServerAnimClip(anims, "Mushroom_Attack2"));
+	m.animController().registerClip("Attack",  findServerAnimClip(anims, "Mushroom_Attack1")); // 임시 재생용
 	m.animController().registerClip("Die",    findServerAnimClip(anims, "Mushroom_Death"));
 	m.animController().switchClip("Idle");
 	m.applyMushroomConfig();
@@ -1592,7 +1604,11 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		obj.setModel(model);
 		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		// 다중공격: 공격 클립 전부 등록 + 임시로 첫 클립 재생(setupGoblin 주석 참고). TODO(스킬전환): attackIndex로 교체.
+		obj.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+		obj.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+		obj.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+		obj.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 		obj.animController().switchClip("Idle");
 		obj.setCanReceiveDamage(true);
@@ -1670,7 +1686,11 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		obj.setModel(assetManager_->modelGoblin());
 		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		// 다중공격: 공격 클립 전부 등록 + 임시로 첫 클립 재생(setupGoblin 주석 참고). TODO(스킬전환): attackIndex로 교체.
+		obj.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+		obj.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+		obj.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+		obj.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 		obj.animController().switchClip("Idle");
 		obj.setCanReceiveDamage(true);
@@ -1769,7 +1789,11 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		obj.setModel(assetManager_->modelGoblin());
 		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		// 다중공격: 공격 클립 전부 등록 + 임시로 첫 클립 재생(setupGoblin 주석 참고). TODO(스킬전환): attackIndex로 교체.
+		obj.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+		obj.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+		obj.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+		obj.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 		obj.animController().switchClip("Idle");
 		obj.setCanReceiveDamage(true);
@@ -1934,7 +1958,11 @@ void Room::registerTacticalNpcBody(Object& obj) {
 	obj.setModel(assetManager_->modelGoblin());
 	obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 	obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-	obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+	// 다중공격: 공격 클립 전부 등록 + 임시로 첫 클립 재생(setupGoblin 주석 참고). TODO(스킬전환): attackIndex로 교체.
+	obj.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+	obj.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+	obj.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+	obj.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 	obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	obj.animController().switchClip("Idle");
 	obj.setCanReceiveDamage(true);
