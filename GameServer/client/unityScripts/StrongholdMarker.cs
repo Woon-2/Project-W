@@ -14,8 +14,22 @@ using UnityEngine;
 // the terrain height field, so the authored Y is only a reference.
 public class StrongholdMarker : MonoBehaviour
 {
-    // Must match the engine's ObjectType enum (Player=0, Goblin=1, Ground=2, Stronghold=3, Snake=4, Mushroom=5).
-    public enum MonsterType { Goblin = 1, Snake = 4, Mushroom = 5 }
+    // Ordinals MUST match the engine's ObjectType enum (ServerEngine/protocol.hpp):
+    //   Player=0, Goblin=1, Ground=2, Stronghold=3, Snake=4, Mushroom=5, Hobgoblin=6,
+    //   Bomber=7, Birdy=8, Slime=9, Treant=10, Grandbaum=11, Isys=12.
+    // Only the normal stronghold-spawnable monsters are listed here. Named variants
+    // (Hobgoblin/Grandbaum/Isys) are mid-boss encounters driven by arena zone markers,
+    // not stronghold populations, so they are intentionally excluded.
+    public enum MonsterType
+    {
+        Goblin   = 1,
+        Snake    = 4,
+        Mushroom = 5,
+        Bomber   = 7,
+        Birdy    = 8,
+        Slime    = 9,
+        Treant   = 10,
+    }
 
     [System.Serializable]
     public struct Population

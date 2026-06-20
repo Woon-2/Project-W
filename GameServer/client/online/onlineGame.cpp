@@ -2438,6 +2438,85 @@ void Game::createMushroom(const ObjectInfo& info) {
 	monsterSpawnInfo_[info.objectId] = info;
 }
 
+// Shared spawn wiring for the newer monster types (Bomber/Birdy/Slime/Treant). These
+// share one Object* pool (newMonsters_) + the generic id-based routing maps, so move/
+// hit/skill/respawn-in-place all work without per-type plumbing. Mirrors createSnake.
+void Game::configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& info,
+                               const Model* model, MonsterKind kind, float mass) {
+	obj->setId(info.objectId);
+	obj->setPos(DirectX::XMLoadFloat3(&info.pos));
+	obj->setOrient(DirectX::XMLoadFloat4(&info.orient));
+	obj->setScale(DirectX::XMLoadFloat3(&info.scale));
+	obj->setModel(model);
+	obj->setAnimBlender(animSystem_, assetManager_);   // virtual -> concrete monster blender
+
+	if (obj->model() && obj->model()->ragdollDef) {
+		obj->ragdoll()->build(
+			obj->model()->skeleton,
+			*obj->model()->ragdollDef,
+			physicsWorld_,
+			obj->body().scale()
+		);
+	}
+
+	obj->setHp(info.hp);
+	obj->setMaxHp(info.maxHp);
+	obj->setFaction(Faction::Monsters);
+	obj->enableBVRendering();
+
+	obj->body().setMotionType(MotionType::Kinematic);
+	obj->body().setMass(mass);
+	obj->body().setLinearDamping(0.f);
+	obj->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		newMonsterHpBars_[info.objectId] = { obj.get(), bar, 2.5f };
+	}
+
+	obj->setRenderObjectId(nextRenderObjId_++);
+
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(info.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = obj.get();
+	}
+
+	idMonsterMap_[info.objectId]     = obj.get();
+	respawnKind_[info.objectId]      = kind;
+	monsterSpawnInfo_[info.objectId] = info;
+	newMonsters_.push_back(std::move(obj));
+}
+
+void Game::createBomber(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
+	configureNetMonster(std::make_shared<Bomber>(), info, assetManager_.modelBomber(), MonsterKind::Bomber, 70.f);
+}
+
+void Game::createBirdy(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	configureNetMonster(std::make_shared<Birdy>(), info, assetManager_.modelBirdy(), MonsterKind::Birdy, 40.f);
+}
+
+void Game::createSlime(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	configureNetMonster(std::make_shared<Slime>(), info, assetManager_.modelSlime(), MonsterKind::Slime, 90.f);
+}
+
+void Game::createTreant(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	configureNetMonster(std::make_shared<Treant>(), info, assetManager_.modelTreant(), MonsterKind::Treant, 120.f);
+}
+
 // === Client-authored corpse pipeline =======================================
 // A dead monster is detached from server-synced containers into corpses_ (with a
 // fresh RenderObjectId, carrying its HP bar). The corpse holds its ragdoll for a
@@ -3176,6 +3255,8 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto barIt = mushroomHpBars_.find( targetId ); barIt != mushroomHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = newMonsterHpBars_.find( targetId ); barIt != newMonsterHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() )
 		it->second.hpBarVisibleSeconds = 5.f;
 
@@ -3431,6 +3512,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& g : goblins_)   g->rebuildBodyBVH();
 	for (auto& s : snakes_)    s->rebuildBodyBVH();
 	for (auto& m : mushrooms_) m->rebuildBodyBVH();
+	for (auto& m : newMonsters_) m->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3560,6 +3642,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(goblins_);
 	updateMonstersNet(snakes_);
 	updateMonstersNet(mushrooms_);
+	updateMonstersNet(newMonsters_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3771,6 +3854,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		};
 		updateMonsterHpBar(snakeHpBars_);
 		updateMonsterHpBar(mushroomHpBars_);
+		updateMonsterHpBar(newMonsterHpBars_);
 
 		for (auto& [id, entry] : strongholdHpBars_) {
 			if (!entry.obj || entry.obj->isDead() || entry.obj->maxHp() <= 0) {
@@ -3942,6 +4026,7 @@ void Game::renderInGame() {
 	for (auto& goblin   : goblins_)   goblin->render(gfx_);
 	for (auto& snake    : snakes_)    snake->render(gfx_);
 	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
+	for (auto& m : newMonsters_) m->render(gfx_);
 
 	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
 	// (orb phase is drawn by orbSystem_.submitDrawEvents).
@@ -5176,11 +5261,13 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
-	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size());
+	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
+	                 + newMonsters_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
 	std::ranges::copy(mushrooms_,    std::back_inserter(entities));
+	std::ranges::copy(newMonsters_,  std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -5264,6 +5351,7 @@ void Game::feedbackCullResultToAnim() {
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
 		for (auto& m : mushrooms_) resetHiZ(m);
+		for (auto& m : newMonsters_) resetHiZ(m);
 		return;
 	}
 
@@ -5276,6 +5364,7 @@ void Game::feedbackCullResultToAnim() {
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);
 	for (auto& m : mushrooms_) applyToEntity(m);
+	for (auto& m : newMonsters_) applyToEntity(m);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 

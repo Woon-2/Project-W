@@ -1028,7 +1028,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -1036,7 +1036,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}*/
+	}
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {
@@ -1616,6 +1616,137 @@ void Mushroom::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 		}
 		break;
 
+	default:
+		break;
+	}
+}
+
+// Bomber/Birdy/Slime/Treant Object EventBus -- identical to Goblin::EventBus::receive
+// (forward Hit/Death/Attack/Respawn to the AnimBlender, mirror server HP, set ragdoll
+// pending on death). Online death judgment is server-authoritative; no local Death post.
+void Bomber::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Bomber*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = std::max(static_cast<const EvHit*>(event)->hp, 0);
+		}
+		break;
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt()) pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+	case EventType::Attack:
+	case EventType::Respawn:
+		if (pOwner) {
+			if (event->type == EventType::Respawn) pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void Birdy::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Birdy*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = std::max(static_cast<const EvHit*>(event)->hp, 0);
+		}
+		break;
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt()) pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+	case EventType::Attack:
+	case EventType::Respawn:
+		if (pOwner) {
+			if (event->type == EventType::Respawn) pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void Slime::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Slime*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = std::max(static_cast<const EvHit*>(event)->hp, 0);
+		}
+		break;
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt()) pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+	case EventType::Attack:
+	case EventType::Respawn:
+		if (pOwner) {
+			if (event->type == EventType::Respawn) pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void Treant::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Treant*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = std::max(static_cast<const EvHit*>(event)->hp, 0);
+		}
+		break;
+	case EventType::Death:
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt()) pOwner->ragdollPendingActivation_ = true;
+		}
+		break;
+	case EventType::Attack:
+	case EventType::Respawn:
+		if (pOwner) {
+			if (event->type == EventType::Respawn) pOwner->isDead_ = false;
+			if (pOwner->renderState_.animBlender)
+				pOwner->renderState_.animBlender->eventBus()->receive(event, deltaTime, evList, timer, pOwner->renderState_.animBlender.get());
+		}
+		break;
 	default:
 		break;
 	}

@@ -307,13 +307,23 @@ void Room::init(const Level* levelData) {
 	int totalBombers = 0, totalBirdys = 0, totalSlimes = 0, totalTreants = 0;
 	for (const auto& sd : sdefs) {
 		for (const auto& pop : sd.populations) {
-			if (pop.type == ObjectType::Goblin)   totalGoblins   += pop.targetCount;
-			if (pop.type == ObjectType::Snake)     totalSnakes    += pop.targetCount;
-			if (pop.type == ObjectType::Mushroom)  totalMushrooms += pop.targetCount;
-			if (pop.type == ObjectType::Bomber)    totalBombers   += pop.targetCount;
-			if (pop.type == ObjectType::Birdy)     totalBirdys    += pop.targetCount;
-			if (pop.type == ObjectType::Slime)     totalSlimes    += pop.targetCount;
-			if (pop.type == ObjectType::Treant)    totalTreants   += pop.targetCount;
+			switch (pop.type) {
+			case ObjectType::Goblin:   totalGoblins   += pop.targetCount; break;
+			case ObjectType::Snake:    totalSnakes    += pop.targetCount; break;
+			case ObjectType::Mushroom: totalMushrooms += pop.targetCount; break;
+			case ObjectType::Bomber:   totalBombers   += pop.targetCount; break;
+			case ObjectType::Birdy:    totalBirdys    += pop.targetCount; break;
+			case ObjectType::Slime:    totalSlimes    += pop.targetCount; break;
+			case ObjectType::Treant:   totalTreants   += pop.targetCount; break;
+			default:
+				// chunks_index.bin "MonsterType" int -> ObjectType (terrain.cpp). Named
+				// bosses (Hobgoblin/Grandbaum/Isys) and out-of-range values are not
+				// stronghold-spawnable; warn so an extraction mistake isn't silently dropped.
+				std::cout << "[Room::init] WARNING: stronghold population has unsupported "
+				             "MonsterType=" << static_cast<int>(pop.type)
+				          << " -> ignored (not a stronghold-spawnable monster)\n";
+				break;
+			}
 		}
 	}
 	goblins_.reserve(static_cast<size_t>(totalGoblins));

@@ -79,6 +79,12 @@ public:
 	void createHobgoblin(const ObjectInfo& hobgoblinInfo);
 	void createSnake(const ObjectInfo& info);
 	void createMushroom(const ObjectInfo& info);
+	// Newer monster types share one Object* pool (newMonsters_) + generic id-based
+	// routing (idMonsterMap_/skillObjectById_); only spawn/render differ per type.
+	void createBomber(const ObjectInfo& info);
+	void createBirdy(const ObjectInfo& info);
+	void createSlime(const ObjectInfo& info);
+	void createTreant(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -282,6 +288,9 @@ private:
 	std::vector<std::shared_ptr<Goblin>>   goblins_{};
 	std::vector<std::shared_ptr<Snake>>    snakes_{};
 	std::vector<std::shared_ptr<Mushroom>> mushrooms_{};
+	// Bomber/Birdy/Slime/Treant share one Object* pool (per-type vectors not needed —
+	// they only render/update/cull, and all id-based routing uses idMonsterMap_).
+	std::vector<std::shared_ptr<Object>>   newMonsters_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
@@ -348,7 +357,12 @@ private:
 	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
 	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
-	enum class MonsterKind { Goblin, Snake, Mushroom };
+	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
+
+	// Shared spawn wiring for newMonsters_ types (model/blender/body/HP bar + id maps).
+	// Declared after MonsterKind so its signature can reference the enum.
+	void configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& info,
+	                         const Model* model, MonsterKind kind, float mass);
 	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
 	struct Corpse {
 		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
@@ -497,6 +511,7 @@ private:
 	};
 	std::unordered_map<uint16, MonsterHpEntry> snakeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> mushroomHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> newMonsterHpBars_{};   // Bomber/Birdy/Slime/Treant
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_

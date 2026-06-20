@@ -175,6 +175,22 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createMushroom(objInfo);
 			break;
 
+		case ObjectType::Bomber:
+			game->createBomber(objInfo);
+			break;
+
+		case ObjectType::Birdy:
+			game->createBirdy(objInfo);
+			break;
+
+		case ObjectType::Slime:
+			game->createSlime(objInfo);
+			break;
+
+		case ObjectType::Treant:
+			game->createTreant(objInfo);
+			break;
+
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
 			break;
@@ -260,6 +276,22 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 
 		case ObjectType::Mushroom:
 			game->createMushroom(objInfo);
+			break;
+
+		case ObjectType::Bomber:
+			game->createBomber(objInfo);
+			break;
+
+		case ObjectType::Birdy:
+			game->createBirdy(objInfo);
+			break;
+
+		case ObjectType::Slime:
+			game->createSlime(objInfo);
+			break;
+
+		case ObjectType::Treant:
+			game->createTreant(objInfo);
 			break;
 
 		default:
