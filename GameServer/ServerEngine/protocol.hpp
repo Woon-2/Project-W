@@ -47,6 +47,8 @@ enum class PacketType : uint16 {
 	S_SkillUseReject,
 	S_ComboState,
 
+	S_PlayerHp,   // server-authoritative player HP push (regen); no hit animation
+
 	S_DebugHitbox,
 
 	S_StrongholdState,
@@ -366,6 +368,14 @@ struct SComboStatePacket : public PacketHeader {
 	uint16 playerId;
 	uint16 comboCount;
 	float  windowMs;
+};
+
+// Server -> all: authoritative player HP value (driven by server-side regen).
+// Applied directly (setHp) on the client without any hit event/animation, so the
+// HP bar/text reflect continuous regen via the existing per-frame read.
+struct SPlayerHpPacket : public PacketHeader {
+	uint16 playerId;
+	int32  newHp;
 };
 
 struct OBBInfo {

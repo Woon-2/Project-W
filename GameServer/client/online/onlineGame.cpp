@@ -5182,6 +5182,14 @@ void Game::onComboState(uint16 playerId, uint16 comboCount, float windowMs) {
 	comboSecLeft_  = windowMs / 1000.f;
 }
 
+void Game::onPlayerHp(uint16 playerId, int32 newHp) {
+	// Authoritative regen HP: set it straight on the player object (covers the local
+	// player and remotes, both registered in idPlayerMap_). No EvHit/EvDeath is posted,
+	// so no hit animation or blood plays; the per-frame HP UI read reflects it directly.
+	if (auto it = idPlayerMap_.find(playerId); it != idPlayerMap_.end())
+		it->second->setHp(newHp);
+}
+
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;

@@ -21,14 +21,23 @@ return {
     -- before its death to be credited.
     damageWindowMs = 15000,
 
-    -- Consecutive-kill combo accelerator. `mult` is indexed by combo count
-    -- (entry 1 = first kill); the last entry repeats for higher counts. The
-    -- result is clamped to `maxMult`. `windowMs` is the time allowed between
-    -- credited kills before the combo resets.
+    -- Consecutive-kill combo. `windowMs` is the time allowed between credited
+    -- kills before the combo resets. The combo count now drives the player's HP
+    -- regen rate (see `regen` below), not charge gain.
     combo = {
         windowMs = 3000,
-        maxMult  = 2.0,
-        mult     = { 1.0, 1.0, 1.25, 1.5, 1.75 },
+    },
+
+    -- Player HP regen per second as an S-curve of the kill-combo count:
+    --   y = basePerSec + (capPerSec - basePerSec) * x^exponent / (x^exponent + halfCombo^exponent)
+    -- `basePerSec` with no combo, staying low until the streak builds, crossing the
+    -- base->cap midpoint at `halfCombo` and asymptoting to `capPerSec`. Higher
+    -- `exponent` (>1) means a flatter start and a sharper rise (a higher threshold).
+    regen = {
+        basePerSec = 1.0,
+        capPerSec  = 25.0,
+        halfCombo  = 10.0,
+        exponent   = 3.0,
     },
 
     -- Soft cap: once a slot already holds at least `startStacks` full casts,

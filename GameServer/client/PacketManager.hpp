@@ -29,6 +29,7 @@ public:
 	static void handleSSkillSelectPacket( byte* buffer, int32 len );
 	static void handleSSkillUseRejectPacket( byte* buffer, int32 len );
 	static void handleSComboStatePacket( byte* buffer, int32 len );
+	static void handleSPlayerHpPacket( byte* buffer, int32 len );
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 	static void handleSZoneStatePacket( byte* buffer, int32 len );

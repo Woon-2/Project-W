@@ -429,6 +429,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSComboStatePacket(uint16 playerId
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSPlayerHpPacket(uint16 playerId, int32 newHp) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SPlayerHpPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SPlayerHpPacket>();
+	pkt->playerId = playerId;
+	pkt->newHp    = newHp;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_PlayerHp;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 
 std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));

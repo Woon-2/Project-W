@@ -230,6 +230,11 @@ private:
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	void teardownArenaWalls();                 // 전 NPC 처치 시 아레나 가상 벽 해제(barriers_ 파괴 + S_ZoneState(.,0))
 	bool allTacticalCombatantsDead() const;    // 보스 사망 AND 전 부대원 사망이면 true
+	// 클리어된 인카운터의 tactical 컨테이너(tacticalNpcs_/tacticalSquads_/platoonLeader_ 등)를
+	// 전부 비워 다음 아레나가 스폰 가드를 통과할 수 있게 한다. teardownArenaWalls() 직후 호출.
+	void cleanupTacticalEncounter();
+	// 현재 다른 아레나 인카운터가 진행 중인지(스폰 가드/동시 진입 차단 가드에서 공용으로 사용).
+	bool tacticalEncounterActive() const { return !tacticalNpcs_.empty() || platoonLeader_ != nullptr; }
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateMonsterAI(Milliseconds dt);
@@ -244,6 +249,7 @@ private:
 	void noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp);
 	void distributeKillCharge(Object* monster);
 	void updateComboExpiry();   // resets stale combos (combo window elapsed) each tick
+	void updatePlayerRegen(Milliseconds dt);   // server-authoritative combo-driven HP regen
 
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
@@ -279,6 +285,7 @@ private:
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };
+	Milliseconds regenSyncAccum_{ 0ms };   // throttles S_PlayerHp regen broadcasts (~10 Hz)
 	std::vector<std::unique_ptr<NpcGroup>> npcGroups_;
 	std::vector<GameSession*> livingPlayersCache_;
 	std::unordered_map<int32/* player id */, int32/* count */> aggroCount_;

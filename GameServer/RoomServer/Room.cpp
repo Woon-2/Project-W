@@ -474,6 +474,14 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
+
 	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
 	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
 	std::vector<const MarkerDef*> wallMarkers;
@@ -543,6 +551,14 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
+
 	// Wall 마커: 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
 	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
@@ -604,6 +620,14 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
 	if (!worldTerrain_) return;
+
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
 
 	// Wall 마커(있으면): 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
 	std::vector<const MarkerDef*> wallMarkers;
@@ -691,6 +715,7 @@ void Room::update() {
 
 	updatePlayerAnimations(dt);
 	updateSkillSystem(dt);
+	updatePlayerRegen(dt);
 
 	doTimer(dt, [this]() {
 		update();
@@ -1465,12 +1490,13 @@ void Room::distributeKillCharge(Object* monster) {
 		p->setComboCount(combo);
 		p->setLastCreditMs(now);
 
-		// Credit the selected slot, scaled by combo accelerator and soft cap.
+		// Credit the selected slot, scaled by the soft cap only. The combo no longer
+		// accelerates charge gain — it now drives the player's HP regen (updatePlayerRegen).
 		const int      slot      = p->selectedSlot();
 		const unsigned w         = static_cast<unsigned>(p->weaponType());
 		const float    cost      = loadout.cost(w, slot);
 		const int      curStacks = (cost > 0.f) ? static_cast<int>(p->skillCharge(slot) / cost) : 0;
-		const float    gain      = reward * cfg.comboMult(combo) * cfg.softCapFactor(curStacks);
+		const float    gain      = reward * cfg.softCapFactor(curStacks);
 		p->addSkillCharge(slot, gain);
 
 		broadcast(PacketManager::makeSSkillChargePacket(
@@ -1493,6 +1519,41 @@ void Room::updateComboExpiry() {
 			s->send(PacketManager::makeSComboStatePacket(
 				static_cast<uint16>(p->getId()), 0, window.count()));
 		}
+	}
+}
+
+void Room::updatePlayerRegen(Milliseconds dt) {
+	if (!assetManager_) return;
+	const ChargeConfig& cfg   = assetManager_->chargeConfig();
+	const float         dtSec = std::chrono::duration<float>(dt).count();
+
+	// Integrate combo-driven regen every tick; the accumulator carries fractional HP.
+	for (GameSession* s : livingPlayersCache_) {
+		Player* p = s->player();
+		if (!p) continue;
+		const int32 hp = p->hp();
+		if (hp <= 0 || hp >= kPlayerMaxHp) { p->setHpRegenAccum(0.f); continue; }
+
+		float accum = p->hpRegenAccum() + cfg.hpRegenPerSec(p->comboCount()) * dtSec;
+		const int32 add = static_cast<int32>(accum);   // floor (accum is non-negative)
+		if (add > 0) {
+			accum -= static_cast<float>(add);
+			p->setHp(std::min(hp + add, kPlayerMaxHp));
+		}
+		p->setHpRegenAccum(accum);
+	}
+
+	// Throttle the HP push to ~10 Hz, and only for players whose HP actually changed.
+	regenSyncAccum_ += dt;
+	if (regenSyncAccum_ < Milliseconds{ 100.f }) return;
+	regenSyncAccum_ = Milliseconds{ 0.f };
+	for (GameSession* s : livingPlayersCache_) {
+		Player* p = s->player();
+		if (!p) continue;
+		const int32 hp = p->hp();
+		if (hp == p->lastSyncedHp()) continue;
+		p->setLastSyncedHp(hp);
+		broadcast(PacketManager::makeSPlayerHpPacket(static_cast<uint16>(p->getId()), hp));
 	}
 }
 
@@ -1584,8 +1645,10 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
 
 	// 전 NPC(보스 + 전 부대원) 처치 시 아레나 가상 벽을 1회 해제 → 플레이어 후퇴 허용.
-	if (arenaWallsActive_ && allTacticalCombatantsDead())
+	if (arenaWallsActive_ && allTacticalCombatantsDead()) {
 		teardownArenaWalls();
+		cleanupTacticalEncounter();   // 다음 아레나가 스폰 가드를 통과하도록 컨테이너 정리
+	}
 }
 
 // 보스(platoonLeader_)가 사망했고 모든 부대원(tacticalNpcs_)도 사망했는지. 보스가 먼저
@@ -1607,6 +1670,39 @@ void Room::teardownArenaWalls() {
 	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
 	arenaWallsActive_ = false;
 	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
+}
+
+// 클리어된 인카운터의 tactical 컨테이너를 전부 비운다. 참조 방향(PlatoonLeader → TacticalSquad
+// (raw ptr) → TacticalNpc(raw ptr))을 따라 상위부터 정리해 dangling 참조 가능성을 없앤다.
+// physicsWorld_/npcBodyOwner_ 해제는 justDied 시점에 이미 끝났을 것이나, 두 호출 모두
+// find-then-erase로 idempotent이므로 방어적으로 다시 호출해도 안전(removeTacticalNpcById와 동일 패턴).
+// nextWedgeChargeId_(단조 증가 ID)/platoonLeaderObjType_/activeArenaZoneId_는 다음 스폰 시 덮어쓰므로
+// 건드리지 않는다.
+void Room::cleanupTacticalEncounter() {
+	if (platoonLeader_) {
+		physicsWorld_.unregisterBody(&platoonLeader_->body());
+		npcBodyOwner_.erase(&platoonLeader_->body());
+		unregisterObject(platoonLeader_.get());
+		IdPool::push(platoonLeader_->getId());
+		platoonLeader_.reset();
+	}
+
+	tacticalSquads_.clear();
+
+	for (auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		physicsWorld_.unregisterBody(&npc->body());
+		npcBodyOwner_.erase(&npc->body());
+		unregisterObject(npc.get());
+		IdPool::push(npc->getId());
+	}
+	tacticalNpcs_.clear();
+
+	clearShieldWallBlockers();
+	tacticalAttackSlots_.clear();
+	wedgeHitRecord_.clear();
+
+	std::cout << "[Zone] tactical encounter cleaned up - containers cleared\n";
 }
 
 TacticalNpc* Room::findTacticalNpcById(uint32_t id) const {

@@ -89,6 +89,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSComboStatePacket( buffer, len );
 		break;
 
+	case PacketType::S_PlayerHp:
+		handleSPlayerHpPacket( buffer, len );
+		break;
+
 	case PacketType::S_DebugHitbox:
 		handleSDebugHitboxPacket( buffer, len );
 		break;
@@ -391,6 +395,11 @@ void PacketManager::handleSSkillUseRejectPacket( byte* buffer, int32 len ) {
 void PacketManager::handleSComboStatePacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SComboStatePacket*>(buffer);
 	INet::ClientApp::onlineGame()->onComboState( pkt->playerId, pkt->comboCount, pkt->windowMs );
+}
+
+void PacketManager::handleSPlayerHpPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SPlayerHpPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onPlayerHp( pkt->playerId, pkt->newHp );
 }
 
 void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {

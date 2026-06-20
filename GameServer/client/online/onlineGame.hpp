@@ -118,6 +118,8 @@ public:
 	void onSkillSelect( uint16 playerId, uint8 slot );
 	void onSkillUseReject( uint8 slot );
 	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
+	// Server-authoritative HP push (regen): apply newHp directly, no hit event/animation.
+	void onPlayerHp( uint16 playerId, int32 newHp );
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 

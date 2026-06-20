@@ -215,6 +215,8 @@ public:
 		}
 		comboCount_ = 0;
 		lastCreditMs_ = Milliseconds{ 0.f };
+		hpRegenAccum_ = 0.f;
+		lastSyncedHp_ = -1;
 	}
 
 	// --- Stack-charge skill state (server-authoritative) ---
@@ -243,6 +245,14 @@ public:
 	Milliseconds lastCreditMs() const { return lastCreditMs_; }
 	void         setLastCreditMs(Milliseconds t) { lastCreditMs_ = t; }
 
+	// --- Server-authoritative HP regen (combo-driven) ---
+	// hpRegenAccum_ carries fractional HP between integer ticks; lastSyncedHp_ is
+	// the last HP value pushed to clients (so the regen sync only broadcasts on change).
+	float hpRegenAccum() const { return hpRegenAccum_; }
+	void  setHpRegenAccum(float v) { hpRegenAccum_ = v; }
+	int32 lastSyncedHp() const { return lastSyncedHp_; }
+	void  setLastSyncedHp(int32 v) { lastSyncedHp_ = v; }
+
 private:
 	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
@@ -251,6 +261,8 @@ private:
 	Milliseconds cooldownEnd_[kSkillSlots] = {};
 	uint16       comboCount_   = 0;
 	Milliseconds lastCreditMs_ { 0.f };
+	float        hpRegenAccum_ = 0.f;
+	int32        lastSyncedHp_ = -1;
 };
 
 class Cube : public Object {

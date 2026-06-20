@@ -245,18 +245,19 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |---|---|---|
 | 스킬 메타(`weaponType/loadoutSlot/isBasic/chargeCost/cooldown`) | `client|RoomServer/skill/skillTypes.hpp` `SkillAsset` | skill lua에서 파싱(`skillCompiler.cpp::tableToAsset`) |
 | `SkillLoadout::build()` | `client|RoomServer/skill/skillLoadout.hpp` | 컴파일된 자산 → 무기별 {기본, 3슬롯 assetId/코스트/쿨} |
-| 신규 패킷 | `ServerEngine/protocol.hpp` | `C_SelectSkill / S_SkillSelect / S_SkillCharge / S_SkillUseReject / S_ComboState` (사용 요청은 기존 `C_SkillStart` 재사용) |
-| `ChargeConfig` | `RoomServer/chargeConfig.{hpp,cpp}` | `resources/data/chargeConfig.lua`(몬스터 charge·윈도우·콤보·소프트캡) sol2 로드, `AssetManager` 전 룸 공유 |
-| `Player` 충전 상태 | `RoomServer/object.hpp` | `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_` |
+| 신규 패킷 | `ServerEngine/protocol.hpp` | `C_SelectSkill / S_SkillSelect / S_SkillCharge / S_SkillUseReject / S_ComboState / S_PlayerHp`(서버 권위 HP 회복 푸시, 이벤트·애니 없음) (사용 요청은 기존 `C_SkillStart` 재사용) |
+| `ChargeConfig` | `RoomServer/chargeConfig.{hpp,cpp}` | `resources/data/chargeConfig.lua`(몬스터 charge·윈도우·콤보·소프트캡·`regen{basePerSec,capPerSec,halfCombo,exponent}`) sol2 로드, `AssetManager` 전 룸 공유. `hpRegenPerSec(combo)`=S자(Hill) `base+(cap-base)·xⁿ/(xⁿ+halfComboⁿ)`(높은 문턱: half=10,n=3) |
+| `Player` 충전 상태 | `RoomServer/object.hpp` | `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_/hpRegenAccum_/lastSyncedHp_` |
 | `Object` 데미저 로그 + reward | `RoomServer/object.hpp` | `killChargeReward_`(스폰 시 `setupGoblin`에서 주입), `noteDamager`/`collectRecentDamagers` |
-| `Room::noteAndMaybeReward / distributeKillCharge` | `RoomServer/Room.cpp` | 데미지 기록 + HP 0 전이 시 최근 데미저 선택슬롯에 `reward×콤보×소프트캡`, `S_SkillCharge`/`S_ComboState` |
+| `Room::noteAndMaybeReward / distributeKillCharge` | `RoomServer/Room.cpp` | 데미지 기록 + HP 0 전이 시 최근 데미저 선택슬롯에 `reward×소프트캡`(콤보 가속 제거됨), `S_SkillCharge`/`S_ComboState` |
+| `Room::updatePlayerRegen` | `RoomServer/Room.cpp` | 60fps 틱 콤보 기반 HP 회복 적분(`hpRegenAccum_` carry, `kPlayerMaxHp` 상한), 변경분만 ~10Hz `S_PlayerHp` 브로드캐스트 |
 | `Room::selectSkill / skillStart`(게이트) / `updateComboExpiry` | `RoomServer/Room.cpp` | 선택 동기화·사용 게이트(스택/쿨, 실패 시 `S_SkillUseReject`)·콤보 만료 |
 | `SkillDialHUD` | `client/ui/skillDialHUD.{hpp,cpp}` | 우하단 소형 120° 회전 휠(선택=꼭대기), 반투명 회색 도넛 배경(effectMode 3) 위에 3 아이콘 배치, 슬롯별 충전/스택, ×N 배지, 0→1 준비 펄스. 크기·도넛 상수는 `.cpp` 상단(`kRadius/kSelSize/kRingPad/kRingHole`) |
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
-| 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터) |
+| 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
 > 시안: `docs/skill_hud_mockup/radial_dial.html`. 남은 폴리시(파티원 HUD 스택·콤보 바·사운드 자산·밸런스)는 설계 문서 §7 참조.
 
