@@ -225,6 +225,13 @@ void Controller::setMonsterCaster(CharacterKind kind) {
         goblin_->adoptAnimBlender(std::move(b), *animSystem_);
         break;
     }
+    case CharacterKind::Boss: {
+        goblin_->setModel(assetManager_->modelBoss());
+        auto b = std::make_unique<AnimBlenderBoss>();
+        b->init(assetManager_->modelBoss(), assetManager_->bossAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
     default:
         break;
     }

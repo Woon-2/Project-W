@@ -136,7 +136,7 @@ struct Resources {
         StructuredBuffer    perInstanceData;   // t0
         StructuredBuffer    lightData;         // t1
         StructuredBuffer    boneData;          // t2
-        ConstantBufferArray perDrawcallData;   // b0
+        ConstantBufferArray perDrawcallData;   // b0: material constants, including alpha cutoff
         ConstantBuffer      perFrameData;      // b1
     } gBufferPass;
 };

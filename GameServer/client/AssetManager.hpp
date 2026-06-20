@@ -105,6 +105,8 @@ public:
 	const std::vector<std::shared_ptr<AnimClip>>& slimeAnimations()   const { return slimeAnimations_; }
 	const Model* modelTreant()  const { return &modelTreant_; }
 	const std::vector<std::shared_ptr<AnimClip>>& treantAnimations()  const { return treantAnimations_; }
+	const Model* modelBoss()    const { return &modelBoss_; }
+	const std::vector<std::shared_ptr<AnimClip>>& bossAnimations()    const { return bossAnimations_; }
 	// Mid-boss variant models. Grandbaum shares the Treant rig/clips, Isys shares the Birdy rig/clips.
 	const Model* modelGrandbaum() const { return &modelGrandbaum_; }
 	const Model* modelIsys()      const { return &modelIsys_; }
@@ -132,6 +134,8 @@ private:
 	std::vector<std::shared_ptr<AnimClip>> slimeAnimations_{};
 	Model modelTreant_{};
 	std::vector<std::shared_ptr<AnimClip>> treantAnimations_{};
+	Model modelBoss_{};
+	std::vector<std::shared_ptr<AnimClip>> bossAnimations_{};
 	// Mid-boss variant models (reuse Treant/Birdy animations, no separate clip sets).
 	Model modelGrandbaum_{};
 	Model modelIsys_{};

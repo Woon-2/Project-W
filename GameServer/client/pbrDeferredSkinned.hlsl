@@ -36,7 +36,7 @@ struct Material {
     float cRoughness;
     float cMetallic;
     float cAOStrength;
-    float padding0;
+    float cAlphaCutoff;   // foliage alpha-test threshold (0 = opaque)
     float3 cEmmisive;
     float padding1;
 };
@@ -216,6 +216,9 @@ GBufferOutput PSMain(VSOutput input) {
     if (material.idxAlbedo.x >= 0) {
         albedo = sampleBindless(material.idxAlbedo, input.uv);
     }
+    // Foliage alpha test for skinned meshes. cAlphaCutoff == 0 for opaque
+    // materials, so this is a no-op outside alpha-clipped materials.
+    clip(albedo.a - material.cAlphaCutoff);
     albedo.rgb = pow(abs(albedo.rgb), 2.2f);
 
     // --- Roughness / Metallic ---

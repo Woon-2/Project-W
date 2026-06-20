@@ -763,6 +763,7 @@ void Dispatcher::gBufferIndirectDraw() {
                 .cRoughness            = de.material->constantRoughness,
                 .cMetallic             = de.material->constantMetallic,
                 .cAOStrength           = de.material->constantAOStrength,
+                .cAlphaCutoff          = de.material->constantAlphaCutoff,
                 .cEmmisive             = de.material->constantEmmisive
             },
         };
@@ -1102,6 +1103,7 @@ void Dispatcher::gBufferDraw() {
                 .cRoughness            = de.material->constantRoughness,
                 .cMetallic             = de.material->constantMetallic,
                 .cAOStrength           = de.material->constantAOStrength,
+                .cAlphaCutoff          = de.material->constantAlphaCutoff,
                 .cEmmisive             = de.material->constantEmmisive
             },
         };
@@ -1272,6 +1274,7 @@ void Dispatcher::addJobGBufferIndirectDraw(
                     .cRoughness            = de.material->constantRoughness,
                     .cMetallic             = de.material->constantMetallic,
                     .cAOStrength           = de.material->constantAOStrength,
+                    .cAlphaCutoff          = de.material->constantAlphaCutoff,
                     .cEmmisive             = de.material->constantEmmisive
                 }
             };
@@ -1364,6 +1367,7 @@ void Dispatcher::addJobGBufferDraw( ID3D12GraphicsCommandList* threadCmdList,
                     .cRoughness            = de.material->constantRoughness,
                     .cMetallic             = de.material->constantMetallic,
                     .cAOStrength           = de.material->constantAOStrength,
+                    .cAlphaCutoff          = de.material->constantAlphaCutoff,
                     .cEmmisive             = de.material->constantEmmisive
                 }
             };

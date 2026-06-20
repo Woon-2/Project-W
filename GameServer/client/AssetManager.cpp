@@ -140,6 +140,11 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelTreant_
 	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/boss/boss.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBoss_
+	} );
 
 	// Mid-boss variant models (share Treant/Birdy rigs; rendered for Grandbaum/Isys bosses).
 	gfx.addRequestModelLoad( RequestModelLoad{
@@ -727,6 +732,8 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	slimeAnimations_.reserve(tmpSlimeAnims.size());
 	auto tmpTreantAnims = loadAnimClipsFromFile("../resources/animations/treantAnimations.anim", gfx);
 	treantAnimations_.reserve(tmpTreantAnims.size());
+	auto tmpBossAnims = loadAnimClipsFromFile("../resources/boss/bossAnimations.anim", gfx);
+	bossAnimations_.reserve(tmpBossAnims.size());
 
 	// 공용 리소스(gfx.initSharedResources)는 호출부에서 미리 초기화되어 있어야 한다.
 	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
@@ -748,6 +755,8 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		slimeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	for (auto& clip : tmpTreantAnims)
 		treantAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpBossAnims)
+		bossAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 
 	// Re-runs player ids (harmless) and assigns goblin baked-anim ids.
 	setupBakedAnimationIds();
@@ -892,4 +901,5 @@ void AssetManager::setupBakedAnimationIds() {
 	for (auto& clip : birdyAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 	for (auto& clip : slimeAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
 	for (auto& clip : treantAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
+	for (auto& clip : bossAnimations_)   clip->id = clip->bakedSamples.idxSrv.idxResource;
 }

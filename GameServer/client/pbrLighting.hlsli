@@ -47,7 +47,8 @@ float3 computeIBL(float3 N, float3 V, float3 albedo, float roughness, float meta
     float2 brdf        = sampleBindless(idxBRDFLUT, float2(NdotV, roughness)).rg;
     float3 specular    = prefiltered * (F0 * brdf.x + brdf.y);
 
-    return (kD * diffuse + specular) * (1.f - ao) * iblIntensity;
+    // [Temp] 어차피 보스만 ao map이 있으므로, 보스가 자연스러운 렌더링이 되도록만 수치를 맞춘다.
+    return (kD * diffuse + specular) * (1.f - min(ao * ao, 0.25f)) * iblIntensity;
 }
 #endif // IBL_ENABLED
 

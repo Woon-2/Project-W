@@ -281,7 +281,7 @@ struct Material {
 	float cRoughness;
 	float cMetallic;
 	float cAOStrength;
-	float padding0;
+	float cAlphaCutoff;   // foliage alpha-test threshold (0 = opaque, no discard)
 	XMFLOAT3 cEmmisive;
 	float padding1;
 };
@@ -990,7 +990,7 @@ struct Material {
 	float cRoughness;
 	float cMetallic;
 	float cAOStrength;
-	float padding0;
+	float cAlphaCutoff;
 	XMFLOAT3 cEmmisive;
 	float padding1;
 };

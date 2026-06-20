@@ -782,6 +782,110 @@ void AnimBlenderMushroom::EventBus::receive(const BasicEvent* event, Seconds del
 	}
 }
 
+// ---------------------------------------------------------------------------
+// AnimBlenderBoss
+// ---------------------------------------------------------------------------
+void AnimBlenderBoss::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
+	setSkeleton(model->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : anims)
+		pushTargetClip(clip->name, clip);
+}
+
+void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
+
+	const auto walkThreshold = 0.06f;
+	const auto speed = pOwner->velocity().len();
+	const auto walkBlendRangeStart = walkThreshold - 0.03f;
+	const auto walkBlendRangeEnd = walkThreshold + 3.f;
+	const auto targetTWalk = std::clamp((speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f);
+
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
+	tIdle_ = 1.f - tWalk_;
+
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Boss_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Boss_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
+	}
+
+	if (cooldownAttack_ > 0ms) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp(animTimeAttack_ / 100ms, 0.f, 1.f);
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
+	}
+}
+
+void AnimBlenderBoss::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames("Boss_Idle", animTimeIdle_);
+	updateFrames("Boss_Walk", animTimeWalk_);
+	updateFrames(currentAttackClip_, animTimeAttack_);
+
+	auto& localXforms = localXformData();
+	auto& framesIdle = curFrames("Boss_Idle");
+	auto& framesWalk = curFrames("Boss_Walk");
+	auto& framesAttack = curFrames(currentAttackClip_);
+
+	if (mode_ == Mode::Baked) {
+		if (tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_ = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>(attackClip->bakedSampleRate * animTimeAttack_.count());
+		}
+		else {
+			float weights[] = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Boss_Idle").get(),
+				targetClip("Boss_Walk").get()
+			};
+			auto i = static_cast<int>(std::distance(std::begin(weights), std::ranges::max_element(weights)));
+			finalBakedClipId_ = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>(clips[i]->bakedSampleRate * animTimes[i].count());
+		}
+	}
+	else {
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+void AnimBlenderBoss::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderBoss*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Attack:
+		pOwner->animTimeAttack_ = 0s;
+		pOwner->cooldownAttack_ = 3000ms;
+		break;
+	case EventType::Respawn:
+		pOwner->animTimeAttack_ = 0s;
+		pOwner->cooldownAttack_ = 0ms;
+		pOwner->tAttack_ = 0.f;
+		break;
+	default:
+		break;
+	}
+}
+
 // 모델을 설정한다.
 // 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
 // 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.

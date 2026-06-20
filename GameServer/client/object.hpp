@@ -331,6 +331,35 @@ private:
 	std::string currentAttackClip_{};
 };
 
+// Temporary boss caster blender: the current boss resource only provides
+// Boss_Idle / Boss_Walk / Boss_Attack, so this intentionally ignores Hit/Death.
+class AnimBlenderBoss : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	std::string currentAttackClip_{ "Boss_Attack" };
+};
+
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
 // 물체의 바운딩 볼륨을 렌더링하는데 필요한 월드 변환 행렬,

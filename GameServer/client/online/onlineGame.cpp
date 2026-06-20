@@ -3560,6 +3560,19 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
 
+	// Death-ragdoll corpses need far more PGS iterations to converge than the default
+	// budget (tuned for shallow/branching constraint sets like player-terrain contacts).
+	// A long unbranched joint chain (e.g. Snake: 16 bodies, 15 joints deep, vs ~3-6 hops
+	// for every other ragdoll) cannot converge within the default 4 velocity passes --
+	// the residual position error compounds every step until the chain destabilizes and
+	// flies apart within about a second. Mirrors the debug ragdoll-test-object iteration
+	// boost in standalone/game.cpp (spawnTestObject), which documents the same mechanism
+	// for deep ConeTwist chains; this wires it into the real corpse path. Cheap: contacts
+	// are unaffected, only joints get the extra passes (setJointSolverExtraIterations).
+	const bool anyRagdollActive = std::any_of(corpses_.begin(), corpses_.end(),
+		[](const Corpse& c) { return c.phase == Corpse::Phase::Ragdoll; });
+	physicsWorld_.setJointSolverExtraIterations(anyRagdollActive ? 48 : 0);
+
 	int physicsStepsDone = 0;
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
