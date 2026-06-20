@@ -304,9 +304,70 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "TextureMapping");
     }
 
-    // bakeXform != null(스킨드 메시)이면 노드의 dress 변환을 정점에 미리 굽는다.
-    // (position은 affine point, normal은 inverse-transpose, tangent는 D로 변환)
-    void ExtractMesh(Mesh mesh, Matrix4x4? bakeXform = null)
+    // 정점별 dress 스킨 행렬(mesh-local→dress)을 만든다.
+    //   dressSkin[b] = root.worldToLocal * bones[b].localToWorld * mesh.bindposes[b]
+    //   vertex i    = Σ w * dressSkin[boneIndex]   (boneWeights 의 본 인덱스는 smr.bones/bindposes
+    //                 평행 배열 기준; boneIdxMap 으로 스켈레톤 순서로 재매핑되기 '전'의 인덱스다.)
+    // 본 팔레트가 rest 포즈에서 만드는 변형과 정확히 동일하므로, 씬 포즈가 FBX bind 와 달라도 정확.
+    Matrix4x4[] BuildSkinBakeMatrices(Transform root, Transform xform,
+        SkinnedMeshRenderer smr, Mesh mesh)
+    {
+        int vcnt = mesh != null ? mesh.vertexCount : 0;
+        Matrix4x4 rootW2L = root.worldToLocalMatrix;
+        Matrix4x4 nodeFallback = rootW2L * xform.localToWorldMatrix;
+
+        Transform[] smrBones = smr != null ? smr.bones : null;
+        Matrix4x4[] bindposes = mesh != null ? mesh.bindposes : null;
+        BoneWeight[] weights = mesh != null ? mesh.boneWeights : null;
+
+        // 폴백: bind/weight 정보가 부족하면 과거 동작(SMR 노드 변환)을 모든 정점에 동일 적용.
+        if (vcnt == 0 || smrBones == null || smrBones.Length == 0
+            || bindposes == null || bindposes.Length != smrBones.Length
+            || weights == null || weights.Length != vcnt)
+        {
+            if (vcnt == 0) return null;
+            Matrix4x4[] all = new Matrix4x4[vcnt];
+            for (int i = 0; i < vcnt; i++) all[i] = nodeFallback;
+            return all;
+        }
+
+        Matrix4x4[] dressSkin = new Matrix4x4[smrBones.Length];
+        for (int b = 0; b < smrBones.Length; b++)
+        {
+            Matrix4x4 boneL2W = smrBones[b] != null
+                ? smrBones[b].localToWorldMatrix : Matrix4x4.identity;
+            dressSkin[b] = rootW2L * boneL2W * bindposes[b];
+        }
+
+        Matrix4x4[] result = new Matrix4x4[vcnt];
+        for (int i = 0; i < vcnt; i++)
+        {
+            BoneWeight w = weights[i];
+            float wsum = w.weight0 + w.weight1 + w.weight2 + w.weight3;
+            if (wsum <= 1e-6f) { result[i] = nodeFallback; continue; }
+
+            Matrix4x4 m = new Matrix4x4();   // 구조체 기본값 = 전부 0
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex0], w.weight0);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex1], w.weight1);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex2], w.weight2);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex3], w.weight3);
+            result[i] = m;
+        }
+        return result;
+    }
+
+    static void AddScaledMatrix(ref Matrix4x4 acc, Matrix4x4 m, float s)
+    {
+        if (s == 0f) return;
+        for (int c = 0; c < 4; c++)
+            for (int r = 0; r < 4; r++)
+                acc[r, c] += m[r, c] * s;
+    }
+
+    // skinBakeMats != null(스킨드 메시)이면 정점별 dress 스킨 행렬로 정점/방향을 미리 굽는다.
+    // (position은 affine point, normal·tangent는 동일 행렬의 MultiplyVector 후 정규화 — 런타임
+    //  스킨드 셰이더가 normal 에도 anim 행렬을 그대로 곱하는 것과 일치시킨다.)
+    void ExtractMesh(Mesh mesh, Matrix4x4[] skinBakeMats = null)
     {
         ExtractUtil.WriteHeadTag(geometryWriter, "Mesh");
 
@@ -317,20 +378,29 @@ public class ModelExtractorWindow : EditorWindow
         Vector3[] normalsArr = mesh.normals;
         Vector4[] tangents4 = mesh.tangents;
 
-        if (bakeXform.HasValue)
+        bool baked = skinBakeMats != null && positions != null
+                  && skinBakeMats.Length == positions.Length;
+        if (baked)
         {
-            Matrix4x4 D = bakeXform.Value;
-            Matrix4x4 N = D.inverse.transpose;   // 노멀은 inverse-transpose로 변환
-            if (positions != null && positions.Length > 0)
-                positions = ExtractUtil.BakePositions(positions, D);
-            if (normalsArr != null && normalsArr.Length > 0)
-                normalsArr = ExtractUtil.BakeDirections(normalsArr, N);
-            if (tangents4 != null && tangents4.Length > 0)
+            Vector3[] bakedPos = new Vector3[positions.Length];
+            for (int i = 0; i < positions.Length; i++)
+                bakedPos[i] = skinBakeMats[i].MultiplyPoint3x4(positions[i]);
+            positions = bakedPos;
+
+            if (normalsArr != null && normalsArr.Length == skinBakeMats.Length)
+            {
+                Vector3[] bakedN = new Vector3[normalsArr.Length];
+                for (int i = 0; i < normalsArr.Length; i++)
+                    bakedN[i] = skinBakeMats[i].MultiplyVector(normalsArr[i]).normalized;
+                normalsArr = bakedN;
+            }
+            if (tangents4 != null && tangents4.Length == skinBakeMats.Length)
             {
                 Vector4[] bakedT = new Vector4[tangents4.Length];
                 for (int i = 0; i < tangents4.Length; i++)
                 {
-                    Vector3 t = D.MultiplyVector(new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z)).normalized;
+                    Vector3 t = skinBakeMats[i].MultiplyVector(
+                        new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z)).normalized;
                     bakedT[i] = new Vector4(t.x, t.y, t.z, tangents4[i].w);   // w(부호) 보존
                 }
                 tangents4 = bakedT;
@@ -341,7 +411,7 @@ public class ModelExtractorWindow : EditorWindow
         // AABB 추출 (베이크된 정점 기준으로 재계산)
         // =========================
         Bounds bounds;
-        if (bakeXform.HasValue && positions != null && positions.Length > 0)
+        if (baked && positions != null && positions.Length > 0)
         {
             Vector3 mn = positions[0], mx = positions[0];
             for (int i = 1; i < positions.Length; i++)
@@ -587,14 +657,23 @@ public class ModelExtractorWindow : EditorWindow
         // 그런데 런타임 스킨드 셰이더는 position·anim·meshXform 순서로 곱하므로(meshXform=노드
         // DressMatrix), 노드 자체에 회전/스케일이 있으면 그 변환이 본 변형 '뒤'에 적용되어
         // 정점(mesh-local) 공간과 본 팔레트(dress) 공간이 어긋난다 — snake가 90° 서거나 birdy
-        // 말단이 늘어나는 원인. 따라서 노드 변환 D(= root.worldToLocal·node.localToWorld)를 정점에
-        // 미리 구워 dress 공간으로 옮기고, 노드 행렬은 항등으로 기록한다. 이러면 런타임이
-        // position(dress)·anim·I 로 본 팔레트를 올바른 공간에서 적용한다. 정적 메시는 기존대로
-        // 노드 변환을 meshXform으로 유지한다(정점은 raw mesh-local).
-        Matrix4x4? bakeXform = null;
+        // 말단이 늘어나는 원인. 따라서 정점을 dress(root) 공간으로 미리 구워 옮기고, 노드 행렬은
+        // 항등으로 기록한다. 이러면 런타임이 position(dress)·anim·I 로 본 팔레트를 올바른 공간에서
+        // 적용한다. 정적 메시는 기존대로 노드 변환을 meshXform으로 유지한다(정점은 raw mesh-local).
+        //
+        // [중요] 정점을 dress 공간으로 옮기는 변환은 SMR 노드 변환이 아니라 '실제 bind pose'에서
+        // 유도해야 한다. Unity 는 스킨드 렌더링에서 SMR 노드 자체 변환을 무시하고 mesh.bindposes 로
+        // mesh-local→bone 결합을 정의한다. 본 b 의 dress 스킨 행렬은
+        //   dressSkin[b] = root.worldToLocal * bones[b].localToWorld * mesh.bindposes[b]
+        // 이고, 정점 i 의 베이크 변환은 가중 합 Σ w * dressSkin[b] (= 본 팔레트가 rest 포즈에서 만드는
+        // 변형과 정확히 동일) 이다. 씬의 rest 포즈가 FBX bind 와 다르면 본마다 dressSkin 이 달라지므로
+        // 단일 행렬(특정 본 하나)로 구우면 메시가 그 본의 포즈 오차만큼 강체로 기울어진다 — 정점별 LBS 로
+        // 구워야 정확하다. 노드 행렬은 항등으로 기록한다. (씬==bind 인 birdy 는 모든 dressSkin 이
+        // 동일해 단일 행렬과 같은 결과; snake 는 정점별로 올바르게 정렬.)
+        Matrix4x4[] skinBakeMats = null;
         if (isSkinnedMesh)
         {
-            bakeXform = root.worldToLocalMatrix * xform.localToWorldMatrix;
+            skinBakeMats = BuildSkinBakeMatrices(root, xform, skinnedMeshRenderer, mesh);
             ExtractUtil.WriteMatrix(geometryWriter, "LocalMatrix", Matrix4x4.identity);
             ExtractUtil.WriteMatrix(geometryWriter, "DressMatrix", Matrix4x4.identity);
         }
@@ -606,7 +685,7 @@ public class ModelExtractorWindow : EditorWindow
 
         if (mesh != null)
         {
-            ExtractMesh(mesh, bakeXform);
+            ExtractMesh(mesh, skinBakeMats);
         }
 
         // --- MaterialSetSelector 지원 ---

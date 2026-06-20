@@ -485,7 +485,7 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 	tIdle_ = 1.f - tWalk_;
 
 	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Snake_Idle")->duration;
+	const auto durationIdle = targetClip("Snake_Walk")->duration;
 	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
 
 	if (tWalk_ > 0.f) {
@@ -527,14 +527,14 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 	const bool hasAttack = !currentAttackClip_.empty();
 
-	updateFrames("Snake_Idle",   animTimeIdle_);
+	updateFrames("Snake_Walk",   animTimeIdle_);
 	updateFrames("Snake_Walk",   animTimeWalk_);
 	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
 	updateFrames("Snake_Hit",    animTimeHit_);
 	updateFrames("Snake_Death",  animTimeDeath_);
 
 	auto& localXforms  = localXformData();
-	auto& framesIdle   = curFrames("Snake_Idle");
+	auto& framesIdle   = curFrames("Snake_Walk");
 	auto& framesWalk   = curFrames("Snake_Walk");
 	auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
 	auto& framesHit    = curFrames("Snake_Hit");
@@ -555,7 +555,7 @@ void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 			float   weights[]   = { tIdle_, tWalk_ };
 			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
 			const AnimClip* clips[] = {
-				targetClip("Snake_Idle").get(),
+				targetClip("Snake_Walk").get(),
 				targetClip("Snake_Walk").get()
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
@@ -1028,7 +1028,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -1036,7 +1036,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}*/
+	}
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {

@@ -520,9 +520,16 @@ Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin
 
 위 모델 scale은 **모델 루트(root) localScale**을 다루지만, **스킨드 메시 노드 자체(SkinnedMeshRenderer 트랜스폼)의 변환**은 별개 문제다. FBX 임포트 시 일부 에셋은 SMR 노드에 회전(예: snake — Z/Y-up 변환의 X축 90°)이나 단위 스케일(예: birdy/Isys — cm→m의 0.01)이 남는다.
 
-- **증상:** snake가 바닥에 누워야 하는데 90° 서 있고, birdy 말단이 늘어남. **본 팔레트 수학·bind pose·애니메이션 정합은 정상**(frame-0 skin 행렬 특이값 전부 1.0)인데도 깨진다.
-- **원인 (곱셈 순서/공간 불일치):** 본 팔레트(`finalXformData`=`toLocal·animDress`)는 **root 기준 dress 공간**에서 만들어지는데, 스킨드 정점은 **raw mesh-local**이고, 런타임 스킨드 셰이더는 `posW = position·anim·world`(`world = meshXform·objWorld`, `meshXform`=노드 DressMatrix) 순서로 곱한다. 즉 `meshXform`이 본 변형 **뒤**에 적용되어, 노드에 회전/스케일이 있으면 정점 공간과 팔레트 공간이 어긋난다. 올바른 순서는 `position·meshXform·anim·objWorld`(먼저 dress로 옮긴 뒤 스킨). `meshXform=I`인 모델(goblin/player 등)만 우연히 정상 동작했다.
-- **Fix (`ModelExtractor.cs`, 옵션 C):** 스킨드 메시는 노드 변환 `D = root.worldToLocal·node.localToWorld`를 정점(position=affine, normal=inverse-transpose, tangent=D)에 미리 구워 dress 공간으로 옮기고, 노드 `LocalMatrix`/`DressMatrix`를 **항등으로 기록**한다(`ExtractMesh(mesh, bakeXform)`). bounds도 베이크 정점 기준 재계산. 그러면 런타임이 `position(dress)·anim·I·objWorld`로 본 팔레트를 올바른 공간에서 적용한다. **정적 메시는 변경 없음**(노드 변환을 `meshXform`으로 유지, 정점은 raw mesh-local).
-- **모델 root scale과 무관:** `D`는 `root.worldToLocal`로 root 자신의 transform(스케일 포함)을 상쇄하므로 노드의 **상대** 변환만 굽는다. 모델 root scale은 여전히 `ModelScale`→`baseScale`→body scale 경로로 분리 적용된다(§4 베이크 폐기 사유인 "애니메이션 scale 채널 충돌"은 root scale 문제였고, 여기 노드 변환은 bind 고정값이라 무관).
-- **런타임/셰이더/서버 변경 0.** 서버 추출기는 정점을 저장하지 않아 영향 없음(서버 `.bin` 재추출 불필요).
-- **재추출 필요(클라):** 스킨드 노드가 비항등인 모델만 — `snake.bin`(90° 회전), `birdy.bin`·`Isys.bin`(0.01 스케일). 노드가 항등인 나머지 스킨드 모델(goblin/player/Hobgoblin/bomber/mushroom/slime/treant/Grandbaum)은 베이크가 no-op이라 기존 `.bin` 그대로 유효(포맷 불변).
+- **증상:** snake가 바닥에 누워야 하는데 90° 서 있고(스크린샷의 얇은 세로선), birdy 말단이 늘어남. **본 팔레트 수학·bind pose·애니메이션 정합은 정상**(frame-0 skin 행렬 특이값 전부 1.0)인데도 깨진다.
+- **원인 (정점이 팔레트와 다른 공간):** 본 팔레트(`finalXformData`=`toLocal·animDress`)는 **root 기준 dress 공간**에서 만들어지고(`toLocal = bone.worldToLocal·root.localToWorld`), 스킨 정점이 그 공간에 있어야 한다. 그런데 스킨드 정점은 **raw mesh-local**이라 노드에 회전/스케일이 있으면 어긋난다. 해법은 정점을 dress 공간으로 미리 굽고 노드 행렬을 항등으로 두는 것(`position·anim·I·objWorld`).
+- **베이크 변환 (핵심 — 정점별 LBS, 실제 bindpose 사용):** mesh-local→dress 변환은 **SMR 노드 변환이 아니라 `mesh.bindposes`에서** 와야 한다. Unity 는 스킨드 렌더링에서 SMR 노드 자체 변환을 **무시**하고 `bone.localToWorld·bindpose` 로만 정점을 배치하기 때문이다. 본 b 의 dress 스킨 행렬 `dressSkin[b] = root.worldToLocal·bones[b].localToWorld·bindposes[b]` 를 구하고, **정점 i 를 가중 합 `Σ w·dressSkin[boneIndex]` 로 굽는다**(정점별 LBS). 이는 본 팔레트가 rest 포즈에서 만드는 변형과 정확히 동일하다. 구현: `BuildSkinBakeMatrices`(정점별 `Matrix4x4[]`) → `ExtractMesh`가 position=`MultiplyPoint3x4`, normal/tangent=`MultiplyVector`(정규화, 런타임 셰이더가 normal 에 anim 을 그대로 곱하는 것과 일치). boneWeight 의 본 인덱스는 `boneIdxMap` 재매핑 '전'(smr.bones/bindposes 평행 배열) 기준.
+- **왜 정점별이어야 하나 (단일 행렬의 한계):** 임의의 본 하나로 `M = bone.l2w·bindpose` 단일 행렬을 쓰면, **씬의 rest 포즈가 FBX bind 와 다를 때** 본마다 `dressSkin` 이 달라 메시 전체가 그 본의 포즈 오차만큼 **강체로 기울어진다**(snake 재추출 1차 시도에서 모양은 살았으나 기울던 증상). 씬==bind 인 birdy 는 모든 `dressSkin` 이 동일해 정점별/단일이 같은 결과.
+- **과거 버그:** `bakeXform = root.worldToLocal·node.localToWorld`(SMR 노드 변환)로 구웠는데, 이는 `bindpose = bone.worldToLocal·SMR.localToWorld` 인 모델(birdy — 0.01 스케일이 bind 에 반영됨)에서만 우연히 맞았다. snake 처럼 SMR 노드에만 90° 회전이 남고 bindpose 는 root 기준인 모델에서는 **존재하지 않는 90° 를 정점에 굽어** 메시가 90° 서버렸다.
+- **모델 root scale과 무관:** `bakeXform`은 `root.worldToLocal`로 root 자신의 transform(스케일 포함)을 상쇄하므로 노드의 **상대** 변환만 굽는다. 모델 root scale은 여전히 `ModelScale`→`baseScale`→body scale 경로로 분리 적용된다.
+- **런타임/셰이더/서버 변경 0.** 서버 추출기(`ModelExtractorForServer.cs`)는 정점을 저장하지 않아 영향 없음(서버 `.bin` 재추출 불필요).
+- **재추출 필요(클라):** 추출기 수정 후 **반드시 `snake.bin` 재추출**(기존 `.bin` 에는 잘못 구워진 변형이 남아 있음). `.bin` 만으로는 정점이 옳게 구워졌는지 노드 항등 여부로 구분 불가 — 반드시 수정된 추출기로 다시 뽑아야 한다.
+- **다른 모델 재추출 사이드이펙트 없음 (검증):** 정점별 LBS 베이크는 모든 스킨드 메시에 적용되지만 다음과 같이 안전하다.
+  - **정적(non-skinned) 메시:** `skinBakeMats=null` 로 베이크 분기 미진입 → 완전 불변(정점 raw, 노드 변환은 meshXform 유지).
+  - **스킨드 + 노드 항등 + scene==bind:** 모든 `dressSkin[b]=I` 라 `Σ w·dressSkin=I` → 결과 동일(부동소수 오차 무시). 현재 정상 렌더되는 모델 전부 이 범주임을 확인 — `.bin` 메시 노드가 모두 항등: goblin/Hobgoblin/mushroom/slime/bomber/treant/Grandbaum(+player). 이들은 재추출해도 형상 불변(바이트만 미세 변동).
+  - **스킨드 + 노드 비항등 또는 scene≠bind:** snake/birdy/Isys 등. 정점별로 본 팔레트 rest 와 정확히 정렬 → 개선(회귀 아님). 구버전 단일 행렬 베이크가 scene≠bind 에서 일으키던 **강체 tilt 도 해소**.
+  - normal/tangent 는 런타임 셰이더와 동일한 `MultiplyVector`(정규화) 사용 → 균일 스케일에서 inverse-transpose 와 동일, 비균일에서도 런타임과 일치. 폴백(가중치 합 0 / bind·weight 정보 부족)은 유효 스킨드 메시에선 발동하지 않는다.
