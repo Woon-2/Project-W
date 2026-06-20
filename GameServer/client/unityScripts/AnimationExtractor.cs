@@ -47,6 +47,12 @@ public class AnimationExtractorWindow : EditorWindow
     private List<Transform> bones = null;
     private List<Matrix4x4> bindposes = null;
 
+    // SkinnedMeshRenderer.bones[i] -> sharedMesh.bindposes[i] 매핑.
+    // baked 행렬이 씬 rest 포즈가 아니라 FBX 가 저작한 bind 포즈(=ModelExtractor 의
+    // dressSkin 과 동일 규약)를 쓰도록 하기 위함. 씬 rest 포즈 != FBX bind 인 모델
+    // (예: Treant)에서 baked 모드 본 꼬임을 방지한다.
+    private Dictionary<Transform, Matrix4x4> bindposeMap = null;
+
     private Vector2 scrollPos;
 
     [MenuItem("Tools/Animation Extractor")]
@@ -174,7 +180,10 @@ public class AnimationExtractorWindow : EditorWindow
     List<Matrix4x4> SampleMatrices(AnimationClip clip, Transform bone, Matrix4x4 bindpose, float fps)
     {
         var matrices = new List<Matrix4x4>();
-        int sampleCnt = (int)(clip.length * clip.frameRate);
+        // 샘플 간격이 1/fps 이므로 개수도 fps 기준으로 맞춘다. clip.frameRate 로 세면
+        // 클라가 인덱싱하는 프레임 수(=length*bakedSampleRate)와 어긋나, frameRate < fps
+        // 면 애니메이션이 중간에 멈추고 frameRate > fps 면 텍스처가 낭비된다.
+        int sampleCnt = (int)(clip.length * fps);
 
         for (int i = 0; i < sampleCnt; ++i)
         {
@@ -355,21 +364,65 @@ public class AnimationExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(binaryWriter, "Clip");
     }
 
+    // sampleTarget(없으면 skeleton) 아래 모든 SkinnedMeshRenderer 를 돌며
+    // bones[i] -> sharedMesh.bindposes[i] 를 모은다(평행 배열). 한 본이 여러 메시에
+    // 묶여 있으면 먼저 만난 것을 유지한다(first-wins).
+    Dictionary<Transform, Matrix4x4> BuildBindposeMap()
+    {
+        var map = new Dictionary<Transform, Matrix4x4>();
+
+        GameObject searchRoot = sampleTarget != null ? sampleTarget : skeleton;
+        if (searchRoot == null)
+            return map;
+
+        var smrs = searchRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var smr in smrs)
+        {
+            if (smr == null || smr.sharedMesh == null)
+                continue;
+
+            Transform[] smrBones = smr.bones;
+            Matrix4x4[] poses = smr.sharedMesh.bindposes;
+            if (smrBones == null || poses == null)
+                continue;
+
+            int n = Mathf.Min(smrBones.Length, poses.Length);
+            for (int i = 0; i < n; ++i)
+            {
+                if (smrBones[i] == null)
+                    continue;
+                if (!map.ContainsKey(smrBones[i]))
+                    map[smrBones[i]] = poses[i];
+            }
+        }
+        return map;
+    }
+
     void ProcessBoneHierarchy(Transform bone)
     {
         bones.Add(bone);
-        bindposes.Add(bone.worldToLocalMatrix * skeleton.transform.localToWorldMatrix);
+
+        Matrix4x4 bind;
+        if (bindposeMap == null || !bindposeMap.TryGetValue(bone, out bind))
+        {
+            // 어떤 SkinnedMeshRenderer 에도 묶이지 않은 본(루트/헬퍼 노드 등)은
+            // 정점 가중치가 없어 baked 행렬이 쓰이지 않으므로, 과거와 동일한
+            // 씬 rest 포즈 역바인드로 폴백한다.
+            bind = bone.worldToLocalMatrix * skeleton.transform.localToWorldMatrix;
+        }
+        bindposes.Add(bind);
 
         for (int i = 0; i < bone.childCount; ++i)
         {
             ProcessBoneHierarchy(bone.GetChild(i));
         }
     }
-    
+
     void ProcessBones()
     {
         bones = new List<Transform>();
         bindposes = new List<Matrix4x4>();
+        bindposeMap = BuildBindposeMap();
         ProcessBoneHierarchy(skeleton.transform);
     }
 
