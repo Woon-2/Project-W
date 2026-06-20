@@ -1,14 +1,9 @@
 ﻿#include "rspch.hpp"
 #include "IMidBossTactic.hpp"
-#include "MidBossTactics.hpp"
 #include "PlatoonLeader.hpp"
 #include "Room.hpp"
 #include "GameSession.hpp"
 #include "object.hpp"
-
-PlatoonLeader::PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg )
-    : TacticalNpc( std::move( base ), cfg ), tactic_( std::make_unique<GoblinMidBossTactic>() )
-{}
 
 PlatoonLeader::PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg, std::unique_ptr<IMidBossTactic> tactic )
     : TacticalNpc( std::move( base ), cfg ), tactic_( std::move( tactic ) )

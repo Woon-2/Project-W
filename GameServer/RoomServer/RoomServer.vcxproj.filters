@@ -144,8 +144,6 @@
     <ClCompile Include="terrain.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
-    <ClCompile Include="skill\skillCompiler.cpp" />
-    <ClCompile Include="skill\skillSystem.cpp" />
     <ClCompile Include="PlatoonLeader.cpp">
       <Filter>contents\tacticalNpc</Filter>
     </ClCompile>
@@ -158,18 +156,41 @@
     <ClCompile Include="TacticalGoblin.cpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
     </ClCompile>
-    <ClCompile Include="MidBossTactics.cpp">
+    <ClCompile Include="MidBossTacticBase.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
-    <ClCompile Include="chargeConfig.cpp" />
-    <ClCompile Include="stronghold.cpp" />
-    <ClCompile Include="zone.cpp" />
-    <ClCompile Include="..\common\simpleJson.cpp" />
+    <ClCompile Include="GoblinMidBossTactic.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClCompile>
+    <ClCompile Include="GrandbaumMidBossTactic.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClCompile>
+    <ClCompile Include="IsysMidBossTactic.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClCompile>
     <ClCompile Include="snake.cpp">
       <Filter>contents\Npc\snake</Filter>
     </ClCompile>
     <ClCompile Include="mushroom.cpp">
       <Filter>contents\Npc\mushroom</Filter>
+    </ClCompile>
+    <ClCompile Include="chargeConfig.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\simpleJson.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillCompiler.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillSystem.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="stronghold.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="zone.cpp">
+      <Filter>contents\etc</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -278,21 +299,44 @@
     <ClInclude Include="IMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
-    <ClInclude Include="MidBossTactics.hpp">
+    <ClInclude Include="MidBossTacticBase.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
-    <ClInclude Include="chargeConfig.hpp" />
-    <ClInclude Include="skill\skillLoadout.hpp" />
-    <ClInclude Include="strongholdDef.hpp" />
-    <ClInclude Include="stronghold.hpp" />
-    <ClInclude Include="zone.hpp" />
-    <ClInclude Include="..\common\zoneDef.hpp" />
-    <ClInclude Include="..\common\markerDef.hpp" />
+    <ClInclude Include="GoblinMidBossTactic.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClInclude>
+    <ClInclude Include="GrandbaumMidBossTactic.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClInclude>
+    <ClInclude Include="IsysMidBossTactic.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClInclude>
     <ClInclude Include="snake.hpp">
       <Filter>contents\Npc\snake</Filter>
     </ClInclude>
     <ClInclude Include="mushroom.hpp">
       <Filter>contents\Npc\mushroom</Filter>
+    </ClInclude>
+    <ClInclude Include="chargeConfig.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\markerDef.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillLoadout.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="stronghold.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="strongholdDef.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="zone.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\zoneDef.hpp">
+      <Filter>contents\etc</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

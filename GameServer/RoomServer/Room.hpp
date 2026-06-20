@@ -10,6 +10,7 @@
 #include "mushroom.hpp"
 #include "stronghold.hpp"
 #include "zone.hpp"
+#include "../common/arenaWall.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "broadPhase.hpp"
@@ -151,19 +152,19 @@ public:
 	                                               mu::Vec3 bossPos,
 	                                               int numSquads        = 3,
 	                                               int troopersPerSquad = 20);
-	// GrandBaum 중간보스 인카운터: 슬라임 3부대(0,1,2) + 뱀 1부대(3) + GrandBaum 전술 보스.
-	void MU_CALLCONV spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
-	// Isis 중간보스 인카운터: Buddy 2부대(0,1) + Bomber 2부대(2,3) + Isis 전술 보스(2연속 쐐기 협공).
-	void MU_CALLCONV spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
+	// Grandbaum 중간보스 인카운터: 슬라임 3부대(0,1,2) + 뱀 1부대(3) + Grandbaum 전술 보스.
+	void MU_CALLCONV spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
+	// Isys 중간보스 인카운터: Buddy 2부대(0,1) + Bomber 2부대(2,3) + Isys 전술 보스(2연속 쐐기 협공).
+	void MU_CALLCONV spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos);
 
-	// ── GrandBaum ShieldWall ──────────────────────────────────────────────────
+	// ── Grandbaum ShieldWall ──────────────────────────────────────────────────
 	// 링 형성 순간 안쪽 플레이어를 바깥으로 넉백(클라 권한 이동잠금: S_PlayerKnockback).
 	void MU_CALLCONV knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius);
 	// 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환/해제(콜리전 마스크 토글).
 	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
 	void clearShieldWallBlockers();
 
-	// GrandBaum 뱀 증원 웨이브: 전투 중 전술 NPC/분대 동적 소환·디스폰.
+	// Grandbaum 뱀 증원 웨이브: 전투 중 전술 NPC/분대 동적 소환·디스폰.
 	// tacticalNpcs_는 unique_ptr 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
 	// (분대/NPC 순회 이전) 즉시 호출해도 안전하다.
 	TacticalNpc* MU_CALLCONV spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId);
@@ -193,10 +194,12 @@ private:
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
-	void onArenaGrandBaumEnter(Zone& zone, uint32 playerId);
-	void onArenaIsisEnter(Zone& zone, uint32 playerId);
+	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
+	void onArenaIsysEnter(Zone& zone, uint32 playerId);
 	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
+	void teardownArenaWalls();                 // 전 NPC 처치 시 아레나 가상 벽 해제(barriers_ 파괴 + S_ZoneState(.,0))
+	bool allTacticalCombatantsDead() const;    // 보스 사망 AND 전 부대원 사망이면 true
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateMonsterAI(Milliseconds dt);
@@ -232,6 +235,9 @@ private:
 	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
 	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
 	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
+	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
+	bool                       arenaWallsActive_{ false };  // 일방향 벽이 올라가 있고 아직 해제 안 됨(1회성 가드)
+	std::vector<OneWayWall>    arenaWalls_;                 // 양끝 후방 Wall 일방향 슬랩(move() 권위 클램프 대상)
 	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;

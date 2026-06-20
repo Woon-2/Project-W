@@ -109,7 +109,7 @@ private:
 
 // Authoritative default player HP, shared by client and server so enter-time
 // HP sync agrees on the same value.
-constexpr int32 kPlayerMaxHp = 500;
+constexpr int32 kPlayerMaxHp = 5000;
 
 #pragma pack(push, 1)
 
@@ -175,7 +175,7 @@ struct SMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 velocity;
 };
 
-// 서버→클라 강제 넉백 명령(GrandBaum ShieldWall). 플레이어 이동은 클라 권한이므로 서버가 위치를
+// 서버→클라 강제 넉백 명령(Grandbaum ShieldWall). 플레이어 이동은 클라 권한이므로 서버가 위치를
 // 강제할 수 없다 → 클라가 이 명령을 받아 로컬에서 knockMs 동안 dir·speed로 밀려나고, 이어
 // postLockMs 동안 입력을 잠근다(그 위치를 계속 C_Move로 서버에 반영).
 struct SPlayerKnockbackPacket : public PacketHeader {

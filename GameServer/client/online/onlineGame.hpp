@@ -17,6 +17,7 @@
 #include "../physicsWorld.hpp"
 #include "../terrainChunkManager.hpp"
 #include "../zone.hpp"
+#include "../../common/arenaWall.hpp"
 #include "../animation.hpp"
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
@@ -225,6 +226,11 @@ private:
 	// 다음에 호출된다.
 	void resolveBarrierSeparation(Seconds dt);
 
+	// 아레나 후방 Wall 일방향 벽 (클라 예측). 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는
+	// 로컬 플레이어만 평면으로 되돌린다. 안쪽 입장·측면 이동은 통과 → 후발 파티원도 합류 가능.
+	// 직전 프레임 위치(arenaPrevPlayerPos_) 대비 횡단 방향으로 일방향 판정. 물리 step 루프 뒤 1회 호출.
+	void resolveArenaWallLeash();
+
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
 	void captureCursor();
@@ -300,6 +306,12 @@ private:
 	void bindZoneHandlers();
 	void rebuildBarrierMagicCircleQuads(uint8 state);
 	void renderBarrierMagicCircleQuads();
+
+	// 아레나 후방 Wall 일방향 벽 상태(S_ZoneState로 토글). 물리 벽 대신 위치 클램프로
+	// "들어오기 자유 / 나가기 차단"을 구현한다(서버 Room::move()가 권위로 미러).
+	bool arenaLeashActive_{ false };
+	std::vector<OneWayWall> arenaWalls_{};   // 활성 아레나의 양끝 일방향 슬랩
+	mu::Vec3 arenaPrevPlayerPos_{};          // 직전 프레임 로컬 플레이어 위치(횡단 판정용)
 
 	// Virtual walls built locally on S_ZoneState (collision-only, not rendered) so
 	// the predicted local player cannot pass. Geometry comes from "Wall" markers.
@@ -553,7 +565,7 @@ private:
 	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 
-	// GrandBaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
+	// Grandbaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에
 	// 있으므로 여기서 직접 강제 이동/입력잠금을 실행한다(processInputGame).
 	float    knockbackTimer_         = 0.f;   // 남은 강제 이동 시간(s)
 	float    knockbackSpeed_         = 0.f;
