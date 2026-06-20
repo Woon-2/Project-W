@@ -1101,6 +1101,12 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
                 material.constantAOStrength = aoStrength;
                 readTailTag(ifs, "cAOStrength");
             }
+            // 알파 테스트 컷오프 상수
+            else if (tag == "cAlphaCutoff") {
+                const auto alphaCutoff = readFloat(ifs);
+                material.constantAlphaCutoff = alphaCutoff;
+                readTailTag(ifs, "cAlphaCutoff");
+            }
             // ======================================
             // 텍스처 읽어들이기 ====================
             // 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들을

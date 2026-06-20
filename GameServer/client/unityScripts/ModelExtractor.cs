@@ -551,6 +551,12 @@ public class ModelExtractorWindow : EditorWindow
             {
                 ExtractUtil.WriteFloat(geometryWriter, "cAOStrength", materials[i].GetFloat("_OcclusionStrength"));
             }
+            // cAlphaCutoff
+            if (materials[i].HasProperty("_IntensityCutoutMap"))
+            {
+                ExtractUtil.WriteFloat(geometryWriter, "cAlphaCutoff",
+                    Mathf.Clamp01(materials[i].GetFloat("_IntensityCutoutMap")));
+            }
 
             // 텍스처들 추출
             // AlbedoMap: 잘 알려진 프로퍼티 이름을 먼저 시도하고, 없으면 셰이더의
