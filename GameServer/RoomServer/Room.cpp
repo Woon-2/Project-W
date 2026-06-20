@@ -257,16 +257,11 @@ void Room::setupTreant(Treant& t, const Level& level) {
 }
 
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
-	// Placeholder visual: a tall vertical bar (the real stronghold model is TBD).
-	// The authored sd.scale is ignored for the placeholder.
-	const mu::Vec3 kPlaceholderScale{ 1.5f, 5.f, 1.5f };
-
-	sh.setModel(level.assetManager->modelCube());   // placeholder mesh (cube) -> BVH hit target
+	sh.setModel(level.assetManager->modelStronghold());   // placeholder mesh (cube) -> BVH hit target
 	sh.setFaction(Faction::Monsters);     // player skills (hostile to Monsters) can damage it
 	sh.setCanReceiveDamage(true);
 	sh.setHp(sd.maxHp);
 	sh.setOrient(sd.orient);
-	sh.setScale(kPlaceholderScale);
 
 	// The cube model's pivot is at its center, so place it on the ground by
 	// lifting it half its world-space height (AABB.size is full extent). The
@@ -279,7 +274,7 @@ void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level&
 	const BVH& bvh = sh.body().worldBVH();
 	const float halfH = bvh.empty() ? 0.f : bvh.nodes[0].bounds.size.y() * 0.5f;
 	const float kGroundBury = 0.5f;   // bury the bottom face below the terrain surface
-	sh.setPos(mu::Vec3(sd.center.x(), groundY + std::max(0.f, halfH - kGroundBury), sd.center.z()));
+	sh.setPos(mu::Vec3(sd.center.x(), groundY + std::max(0.f, -kGroundBury), sd.center.z()));
 
 	sh.body().setMotionType(MotionType::Static);
 }

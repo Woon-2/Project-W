@@ -15,6 +15,7 @@ public:
 	void loadAssets();
 
 	const Model* modelCube()      const { return &modelCube_; }
+	const Model* modelStronghold()      const { return &modelStronghold_; }
 	const Model* modelPlayer()    const { return &modelPlayer_; }
 	const Model* modelGoblin()    const { return &modelGoblin_; }
 	const Model* modelHobgoblin() const { return &modelHobgoblin_; }
@@ -53,6 +54,7 @@ public:
 
 private:
 	Model modelCube_;
+	Model modelStronghold_;
 	Model modelPlayer_;
 	Model modelGoblin_;
 	Model modelHobgoblin_;

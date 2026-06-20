@@ -2814,12 +2814,13 @@ void Game::createStronghold(const ObjectInfo& info) {
 	sh->setPos(DirectX::XMLoadFloat3(&info.pos));
 	sh->setOrient(DirectX::XMLoadFloat4(&info.orient));
 	sh->setScale(DirectX::XMLoadFloat3(&info.scale));
-	sh->setModel(assetManager_.modelCube());
+	sh->setModel(assetManager_.modelStronghold());
 	sh->setFaction(Faction::Monsters);
 	// HP/maxHp arrive in the enter packet (server-authoritative).
 	sh->setHp(info.hp);
 	sh->setMaxHp(info.maxHp);
 	sh->setRenderObjectId(nextRenderObjId_++);
+	sh->enableBVRendering();
 
 	// Static collidable obstacle: register to the client physics world so the
 	// locally-predicted player collides with it (server pos/scale already place

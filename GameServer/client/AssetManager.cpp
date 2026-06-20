@@ -73,6 +73,12 @@ void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) 
 	} );
 
 	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/stronghold/stronghold.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelStronghold_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/player/player.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_

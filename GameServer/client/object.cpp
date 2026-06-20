@@ -2581,6 +2581,18 @@ void Stronghold::EventBus::receive(const BasicEvent* event, Seconds deltaTime, E
 	}
 }
 
+void Stronghold::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
+	for (auto& [mesh, meshXform] : renderState_.pModel->meshWithDressXforms) {
+		for ( auto& submesh : mesh.subMeshes ) { 
+			gfx.addOccluder( PBRDeferredPipeline::OccluderInfo{
+				.mesh = &mesh, .subMesh = &submesh,
+				.world = meshXform * renderState_.world 
+			} );
+		}
+	}
+	Object::render(gfx);
+}
+
 void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
 	if (!terrainData_ || terrainData_->mesh.subMeshes.empty()) return;
 

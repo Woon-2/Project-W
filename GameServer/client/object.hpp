@@ -911,6 +911,8 @@ public:
 	Stronghold(Object&& base)
 		: Object(std::move(base)) {}
 
+	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4()) override;
+
 	class EventBus : public IEventBus {
 	public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;

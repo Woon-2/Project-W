@@ -20,6 +20,7 @@ public:
 	void loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
 
 	const Model* modelCube() const { return &modelCube_; }
+	const Model* modelStronghold() const { return &modelStronghold_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
 	const Model* modelGoblin() const { return &modelGoblin_; }
 	const Model* modelHobgoblin() const { return &modelHobgoblin_; }
@@ -120,6 +121,7 @@ private:
 	std::vector<std::shared_ptr<AnimClip>> snakeAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> mushroomAnimations_{};
 	Model modelCube_{};
+	Model modelStronghold_{};
 	Model modelPlayer_{};
 	Model modelGoblin_{};
 	Model modelHobgoblin_{};
