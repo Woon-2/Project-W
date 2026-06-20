@@ -11,8 +11,8 @@ return {
         Goblin   = 10,
         Snake    = 10,
         Mushroom = 10,
-        Birdy = 10,
         Bomber = 10,
+        Birdy = 10,
         Slime = 10,
         Treant = 10
     },

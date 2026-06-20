@@ -13,6 +13,13 @@ static ObjectType parseObjectType(const std::string& s) {
     if (s == "Stronghold") return ObjectType::Stronghold;
     if (s == "Snake")      return ObjectType::Snake;
     if (s == "Mushroom")   return ObjectType::Mushroom;
+    if (s == "Hobgoblin")  return ObjectType::Hobgoblin;
+    if (s == "Bomber")     return ObjectType::Bomber;
+    if (s == "Birdy")      return ObjectType::Birdy;
+    if (s == "Slime")      return ObjectType::Slime;
+    if (s == "Treant")     return ObjectType::Treant;
+    if (s == "Grandbaum")  return ObjectType::Grandbaum;
+    if (s == "Isys")       return ObjectType::Isys;
     return ObjectType::Goblin;
 }
 

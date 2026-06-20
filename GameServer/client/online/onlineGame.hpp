@@ -79,8 +79,8 @@ public:
 	void createHobgoblin(const ObjectInfo& hobgoblinInfo);
 	void createSnake(const ObjectInfo& info);
 	void createMushroom(const ObjectInfo& info);
-	// Newer monster types share one Object* pool (newMonsters_) + generic id-based
-	// routing (idMonsterMap_/skillObjectById_); only spawn/render differ per type.
+	// Newer monster types each have their own typed vector + per-type loops (like goblins_).
+	// configureNetMonster fills the shared state; each create pushes into its own vector.
 	void createBomber(const ObjectInfo& info);
 	void createBirdy(const ObjectInfo& info);
 	void createSlime(const ObjectInfo& info);
@@ -296,9 +296,13 @@ private:
 	std::vector<std::shared_ptr<Goblin>>   goblins_{};
 	std::vector<std::shared_ptr<Snake>>    snakes_{};
 	std::vector<std::shared_ptr<Mushroom>> mushrooms_{};
-	// Bomber/Birdy/Slime/Treant share one Object* pool (per-type vectors not needed —
-	// they only render/update/cull, and all id-based routing uses idMonsterMap_).
-	std::vector<std::shared_ptr<Object>>   newMonsters_{};
+	// Newer monster types each get their own typed vector + per-type loops, mirroring
+	// goblins_/snakes_/mushrooms_. (Grandbaum is stored here as a Treant, Isys as a Birdy —
+	// the boss variants route through the Treant/Birdy MonsterKind for corpse/respawn.)
+	std::vector<std::shared_ptr<Bomber>>   bombers_{};
+	std::vector<std::shared_ptr<Birdy>>    birdys_{};
+	std::vector<std::shared_ptr<Slime>>    slimes_{};
+	std::vector<std::shared_ptr<Treant>>   treants_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
@@ -321,7 +325,7 @@ private:
 	ZoneSystem clientZoneSystem_{};
 	std::unordered_map<uint16, uint8> zoneStates_{};
 	void bindZoneHandlers();
-	void rebuildBarrierMagicCircleQuads(uint8 state);
+	void rebuildBarrierMagicCircleQuads();
 	void renderBarrierMagicCircleQuads();
 
 	// 아레나 후방 Wall 일방향 벽 상태(S_ZoneState로 토글). 물리 벽 대신 위치 클램프로
@@ -367,10 +371,22 @@ private:
 	EnergyOrbSystem orbSystem_{};
 	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
 
-	// Shared spawn wiring for newMonsters_ types (model/blender/body/HP bar + id maps).
+	// HP bar tracking entry for non-goblin monsters (declared here so configureNetMonster's
+	// signature can reference it). Per-type maps below reuse this shape.
+	struct MonsterHpEntry {
+		Object*          monster;              // non-owning; lifetime owned by typed shared_ptr vectors
+		UI::ProgressBar* hpBar;                // owned by uiManager_
+		float            worldYOffset;
+		float            hpBarVisibleSeconds = 0.f;
+	};
+
+	// Shared spawn wiring for the newer monster types (model/blender/body/HP bar + id maps).
+	// The caller creates the typed shared_ptr and pushes it into its own vector after this
+	// returns; this fills the common state (incl. the HP bar into the passed-in per-type map).
 	// Declared after MonsterKind so its signature can reference the enum.
-	void configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& info,
-	                         const Model* model, MonsterKind kind, float mass);
+	void configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
+	                         const Model* model, MonsterKind kind, float mass,
+	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars);
 	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
 	struct Corpse {
 		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
@@ -388,10 +404,10 @@ private:
 	std::vector<PooledMonster> goblinPool_;
 	std::vector<PooledMonster> snakePool_;
 	std::vector<PooledMonster> mushroomPool_;
-	// Newer monster kinds (Bomber/Birdy/Slime/Treant) share newMonsters_ at runtime, but the
-	// corpse->respawn pool must reuse an object of the SAME kind (a Bomber must not respawn as a
-	// Slime). Keyed by MonsterKind index instead of a named vector per type. Sized to the enum.
-	std::array<std::vector<PooledMonster>, 7> newMonsterPool_;
+	std::vector<PooledMonster> bomberPool_;
+	std::vector<PooledMonster> birdyPool_;
+	std::vector<PooledMonster> slimePool_;
+	std::vector<PooledMonster> treantPool_;
 	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
 	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
 
@@ -515,15 +531,13 @@ private:
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
-	struct MonsterHpEntry {
-		Object*          monster;              // non-owning; lifetime owned by typed shared_ptr vectors
-		UI::ProgressBar* hpBar;                // owned by uiManager_
-		float            worldYOffset;
-		float            hpBarVisibleSeconds = 0.f;
-	};
+	// MonsterHpEntry is declared above (near MonsterKind) so configureNetMonster can use it.
 	std::unordered_map<uint16, MonsterHpEntry> snakeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> mushroomHpBars_{};
-	std::unordered_map<uint16, MonsterHpEntry> newMonsterHpBars_{};   // Bomber/Birdy/Slime/Treant
+	std::unordered_map<uint16, MonsterHpEntry> bomberHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> birdyHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> slimeHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_

@@ -135,3 +135,20 @@ repeat Z:
 - **신규 패킷 없음:** 기존 `S_ZoneState`(1=벽 on, 0=off) 재사용. §12 해제(전 NPC 처치)가 그대로 연동(0 → 양측 `arenaWalls_` clear).
 - **⚠️ 부호 검증:** 진입 시 서버·클라가 각 슬랩 outward를 로그. 전진이 막히고 후퇴가 되면 outward 부호 반대 → interior 기준점 재확인.
 - **빌드:** RoomServer + client Debug x64 그린(2026-06, 오류 0; 클라 기존 무해 C4244 3건 외 경고 0).
+
+## 14. As-Built — 장식용 마법진(Wall Marker) 3개 아레나 일반화 (2026-06)
+
+§13에서 `arenaWalls_`(충돌)는 이미 zone tag → Wall prefix로 일반화됐지만, 장식용 마법진
+(`rebuildBarrierMagicCircleQuads`)은 `isHobgoblinBarrierMarker()`가 `"WallHobgoblin_0/1"`만 하드코딩해
+Grandbaum(`WallGrandbaum_0/1/2`)·Isys(`WallIsys_0/1/2`)에는 렌더링되지 않았다.
+
+- **변경:** `isHobgoblinBarrierMarker`/`currentBarrierMagicState`(단일 글로벌 state) 제거. 대신
+  `rebuildBarrierMagicCircleQuads()`가 인자 없이 `chunkManager_.zones()`의 모든 `"Arena_*"` zone을
+  순회해 각자의 Wall prefix(`arenaWallPrefix()`, §13 prefix 도출 로직과 공유)와 `zoneStates_`의 해당
+  zone state(미진입=0=파란색 기본값)로 독립적으로 quad를 재구성한다. 한 아레나에 진입해도 다른 아레나의
+  마법진 색은 영향받지 않는다.
+- **호출부:** `onZoneState`·`setupStageVisual` 모두 인자 없이 `rebuildBarrierMagicCircleQuads()` 호출 —
+  state는 함수 내부에서 zone별로 다시 조회.
+- **서버 변경 없음:** `Room.cpp`의 3개 아레나 핸들러가 이미 동일한 `S_ZoneState` 패턴을 broadcast.
+- **오프셋:** `barrierMagicLocalOffset`의 `"WallHobgoblin_0"` +12m Z 오프셋(코리도 2벽 구조 보정)은
+  그대로 유지, Grandbaum/Isys(3벽 구조)는 기본값(오프셋 0)으로 시작 — 시각 확인 후 필요시 마커별 추가.

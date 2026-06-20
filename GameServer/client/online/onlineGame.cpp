@@ -78,10 +78,6 @@ static constexpr int      kBarrierMagicRenderOrder = 4;
 static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
 static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
 
-static bool isHobgoblinBarrierMarker(const MarkerDef& m) {
-	return m.type == "Wall" && (m.name == "WallHobgoblin_0" || m.name == "WallHobgoblin_1");
-}
-
 static float barrierMagicDiameter(const MarkerDef& m) {
 	const float wallHeight = std::fabs(m.scale.y());
 	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
@@ -94,11 +90,12 @@ static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
 	return mu::Vec3{};
 }
 
-static uint8 currentBarrierMagicState(const std::unordered_map<uint16, uint8>& zoneStates) {
-	for (const auto& [_, state] : zoneStates) {
-		if (state == 1) return 1;
-	}
-	return 0;
+// "Arena_X" zone 태그 -> "WallX" 마커 prefix. 아레나 후방 Wall 일방향 벽(arenaWalls_)과 장식용
+// 마법진(rebuildBarrierMagicCircleQuads) 둘 다 같은 규칙으로 마커를 묶는다.
+static std::string arenaWallPrefix(const ZoneDef& z) {
+	constexpr char kArenaTag[] = "Arena_";
+	if (z.tag.rfind(kArenaTag, 0) != 0) return {};
+	return "Wall" + z.tag.substr(sizeof(kArenaTag) - 1);
 }
 
 static constexpr float   kArrowRainRadius          = 4.75f;
@@ -189,7 +186,7 @@ void Game::setupStageVisual() {
 	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
 	clientZoneSystem_.build(chunkManager_.zones());
 	bindZoneHandlers();
-	rebuildBarrierMagicCircleQuads(currentBarrierMagicState(zoneStates_));
+	rebuildBarrierMagicCircleQuads();
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
@@ -2438,11 +2435,13 @@ void Game::createMushroom(const ObjectInfo& info) {
 	monsterSpawnInfo_[info.objectId] = info;
 }
 
-// Shared spawn wiring for the newer monster types (Bomber/Birdy/Slime/Treant). These
-// share one Object* pool (newMonsters_) + the generic id-based routing maps, so move/
-// hit/skill/respawn-in-place all work without per-type plumbing. Mirrors createSnake.
-void Game::configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& info,
-                               const Model* model, MonsterKind kind, float mass) {
+// Shared spawn wiring for the newer monster types (Bomber/Birdy/Slime/Treant). Fills the
+// common state (model/blender/ragdoll/body/HP bar + id maps) and inserts the HP bar into the
+// caller's per-type map; the caller pushes the typed shared_ptr into its own vector. Mirrors
+// the body of createSnake without the type-specific container/id-map lines.
+void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
+                               const Model* model, MonsterKind kind, float mass,
+                               std::unordered_map<uint16, MonsterHpEntry>& hpBars) {
 	obj->setId(info.objectId);
 	obj->setPos(DirectX::XMLoadFloat3(&info.pos));
 	obj->setOrient(DirectX::XMLoadFloat4(&info.orient));
@@ -2480,7 +2479,7 @@ void Game::configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& in
 		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
-		newMonsterHpBars_[info.objectId] = { obj.get(), bar, 2.5f };
+		hpBars[info.objectId] = { obj.get(), bar, 2.5f };
 	}
 
 	obj->setRenderObjectId(nextRenderObjId_++);
@@ -2494,39 +2493,51 @@ void Game::configureNetMonster(std::shared_ptr<Object> obj, const ObjectInfo& in
 	idMonsterMap_[info.objectId]     = obj.get();
 	respawnKind_[info.objectId]      = kind;
 	monsterSpawnInfo_[info.objectId] = info;
-	newMonsters_.push_back(std::move(obj));
+	// (caller pushes obj into its own typed vector)
 }
 
 void Game::createBomber(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
-	configureNetMonster(std::make_shared<Bomber>(), info, assetManager_.modelBomber(), MonsterKind::Bomber, 70.f);
+	auto bomber = std::make_shared<Bomber>();
+	configureNetMonster(bomber, info, assetManager_.modelBomber(), MonsterKind::Bomber, 70.f, bomberHpBars_);
+	bombers_.push_back(bomber);
 }
 
 void Game::createBirdy(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
-	configureNetMonster(std::make_shared<Birdy>(), info, assetManager_.modelBirdy(), MonsterKind::Birdy, 40.f);
+	auto birdy = std::make_shared<Birdy>();
+	configureNetMonster(birdy, info, assetManager_.modelBirdy(), MonsterKind::Birdy, 40.f, birdyHpBars_);
+	birdys_.push_back(birdy);
 }
 
 void Game::createSlime(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
-	configureNetMonster(std::make_shared<Slime>(), info, assetManager_.modelSlime(), MonsterKind::Slime, 90.f);
+	auto slime = std::make_shared<Slime>();
+	configureNetMonster(slime, info, assetManager_.modelSlime(), MonsterKind::Slime, 90.f, slimeHpBars_);
+	slimes_.push_back(slime);
 }
 
 void Game::createTreant(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
-	configureNetMonster(std::make_shared<Treant>(), info, assetManager_.modelTreant(), MonsterKind::Treant, 120.f);
+	auto treant = std::make_shared<Treant>();
+	configureNetMonster(treant, info, assetManager_.modelTreant(), MonsterKind::Treant, 120.f, treantHpBars_);
+	treants_.push_back(treant);
 }
 
 // Grandbaum/Isys 미드보스: 전용 모델로 스폰하되 corpse/래그돌/에너지오브 정합을 위해 변종 베이스의
-// MonsterKind(Treant/Birdy)로 라우팅한다(newMonsters_ corpse 파이프라인이 해당 kind를 처리).
+// MonsterKind(Treant/Birdy)로 라우팅한다. 컨테이너도 변종 베이스(treants_/birdys_)에 저장한다.
 void Game::createGrandbaum(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
-	configureNetMonster(std::make_shared<Grandbaum>(), info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f);
+	auto grandbaum = std::make_shared<Grandbaum>();
+	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
+	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
 }
 
 void Game::createIsys(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
-	configureNetMonster(std::make_shared<Isys>(), info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f);
+	auto isys = std::make_shared<Isys>();
+	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
+	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
 }
 
 // === Client-authored corpse pipeline =======================================
@@ -2590,12 +2601,20 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		std::erase(mushrooms_, std::static_pointer_cast<Mushroom>(obj));
 		break;
 	case MonsterKind::Bomber:
+		grabBar(bomberHpBars_);
+		std::erase(bombers_, std::static_pointer_cast<Bomber>(obj));
+		break;
 	case MonsterKind::Birdy:
+		grabBar(birdyHpBars_);
+		std::erase(birdys_, std::static_pointer_cast<Birdy>(obj));
+		break;
 	case MonsterKind::Slime:
+		grabBar(slimeHpBars_);
+		std::erase(slimes_, std::static_pointer_cast<Slime>(obj));
+		break;
 	case MonsterKind::Treant:
-		// Newer kinds share the generic newMonsters_ pool + newMonsterHpBars_ (no per-type map).
-		grabBar(newMonsterHpBars_);
-		std::erase(newMonsters_, obj);
+		grabBar(treantHpBars_);
+		std::erase(treants_, std::static_pointer_cast<Treant>(obj));
 		break;
 	}
 	idMonsterMap_.erase(npcId);
@@ -2623,27 +2642,28 @@ void Game::returnMonsterToPool(Corpse& corpse) {
 	case MonsterKind::Goblin:   goblinPool_.push_back(std::move(pm));   break;
 	case MonsterKind::Snake:    snakePool_.push_back(std::move(pm));    break;
 	case MonsterKind::Mushroom: mushroomPool_.push_back(std::move(pm)); break;
-	case MonsterKind::Bomber:
-	case MonsterKind::Birdy:
-	case MonsterKind::Slime:
-	case MonsterKind::Treant:
-		newMonsterPool_[static_cast<size_t>(corpse.kind)].push_back(std::move(pm));
-		break;
+	case MonsterKind::Bomber:   bomberPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Birdy:    birdyPool_.push_back(std::move(pm));    break;
+	case MonsterKind::Slime:    slimePool_.push_back(std::move(pm));    break;
+	case MonsterKind::Treant:   treantPool_.push_back(std::move(pm));   break;
 	}
 }
 
 bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, int32 hp) {
+	// [EXPERIMENT] Force fresh-spawn for Bomber: never reuse a pooled bomber so respawns go
+	// through createBomber instead of reinitFromPool. If the "vanish on death" bug disappears,
+	// the cause is pooled-bomber reactivation. REVERT after the test.
+	if (kind == MonsterKind::Bomber) return false;
+
 	std::vector<PooledMonster>* pool = nullptr;
 	switch (kind) {
 	case MonsterKind::Goblin:   pool = &goblinPool_;   break;
 	case MonsterKind::Snake:    pool = &snakePool_;    break;
 	case MonsterKind::Mushroom: pool = &mushroomPool_; break;
-	case MonsterKind::Bomber:
-	case MonsterKind::Birdy:
-	case MonsterKind::Slime:
-	case MonsterKind::Treant:
-		pool = &newMonsterPool_[static_cast<size_t>(kind)];
-		break;
+	case MonsterKind::Bomber:   pool = &bomberPool_;   break;
+	case MonsterKind::Birdy:    pool = &birdyPool_;    break;
+	case MonsterKind::Slime:    pool = &slimePool_;    break;
+	case MonsterKind::Treant:   pool = &treantPool_;   break;
 	}
 	if (!pool || pool->empty()) return false;
 
@@ -2691,14 +2711,30 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 		if (bar) mushroomHpBars_[npcId] = { m.get(), bar, 2.5f };
 		break;
 	}
-	case MonsterKind::Bomber:
-	case MonsterKind::Birdy:
-	case MonsterKind::Slime:
-	case MonsterKind::Treant:
-		// Pooled object keeps its concrete type — funnel back into the shared newMonsters_ path.
-		newMonsters_.push_back(obj);
-		if (bar) newMonsterHpBars_[npcId] = { obj.get(), bar, 2.5f };
+	case MonsterKind::Bomber: {
+		auto b = std::static_pointer_cast<Bomber>(obj);
+		bombers_.push_back(b);
+		if (bar) bomberHpBars_[npcId] = { b.get(), bar, 2.5f };
 		break;
+	}
+	case MonsterKind::Birdy: {
+		auto b = std::static_pointer_cast<Birdy>(obj);
+		birdys_.push_back(b);
+		if (bar) birdyHpBars_[npcId] = { b.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Slime: {
+		auto s = std::static_pointer_cast<Slime>(obj);
+		slimes_.push_back(s);
+		if (bar) slimeHpBars_[npcId] = { s.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Treant: {
+		auto t = std::static_pointer_cast<Treant>(obj);
+		treants_.push_back(t);
+		if (bar) treantHpBars_[npcId] = { t.get(), bar, 2.5f };
+		break;
+	}
 	}
 	idMonsterMap_[npcId] = obj.get();
 	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
@@ -2836,22 +2872,33 @@ void Game::bindZoneHandlers() {
 	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
 }
 
-void Game::rebuildBarrierMagicCircleQuads(uint8 state) {
+// 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
+// 가능/미진입, 빨간색=해당 아레나 활성). 한 아레나에 진입해도 다른 아레나의 마법진 색은 영향받지 않는다.
+void Game::rebuildBarrierMagicCircleQuads() {
 	barrierMagicCircleQuads_.clear();
 
-	const bool blocked = (state == 1);
-	for (const auto& m : chunkManager_.markers()) {
-		if (!isHobgoblinBarrierMarker(m)) continue;
+	for (const auto& z : chunkManager_.zones()) {
+		const std::string prefix = arenaWallPrefix(z);
+		if (prefix.empty()) continue;
 
-		const float diameter = barrierMagicDiameter(m);
-		const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
-		BarrierMagicCircleQuad quad{};
-		quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
-		           * mu::translate(circlePos);
-		quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
-		quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
-		quad.sortPos = circlePos;
-		barrierMagicCircleQuads_.push_back(quad);
+		uint8 state = 0;   // 미진입 zone은 기본 통과 가능(파란색)
+		if (auto it = zoneStates_.find(static_cast<uint16>(z.id)); it != zoneStates_.end())
+			state = it->second;
+		const bool blocked = (state == 1);
+
+		for (const auto& m : chunkManager_.markers()) {
+			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
+
+			const float diameter = barrierMagicDiameter(m);
+			const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+			BarrierMagicCircleQuad quad{};
+			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
+			           * mu::translate(circlePos);
+			quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
+			quad.sortPos = circlePos;
+			barrierMagicCircleQuads_.push_back(quad);
+		}
 	}
 }
 
@@ -2882,7 +2929,7 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
-	rebuildBarrierMagicCircleQuads(state);   // 장식용 마법진(마커 기반, 충돌과 무관)
+	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
 
 	arenaWalls_.clear();
 	if ( state == 1 ) {
@@ -2891,9 +2938,7 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 		std::string prefix;
 		for ( const auto& z : chunkManager_.zones() ) {
 			if ( z.id != static_cast<int>( zoneId ) ) continue;
-			constexpr char kArenaTag[] = "Arena_";
-			if ( z.tag.rfind( kArenaTag, 0 ) == 0 )
-				prefix = "Wall" + z.tag.substr( sizeof( kArenaTag ) - 1 );   // "Arena_Hobgoblin" -> "WallHobgoblin"
+			prefix = arenaWallPrefix( z );   // "Arena_Hobgoblin" -> "WallHobgoblin"
 			break;
 		}
 		if ( !prefix.empty() ) {
@@ -3295,7 +3340,13 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto barIt = mushroomHpBars_.find( targetId ); barIt != mushroomHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
-	if ( auto barIt = newMonsterHpBars_.find( targetId ); barIt != newMonsterHpBars_.end() )
+	if ( auto barIt = bomberHpBars_.find( targetId ); barIt != bomberHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = birdyHpBars_.find( targetId ); barIt != birdyHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = slimeHpBars_.find( targetId ); barIt != slimeHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = treantHpBars_.find( targetId ); barIt != treantHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() )
 		it->second.hpBarVisibleSeconds = 5.f;
@@ -3556,7 +3607,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& g : goblins_)   g->rebuildBodyBVH();
 	for (auto& s : snakes_)    s->rebuildBodyBVH();
 	for (auto& m : mushrooms_) m->rebuildBodyBVH();
-	for (auto& m : newMonsters_) m->rebuildBodyBVH();
+	for (auto& b : bombers_)   b->rebuildBodyBVH();
+	for (auto& b : birdys_)    b->rebuildBodyBVH();
+	for (auto& s : slimes_)    s->rebuildBodyBVH();
+	for (auto& t : treants_)   t->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3686,7 +3740,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(goblins_);
 	updateMonstersNet(snakes_);
 	updateMonstersNet(mushrooms_);
-	updateMonstersNet(newMonsters_);
+	updateMonstersNet(bombers_);
+	updateMonstersNet(birdys_);
+	updateMonstersNet(slimes_);
+	updateMonstersNet(treants_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3777,13 +3834,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& goblin   : goblins_)   activateAndCollect(goblin,   MonsterKind::Goblin);
 		for (auto& snake    : snakes_)    activateAndCollect(snake,    MonsterKind::Snake);
 		for (auto& mushroom : mushrooms_) activateAndCollect(mushroom, MonsterKind::Mushroom);
-		// Newer kinds live in the shared newMonsters_ pool — recover each kind from respawnKind_
-		// (id is still the live npc id here, before migrateToCorpse swaps in the corpse sentinel).
-		for (auto& m : newMonsters_) {
-			auto it = respawnKind_.find(static_cast<uint16>(m->getId()));
-			if (it == respawnKind_.end()) continue;  // kind unknown -> skip defensively
-			activateAndCollect(m, it->second);
-		}
+		for (auto& bomber   : bombers_)   activateAndCollect(bomber,   MonsterKind::Bomber);
+		for (auto& birdy    : birdys_)    activateAndCollect(birdy,    MonsterKind::Birdy);
+		for (auto& slime    : slimes_)    activateAndCollect(slime,    MonsterKind::Slime);
+		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
 
 		for (auto& [objPtr, kind] : justDied)
 			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
@@ -3905,7 +3959,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		};
 		updateMonsterHpBar(snakeHpBars_);
 		updateMonsterHpBar(mushroomHpBars_);
-		updateMonsterHpBar(newMonsterHpBars_);
+		updateMonsterHpBar(bomberHpBars_);
+		updateMonsterHpBar(birdyHpBars_);
+		updateMonsterHpBar(slimeHpBars_);
+		updateMonsterHpBar(treantHpBars_);
 
 		for (auto& [id, entry] : strongholdHpBars_) {
 			if (!entry.obj || entry.obj->isDead() || entry.obj->maxHp() <= 0) {
@@ -4077,7 +4134,10 @@ void Game::renderInGame() {
 	for (auto& goblin   : goblins_)   goblin->render(gfx_);
 	for (auto& snake    : snakes_)    snake->render(gfx_);
 	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
-	for (auto& m : newMonsters_) m->render(gfx_);
+	for (auto& bomber   : bombers_)   bomber->render(gfx_);
+	for (auto& birdy    : birdys_)    birdy->render(gfx_);
+	for (auto& slime    : slimes_)    slime->render(gfx_);
+	for (auto& treant   : treants_)   treant->render(gfx_);
 
 	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
 	// (orb phase is drawn by orbSystem_.submitDrawEvents).
@@ -5346,12 +5406,15 @@ void Game::processInputGame(Milliseconds deltaTime) {
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
 	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
-	                 + newMonsters_.size());
+	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
 	std::ranges::copy(mushrooms_,    std::back_inserter(entities));
-	std::ranges::copy(newMonsters_,  std::back_inserter(entities));
+	std::ranges::copy(bombers_,      std::back_inserter(entities));
+	std::ranges::copy(birdys_,       std::back_inserter(entities));
+	std::ranges::copy(slimes_,       std::back_inserter(entities));
+	std::ranges::copy(treants_,      std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -5435,7 +5498,10 @@ void Game::feedbackCullResultToAnim() {
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
 		for (auto& m : mushrooms_) resetHiZ(m);
-		for (auto& m : newMonsters_) resetHiZ(m);
+		for (auto& b : bombers_)   resetHiZ(b);
+		for (auto& b : birdys_)    resetHiZ(b);
+		for (auto& s : slimes_)    resetHiZ(s);
+		for (auto& t : treants_)   resetHiZ(t);
 		return;
 	}
 
@@ -5448,7 +5514,10 @@ void Game::feedbackCullResultToAnim() {
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);
 	for (auto& m : mushrooms_) applyToEntity(m);
-	for (auto& m : newMonsters_) applyToEntity(m);
+	for (auto& b : bombers_)   applyToEntity(b);
+	for (auto& b : birdys_)    applyToEntity(b);
+	for (auto& s : slimes_)    applyToEntity(s);
+	for (auto& t : treants_)   applyToEntity(t);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 
