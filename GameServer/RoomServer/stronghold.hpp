@@ -9,6 +9,10 @@ class Room;
 class Goblin;
 class Snake;
 class Mushroom;
+class Bomber;
+class Birdy;
+class Slime;
+class Treant;
 
 // A stronghold: a damageable static structure that also maintains fixed monster
 // pools around it at the configured population (the "fixed pool revive" model).
@@ -31,9 +35,13 @@ public:
 
     // Bind this stronghold to its config, NpcGroup id, and per-type pool ranges.
     void configure(const StrongholdDef& def, int groupId,
-                   int goblinStart, int goblinCount,
-                   int snakeStart,  int snakeCount,
-                   int mushroomStart, int mushroomCount);
+                   int goblinStart,   int goblinCount,
+                   int snakeStart,    int snakeCount,
+                   int mushroomStart, int mushroomCount,
+                   int bomberStart,   int bomberCount,
+                   int birdyStart,    int birdyCount,
+                   int slimeStart,    int slimeCount,
+                   int treantStart,   int treantCount);
 
     // Revive dead monsters in all pool ranges, up to maxPerWave per type per
     // respawn interval (no revival while destroyed).
@@ -41,6 +49,10 @@ public:
                           std::vector<Goblin>&   goblins,
                           std::vector<Snake>&    snakes,
                           std::vector<Mushroom>& mushrooms,
+                          std::vector<Bomber>&   bombers,
+                          std::vector<Birdy>&    birdys,
+                          std::vector<Slime>&    slimes,
+                          std::vector<Treant>&   treants,
                           Room& room,
                           std::vector<uint32>& outRevivedIds);
 
@@ -60,6 +72,10 @@ private:
     MonsterPool goblinPool_;
     MonsterPool snakePool_;
     MonsterPool mushroomPool_;
+    MonsterPool bomberPool_;
+    MonsterPool birdyPool_;
+    MonsterPool slimePool_;
+    MonsterPool treantPool_;
 
     int     strongholdMaxHp_ = 1000;
     bool    destroyed_       = false;

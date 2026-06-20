@@ -9,11 +9,22 @@ void AssetManager::loadAssets() {
     modelHobgoblin_ = loadModelFromFile("../resources/models/goblin/HobgoblinServer.bin");
     modelSnake_    = loadModelFromFile("../resources/models/snake/snakeServer.bin");
     modelMushroom_ = loadModelFromFile("../resources/models/mushroom/mushroomServer.bin");
+    modelBomber_   = loadModelFromFile("../resources/models/bomber/bomberServer.bin");
+    modelBirdy_    = loadModelFromFile("../resources/models/birdy/birdyServer.bin");
+    modelSlime_    = loadModelFromFile("../resources/models/slime/slimeServer.bin");
+    modelTreant_   = loadModelFromFile("../resources/models/treant/treantServer.bin");
+    // Named variants: share base monster anims, different model only.
+    modelGrandbaum_ = loadModelFromFile("../resources/models/treant/GrandbaumServer.bin");
+    modelIsys_      = loadModelFromFile("../resources/models/birdy/IsysServer.bin");
 
     playerAnimations_   = loadServerAnimClipsFromFile("../resources/animations/playerAnimations.anim");
     goblinAnimations_   = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
     snakeAnimations_    = loadServerAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim");
     mushroomAnimations_ = loadServerAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim");
+    bomberAnimations_   = loadServerAnimClipsFromFile("../resources/animations/bomberAnimations.anim");
+    birdyAnimations_    = loadServerAnimClipsFromFile("../resources/animations/birdyAnimations.anim");
+    slimeAnimations_    = loadServerAnimClipsFromFile("../resources/animations/slimeAnimations.anim");
+    treantAnimations_   = loadServerAnimClipsFromFile("../resources/animations/treantAnimations.anim");
 
     level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
     level_.terrainChunks.init("../resources/terrains/");

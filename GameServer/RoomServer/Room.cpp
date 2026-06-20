@@ -15,6 +15,10 @@
 #include "IsysMidBossTactic.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
+#include "bomber.hpp"
+#include "birdy.hpp"
+#include "slime.hpp"
+#include "treant.hpp"
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -89,6 +93,11 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
+	// Skill-based attacks: (skill asset id, server anim clip key). attackIndex in the
+	// lua matches the clip order; AI picks one at random per swing.
+	g.addAttack(skillIdByName("Goblin_Attack1"), "Attack1");
+	g.addAttack(skillIdByName("Goblin_Attack2"), "Attack2");
+	g.addAttack(skillIdByName("Goblin_Attack3"), "Attack3");
 	g.setCanReceiveDamage(true);
 	g.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Goblin));
 	g.body().setMotionType(MotionType::Dynamic);
@@ -111,6 +120,7 @@ void Room::setupSnake(Snake& s, const Level& level) {
 	s.animController().registerClip("Die",    findServerAnimClip(anims, "Snake_Death"));
 	s.animController().switchClip("Idle");
 	s.applySnakeConfig();
+	s.addAttack(skillIdByName("Snake_Attack1"), "Attack1");
 	s.setCanReceiveDamage(true);
 	s.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Snake));
 	s.body().setMotionType(MotionType::Dynamic);
@@ -134,6 +144,8 @@ void Room::setupMushroom(Mushroom& m, const Level& level) {
 	m.animController().registerClip("Die",    findServerAnimClip(anims, "Mushroom_Death"));
 	m.animController().switchClip("Idle");
 	m.applyMushroomConfig();
+	m.addAttack(skillIdByName("Mushroom_Attack1"), "Attack1");
+	m.addAttack(skillIdByName("Mushroom_Attack2"), "Attack2");
 	m.setCanReceiveDamage(true);
 	m.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Mushroom));
 	m.body().setMotionType(MotionType::Dynamic);
@@ -143,6 +155,100 @@ void Room::setupMushroom(Mushroom& m, const Level& level) {
 	m.body().setRestitution(0.0f);
 	m.body().setUprightStiffness(4000.f);
 	m.body().enableMotor(true);
+}
+
+void Room::setupBomber(Bomber& b, const Level& level) {
+	const auto& anims = level.assetManager->bomberAnimations();
+	b.setModel(level.assetManager->modelBomber());
+	b.animController().registerClip("Idle",   findServerAnimClip(anims, "Bomber_Idle"));
+	b.animController().registerClip("Walk",   findServerAnimClip(anims, "Bomber_Walk"));
+	b.animController().registerClip("Attack1", findServerAnimClip(anims, "Bomber_Attack1"));
+	b.animController().registerClip("Attack",  findServerAnimClip(anims, "Bomber_Attack1")); // legacy default
+	b.animController().registerClip("Die",    findServerAnimClip(anims, "Bomber_Death"));
+	b.animController().switchClip("Idle");
+	b.applyBomberConfig();
+	b.addAttack(skillIdByName("Bomber_Attack1"), "Attack1");
+	b.setCanReceiveDamage(true);
+	b.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Bomber));
+	b.body().setMotionType(MotionType::Dynamic);
+	b.body().setMass(70.f);
+	b.body().setLinearDamping(0.1f);
+	b.body().setAngularDamping(25.f);
+	b.body().setRestitution(0.0f);
+	b.body().setUprightStiffness(4000.f);
+	b.body().enableMotor(true);
+}
+
+void Room::setupBirdy(Birdy& b, const Level& level) {
+	const auto& anims = level.assetManager->birdyAnimations();
+	b.setModel(level.assetManager->modelBirdy());
+	b.animController().registerClip("Idle",   findServerAnimClip(anims, "Birdy_Idle"));
+	b.animController().registerClip("Walk",   findServerAnimClip(anims, "Birdy_Walk"));
+	b.animController().registerClip("Attack1", findServerAnimClip(anims, "Birdy_Attack1"));
+	b.animController().registerClip("Attack2", findServerAnimClip(anims, "Birdy_Attack2"));
+	b.animController().registerClip("Attack",  findServerAnimClip(anims, "Birdy_Attack1")); // legacy default
+	b.animController().registerClip("Die",    findServerAnimClip(anims, "Birdy_Death"));
+	b.animController().switchClip("Idle");
+	b.applyBirdyConfig();
+	b.addAttack(skillIdByName("Birdy_Attack1"), "Attack1");
+	b.addAttack(skillIdByName("Birdy_Attack2"), "Attack2");
+	b.setCanReceiveDamage(true);
+	b.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Birdy));
+	b.body().setMotionType(MotionType::Dynamic);
+	b.body().setMass(40.f);
+	b.body().setLinearDamping(0.1f);
+	b.body().setAngularDamping(25.f);
+	b.body().setRestitution(0.0f);
+	b.body().setUprightStiffness(4000.f);
+	b.body().enableMotor(true);
+}
+
+void Room::setupSlime(Slime& s, const Level& level) {
+	const auto& anims = level.assetManager->slimeAnimations();
+	s.setModel(level.assetManager->modelSlime());
+	s.animController().registerClip("Idle",   findServerAnimClip(anims, "Slime_Idle"));
+	s.animController().registerClip("Walk",   findServerAnimClip(anims, "Slime_Walk"));
+	s.animController().registerClip("Attack1", findServerAnimClip(anims, "Slime_Attack1"));
+	s.animController().registerClip("Attack",  findServerAnimClip(anims, "Slime_Attack1")); // legacy default
+	s.animController().registerClip("Die",    findServerAnimClip(anims, "Slime_Death"));
+	s.animController().switchClip("Idle");
+	s.applySlimeConfig();
+	s.addAttack(skillIdByName("Slime_Attack1"), "Attack1");
+	s.setCanReceiveDamage(true);
+	s.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Slime));
+	s.body().setMotionType(MotionType::Dynamic);
+	s.body().setMass(90.f);
+	s.body().setLinearDamping(0.1f);
+	s.body().setAngularDamping(25.f);
+	s.body().setRestitution(0.0f);
+	s.body().setUprightStiffness(4000.f);
+	s.body().enableMotor(true);
+}
+
+void Room::setupTreant(Treant& t, const Level& level) {
+	const auto& anims = level.assetManager->treantAnimations();
+	t.setModel(level.assetManager->modelTreant());
+	t.animController().registerClip("Idle",      findServerAnimClip(anims, "Treant_Idle"));
+	t.animController().registerClip("Walk",      findServerAnimClip(anims, "Treant_Walk"));
+	t.animController().registerClip("SpinKick",  findServerAnimClip(anims, "Treant_SpinKick"));
+	t.animController().registerClip("Clap",      findServerAnimClip(anims, "Treant_Clap"));
+	t.animController().registerClip("Punch",     findServerAnimClip(anims, "Treant_Punch"));
+	t.animController().registerClip("Attack",    findServerAnimClip(anims, "Treant_SpinKick")); // legacy default
+	t.animController().registerClip("Die",       findServerAnimClip(anims, "Treant_Death"));
+	t.animController().switchClip("Idle");
+	t.applyTreantConfig();
+	t.addAttack(skillIdByName("Treant_SpinKick"), "SpinKick");
+	t.addAttack(skillIdByName("Treant_Clap"),     "Clap");
+	t.addAttack(skillIdByName("Treant_Punch"),    "Punch");
+	t.setCanReceiveDamage(true);
+	t.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Treant));
+	t.body().setMotionType(MotionType::Dynamic);
+	t.body().setMass(120.f);
+	t.body().setLinearDamping(0.1f);
+	t.body().setAngularDamping(25.f);
+	t.body().setRestitution(0.0f);
+	t.body().setUprightStiffness(4000.f);
+	t.body().enableMotor(true);
 }
 
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
@@ -198,16 +304,25 @@ void Room::init(const Level* levelData) {
 	const auto& sdefs = worldTerrain_->strongholds();
 
 	int totalGoblins = 0, totalSnakes = 0, totalMushrooms = 0;
+	int totalBombers = 0, totalBirdys = 0, totalSlimes = 0, totalTreants = 0;
 	for (const auto& sd : sdefs) {
 		for (const auto& pop : sd.populations) {
 			if (pop.type == ObjectType::Goblin)   totalGoblins   += pop.targetCount;
 			if (pop.type == ObjectType::Snake)     totalSnakes    += pop.targetCount;
 			if (pop.type == ObjectType::Mushroom)  totalMushrooms += pop.targetCount;
+			if (pop.type == ObjectType::Bomber)    totalBombers   += pop.targetCount;
+			if (pop.type == ObjectType::Birdy)     totalBirdys    += pop.targetCount;
+			if (pop.type == ObjectType::Slime)     totalSlimes    += pop.targetCount;
+			if (pop.type == ObjectType::Treant)    totalTreants   += pop.targetCount;
 		}
 	}
 	goblins_.reserve(static_cast<size_t>(totalGoblins));
 	snakes_.reserve(static_cast<size_t>(totalSnakes));
 	mushrooms_.reserve(static_cast<size_t>(totalMushrooms));
+	bombers_.reserve(static_cast<size_t>(totalBombers));
+	birdys_.reserve(static_cast<size_t>(totalBirdys));
+	slimes_.reserve(static_cast<size_t>(totalSlimes));
+	treants_.reserve(static_cast<size_t>(totalTreants));
 	strongholds_.reserve(sdefs.size());
 
 	for (const auto& sd : sdefs) {
@@ -216,15 +331,24 @@ void Room::init(const Level* levelData) {
 			std::make_unique<NpcGroup>(groupId, sd.center, sd.activityRadius));
 
 		int goblinCount = 0, snakeCount = 0, mushroomCount = 0;
+		int bomberCount = 0, birdyCount = 0, slimeCount = 0, treantCount = 0;
 		for (const auto& pop : sd.populations) {
 			if (pop.type == ObjectType::Goblin)   goblinCount   += pop.targetCount;
 			if (pop.type == ObjectType::Snake)     snakeCount    += pop.targetCount;
 			if (pop.type == ObjectType::Mushroom)  mushroomCount += pop.targetCount;
+			if (pop.type == ObjectType::Bomber)    bomberCount   += pop.targetCount;
+			if (pop.type == ObjectType::Birdy)     birdyCount    += pop.targetCount;
+			if (pop.type == ObjectType::Slime)     slimeCount    += pop.targetCount;
+			if (pop.type == ObjectType::Treant)    treantCount   += pop.targetCount;
 		}
 
 		const int goblinStart   = static_cast<int>(goblins_.size());
 		const int snakeStart    = static_cast<int>(snakes_.size());
 		const int mushroomStart = static_cast<int>(mushrooms_.size());
+		const int bomberStart   = static_cast<int>(bombers_.size());
+		const int birdyStart    = static_cast<int>(birdys_.size());
+		const int slimeStart    = static_cast<int>(slimes_.size());
+		const int treantStart   = static_cast<int>(treants_.size());
 
 		auto spawnMonster = [&](auto& pool, auto setupFn) {
 			auto& m = pool.emplace_back();
@@ -241,6 +365,10 @@ void Room::init(const Level* levelData) {
 		for (int i = 0; i < goblinCount;   ++i) spawnMonster(goblins_,   [this](Goblin&   g, const Level& l) { setupGoblin(g, l);   });
 		for (int i = 0; i < snakeCount;    ++i) spawnMonster(snakes_,    [this](Snake&    s, const Level& l) { setupSnake(s, l);    });
 		for (int i = 0; i < mushroomCount; ++i) spawnMonster(mushrooms_, [this](Mushroom& m, const Level& l) { setupMushroom(m, l); });
+		for (int i = 0; i < bomberCount;   ++i) spawnMonster(bombers_,   [this](Bomber&   b, const Level& l) { setupBomber(b, l);   });
+		for (int i = 0; i < birdyCount;    ++i) spawnMonster(birdys_,    [this](Birdy&    b, const Level& l) { setupBirdy(b, l);    });
+		for (int i = 0; i < slimeCount;    ++i) spawnMonster(slimes_,    [this](Slime&    s, const Level& l) { setupSlime(s, l);    });
+		for (int i = 0; i < treantCount;   ++i) spawnMonster(treants_,   [this](Treant&   t, const Level& l) { setupTreant(t, l);   });
 
 		Stronghold sh{};
 		sh.setId(IdPool::pop());
@@ -248,7 +376,11 @@ void Room::init(const Level* levelData) {
 		sh.configure(sd, groupId,
 		             goblinStart,   goblinCount,
 		             snakeStart,    snakeCount,
-		             mushroomStart, mushroomCount);
+		             mushroomStart, mushroomCount,
+		             bomberStart,   bomberCount,
+		             birdyStart,    birdyCount,
+		             slimeStart,    slimeCount,
+		             treantStart,   treantCount);
 		strongholds_.push_back(std::move(sh));
 	}
 
@@ -263,6 +395,10 @@ void Room::init(const Level* levelData) {
 	for (auto& g : goblins_)   registerMonster(g);
 	for (auto& s : snakes_)    registerMonster(s);
 	for (auto& m : mushrooms_) registerMonster(m);
+	for (auto& b : bombers_)   registerMonster(b);
+	for (auto& b : birdys_)    registerMonster(b);
+	for (auto& s : slimes_)    registerMonster(s);
+	for (auto& t : treants_)   registerMonster(t);
 
 	// Strongholds are damageable static structures (collidable obstacles).
 	for (auto& sh : strongholds_) {
@@ -631,9 +767,14 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
 	for (auto& s : snakes_)    s.body().setOmega(mu::Vec3{});
 	for (auto& m : mushrooms_) m.body().setOmega(mu::Vec3{});
+	for (auto& b : bombers_)   b.body().setOmega(mu::Vec3{});
+	for (auto& b : birdys_)    b.body().setOmega(mu::Vec3{});
+	for (auto& s : slimes_)    s.body().setOmega(mu::Vec3{});
+	for (auto& t : treants_)   t.body().setOmega(mu::Vec3{});
 
 	std::vector<SNpcMoveInfo> moveInfos;
-	moveInfos.reserve(goblins_.size() + snakes_.size() + mushrooms_.size());
+	moveInfos.reserve(goblins_.size() + snakes_.size() + mushrooms_.size()
+	                  + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
 
 	auto tickPool = [&](auto& pool) {
 		for (auto& npc : pool) {
@@ -657,6 +798,10 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	tickPool(goblins_);
 	tickPool(snakes_);
 	tickPool(mushrooms_);
+	tickPool(bombers_);
+	tickPool(birdys_);
+	tickPool(slimes_);
+	tickPool(treants_);
 
 	// ── Strongholds: structure destruction/rebuild + population maintenance ──
 	const Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
@@ -668,7 +813,8 @@ void Room::updateMonsterAI(Milliseconds dt) {
 				sh.hp(),
 				sh.isDestroyed() ? uint8(1) : uint8(0)));
 		}
-		sh.updatePopulation(dtSec, goblins_, snakes_, mushrooms_, *this, revivedIds);
+		sh.updatePopulation(dtSec, goblins_, snakes_, mushrooms_,
+		                    bombers_, birdys_, slimes_, treants_, *this, revivedIds);
 	}
 	for (uint32 id : revivedIds) {
 		Object* o = (id < objectById_.size()) ? objectById_[id] : nullptr;
@@ -715,6 +861,10 @@ void Room::rebuildAggroCount() {
 	countPool(goblins_);
 	countPool(snakes_);
 	countPool(mushrooms_);
+	countPool(bombers_);
+	countPool(birdys_);
+	countPool(slimes_);
+	countPool(treants_);
 }
 
 bool MU_CALLCONV Room::isNearAnyPlayer(mu::Vec3 p) const {
@@ -738,6 +888,10 @@ void Room::rebuildNpcNeighbors() {
 	for (auto& g : goblins_)      consider(&g);
 	for (auto& s : snakes_)       consider(&s);
 	for (auto& m : mushrooms_)    consider(&m);
+	for (auto& b : bombers_)      consider(&b);
+	for (auto& b : birdys_)       consider(&b);
+	for (auto& s : slimes_)       consider(&s);
+	for (auto& t : treants_)      consider(&t);
 	for (auto& n : tacticalNpcs_) consider(n.get());
 	if (platoonLeader_)           consider(platoonLeader_.get());
 
@@ -796,6 +950,11 @@ void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
 	player->setFaction(Faction::Players);
+	// Must be a valid skill target: checkHitboxCollisions() skips objects with
+	// canReceiveDamage()==false, so monster (Faction::Monsters) skill hitboxes would
+	// otherwise miss the player entirely (only the legacy contact push remains, no
+	// damage). See strongholdSystem.md "canReceiveDamage 함정".
+	player->setCanReceiveDamage(true);
 	player->setModel(RoomManager::playerModelData());
 	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// 새로 들어오는 플레이어는 playerStarts_에서 순서대로 위치를 받는다.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
@@ -883,6 +1042,24 @@ void Room::enter(GameSession* session) {
 			.scale = m.scale().getXmf(),
 		});
 	}
+	auto pushMonsterInfo = [&](const auto& pool, ObjectType type) {
+		for (const auto& m : pool) {
+			objInfos.push_back(ObjectInfo{
+				.type = type,
+				.objectId = static_cast<uint16>(m.getId()),
+				.materialSetIdx = 0,
+				.hp = m.hp(),
+				.maxHp = m.maxHp(),
+				.pos = m.pos().getXmf(),
+				.orient = m.orient().getXmf(),
+				.scale = m.scale().getXmf(),
+			});
+		}
+	};
+	pushMonsterInfo(bombers_, ObjectType::Bomber);
+	pushMonsterInfo(birdys_,  ObjectType::Birdy);
+	pushMonsterInfo(slimes_,  ObjectType::Slime);
+	pushMonsterInfo(treants_, ObjectType::Treant);
 
 	for (const auto& sh : strongholds_) {
 		objInfos.push_back(ObjectInfo{
@@ -1166,6 +1343,41 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 	);
 }
 
+uint32 Room::skillIdByName(std::string_view name) const {
+	if (!assetManager_) return 0u;
+	for (const SkillAsset& a : assetManager_->skillAssets())
+		if (a.name == name) return a.id;
+	return 0u;
+}
+
+bool Room::npcSkillActive(int32 ownerObjectId) const {
+	return skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId));
+}
+
+void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed) {
+	if (skillAssetId == 0) return;
+	Object* owner = (ownerObjectId >= 0 && ownerObjectId < static_cast<int32>(objectById_.size()))
+		? objectById_[ownerObjectId] : nullptr;
+	if (!owner || owner->hp() <= 0) return;
+	if (skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId))) return;  // don't stack casts
+
+	// Authoritative skill instance (elapsedMs = 0: server casts in real time, no lag comp).
+	SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
+	bindGroundQueries(ctx);
+	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerObjectId),
+	                                      ctx, Milliseconds{ 0.f }, skillSeed);
+	clearEvents(skillEvList_);
+	if (instIdx < 0) return;
+
+	// Broadcast to ALL clients (NPC has no session to exclude) so they play the
+	// matching VFX + drive the NPC's AnimBlender via the skill's PlayAnimation.
+	broadcast(PacketManager::makeSSkillStartPacket(
+		skillAssetId,
+		static_cast<uint16>(ownerObjectId),
+		uint16(0),
+		skillSeed));
+}
+
 void Room::attack(int32 sessionId, uint64 clientMs) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 
@@ -1193,6 +1405,8 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
 	uint64 targetMs = clientMs;
 
+	// Legacy player melee (lag-comp rewind). New monster pools are damageable via the
+	// skill system (objectById_), so they are not added to this vestigial path.
 	for (auto& goblin : goblins_) {
 		if (goblin.hp() <= 0) {
 			continue;

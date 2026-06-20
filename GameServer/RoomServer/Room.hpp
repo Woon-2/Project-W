@@ -8,6 +8,10 @@
 #include "goblin.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
+#include "bomber.hpp"
+#include "birdy.hpp"
+#include "slime.hpp"
+#include "treant.hpp"
 #include "stronghold.hpp"
 #include "zone.hpp"
 #include "../common/arenaWall.hpp"
@@ -47,6 +51,10 @@ public:
 		for (const auto& m : mushrooms_) {
 			IdPool::push(m.getId());
 		}
+		for (const auto& b : bombers_)  { IdPool::push(b.getId()); }
+		for (const auto& b : birdys_)   { IdPool::push(b.getId()); }
+		for (const auto& s : slimes_)   { IdPool::push(s.getId()); }
+		for (const auto& t : treants_)  { IdPool::push(t.getId()); }
 
 		// Unregister tactical NPC bodies before unique_ptrs are destroyed
 		if (platoonLeader_) {
@@ -81,6 +89,15 @@ public:
 	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 
+	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
+	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
+	// (ownerId = NPC id, elapsedMs = 0) so clients play the matching VFX/animation.
+	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed);
+	// True while ownerObjectId has a live skill instance (NPC AI holds its attack).
+	bool npcSkillActive(int32 ownerObjectId) const;
+	// Resolve a skill asset id by name from the shared registry (0 if absent).
+	uint32 skillIdByName(std::string_view name) const;
+
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
 
@@ -111,6 +128,10 @@ public:
 	std::vector<Goblin>&   goblins()   { return goblins_; }
 	std::vector<Snake>&    snakes()    { return snakes_; }
 	std::vector<Mushroom>& mushrooms() { return mushrooms_; }
+	std::vector<Bomber>&   bombers()   { return bombers_; }
+	std::vector<Birdy>&    birdys()    { return birdys_; }
+	std::vector<Slime>&    slimes()    { return slimes_; }
+	std::vector<Treant>&   treants()   { return treants_; }
 	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
 	// 전술 NPC 대형 이동 시 회피할 "큰 장애물"(플레이어 + 생존 중인 보스) 위치를 radius 내에서 append.
@@ -191,6 +212,10 @@ private:
 	void setupGoblin   (Goblin&    g, const Level& level);
 	void setupSnake    (Snake&     s, const Level& level);
 	void setupMushroom (Mushroom&  m, const Level& level);
+	void setupBomber   (Bomber&    b, const Level& level);
+	void setupBirdy    (Birdy&     b, const Level& level);
+	void setupSlime    (Slime&     s, const Level& level);
+	void setupTreant   (Treant&    t, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
@@ -228,6 +253,10 @@ private:
 	std::vector<Goblin>   goblins_;
 	std::vector<Snake>    snakes_;
 	std::vector<Mushroom> mushrooms_;
+	std::vector<Bomber>   bombers_;
+	std::vector<Birdy>    birdys_;
+	std::vector<Slime>    slimes_;
+	std::vector<Treant>   treants_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;

@@ -75,6 +75,13 @@ enum class ObjectType : uint16 {
 	Snake,
 	Mushroom,
 	Hobgoblin,
+	// Append-only (ordinals are wire values shared by client + server).
+	Bomber,
+	Birdy,
+	Slime,
+	Treant,
+	Grandbaum,   // named variant of Treant (shares Treant anims, different model)
+	Isys,        // named variant of Birdy  (shares Birdy anims, different model)
 };
 
 enum class PlayerWeaponType : uint8 {

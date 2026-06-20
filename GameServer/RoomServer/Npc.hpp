@@ -55,6 +55,13 @@ enum class NpcState {
     Investigate,    // 그룹 공유 기억 위치 조사
 };
 
+// A skill-based attack option: the skill asset to cast plus the server anim clip
+// key to play, so the hitbox bone transforms track the skill's timeline.
+struct NpcAttack {
+    uint32      skillId = 0;
+    std::string clipKey;
+};
+
 // ─── Npc ─────────────────────────────────────────────────────────────────────
 class Npc : public Object {
 public:
@@ -63,6 +70,12 @@ public:
 
     NpcUpdateResult update(Seconds dt, Room& room);
     void onHitImpulse() override;
+
+    // Register a skill-based attack (called from Room::setupX). With at least one
+    // attack the NPC casts skills (hitbox = authoritative damage); with none it
+    // falls back to the legacy direct-damage melee in updateAttackWindup.
+    void addAttack(uint32 skillId, std::string clipKey);
+    bool hasSkillAttacks() const { return !attacks_.empty(); }
 
     NpcState getState()    const { return state_; }
     int32    maxHp()       const { return static_cast<int32>(maxHp_); }  // network/UI HP (AI math uses float maxHp_)
@@ -94,6 +107,7 @@ private:
 
     bool         checkAlert(Seconds dt, Room& room);  // 감지/반응 판정(전환 또는 대기 시 true)
     mu::Vec3     pickPatrolDest() const;              // 스폰 근처 랜덤 웨이포인트
+    const NpcAttack& pickAttack() const;              // 다중공격 확률 선택(균등). attacks_ 비어있지 않을 때만 호출
 
     GameSession* selectBestVisibleTarget(Room& room) const;
     float        evaluateTargetScore(GameSession* s, Room& room) const;
@@ -130,6 +144,9 @@ private:
     Seconds windupTimer_    { 0s };
     Seconds recoverTimer_   { 0s };
     Seconds targetEvalTimer_{ 0s };
+
+    std::vector<NpcAttack> attacks_;       // skill-based attacks (empty => legacy melee)
+    bool                   attackCast_{ false };  // one skill cast per windup
 
     mu::Vec3 repositionDir_  { 1.f, 0.f, 0.f };
     Seconds  repositionTimer_{ 0s };

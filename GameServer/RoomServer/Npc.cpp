@@ -55,6 +55,17 @@ void Npc::applyConfig(const NpcConfig& cfg) {
     body().setMotorGain(cfg.motorGain);
 }
 
+void Npc::addAttack(uint32 skillId, std::string clipKey) {
+    if (skillId == 0) return;   // skill not found in registry -> skip (keeps fallback intact)
+    attacks_.push_back({ skillId, std::move(clipKey) });
+}
+
+const NpcAttack& Npc::pickAttack() const {
+    // Uniform random selection over the registered attacks (multi-attack monsters).
+    std::uniform_int_distribution<size_t> dist(0, attacks_.size() - 1);
+    return attacks_[dist(s_rng)];
+}
+
 void MU_CALLCONV Npc::setSpawnPos(mu::Vec3 p) {
     spawnPos_           = p;
     activityZoneCenter_ = p;
@@ -75,7 +86,7 @@ void Npc::transitionTo(NpcState next) {
         groupReactTimer_  = -1s;
     }
     
-    if (next == NpcState::AttackWindup)  windupTimer_     = 0s;
+    if (next == NpcState::AttackWindup)  { windupTimer_ = 0s; attackCast_ = false; }
     if (next == NpcState::AttackRecover) recoverTimer_    = 0s;
     if (next == NpcState::Reposition)    repositionTimer_ = 0s;
 
@@ -104,8 +115,13 @@ void Npc::transitionTo(NpcState next) {
         case NpcState::Reposition:
             animController().switchClip("Walk");    break;
         case NpcState::AttackWindup:
-        case NpcState::AttackRecover:
             animController().switchClip("Attack");  break;
+        case NpcState::AttackRecover:
+            // Skill-based NPCs keep the cast attack clip playing through recover so the
+            // server hitbox bones stay in sync with the skill timeline; only legacy
+            // (no skill-attack) NPCs fall back to the generic "Attack" clip here.
+            if (!hasSkillAttacks()) animController().switchClip("Attack");
+            break;
         case NpcState::Dead:
             animController().switchClip("Die");     break;
     }
@@ -344,6 +360,38 @@ NpcUpdateResult Npc::updateAttackWindup( Seconds dt, Room& room ) {
     }
 
     mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
+
+    // Skill-based attack (preferred): cast once at the start of the windup. The
+    // skill's own timeline (PlayAnimation + SpawnHitbox) supplies the telegraph and
+    // hit; its hitbox applies damage authoritatively (no direct setHp). Multi-attack
+    // monsters pick a random attack here. AttackRecover keeps the NPC in place until
+    // the skill finishes (see updateAttackRecover) so the bones track the hitboxes.
+    if ( hasSkillAttacks() ) {
+        // Re-chase only before committing the cast; once cast, the swing follows through.
+        if ( !attackCast_ && toTarget.len2() > attackRange_ * attackRange_ ) {
+            mu::NVec3 nd( toTarget );
+            setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+            setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+            transitionTo( NpcState::Chase );
+            return {};
+        }
+        if ( !attackCast_ ) {
+            // Face the target, select an attack, drive the server anim, cast.
+            mu::NVec3 nd( toTarget );
+            setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+            const NpcAttack& atk = pickAttack();
+            if ( !atk.clipKey.empty() ) animController().switchClip( atk.clipKey );
+            const uint32 seed = std::random_device{}();
+            room.skillStartInternal( static_cast<int32>( getId() ), atk.skillId, seed );
+            attackCast_ = true;
+        }
+        windupTimer_ += dt;
+        if ( windupTimer_ >= attackWindupTime_ )
+            transitionTo( NpcState::AttackRecover );
+        return {};
+    }
+
+    // ===== Legacy fallback: direct-damage melee (NPCs with no registered skill) =====
     if ( toTarget.len2() > attackRange_ * attackRange_ ) {
         mu::NVec3 nd( toTarget );
         setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
@@ -354,28 +402,25 @@ NpcUpdateResult Npc::updateAttackWindup( Seconds dt, Room& room ) {
 
     windupTimer_ += dt;
     if ( windupTimer_ >= attackWindupTime_ ) {
-        mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
+        mu::Vec3 toTarget2 = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
 
-        if ( toTarget.len() <= attackRange_ ) {
+        if ( toTarget2.len() <= attackRange_ ) {
             int32 newHp = std::max( targetSession->player()->hp() - static_cast<int32>(attackDamage_), 0 );
             targetSession->player()->setHp( newHp );
 
             NpcUpdateResult result;
             result.hit = { static_cast<uint16>(targetSession->id()), newHp };
 
-			// 타깃 체력이 0이하가 되었으므로 타깃 잃음 처리 후 Return으로 전환
             if ( newHp <= 0 ) {
                 targetId_ = -1;
                 transitionTo( NpcState::Return );
             }
-			// 타깃이 아직 살아있으면 AttackRecover로 전환
             else {
                 transitionTo( NpcState::AttackRecover );
             }
             return result;
         }
         else {
-			// 공격 빗나갔으므로 AttackRecover로 전환
             transitionTo( NpcState::AttackRecover );
         }
     }
@@ -412,7 +457,10 @@ NpcUpdateResult Npc::updateAttackRecover( Seconds dt, Room& room ) {
     }
 
     recoverTimer_ += dt;
-    if ( recoverTimer_ >= attackRecoverTime_ ) {
+    // Skill-based NPCs hold AttackRecover (and the cast attack clip) until the skill
+    // instance finishes, so the server hitbox bones stay valid for late hitboxes.
+    if ( recoverTimer_ >= attackRecoverTime_ &&
+         !( hasSkillAttacks() && room.npcSkillActive( static_cast<int32>( getId() ) ) ) ) {
         mu::Vec3 toTargetXZ = targetSession->player()->pos() - pos();
         toTargetXZ = mu::Vec3( toTargetXZ.x(), 0.f, toTargetXZ.z() );
         if ( toTargetXZ.len() > 0.001f ) {
