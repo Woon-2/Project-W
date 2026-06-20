@@ -885,13 +885,19 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
             }
         }
 
-        // BVH hit check — capture damageCoeff from the hit leaf node
+        // BVH hit check — capture damageCoeff from the hit leaf node.
+        // Per-region damageCoeff is authored for player->monster hits (head =2.0,
+        // weak points, etc.). Monster->player hits use FLAT damage: the player BVH
+        // carries no meaningful per-region coeffs and some regions are 0, which would
+        // null the damage while the knockback impulse still lands — exactly the
+        // "looks like a hit but no damage" symptom for certain monsters/parts.
+        const bool flatDamage = (target->faction() == Faction::Players);
         const BVH& bvh   = target->body().worldBVH();
         float      coeff = 1.0f;
         bool       hit   = false;
         for (const OBB& obb : hb.worldOBBs) {
             BVHHitResult r = collides(bvh, obb);
-            if (r.hit) { coeff = r.damageCoeff; hit = true; break; }
+            if (r.hit) { coeff = flatDamage ? 1.0f : r.damageCoeff; hit = true; break; }
         }
         if (hit) {
             pendingHits_.push_back({ c.hitboxIdx, targetId, coeff });

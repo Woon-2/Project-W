@@ -333,8 +333,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlenderPlayer` | `object.hpp #16` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
 | `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
 | `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
-| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp` `#if 0`[Name] 스캐폴드(주석) — Mushroom 패턴 복제, impl은 `object.cpp` `#if 0`[Name]. enable 시 AssetManager·editor·characterSkillMap의 동일 [Name] 가드 동반 해제 |
-| `AnimBlenderAnubis` 이하 | (이전 인덱스 라인은 추가 스캐폴드로 밀림 — Grep으로 조회) |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
 
@@ -402,7 +402,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Goblin` | `object.hpp #454` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
 | `Snake` | `object.hpp #481` : `Object` — 고블린과 동일 패턴 복제 |
 | `Mushroom` | `object.hpp #508` : `Object` — 고블린과 동일 패턴 복제 |
-| `Bomber/Birdy/Slime/Treant` | `object.hpp` `#if 0`[Name] 스캐폴드(주석) — 몬스터 스킬 캐스터. Mushroom 패턴 복제, `setAnimBlender`/AnimBlender impl은 `object.cpp` `#if 0`[Name]. enable=AssetManager·editor·characterSkillMap 동일 [Name] 가드 동반 해제(리소스 有: Bomber, 無: Birdy/Slime/Treant) |
+| `Bomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — 몬스터 스킬 캐스터(에디터). Mushroom 패턴 복제, 모두 활성(가드 제거됨). 리소스 클라·서버 `*.bin`+`*Server.bin` 전부 존재 |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
 | `Bomber` | `object.hpp #696` |
@@ -1056,8 +1056,8 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수. Player(18스킬) 활성. 몬스터 7종(Goblin/Mushroom/Snake/Birdy/Bomber/Slime/Treant)은 `#if 0`[Name] 가드로 비활성 스캐폴드(enum 값은 활성). 스킬명=`<Mon>_<Attack>`(lua `resources/skills/*_attackN.lua`) |
-| `Controller::setMonsterCaster(kind)` | `editor/editorController.cpp` | 몬스터 선택 시 단일 몬스터 객체(goblin_)를 해당 모델+`AnimBlender<Name>`로 핫스왑(`setModel`+`adoptAnimBlender`). kind별 case는 `#if 0`[Name] 가드. `selectCharacter`가 비-Player에서 호출. InitRefs에 `assetManager`/`animSystem` 주입(game.cpp editorRefs) |
+| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수. Player(18스킬) + 몬스터 7종(Goblin/Mushroom/Snake/Birdy/Bomber/Slime/Treant) 전부 활성. 스킬명=`<Mon>_<Attack>`(lua `resources/skills/*_attackN.lua`) |
+| `Controller::setMonsterCaster(kind)` | `editor/editorController.cpp` | 몬스터 선택 시 단일 몬스터 객체(goblin_)를 해당 모델+`AnimBlender<Name>`로 핫스왑(`setModel`+`adoptAnimBlender`). kind별 switch(전부 활성). `selectCharacter`가 비-Player에서 호출. InitRefs에 `assetManager`/`animSystem` 주입(game.cpp editorRefs) |
 | `Editor::SkillDraft` | `editor/skillDraft.hpp/.cpp` | 컴파일 에셋의 original/draft 사본 + 편집 필드 목록 + diff 콘솔 덤프 |
 | `SkillDraft::Field` / `FieldType` | `editor/skillDraft.hpp` | 편집 가능한 스칼라 필드(center/half/euler/onHit/time/duration) |
 | `SkillDraft::load/buildFields/applyDelta/dumpDiff` | `editor/skillDraft.cpp` | 로드/필드구성/넛지/가이드 출력 |

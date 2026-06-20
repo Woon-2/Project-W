@@ -337,3 +337,34 @@ SkillSystem은 **객체를 raw 포인터로 직접 들고 있지 않고**, `Skil
 
 > **신규 몬스터에 charge를 주려면:** `chargeConfig.lua`의 `monsters`에 ObjectType 항목 추가 +
 > 스폰 시 `setKillChargeReward()` 설정(보스 등 개별 override 가능).
+
+---
+
+## NPC(몬스터) 스킬 공격
+
+레거시 NPC 공격(`Npc::updateAttackWindup`의 직접 `setHp`)을 SkillSystem 히트박스로 전면 교체했다(2026-06-20).
+플레이어 스킬과 동일 엔진을 NPC 캐스터로 재사용한다.
+
+- **`Room::skillStartInternal(ownerObjectId, skillAssetId, seed)`** — 플레이어 전용 `Room::skillStart`(charge/
+  세션/무기 게이트)를 우회하는 NPC용 내부 시전 경로. `startSkill(assetId, ownerId, ctx, elapsed=0, seed)` +
+  `hasActiveSkill` 가드(중복 캐스트 방지) 후 `S_SkillStart{ownerId=NPC id}`를 **전원 브로드캐스트**(세션 없음).
+- **`Npc::attacks_` (`{skillId, clipKey}` 목록)** — `setupX`가 `skillIdByName("Goblin_Attack1")`+서버 anim
+  클립키로 채움. `updateAttackWindup`이 윈드업 시작 시 1회 `pickAttack()`(균등 랜덤) → `animController().switchClip(clipKey)`
+  → `skillStartInternal`. 다중공격 종은 시전마다 랜덤. `attacks_` 비면 레거시 `setHp` 폴백(전술 NPC 등).
+- **히트 판정**: 히트박스 `targetMask = hostileMask(Monsters) = Players`. 데미지는 `S_SkillHit`로만 전달
+  (클라는 `clientPredictionOnly`로 임펄스만 예측, HP는 서버 권위).
+
+### ⚠ NPC 스킬 공격 함정 3종 (디버깅 비용 큼)
+
+1. **플레이어 `canReceiveDamage`**: `Object::canReceiveDamage_` 기본 false → `checkHitboxCollisions`가 타깃에서
+   제외. `Room::enter`가 플레이어에 `setCanReceiveDamage(true)`를 호출해야 NPC 스킬이 플레이어를 맞힌다.
+   누락 시 **임펄스(클라 예측)만 보이고 데미지 0**. (cf. strongholdSystem.md 고블린 동일 함정)
+2. **클라/서버 anim 파일 동일성**: 히트박스는 본-부착이라 본 포즈가 클라=서버여야 결정론이 성립한다. `setupX`의
+   `registerClip(key, findServerAnimClip(anims, "X_AttackN"))`이 **null**이면(anim 파일에 그 클립명이 없거나
+   파일 자체가 0 clips) `AnimController::switchClip` null 가드가 live 클립을 유지 → **공격 애니 미재생, 본이 Idle
+   포즈** → 히트박스가 엉뚱한 위치 → 서버 miss. 서버/클라가 **다른 anim 파일 경로**를 보면 포즈가 어긋나 같은 증상.
+   → 클라·서버 모두 `resources/animations/Xanimations.anim`로 통일할 것(과거 snake/mushroom이 `models/<m>/`
+   경로에 있다 `animations/`로 이전되며 서버만 옛 경로를 봐서 0 clips가 됐던 사례).
+3. **플레이어 피격 damageCoeff**: 데미지 = `oh.damage × BVH리프 damageCoeff`. 부위 배율은 플레이어→몬스터
+   (헤드샷)용이므로 **타깃이 `Faction::Players`면 `checkHitboxCollisions`에서 coeff=1.0 고정**(flat). 안 그러면
+   플레이어 BVH의 0-coeff 부위 피격 시 임펄스만 들어가고 데미지 0.

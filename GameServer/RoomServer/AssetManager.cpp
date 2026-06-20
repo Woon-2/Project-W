@@ -19,8 +19,8 @@ void AssetManager::loadAssets() {
 
     playerAnimations_   = loadServerAnimClipsFromFile("../resources/animations/playerAnimations.anim");
     goblinAnimations_   = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
-    snakeAnimations_    = loadServerAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim");
-    mushroomAnimations_ = loadServerAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim");
+    snakeAnimations_    = loadServerAnimClipsFromFile("../resources/animations/snakeAnimations.anim");
+    mushroomAnimations_ = loadServerAnimClipsFromFile("../resources/animations/mushroomAnimations.anim");
     bomberAnimations_   = loadServerAnimClipsFromFile("../resources/animations/bomberAnimations.anim");
     birdyAnimations_    = loadServerAnimClipsFromFile("../resources/animations/birdyAnimations.anim");
     slimeAnimations_    = loadServerAnimClipsFromFile("../resources/animations/slimeAnimations.anim");
