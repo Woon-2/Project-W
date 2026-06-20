@@ -1,11 +1,11 @@
-# GrandBaum(그랜드밤) 중간보스 전술 — 설계/구현 문서
+# Grandbaum(그랜드밤) 중간보스 전술 — 설계/구현 문서
 
-NPCAI 프로토타입(`D:\source\repos\Project-W\NPCAI\NPCAI\sim`)의 GrandBaum 전술을 `RoomServer`로
+NPCAI 프로토타입(`D:\source\repos\Project-W\NPCAI\NPCAI\sim`)의 Grandbaum 전술을 `RoomServer`로
 포팅한 결과를 기록한다. 홉고블린(`GoblinMidBossTactic`) 포팅 인프라를 재사용한다.
 
 ## 전술 개요
 
-GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우선순위 melee만 하고, 보스 HP가
+Grandbaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우선순위 melee만 하고, 보스 HP가
 **66% / 33%** 에 도달하면 각 1회 ShieldWall이 발동한다.
 
 - **발동 게이트** (둘 다 충족해야 발동, 하나라도 불충족 시 스킵→Cooldown):
@@ -73,8 +73,8 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 
 | 파일 | 내용 |
 |---|---|
-| `MidBossTactics.hpp/.cpp` | `GrandBaumMidBossTactic`(Goblin 전술과 동거). NPCAI 구조 미러. |
-| `Room.hpp/.cpp` | `spawnGrandBaumEncounter`(이종 4부대), `onArenaGrandBaumEnter`, ShieldWall/넉백/동적소환 헬퍼, 데미지 훅, `move` 클램프 면제. |
+| `GrandbaumMidBossTactic.hpp/.cpp` | `GrandbaumMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
+| `Room.hpp/.cpp` | `spawnGrandbaumEncounter`(이종 4부대), `onArenaGrandbaumEnter`, ShieldWall/넉백/동적소환 헬퍼, 데미지 훅, `move` 클램프 면제. |
 | `object.hpp` | `damageTakenMultiplier_`. |
 | `GameSession.hpp` | 넉백 클램프 면제 타이머. |
 | `ServerEngine/protocol.hpp` | `S_PlayerKnockback` 패킷. |
@@ -85,15 +85,16 @@ GrandBaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우�
 
 - **공격권 예약**은 `TacticalNpc` 자체 기능. 상태 핸들러가 `canEnterAttackSlot()` →
   `Room::tryReserveTacticalAttackSlot`(targetId당 최대 5슬롯, `tacticalNpcs_` 전체 후보)를 직접 호출 →
-  전술 무관. GrandBaum 슬라임/뱀/웨이브 모두 자동 적용(보스는 1기라 불필요).
+  전술 무관. Grandbaum 슬라임/뱀/웨이브 모두 자동 적용(보스는 1기라 불필요).
 - **슬라임 부대(0,1,2) Engage**는 `MidBossTacticBase::issueStableEngage`(균형배정 + 생존중 고정,
-  Goblin/GrandBaum 공용)를 재사용. 원본 뱀(3)은 personal 회피(HoldSlot), 증원 웨이브는
+  Goblin/Grandbaum 공용)를 재사용. 원본 뱀(3)은 personal 회피(HoldSlot), 증원 웨이브는
   `DistributedEngage`. (issueStableEngage는 원래 GoblinMidBossTactic private였으나 base로 승격.)
 
 ## 트리거
 
-Zone 태그 `"Arena_GrandBaum"` + 마커 `WallGrandBaum_0/1`(후방벽), `BossSpawn`(없으면 Wall 중점
-fallback). 홉고블린(`Arena_Hobgoblin`) 미러.
+Zone 태그 `"Arena_Grandbaum"` + 마커 `WallGrandbaum_0/1/2`(후방벽), `GrandbaumSpawner`(없으면 Wall
+중점 fallback). 해당 아레나 진입만으로 트리거된다. (과거 한자리 비교용 디버그 트리거
+`HOBGOBLIN_DEBUG_TACTIC`는 제거됨 — `Arena_Hobgoblin`은 다시 홉고블린 전용.)
 
 ## 스탯/상수 (인게임 스케일)
 
@@ -109,19 +110,19 @@ fallback). 홉고블린(`Arena_Hobgoblin`) 미러.
 - **M1**: 데미지 훅, 전술 골격(표적우선순위/뱀회피/ShieldWall 발동·링·경감·블로커), 넉백. → 예방 경로 동작.
 - **M2**: 동적 소환 인프라 + 뱀 매복 풀 루프(후퇴→웨이브→전멸→종료→부활). → 해제 경로 동작.
 - **M3**: 거리 상수 인게임 스케일(×~0.4) 적용 + 본 문서/메모리 작성 완료. **실제 client 검증·밸런싱은
-  `Arena_GrandBaum` 레벨 마커 저작 후** 진행(미완).
+  `Arena_Grandbaum` 레벨 마커 저작 후** 진행(미완).
 
 RoomServer · client 모두 Debug/x64 빌드 통과.
 
 ## 검증 방법
 
 실행 검증은 `client`로(DummyClient 아님). RoomServer+LobbyServer+client 기동 → 방 입장 →
-`Arena_GrandBaum` zone 진입.
+`Arena_Grandbaum` zone 진입.
 1. 예방: 66% 전 뱀 부대(D) 전멸 → 66% 도달 시 ShieldWall **스킵** 확인.
 2. 해제: 뱀 남긴 채 66% 도달 → 슬라임 링(통과 불가)+보스 90% 경감 → 증원 웨이브 스폰 → 전멸 시
    링 해제·재취약. 33%에서 1회 재현(독립).
 3. 넉백: 링 형성 시 안쪽 플레이어 0.32s 밀려남 + 1.2s 입력잠금.
 4. 표적 우선순위: 뱀 근처 플레이어 우선 추적.
 
-> **주의**: 현재 레벨 데이터에 `Arena_GrandBaum` zone/마커가 없어, 실제 트리거하려면 레벨 저작 또는
-> 임시 디버그 트리거가 필요하다.
+> **주의**: 디버그 fallback이 제거됐으므로 `Arena_Grandbaum` zone과 `WallGrandbaum_*`/`GrandbaumSpawner`
+> 마커가 레벨에 저작돼 있어야 Grandbaum이 스폰된다(미저작 시 인카운터 스킵).

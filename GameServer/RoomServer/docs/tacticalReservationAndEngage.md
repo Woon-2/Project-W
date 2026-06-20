@@ -65,7 +65,7 @@ NPC는 일정 거리 전진하기 전까지 재예약하지 않으므로 chase�
 - `Room.hpp` / `Room.cpp` — prune + 거리/축출 예약, `findTacticalNpcById`
 - `TacticalNpc.hpp` / `TacticalNpc.cpp` — PROGRESS_DIST 상수, blocked 필드, 예약 헬퍼 4종
 - `TacticalSquad.hpp` — `getEngageTargetId()`
-- `MidBossTactics.hpp` / `MidBossTactics.cpp` — `engageTargetBySquad_`, `issueStableEngage`,
+- `MidBossTacticBase.hpp` / `MidBossTacticBase.cpp` — `engageTargetBySquad_`, `issueStableEngage`,
   `isLivingPlayerTarget`; `assignSquadsToPlayers` 제거
 
 ## 검증

@@ -12,7 +12,6 @@ class GameSession;
 
 class PlatoonLeader : public TacticalNpc {
 public:
-    PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg = {} );
     PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg, std::unique_ptr<IMidBossTactic> tactic );
     virtual ~PlatoonLeader() = default;
 

@@ -10,7 +10,9 @@
 #include "collision.hpp"
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
-#include "MidBossTactics.hpp"
+#include "GoblinMidBossTactic.hpp"
+#include "GrandbaumMidBossTactic.hpp"
+#include "IsysMidBossTactic.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 
@@ -296,35 +298,25 @@ void Room::init(const Level* levelData) {
 
 // Binds gameplay behavior to zone tags. Handlers run on the room thread each
 // tick; lambdas defined here have full access to Room internals.
-// [디버그] Arena_Hobgoblin 진입 시 띄울 전술 전투 선택. 0=Goblin(정식) / 1=GrandBaum / 2=Isis.
-// 값만 바꿔 재빌드하면 같은 존에서 세 전술 거동을 비교할 수 있다. 정식 빌드는 0으로 둘 것.
-// (전술마다 부대 구성이 달라 각 전술 전용 인카운터를 통째로 스폰한다. GrandBaum/Isis는 Hobgoblin
-//  레벨에 WallXxx 마커가 없어 후방벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.)
-#define HOBGOBLIN_DEBUG_TACTIC 0
-
+// 각 보스는 전용 zone(Arena_Hobgoblin/Arena_Grandbaum/Arena_Isys)과 마커(Wall*/*Spawner)가
+// 레벨에 저작돼 있어 해당 아레나 진입만으로 자기 전술 인카운터가 트리거된다.
 void Room::bindZoneHandlers() {
 	// Mid-boss arena: entering starts the encounter. Designers author a
 	// ZoneMarker tagged "Arena_Hobgoblin" (factionMask = Players).
 	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-#if HOBGOBLIN_DEBUG_TACTIC == 1
-			room.onArenaGrandBaumEnter(zone, playerId);   // [디버그] 홉고블린 대신 GrandBaum 스폰
-#elif HOBGOBLIN_DEBUG_TACTIC == 2
-			room.onArenaIsisEnter(zone, playerId);        // [디버그] 홉고블린 대신 Isis 스폰
-#else
 			room.onArenaHobgoblinEnter(zone, playerId);
-#endif
 		});
 
-	zoneSystem_.on("Arena_GrandBaum", ZoneEvent::Enter,
+	zoneSystem_.on("Arena_Grandbaum", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-			room.onArenaGrandBaumEnter(zone, playerId);
+			room.onArenaGrandbaumEnter(zone, playerId);
 		});
 
-	// 정식 Isis zone(레벨에 "Arena_Isis" 마커 저작 후 작동).
-	zoneSystem_.on("Arena_Isis", ZoneEvent::Enter,
+	// 정식 Isys zone(레벨 zone tag는 "Arena_Isys" 철자).
+	zoneSystem_.on("Arena_Isys", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
-			room.onArenaIsisEnter(zone, playerId);
+			room.onArenaIsysEnter(zone, playerId);
 		});
 }
 
@@ -336,35 +328,45 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// Rear walls: build a Static collider from each named "Wall" marker.
-	// 동시에 Wall 위치를 누적해 BossSpawn 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
+	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	// Mid-boss encounter: dynamically spawn the boss + squads, then notify clients
 	// (S_NpcSpawnBatch) so they instantiate the goblins. Guarded so a re-entry
 	// can't double-spawn (zone is one-shot anyway).
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
-		// Spawn center: prefer a "BossSpawn" marker; fall back to the Wall midpoint
-		// when the level has no BossSpawn marker authored.
+		// Spawn center: prefer the "HobgoblinSpawner" marker; fall back to the Wall
+		// midpoint when the level has no spawner marker authored.
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "HobgoblinSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
 			std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
-			break;   // 첫 BossSpawn 마커만 사용
+			break;   // 첫 스포너 마커만 사용
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
@@ -401,71 +403,62 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	// Clients build the same walls locally so the predicted player collides.
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_Hobgoblin과 동일 패턴: GrandBaum 마커(WallGrandBaum_0/1, BossSpawn)로 벽/스폰점을
-// 구성하고 GrandBaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
-void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
+// Arena_Hobgoblin과 동일 패턴: Grandbaum 마커(WallGrandbaum_0/1/2, GrandbaumSpawner)로 벽/스폰점을
+// 구성하고 Grandbaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
+void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	// Wall 마커: 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
-		if (m.name != "WallGrandBaum_0" && m.name != "WallGrandBaum_1") continue;
-		spawnBarrierFromMarker(m);
+		if (m.name != "WallGrandbaum_0" && m.name != "WallGrandbaum_1"
+		    && m.name != "WallGrandbaum_2") continue;
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "GrandbaumSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
-			std::cout << "[Zone] GrandBaum spawn point '" << m.name << "' at ("
+			std::cout << "[Zone] Grandbaum spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 			break;
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
 			haveSpawnPos = true;
-			std::cout << "[Zone] GrandBaum spawn point (fallback: Wall 중점) at ("
+			std::cout << "[Zone] Grandbaum spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallGrandBaum/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
-		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
-		if (!haveSpawnPos) {
-			mu::Vec3 anyWallSum{};
-			int      anyWallCount = 0;
-			for (const auto& m : worldTerrain_->markers()) {
-				if (m.type != "Wall") continue;
-				anyWallSum += m.pos;
-				++anyWallCount;
-			}
-			if (anyWallCount > 0) {
-				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
-				haveSpawnPos = true;
-				std::cout << "[Zone] GrandBaum spawn point (debug fallback: any Wall 중점)\n";
-			}
-			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
-				spawnPos     = s->player()->pos();
-				haveSpawnPos = true;
-				std::cout << "[Zone] GrandBaum spawn point (debug fallback: 진입 플레이어 위치)\n";
-			}
-		}
-
 		if (haveSpawnPos) {
-			spawnGrandBaumEncounter(spawnPos, spawnPos);
+			spawnGrandbaumEncounter(spawnPos, spawnPos);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
@@ -490,72 +483,63 @@ void Room::onArenaGrandBaumEnter(Zone& zone, uint32 playerId) {
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
 
-// Arena_GrandBaum과 동일 패턴: Isis 마커(WallIsis_0/1, BossSpawn)로 벽/스폰점을 구성하고 Isis
+// Arena_Grandbaum과 동일 패턴: Isys 마커(WallIsys_0/1/2, IsysSpawner)로 벽/스폰점을 구성하고 Isys
 // 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm). 디버그 트리거(홉고블린
-// zone 재사용) 시에는 WallIsis 마커가 없어 벽은 생략되고, 공용 BossSpawn 마커를 스폰점으로 쓴다.
-void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
-	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isis)\n";
+// zone 재사용) 시에는 WallIsys 마커가 매칭 안 돼 벽은 생략되고, any-Wall/플레이어 위치로 fallback한다.
+void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + BossSpawn 없을 때 fallback 중점 누적.
+	// Wall 마커(있으면): 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
-		if (m.name != "WallIsis_0" && m.name != "WallIsis_1") continue;
-		spawnBarrierFromMarker(m);
+		if (m.name != "WallIsys_0" && m.name != "WallIsys_1"
+		    && m.name != "WallIsys_2") continue;
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
 		mu::Vec3 spawnPos{};
 		bool     haveSpawnPos = false;
 		for (const auto& m : worldTerrain_->markers()) {
-			if (m.type != "BossSpawn") continue;
+			if (m.type != "IsysSpawner") continue;
 			spawnPos     = m.pos;
 			haveSpawnPos = true;
-			std::cout << "[Zone] Isis spawn point '" << m.name << "' at ("
+			std::cout << "[Zone] Isys spawn point '" << m.name << "' at ("
 			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 			break;
 		}
 		if (!haveSpawnPos && wallCount > 0) {
 			spawnPos     = wallSum / static_cast<float>(wallCount);
 			haveSpawnPos = true;
-			std::cout << "[Zone] Isis spawn point (fallback: Wall 중점) at ("
+			std::cout << "[Zone] Isys spawn point (fallback: Wall 중점) at ("
 			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
 		}
-		// [디버그 트리거] 전용 WallIsis/BossSpawn 마커가 없을 때(Hobgoblin zone 재사용): 아무 "Wall"
-		// 마커 중점 → 진입 플레이어 위치 순으로 스폰점 fallback(없으면 인카운터가 통째로 스킵됨).
-		if (!haveSpawnPos) {
-			mu::Vec3 anyWallSum{};
-			int      anyWallCount = 0;
-			for (const auto& m : worldTerrain_->markers()) {
-				if (m.type != "Wall") continue;
-				anyWallSum += m.pos;
-				++anyWallCount;
-			}
-			if (anyWallCount > 0) {
-				spawnPos     = anyWallSum / static_cast<float>(anyWallCount);
-				haveSpawnPos = true;
-				std::cout << "[Zone] Isis spawn point (debug fallback: any Wall 중점)\n";
-			}
-			else if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
-				spawnPos     = s->player()->pos();
-				haveSpawnPos = true;
-				std::cout << "[Zone] Isis spawn point (debug fallback: 진입 플레이어 위치)\n";
-			}
-		}
-
 		if (haveSpawnPos) {
-			spawnIsisEncounter(spawnPos, spawnPos);
+			spawnIsysEncounter(spawnPos, spawnPos);
 
 			std::vector<ObjectInfo> spawnInfos;
 			spawnInfos.reserve(tacticalNpcs_.size() + 1);
@@ -580,6 +564,8 @@ void Room::onArenaIsisEnter(Zone& zone, uint32 playerId) {
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -1005,13 +991,23 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	mu::Vec3 newPos = DirectX::XMLoadFloat3(&cMvPkt->pos);
 	const mu::Vec3 deltaXZ{ newPos.x() - oldPos.x(), 0.f, newPos.z() - oldPos.z() };
 	const float horizDist = deltaXZ.len();
-	// GrandBaum 넉백 중인 세션은 클램프 면제(클라가 넉백 속도로 빠르게 밀려나므로).
+	// Grandbaum 넉백 중인 세션은 클램프 면제(클라가 넉백 속도로 빠르게 밀려나므로).
 	if (!session->isMoveClampExempt() && horizDist > kMaxMovePerPacket) {
 		const float s = kMaxMovePerPacket / horizDist;
 		// XZ만 허용치로 클램프, Y(낙하/지형)는 그대로 둔다.
 		newPos = mu::Vec3{ oldPos.x() + deltaXZ.x() * s, newPos.y(), oldPos.z() + deltaXZ.z() * s };
 		std::cout << "[move() 검증] 비정상 이동 감지 (sessionId: " << sessionId
 		          << ", dist: " << horizDist << "m) → 허용치로 클램프\n";
+	}
+
+	// ── 아레나 후방 Wall 일방향 클램프(권위 미러) ────────────────────────
+	// 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는 플레이어만 평면으로 되돌린다. 안쪽으로
+	// 들어오기·측면 이동은 통과(입장 자유). felt collision은 클라 예측(resolveArenaWallLeash)이
+	// 담당하고, 여기선 치트 방지용 권위. 넉백 중(isMoveClampExempt)은 면제.
+	if (arenaWallsActive_ && !session->isMoveClampExempt()) {
+		constexpr float kArenaWallMargin = 0.5f;   // footprint 여유(플레이어 반경 근사)
+		for (const OneWayWall& w : arenaWalls_)
+			newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
 	}
 
 	player->setPos(newPos);
@@ -1076,7 +1072,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		int32 newHp = std::max(prevHp - hit->damage, 0);
 		
 		// 이 로직으로 교체해야 함.
-		// 받는 피해 배율 적용(기본 1.0; GrandBaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
+		// 받는 피해 배율 적용(기본 1.0; Grandbaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
 		//int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		//int32 newHp = std::max(tgt->hp() - dmg, 0);
 		
@@ -1396,6 +1392,31 @@ void Room::updateTacticalAI(Milliseconds dt) {
 
 	if (!moveInfos.empty())
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
+
+	// 전 NPC(보스 + 전 부대원) 처치 시 아레나 가상 벽을 1회 해제 → 플레이어 후퇴 허용.
+	if (arenaWallsActive_ && allTacticalCombatantsDead())
+		teardownArenaWalls();
+}
+
+// 보스(platoonLeader_)가 사망했고 모든 부대원(tacticalNpcs_)도 사망했는지. 보스가 먼저
+// 죽어도 Confused로 살아남은 부대원이 1명이라도 있으면 false(전 NPC 처치 후에만 벽 해제).
+bool Room::allTacticalCombatantsDead() const {
+	if (!platoonLeader_ || platoonLeader_->hp() > 0) return false;
+	for (const auto& npc : tacticalNpcs_)
+		if (npc && npc->hp() > 0) return false;
+	return true;
+}
+
+// 아레나 가상 벽 해제: 서버 배리어 바디를 물리에서 제거(~Room()과 동일 패턴)하고, 클라엔
+// S_ZoneState(.,0)을 broadcast한다(클라 onZoneState가 로컬 벽 제거). 1회성(arenaWallsActive_ off).
+void Room::teardownArenaWalls() {
+	arenaWalls_.clear();
+	for (const auto& b : barriers_)
+		if (b) physicsWorld_.unregisterBody(&b->body());
+	barriers_.clear();
+	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
+	arenaWallsActive_ = false;
+	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
 }
 
 TacticalNpc* Room::findTacticalNpcById(uint32_t id) const {
@@ -1656,8 +1677,9 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 
 	// 보스는 spawnPos(Wall 마커 등 지형보다 높을 수 있음)를 그대로 받으므로 지형 높이로 보정.
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
-	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
-	registerBody(*platoonLeader_, assetManager_->modelHobgoblin());
+	platoonLeader_ = std::make_unique<PlatoonLeader>(
+		makeBase(bossPos), bossCfg, std::make_unique<GoblinMidBossTactic>());
+	registerBody(*platoonLeader_, assetManager_->modelHobgoblin());   // 보스는 Hobgoblin 모델
 	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 	platoonLeaderObjType_ = ObjectType::Hobgoblin;   // 클라에 Hobgoblin 모델로 통지(ObjectInfo.type)
@@ -1666,10 +1688,10 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		platoonLeader_->addSquad(sq.get());
 }
 
-// GrandBaum 중간보스 인카운터 스폰. 슬라임 3부대(0,1,2) + 뱀 1부대(3)를 spawnCenter 주변에
-// 산개시키고, bossPos에 GrandBaum 전술(GrandBaumMidBossTactic) 보스를 배치한다.
+// Grandbaum 중간보스 인카운터 스폰. 슬라임 3부대(0,1,2) + 뱀 1부대(3)를 spawnCenter 주변에
+// 산개시키고, bossPos에 Grandbaum 전술(GrandbaumMidBossTactic) 보스를 배치한다.
 // NPC 모델/물리 셋업은 일반 goblin과 동일(전용 슬라임/뱀 모델 추가 전까지 goblin 재사용).
-void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 {
 	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
 
@@ -1730,8 +1752,8 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
 	// 부대 구성: 0,1,2 = 슬라임, 3 = 뱀. 인원은 시뮬(A12/B12/C48/D10) 기반(난이도 튜닝 가능).
-	struct GrandBaumSquadDef { const TacticalNpcConfig* cfg; int count; };
-	const GrandBaumSquadDef squadDefs[] = {
+	struct GrandbaumSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const GrandbaumSquadDef squadDefs[] = {
 		{ &slimeCfg, 12 },
 		{ &slimeCfg, 12 },
 		{ &slimeCfg, 48 },
@@ -1760,7 +1782,7 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
-		makeBase(bossPos), bossCfg, std::make_unique<GrandBaumMidBossTactic>());
+		makeBase(bossPos), bossCfg, std::make_unique<GrandbaumMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 	platoonLeaderObjType_ = ObjectType::Goblin;   // 전용 모델 추가 전까지 goblin placeholder
@@ -1769,10 +1791,10 @@ void Room::spawnGrandBaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		platoonLeader_->addSquad(sq.get());
 }
 
-// Isis 중간보스 인카운터. spawnGrandBaumEncounter 미러. 부대 계약: 0,1 = Buddy(2차 돌격 + 보스 합류),
+// Isys 중간보스 인카운터. spawnGrandbaumEncounter 미러. 부대 계약: 0,1 = Buddy(2차 돌격 + 보스 합류),
 // 2,3 = Bomber(1차 돌격). 모델/ObjectType은 전용 에셋 추가 전까지 goblin 재사용. config/인원은
 // 시뮬(Buddy 12/12, Bomber 40/40) 기반 — M3 튜닝/성능 확인 대상.
-void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
+void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 {
 	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
 
@@ -1832,9 +1854,9 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
-	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsisMidBossTactic의 squad 인덱스 계약을 보장.
-	struct IsisSquadDef { const TacticalNpcConfig* cfg; int count; };
-	const IsisSquadDef squadDefs[] = {
+	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsysMidBossTactic의 squad 인덱스 계약을 보장.
+	struct IsysSquadDef { const TacticalNpcConfig* cfg; int count; };
+	const IsysSquadDef squadDefs[] = {
 		{ &buddyCfg,  12 },
 		{ &buddyCfg,  12 },
 		{ &bomberCfg, 40 },
@@ -1862,7 +1884,7 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
-		makeBase(bossPos), bossCfg, std::make_unique<IsisMidBossTactic>());
+		makeBase(bossPos), bossCfg, std::make_unique<IsysMidBossTactic>());
 	registerBody(*platoonLeader_);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
 	platoonLeaderObjType_ = ObjectType::Goblin;   // 전용 모델 추가 전까지 goblin placeholder
@@ -1871,7 +1893,7 @@ void Room::spawnIsisEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		platoonLeader_->addSquad(sq.get());
 }
 
-// ── GrandBaum ShieldWall 헬퍼 ────────────────────────────────────────────────
+// ── Grandbaum ShieldWall 헬퍼 ────────────────────────────────────────────────
 
 void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 	// 인게임 스케일 넉백(시뮬 SHIELD_WALL_KNOCKBACK_*: speed 90 × ~0.4). 이동 권한은 클라에
@@ -1946,10 +1968,10 @@ void Room::clearShieldWallBlockers() {
 	shieldWallBlockerIds_.clear();
 }
 
-// ── GrandBaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
+// ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
 
 // 일반 goblin과 동일한 모델/물리(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록.
-// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandBaumEncounter의 registerBody와 동일 셋업).
+// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandbaumEncounter의 registerBody와 동일 셋업).
 void Room::registerTacticalNpcBody(Object& obj) {
 	const auto& anims = assetManager_->goblinAnimations();
 	obj.setId(IdPool::pop());
