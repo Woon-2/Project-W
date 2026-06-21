@@ -98,8 +98,8 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 - **월드 거리/반경/슬롯 오프셋**은 인게임 스케일 **×~0.4** 적용(주석에 시뮬 원본 병기). 예:
   `ISIS_RETREAT_MIN_DIST 36`(시뮬 90), `RETREAT_BUDDY_SIDE_OFFSET 11`(시뮬 28), `CLUSTER_RADIUS 8`(시뮬 20),
   `BOSS_BACKSTEP_DIST 7`(시뮬 18).
-- **시간/비율/카운트/점수/spacing**(0.80, ×1000−d, 350, ×1.5, 타이머 5/3.5/7, 쿨다운 7~13,
-  spacing/column scale)은 **시뮬 원본 유지**.
+- **시간/비율/카운트/점수/spacing**(0.80, ×1000−d, 350, ×1.5, 타이머 5/3.5/7,
+  spacing/column scale)은 **시뮬 원본 유지**하며, 협공 사이클 쿨다운은 게임 템포에 맞춰 **15~21초**로 조정한다.
 - `WEDGE_PREP_APEX_DISTANCE`/`WEDGE_EXIT_DISTANCE`는 `TacticalSquad`의 GameServer 값(4/14, 인게임 스케일)을
   자동 사용.
 
