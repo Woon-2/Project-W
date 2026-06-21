@@ -926,12 +926,14 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
 
         const BVH& bvh = target->worldBVH();
         bool hit = false;
+        mu::Vec3 contactPoint{};
         for (const OBB& obb : hb.worldOBBs) {
-            if (collides(bvh, obb).hit) { hit = true; break; }
+            const CollisionResult res = collides(bvh, obb);
+            if (res.hit) { hit = true; contactPoint = res.contactPoint; break; }
         }
 
         if (hit) {
-            pendingHits_.push_back({ c.hitboxIdx, targetId });
+            pendingHits_.push_back({ c.hitboxIdx, targetId, contactPoint });
             if (hb.instanceIdx >= 0 && hb.instanceIdx < poolSize) {
                 SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
                 inst.hitGroups[hb.hitGroup].lastHitByTarget[targetId] = inst.elapsed;
@@ -960,8 +962,10 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (oh.hitVfxId != 0xFF && ctx.vfxById &&
             oh.hitVfxId < static_cast<u8t>(ctx.vfxByIdSize)) {
             ParticleEffect* fx = ctx.vfxById[oh.hitVfxId];
-            Object* target = lookupObject(ctx, hr.targetObjectId);
-            if (fx && target) fx->play(target->pos());
+            // 검(히트박스)과 적(BVH)이 충돌한 지점에 피격 VFX를 재생한다.
+            // target->pos()(발밑/오브젝트 원점) 대신 narrow phase contact point 사용.
+            // hitVfxScale로 hit별 크기 연출(피니셔 타격 큰 혈흔 등).
+            if (fx) fx->play(hr.contactPoint, oh.hitVfxScale);
         }
 
         if (oh.impulseStrength > 0.f) {

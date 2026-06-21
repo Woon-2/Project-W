@@ -49,6 +49,7 @@ for i = 1, 20 do
         bursts = { { time = 0.06 * wave, count = 1, cycleCount = 1 } },
     }
 end
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(18, "effects/PS_VFX_Piercing_ParticleSystems.json", { systems = pmSystems })
 
 skill:addEvent(0, "PlayAnimation", {
@@ -61,27 +62,32 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
--- Multi-stab barrage: one short stab SFX per visual wave (10 waves, 60ms apart, in
--- sync with the particle bursts at PlayVFX + 0.06*wave). To keep the rapid repeats
--- from clashing when they overlap:
+-- Multi-stab barrage: one stab SFX per visual wave (10 waves, 60ms apart, in sync
+-- with the particle bursts at PlayVFX + 0.06*wave).
+-- IMPORTANT: the spearN samples are NOT punchy at the start. After the engine trims
+-- the leading silence, each clip still has ~80ms of near-silent wind-up and the actual
+-- thrust IMPACT lands around 120-160ms in. A short cut (the old 90ms/50ms) faded the
+-- voice out right through the impact, so only the inaudible wind-up played -- the stab
+-- was effectively silent. The cut must therefore reach past the impact (~200ms) before
+-- fading. To keep the rapid overlap from clashing:
 --   * rotate spear1/2/3 so adjacent stabs use different samples (no identical-sample
 --     phasing/flam, and no same-name dedupe drops),
---   * cut each to a short punchy hit (durationMs+fadeMs) so at most ~2 overlap,
---   * lower the per-stab volume so the overlap does not blow out.
+--   * fade out after the impact+early body so the long 8s tail never lingers,
+--   * lower the per-stab volume so the ~3-4 overlapping bodies do not blow out.
 -- (Basic Piercing still plays spear1 at full catalog volume -- event volume is local.)
 local stabSounds = { "spear1", "spear2", "spear3" }
 for w = 0, 9 do
     skill:addEvent(100 + w * 60, "PlaySound", {
         sound      = stabSounds[(w % 3) + 1],
-        durationMs = 90,
-        fadeMs     = 50,
-        volume     = 0.6
+        durationMs = 200,
+        fadeMs     = 70,
+        volume     = 0.5
     })
 end
 
 local onHit = OnHit({
     damage          = 8,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 450.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
 })

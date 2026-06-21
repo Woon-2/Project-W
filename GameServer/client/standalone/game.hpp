@@ -159,6 +159,7 @@ private:
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
+	ParticleEffect bloodEffect_{};   // 칼/창/완드 공통 피격 혈흔 (vfxId 0)
 	ParticleEffect swordSlash1Effect_{};
 	ParticleEffect swordSlash7Effect_{};
 	ParticleEffect swordSlashComboEffect_{};

@@ -9,6 +9,7 @@ skill.isBasic          = true
 skill.totalDurationMs  = 600
 skill.interruptible    = true
 
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(15, "effects/piercing.json")
 
 skill:addEvent(0, "PlayAnimation", {
@@ -26,7 +27,7 @@ skill:addEvent(100, "PlaySound", { sound = "spear1" })
 
 local onHit = OnHit({
     damage          = 16,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 1200.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
 })

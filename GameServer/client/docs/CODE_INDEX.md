@@ -706,7 +706,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 - `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
   - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
   - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
-- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate). Billboard와 동일하게 `TextureSheetAnimationModule` 프레임 UV(`uvOffset/uvScale`)를 적용 — `PerInstanceData.uvScaleOffset`로 per-particle 전달, `meshParticle.hlsl`에서 `uv = uv*scale+offset`. 기본 (1,1,0,0)=전체 텍스처. bloodEffect(3x3 시트)가 이 경로 사용
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 - `Mesh` + `MatWindRing` — `WindRingPipeline::DrawEvent` 제출 (NORMAL 입력 + Fresnel edge fade)
 - `Mesh` + `MatPiercing` — `PiercingMeshPipeline::DrawEvent` 제출 (Custom1.xy→uv2.z/.w dissolve, 3중 노이즈 + distortion)
@@ -1095,7 +1095,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **이펙트↔스킬 1:1 기반:** 기존 이펙트 드롭다운 18종 ParticleEffect와 1:1로 짝지은 기본 스킬 lua를
 `resources/skills/`에 추가(`SkillCompiler::compileAll`이 디렉터리 스캔→자동 등록). VFX는 경로가
 아니라 lua `PlayVFX{vfxId}`→`StandAlone::Game::skillVfxById_[vfxId]`(`ParticleEffect*` 배열) 인덱스
-바인딩(`standalone/game.cpp`, 0=hit/blood 예약 nullptr, 1~18=각 Effect). 스킬명은
+바인딩(`standalone/game.cpp` + `online/onlineGame.cpp`, 0=`bloodEffect_`(칼/창/완드 피격 혈흔, `blood_hit.json`+Plane 곡면 메시+3x3 시트), 1~18=각 Effect). 칼=sword_slash·창=piercing·완드=spikes lua의 `onHit{vfxId=0}`이 피격 시 재생(활/arrow 제외). 스킬명은
 `kCharacterSkillMap` Player에 등록. vfxId↔Effect↔skill/lua 매핑표는 `docs/skillEditor.md`.
 
 | 항목 | 위치 | 설명 |

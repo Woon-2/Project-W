@@ -13,6 +13,7 @@ skill.interruptible    = true
 
 -- systems[]: ParticleEffect composition (index = addSystem order in game.cpp).
 -- The slot-3 hitbox tracks system 1 (SlashPath projectile wave).
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(2, "effects/Slash wave_ParticleSystems.json", {
     systems = {
         { name = "Slash wave",           mode = "Continuous", looping = false },

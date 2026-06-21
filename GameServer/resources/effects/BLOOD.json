@@ -1,0 +1,512 @@
+{
+    "materialName": "BLOOD",
+    "materialAssetPath": "Assets/VFXPACK_IMPACT_WALLCOEUR_FreeVersion/01_Material/Liquid/BLOOD.mat",
+    "shaderName": "Mobile/Particles/Alpha Blended",
+    "shaderAssetPath": "Resources/unity_builtin_extra",
+    "renderQueue": 3000,
+    "rawRenderQueue": -1,
+    "enableInstancing": false,
+    "doubleSidedGI": false,
+    "globalIlluminationFlags": "EmissiveIsBlack",
+    "shaderKeywords": [],
+    "tags": [
+        {
+            "name": "Queue",
+            "value": "Transparent"
+        },
+        {
+            "name": "RenderType",
+            "value": "Transparent"
+        },
+        {
+            "name": "IgnoreProjector",
+            "value": "true"
+        },
+        {
+            "name": "PreviewType",
+            "value": "Plane"
+        }
+    ],
+    "shaderProperties": [
+        {
+            "index": 0,
+            "name": "_MainTex",
+            "displayName": "Particle Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "Blood",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "Blood",
+                "assetPath": "Assets/VFXPACK_IMPACT_WALLCOEUR_FreeVersion/03_Texture/Blood.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 2048,
+                "height": 2048
+            }
+        }
+    ],
+    "savedProperties": {
+        "texEnvs": [
+            {
+                "name": "_BaseMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_BumpMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailAlbedoMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailMask",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailNormalMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_EmissionMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MainTex",
+                "textureName": "Blood",
+                "assetPath": "Assets/VFXPACK_IMPACT_WALLCOEUR_FreeVersion/03_Texture/Blood.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MetallicGlossMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_OcclusionMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_ParallaxMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_SpecGlossMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_Lightmaps",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_LightmapsInd",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_ShadowMasks",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            }
+        ],
+        "floats": [
+            {
+                "name": "_AlphaClip",
+                "value": 0.0
+            },
+            {
+                "name": "_Blend",
+                "value": 0.0
+            },
+            {
+                "name": "_BumpScale",
+                "value": 1.0
+            },
+            {
+                "name": "_ClearCoatMask",
+                "value": 0.0
+            },
+            {
+                "name": "_ClearCoatSmoothness",
+                "value": 0.0
+            },
+            {
+                "name": "_Cull",
+                "value": 2.0
+            },
+            {
+                "name": "_Cutoff",
+                "value": 0.5
+            },
+            {
+                "name": "_DetailAlbedoMapScale",
+                "value": 1.0
+            },
+            {
+                "name": "_DetailNormalMapScale",
+                "value": 1.0
+            },
+            {
+                "name": "_DstBlend",
+                "value": 0.0
+            },
+            {
+                "name": "_EnvironmentReflections",
+                "value": 1.0
+            },
+            {
+                "name": "_GlossMapScale",
+                "value": 0.0
+            },
+            {
+                "name": "_Glossiness",
+                "value": 0.0
+            },
+            {
+                "name": "_GlossyReflections",
+                "value": 0.0
+            },
+            {
+                "name": "_Metallic",
+                "value": 0.0
+            },
+            {
+                "name": "_OcclusionStrength",
+                "value": 1.0
+            },
+            {
+                "name": "_Parallax",
+                "value": 0.004999999888241291
+            },
+            {
+                "name": "_QueueOffset",
+                "value": 0.0
+            },
+            {
+                "name": "_ReceiveShadows",
+                "value": 1.0
+            },
+            {
+                "name": "_Smoothness",
+                "value": 0.5
+            },
+            {
+                "name": "_SmoothnessTextureChannel",
+                "value": 0.0
+            },
+            {
+                "name": "_SpecularHighlights",
+                "value": 1.0
+            },
+            {
+                "name": "_SrcBlend",
+                "value": 1.0
+            },
+            {
+                "name": "_Surface",
+                "value": 0.0
+            },
+            {
+                "name": "_WorkflowMode",
+                "value": 1.0
+            },
+            {
+                "name": "_ZWrite",
+                "value": 1.0
+            }
+        ],
+        "colors": [
+            {
+                "name": "_BaseColor",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_Color",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_EmissionColor",
+                "value": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_SpecColor",
+                "value": {
+                    "r": 0.19999995827674867,
+                    "g": 0.19999995827674867,
+                    "b": 0.19999995827674867,
+                    "a": 1.0
+                }
+            }
+        ],
+        "ints": []
+    },
+    "swordSlashMappedValues": {
+        "opacity": 1.0,
+        "emission": 1.0,
+        "desaturation": 0.0,
+        "useSmoothDissolve": 0.0,
+        "useDepth": 0.0,
+        "flowPower": 0.0,
+        "remap": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "addColor": {
+            "r": 0.0,
+            "g": 0.0,
+            "b": 0.0,
+            "a": 0.0
+        },
+        "speedMainTexUVNoise": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "speedFlow": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "mainTexture": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "emissionTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "dissolveTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "flowTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        }
+    }
+}

@@ -152,6 +152,16 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.needsUploadInfo = false
 	} );
 
+	// 피격 혈흔 이펙트(bloodEffect). 3x3 스프라이트 시트 + Plane 곡면 메시.
+	// smoke 와 동일하게 기본 샘플러(Repeat) 사용 — 머테리얼 BLOOD wrapMode=Repeat.
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name           = "BloodTex",
+		.texturePath    = "../resources/Textures/Blood.dds",
+		.pDest          = &bloodTex_,
+		.pTexHashMap    = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	// Combat feedback UI: damage-number digit atlas + kill-count skull icon.
 	// Clamp sampler avoids UV bleed across atlas cell borders.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -249,6 +259,13 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	loadSkillIcon( "SkillIconPiercingSlash",       "../resources/UI/piercing_slash.dds",        &skillIconPiercingSlash_ );
 	loadSkillIcon( "SkillIconPiercingCircle",      "../resources/UI/piercing_circle_slash.dds", &skillIconPiercingCircle_ );
 	loadSkillIcon( "SkillIconPiercingMulti",       "../resources/UI/piercing_multi.dds",        &skillIconPiercingMulti_ );
+
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/Plane.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshBloodPlane_,
+		.pDestTex    = nullptr
+	} );
 
 	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
 		.meshPath    = "../resources/effects/Slash3.meshbin",

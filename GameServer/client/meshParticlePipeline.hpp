@@ -28,6 +28,10 @@ struct DrawEvent {
     const SubMesh* pSubMesh = nullptr;
     const Texture* pTex     = nullptr;
     mu::Vec4       tint     = { 1.f, 1.f, 1.f, 1.f };
+    // Sprite-sheet (flipbook) frame UV. Defaults select the full texture, so
+    // effects without TextureSheetAnimation are unaffected.
+    mu::Vec2       uvOffset = { 0.f, 0.f };
+    mu::Vec2       uvScale  = { 1.f, 1.f };
     int            renderOrder = 0;
 };
 
