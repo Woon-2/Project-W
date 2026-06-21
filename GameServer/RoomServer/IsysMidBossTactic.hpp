@@ -61,8 +61,8 @@ private:
         bool                 engageIssued{ false };
     };
 
-    void    enterPhase( Phase next, PlatoonLeader& leader );
-    void    enterCooldown( PlatoonLeader& leader );
+    void    enterPhase( Phase next, Room& room, PlatoonLeader& leader );
+    void    enterCooldown( Room& room, PlatoonLeader& leader );
     bool    checkUnlockCondition( const PlatoonLeader& leader ) const;
     void    captureInitialSquadSizes( const PlatoonLeader& leader );
     void    issueEngage( Room& room, PlatoonLeader& leader, bool resetAssignments );

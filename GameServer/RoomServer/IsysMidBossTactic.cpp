@@ -34,6 +34,17 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
     leader.removeDeadMembersFromSquads();
     updateBossDamageReaction( dt, leader );
 
+    // Isys has no dedicated BossSolo phase. If every squad is gone, cancel any
+    // in-flight pincer state and reuse Engage as the boss-only combat state.
+    if ( !hasLiveSquadMembers( leader ) ) {
+        if ( phase_ != Phase::Engage ) {
+            enterPhase( Phase::Engage, room, leader );
+        }
+        else {
+            setEncounterDamageProfile( room, leader, 1.f, 1.f );
+        }
+    }
+
     const auto& squads = leader.getSquads();
     if ( squads.empty() ) {
         return;
@@ -43,7 +54,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
     if ( !tacticsUnlocked_ && checkUnlockCondition( leader ) ) {
         tacticsUnlocked_ = true;
         cooldownTimer_ = 0s;
-        enterPhase( Phase::Cooldown, leader );
+        enterPhase( Phase::Cooldown, room, leader );
     }
 
     if ( phase_ == Phase::Engage ) {
@@ -62,7 +73,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         if ( tacticsUnlocked_ ) {
             cooldownTimer_ -= dt;
             if ( cooldownTimer_ <= 0s && hasLiveBomberSquad( leader ) ) {
-                enterPhase( Phase::RetreatForPincer, leader );
+                enterPhase( Phase::RetreatForPincer, room, leader );
                 return;
             }
         }
@@ -75,7 +86,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         }
         cooldownTimer_ -= dt;
         if ( cooldownTimer_ <= 0s ) {
-            enterPhase( Phase::Engage, leader );
+            enterPhase( Phase::Engage, room, leader );
         }
     }
     else if ( phase_ == Phase::RetreatForPincer ) {
@@ -86,7 +97,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         }
         bool leaderAtRetreat = lenXZ( retreatTargetPos_ - leader.pos() ) <= ISIS_RETREAT_ARRIVE_DIST;
         if ( ( leaderAtRetreat && allLiveSquadsAtSlots( leader ) ) || phaseTimer_ >= RETREAT_TIMEOUT ) {
-            enterPhase( Phase::RegroupBombers, leader );
+            enterPhase( Phase::RegroupBombers, room, leader );
         }
     }
     else if ( phase_ == Phase::RegroupBombers ) {
@@ -96,7 +107,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
             pincerIssued_ = true;
         }
         if ( activeStrikeSquadsAtSlots() || phaseTimer_ >= REGROUP_TIMEOUT ) {
-            enterPhase( Phase::FirstBomberWedge, leader );
+            enterPhase( Phase::FirstBomberWedge, room, leader );
         }
     }
     else if ( phase_ == Phase::FirstBomberWedge ) {
@@ -119,10 +130,10 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         }
         if ( activeStrikeTasksEngaged() || timeout ) {
             if ( hasLiveBuddySquad( leader ) ) {
-                enterPhase( Phase::RegroupBuddies, leader );
+                enterPhase( Phase::RegroupBuddies, room, leader );
             }
             else {
-                enterCooldown( leader );
+                enterCooldown( room, leader );
                 issueEngage( room, leader, /*reset=*/true );
             }
         }
@@ -133,18 +144,18 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
             issueRegroupBuddies( room, leader );
         }
         if ( !hasLiveBuddySquad( leader ) ) {
-            enterCooldown( leader );
+            enterCooldown( room, leader );
             issueEngage( room, leader, /*reset=*/true );
             return;
         }
         if ( !ensureBossBuddyWedgeJoin( room, leader ) ) {
-            enterCooldown( leader );
+            enterCooldown( room, leader );
             issueEngage( room, leader, /*reset=*/true );
             return;
         }
         updateBossBuddyWedgeJoin( dt, leader );
         if ( isSecondStrikePrepReady( leader ) || phaseTimer_ >= BUDDY_REGROUP_TIMEOUT ) {
-            enterPhase( Phase::SecondBuddyWedge, leader );
+            enterPhase( Phase::SecondBuddyWedge, room, leader );
         }
     }
     else if ( phase_ == Phase::SecondBuddyWedge ) {
@@ -167,7 +178,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         bool strikeDone = activeStrikeTasksEngaged() &&
             ( !bossBuddyWedgeJoinActive_ || bossBuddyWedgeChargeComplete_ );
         if ( strikeDone || timeout ) {
-            enterCooldown( leader );
+            enterCooldown( room, leader );
             issueEngage( room, leader, /*reset=*/true );
         }
     }
@@ -205,9 +216,9 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
     updateBossPersonalCombat( dt, room, leader );
 }
 
-void IsysMidBossTactic::enterCooldown( PlatoonLeader& leader ) {
+void IsysMidBossTactic::enterCooldown( Room& room, PlatoonLeader& leader ) {
     cooldownTimer_ = rollCooldown();
-    enterPhase( Phase::Cooldown, leader );
+    enterPhase( Phase::Cooldown, room, leader );
 }
 
 void IsysMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
@@ -215,7 +226,7 @@ void IsysMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
     MidBossTacticBase::onLeaderDead( room, leader );
 }
 
-void IsysMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
+void IsysMidBossTactic::enterPhase( Phase next, Room& room, PlatoonLeader& leader ) {
     phase_ = next;
     phaseTimer_ = 0s;
     engageOrderIssued_ = false;
@@ -256,6 +267,15 @@ void IsysMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
               next == Phase::RegroupBuddies || next == Phase::SecondBuddyWedge ) {
         leader.transitionTacticalState( TacticalNpcState::HoldSlot );
     }
+
+    const bool tacticInvulnerable =
+        next == Phase::RetreatForPincer ||
+        next == Phase::RegroupBombers ||
+        next == Phase::FirstBomberWedge ||
+        next == Phase::RegroupBuddies ||
+        next == Phase::SecondBuddyWedge;
+    const float multiplier = tacticInvulnerable ? 0.f : 1.f;
+    setEncounterDamageProfile( room, leader, multiplier, multiplier );
 }
 
 // 첫 틱(부대 배선 완료 후)에 각 스쿼드 초기 인원을 캡처 — unlock(80% 손실) 판정 기준.

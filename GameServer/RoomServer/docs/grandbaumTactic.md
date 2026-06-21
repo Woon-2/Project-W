@@ -11,15 +11,15 @@
 
 | 상태 | 보스 DR | 슬라임 DR | 의도 |
 |---|---|---|---|
-| 평상시(Engage/Cooldown) | 1.0 (취약) | **0.1 (90% 경감, 단단)** | 슬라임 처치가 비효율 → 플레이어가 보스 집중(보스가 먼저 죽음). 평상시 슬라임이 거의 안 죽어 **2페이즈용 슬라임 보존** |
-| ShieldWall 발동 중 | **0.1 (보호)** | **1.0 (취약)** | 보스는 못 뚫음 → 벽 슬라임(취약)을 처치 |
+| 평상시(Engage/Cooldown) | 1.0 (취약) | **0.0 (무적)** | 플레이어가 보스에 집중하고 2페이즈용 슬라임을 보존 |
+| ShieldWall 발동 중 | **0.1 (90% 경감)** | **0.5 (50% 경감)** | 보스는 보호되고 벽 슬라임을 처치해 파훼 |
 | 보스 사망 후(혼란) | (사망) | **1.0 (취약)** | 잔여 슬라임 정리 → 아레나 벽 해제 |
 
 ### 전투 흐름
 
-1. **평상시**: 슬라임 단단(0.1)·보스 취약 → 플레이어가 보스 집중. 슬라임은 `issueStableEngage`로 교전.
+1. **평상시**: 슬라임 무적(0.0)·보스 취약 → 플레이어가 보스 집중. 슬라임은 `issueStableEngage`로 교전.
 2. **66% / 33% 도달 → ShieldWall 발동**: 플레이어 넉백 + 전 슬라임 부대가 보스를 원형 벽(RingGuard)으로
-   감싸 **하드 블로커**가 되고 **보스 DR 0.1(보호)**. 단 **이때만 슬라임 DR을 1.0으로 풀어 취약**하게 한다.
+   감싸 **하드 블로커**가 되고 **보스 DR 0.1(보호)**. 이때 슬라임 DR을 0.5로 풀어 파훼 가능하게 한다.
    HP가 66%와 33%를 서로 다른 시점에 통과하면 각 단계에서 한 번씩 발동한다. 한 번의 전술 업데이트에서
    66%를 건너뛰고 바로 33% 이하가 되면 현재 HP 단계 2를 한 번만 소비하므로 ShieldWall도 한 번만 발동한다.
    첫 ShieldWall 중 33% 이하가 되면 현재 벽 파훼 직후 Cooldown 없이 두 번째로 발동한다. Cooldown 중 33%에
@@ -29,7 +29,7 @@
 4. **보스 사망**: `onLeaderDead`에서 잔여(혼란 상태) 슬라임 DR을 영구 1.0으로 해제 → 깔끔히 정리.
 
 발동 게이트: **살아있는 슬라임 ≥ `MIN_SHIELD_WALL_SLIME_COUNT`(10)** 만 충족하면 발동, 아니면 스킵→Cooldown.
-2페이즈가 가능한 이유: 평상시 슬라임이 단단해 거의 안 죽으므로 33% 발동 시에도 벽을 세울 슬라임이 남는다.
+2페이즈가 가능한 이유: 평상시 슬라임이 무적이므로 33% 발동 시에도 벽을 세울 슬라임이 남는다.
 
 ## 핵심 메커니즘
 
@@ -39,8 +39,8 @@
 - 스킬 피격: `Room::updateSkillSystem`에서 `hit->damage × tgt->damageTakenMultiplier()`.
 - 레거시 평타: `tryMeleeTactical`(스킬과 별도 경로)에서 동일하게 `kDamage × o->damageTakenMultiplier()`.
 
-DR 토글은 `GrandbaumMidBossTactic`이 소유: `applyNormalDamageProfile`(보스1.0/슬라임0.1+블로커해제) /
-`applyShieldWallProtection`(보스0.1/슬라임1.0+블로커) / `setAllSlimeDamageMultiplier`. 스폰 시 슬라임 0.1 초기화.
+DR 토글은 `GrandbaumMidBossTactic`이 소유: `applyNormalDamageProfile`(보스1.0/슬라임0.0+블로커해제) /
+`applyShieldWallProtection`(보스0.1/슬라임0.5+블로커) / `setAllSlimeDamageMultiplier`. 스폰 시 슬라임 0.0 초기화.
 
 ### 2. 슬라임 차단벽 (전적으로 클라 권위)
 차단은 **클라 barrier가 전담**한다(goblin divide와 동일). `Room::setShieldWallBlockers`는 **서버 충돌을 일절
@@ -64,7 +64,7 @@ knockMs, postLockMs }`. 서버 `Room::knockPlayersOutOfShieldWall`(살아있는 
 종료 시간이 아니며, 슬라임 barrier·보스 DR·ShieldWall 페이즈는 파훼 전까지 계속 유지된다.
 
 ### 4. 밸런스
-평상시 슬라임은 단단해 못 잡으므로 "못 잡는 딜러"가 되지 않도록 위협을 보스로 집중. **공격력 레버는
+평상시 슬라임은 무적이므로 "못 잡는 딜러"가 되지 않도록 위협을 보스로 집중. **공격력 레버는
 `attackDamageScale`** — 등록 스킬을 쓰는 NPC의 데미지는 `skillSystem.cpp:933`에서 `lua damage × damageCoeff ×
 attackDamageScale`로 산정되며, 레거시 `TacticalNpcConfig::attackDamage`는 스킬 없을 때만 쓰이는 폴백(미사용).
 - 슬라임 공격↓: `TacticalSlime::trooperConfig()` `attackDamageScale 0.3`(슬라임 = Slime_Attack1 lua 9 × 0.3).
@@ -76,7 +76,7 @@ attackDamageScale`로 산정되며, 레거시 `TacticalNpcConfig::attackDamage`�
 | 파일 | 내용 |
 |---|---|
 | `GrandbaumMidBossTactic.hpp/.cpp` | DR 토글 전술 전체(보스 melee, ShieldWall 발동/형성/파훼, DR 프로파일). |
-| `Room.cpp` | `spawnGrandbaumEncounter`(슬라임 4부대 12/12/48/10 + 초기 DR 0.1), `onArenaGrandbaumEnter`, 데미지 경감 적용부(2곳), ShieldWall 넉백/블로커 헬퍼. |
+| `Room.cpp` | `spawnGrandbaumEncounter`(슬라임 4부대 20명씩 + 초기 DR 0.0), `onArenaGrandbaumEnter`, 데미지 경감 적용부(2곳), ShieldWall 넉백/블로커 헬퍼. |
 | `TacticalSlime.cpp` | 슬라임 trooper config(공격력 하향). |
 | `object.hpp` | `damageTakenMultiplier_`. |
 | `ServerEngine/protocol.hpp`, `PacketManager.*` | `S_PlayerKnockback`, `S_NpcBarrier`. |
@@ -96,7 +96,7 @@ fallback). 해당 아레나 진입만으로 트리거. (마커는 `resources/ter
 
 - HP 임계 66%/33%, `MIN_SHIELD_WALL_SLIME_COUNT 10`, 링 반경 `3~8`, `SHIELD_BREAK_KILL_FRACTION 0.2`,
   `SHIELD_WALL_FORM_KNOCK_MAX 6s`, `TACTIC_COOLDOWN_DURATION 8s`,
-  보스 DR/슬라임 평상시 DR `0.1`. 거리/반경/비율은 실검증 튜닝 대상.
+  ShieldWall 보스 DR `0.1`, ShieldWall 슬라임 DR `0.5`, 슬라임 평상시 DR `0.0`. 거리/반경/비율은 실검증 튜닝 대상.
 - **방패벽 연속성**: RingGuard는 전역 고유 슬롯을 다겹(multi-lane) 링으로 생성한다. ShieldWall 중에는
   슬라임 상호 물리 충돌을 끄고 원주·방사 슬롯 간격을 1.4로 유지한다. 클라 barrier 연결거리
   (`kBarrierLinkDist 2.9`)보다 충분히 짧아 연속 벽이 유지된다. 80마리 기준 지름 16m,
@@ -108,8 +108,8 @@ fallback). 해당 아레나 진입만으로 트리거. (마커는 `resources/ter
 ## 검증 방법
 
 실행 검증은 `client`로(DummyClient 아님). RoomServer+LobbyServer+client 기동 → 방 입장 → `Arena_Grandbaum` 진입.
-1. **DR 동작**: 평상시 슬라임 타격은 1/10 데미지, 보스 타격은 풀데미지.
-2. **발동/파훼**: 66% 도달 → 넉백 + 슬라임 벽(통과 불가, 죽은 자리 틈) + 보스 보호 + 슬라임 취약, **크래시 없음**.
+1. **DR 동작**: 평상시 슬라임은 HP가 감소하지 않고 보스는 풀데미지를 받는다.
+2. **발동/파훼**: 66% 도달 → 넉백 + 슬라임 벽(통과 불가, 죽은 자리 틈) + 보스 90% 경감 + 슬라임 50% 경감, **크래시 없음**.
    벽 슬라임 일정 수 처치 → 실드 해제·보스 재취약. 30초 이상 대기만 해서는 해제되지 않음. 33% 재현(보존된 슬라임으로 벽).
    `100%→60%→30%`는 총 2회, 한 번에 `100%→30%`는 총 1회만 발동하고 HP 회복 후 재하락해도 중복 발동하지 않는다.
    첫 ShieldWall 중 33% 도달 시 파훼 직후 연속 발동하며, Cooldown 중 도달 시 다음 전술 틱에 즉시 발동한다.

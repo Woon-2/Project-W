@@ -2,7 +2,7 @@
 #include "TacticalSlime.hpp"
 
 TacticalNpcConfig TacticalSlime::trooperConfig() {
-	// Grandbaum 재설계: 평상시 슬라임은 단단(받는 피해 90% 경감)해 처치가 비효율 → 슬라임이
+	// Grandbaum 재설계: 평상시 슬라임은 무적이고 ShieldWall 중에만 50% 피해를 받음 → 슬라임이
 	// "못 잡는 딜러"가 되지 않도록 공격력 하향(주 위협은 보스). 슬라임은 Slime_Attack1 스킬을 시전하므로
 	// 실제 데미지 레버는 attackDamageScale(= lua damage 9 × scale). attackDamage는 레거시 폴백(스킬 없을 때만, 미사용).
 	return TacticalNpcConfig{

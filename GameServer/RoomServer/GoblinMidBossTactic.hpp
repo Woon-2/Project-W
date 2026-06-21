@@ -49,7 +49,7 @@ private:
         float    score{ 0.f };
     };
 
-    void        enterPhase( LeaderPhase next );
+    void        enterPhase( LeaderPhase next, Room& room, PlatoonLeader& leader );
     void        enterTacticFailCooldown( Room& room, PlatoonLeader& leader );
     void        evaluateTactics( Room& room, PlatoonLeader& leader );
     bool        updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader );

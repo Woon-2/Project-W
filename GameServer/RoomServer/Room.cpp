@@ -1281,7 +1281,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		if (!tgt) continue;
 
 		const int32 prevHp = tgt->hp();
-		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
+		// 전술 phase가 관리하는 대상별 무적/피해 경감 배율을 최종 피해에 적용한다.
 		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		const int32 newHp = std::max(prevHp - dmg, 0);
 		tgt->setHp(newHp);
@@ -1465,7 +1465,7 @@ void Room::attack(int32 sessionId, uint64 actionServerMs) {
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
 			const int32 prevHp = o->hp();
-			// 받는 피해 배율 적용(스킬 히트와 동일; Grandbaum 평상시 슬라임/ShieldWall 중 보스 0.1).
+			// 스킬 히트와 동일한 대상별 무적/피해 경감 배율을 적용한다.
 			const int32 dmg    = static_cast<int32>(kDamage * o->damageTakenMultiplier());
 			const int32 newHp  = std::max(prevHp - dmg, 0);
 			o->setHp(newHp);
@@ -1496,6 +1496,7 @@ const SkillAsset* Room::findSkillAsset(uint32 id) const {
 }
 
 void Room::noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp) {
+	if (newHp >= prevHp) return;   // invulnerable/fully mitigated hits grant no contribution
 	if (!target || target->killChargeReward() <= 0.f) return;   // not a chargeable monster
 	Object* atk = (attackerObjId >= 0 && attackerObjId < static_cast<int32>(objectById_.size()))
 		? objectById_[attackerObjId] : nullptr;
@@ -2023,9 +2024,8 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
 			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
-			// 평상시 슬라임은 받는 피해 90% 경감(단단) → 플레이어가 보스를 공격하도록 유도.
-			// ShieldWall 중에는 GrandbaumMidBossTactic이 1.0으로 풀어 취약하게, 종료 시 0.1로 복귀.
-			npc->setDamageTakenMultiplier(0.1f);
+			// 평상시 슬라임은 무적. ShieldWall 중에만 0.5로 풀려 파훼 대상이 된다.
+			npc->setDamageTakenMultiplier(0.f);
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());

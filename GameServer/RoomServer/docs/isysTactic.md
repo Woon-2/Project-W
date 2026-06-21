@@ -30,6 +30,10 @@ Isys는 Grandbaum(수동적 생존형)과 대비되는 **능동적 섬멸형** �
 | `RegroupBuddies` | Buddy 라인 형성, 보스 본체가 쐐기 apex에 합류(자리 예약) | Buddy 슬롯 집결 & 보스 ready, 또는 4초 타임아웃 → `SecondBuddyWedge` |
 | `SecondBuddyWedge` | Buddy 2차 쐐기 + 보스 직접 가세 → **피해 ×1.5** | charge 완료/타임아웃 → `Cooldown` → `Engage` |
 
+피해 프로파일은 `Engage/Cooldown=1.0`, `RetreatForPincer`부터 `SecondBuddyWedge` 종료까지
+보스와 전 부대원 `0.0`이다. 부대가 먼저 전멸하면 진행 중 협공을 취소하고 `Engage`를 보스 단독 전투
+상태로 재사용하며, 보스가 먼저 사망하면 모든 생존 부대원을 `1.0`으로 복구한다.
+
 ## 핵심 메커니즘
 
 ### ① 전술 잠금 해제 (`checkUnlockCondition`)
@@ -68,7 +72,7 @@ score 기반 타깃 + `BOSS_TARGET_SWITCH_MARGIN`). 추가로 **피해 반응 Ba
 | 쐐기 충돌 처리 | `Room::beginWedgeCharge/endWedgeCharge/tryApplyWedgeChargeHit` (charge당 플레이어 1회 피격) |
 | 인카운터/존 | `Room::spawnGrandbaumEncounter` / `onArenaGrandbaumEnter` 미러 |
 
-Grandbaum과 달리 Isys는 **새 패킷·넉백·피해경감·동적소환이 일절 없는** 순수 서버 AI 포팅이다.
+Isys의 전술 무적은 공용 `damageTakenMultiplier`만 사용하므로 **새 패킷·동적소환 없이** 서버 phase에서 처리한다.
 `MidBossTactics.cpp/.hpp`는 이미 `.vcxproj`에 포함되어 신규 파일/프로젝트 수정도 없다.
 
 ### ⑤ 장애물 안전 슬롯과 교착 방지

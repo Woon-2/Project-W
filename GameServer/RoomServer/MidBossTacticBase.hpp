@@ -44,6 +44,9 @@ protected:
     // (Goblin/Grandbaum 등 전술 공용 — squad+player 균형배정이라 전술 무관.)
     void issueStableEngage( Room& room, const std::vector<TacticalSquad*>& liveSquads, bool resetAssignments );
     bool isLivingPlayerTarget( const Room& room, uint32 playerId ) const;
+    bool hasLiveSquadMembers( const PlatoonLeader& leader ) const;
+    void setEncounterDamageProfile( Room& room, PlatoonLeader& leader,
+                                    float leaderMultiplier, float memberMultiplier ) const;
 
     // squadId → 고정된 Engage 타깃 플레이어 id. 생존 중 유지, 사망/전술종료 시 재배정.
     std::unordered_map<int32, uint32> engageTargetBySquad_{};
