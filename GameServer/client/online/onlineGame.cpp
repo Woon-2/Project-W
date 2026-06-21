@@ -5545,23 +5545,23 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		}
 		}
 
-		// Wheel click (middle button): use the selected skill if it has a stack and
-		// is off (predicted) cooldown. Instant cast; the server re-validates.
-		if ((keyboardStateCurr_[VK_MBUTTON] & 0x80) && !(keyboardStatePrev_[VK_MBUTTON] & 0x80)) {
-			const int slot = skillDial_.selected();
-			if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
-				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
-					castSkillByName(a->name);
-					skillDial_.notePredictedUse(slot, nowSec);
+		if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80) ) {
+			// Shift + Left click : use the selected skill if it has a stack and
+			// is off (predicted) cooldown. Instant cast; the server re-validates.
+			if (keyboardStateCurr_[VK_SHIFT] & 0x80) {
+				const int slot = skillDial_.selected();
+				if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
+					if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
+						castSkillByName(a->name);
+						skillDial_.notePredictedUse(slot, nowSec);
+					}
 				}
 			}
-		}
-
-		// Left click: basic attack (ungated weapon skill).
-		if ((keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		    && basicSkillAssetId_ >= 0) {
-			if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
-				castSkillByName(a->name);
+			// Normal Left click: basic attack (ungated weapon skill).
+			else if ( basicSkillAssetId_ >= 0 ) {
+				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
+					castSkillByName(a->name);
+			}
 		}
 	} else {
 		wheelAccum_ = 0;   // discard notches while a cursor UI is open or the player is dead
