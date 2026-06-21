@@ -385,6 +385,10 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                     p.flags |= kPlayVFXFlagGroundSnap;
                 if (evTbl.get_or("groundAlign", false))
                     p.flags |= kPlayVFXFlagGroundAlign;
+                // flipX: mirror a mesh VFX horizontally (reverse a slash arc to match
+                // the player's swing direction). Two-sided pipeline -> renders fine.
+                if (evTbl.get_or("flipX", false))
+                    p.flags |= kPlayVFXFlagFlipX;
 
                 // particleCollision / particleConform: drive the played effect's
                 // particle behaviour (fall-and-die, slope conform) from the skill,

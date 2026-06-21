@@ -9,8 +9,8 @@ skill.name             = "Slash7"
 skill.weapon           = "sword"
 skill.dialSlot         = 1
 skill.chargeCost       = 5
-skill.cooldownMs       = 700
-skill.totalDurationMs  = 350
+skill.cooldownMs       = 800
+skill.totalDurationMs  = 700
 skill.interruptible    = true
 
 skill:addVFX(0, "effects/blood_hit.json")
@@ -22,16 +22,16 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(100, "PlayVFX", {
+skill:addEvent(400, "PlayVFX", {
     vfxId  = 4,
     offset = Vec3(0.0, 1.0, 0.0)
 })
 
 -- Radial burst SFX, on the slash.
-skill:addEvent(100, "PlaySound", { sound = "sword_slash_7" })
+skill:addEvent(450, "PlaySound", { sound = "sword_slash_7" })
 
 local onHitBase = OnHit({
-    damage          = 2,
+    damage          = 45,
     vfxId           = 0,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)
@@ -43,8 +43,8 @@ local onHitBase = OnHit({
 -- and pushes enemies radially outward with a slight upward lift.
 local radius    = 3.0
 local count     = 8
-local spawnMs   = 100
-local destroyMs = 250
+local spawnMs   = 450
+local destroyMs = 600
 
 for i = 0, count - 1 do
     local deg = i * (360.0 / count)

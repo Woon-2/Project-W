@@ -78,6 +78,7 @@ static constexpr u8t kPlayVFXParticleCollisionShift = 3;
 static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;
 static constexpr u8t kPlayVFXParticleConformShift   = 5;
 static constexpr u8t kPlayVFXParticleConformMask    = 0x60;
+static constexpr u8t kPlayVFXFlagFlipX              = 0x80;  // client-only: mirror mesh VFX on local X
 
 union SkillEventPayload {
     struct SpawnHitbox {
