@@ -63,7 +63,10 @@ public:
 
 private:
 	void processInput(Milliseconds deltaTime);
-	
+	// Debug: toggle ragdoll on/off for the currently controlled object (editor caster).
+	// Rebuilds the ragdoll for the caster's current model (covers hot-swapped rigs, e.g. Boss).
+	void toggleCasterRagdoll();
+
 	void cullObjects();
 	void cullObjectsForShadow();
 	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.

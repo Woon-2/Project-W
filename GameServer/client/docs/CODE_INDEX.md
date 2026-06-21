@@ -275,7 +275,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `EventList` alias | `event.hpp #62` | `std::list<char*>` |
 | `EventType` enum | `event.hpp #67-78` | Hit, Blood, Death, Attack, Respawn, SkillHit, CameraShake, VFXSpawn |
 | `BasicEvent` struct | `event.hpp #84-86` | 공통 base (type 필드) |
-| `EvHit` struct | `event.hpp #88-95` | targetId, hp |
+| `EvHit` struct | `event.hpp #88-100` | targetId, hp, `hitAnimIndex`(u8): 서버 권위 선택 피격 리액션 클립 인덱스(다중 hit 리그 Boss=Hit1/Hit2). 단일 hit 몬스터는 무시. `S_SkillHit`→`onSkillHit`→`applyHit`→`EvHit` 전파 |
 | `EvBlood` struct | `event.hpp #96-101` | victimId |
 | `EvDeath` struct | `event.hpp #102-107` | victimId |
 | `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case) |
@@ -335,6 +335,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
 | `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
 | `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #336`/`object.cpp #788` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---

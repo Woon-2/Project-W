@@ -331,8 +331,10 @@ private:
 	std::string currentAttackClip_{};
 };
 
-// Temporary boss caster blender: the current boss resource only provides
-// Boss_Idle / Boss_Walk / Boss_Attack, so this intentionally ignores Hit/Death.
+// Final-boss caster blender. Full 14-clip rig: 4-directional walk + speed-based
+// run (player-style blend space), multi-attack (Swings/Combo/BackAttack/Smite via
+// attackIndex), two hit-reaction clips (Hit1/Hit2 chosen by the server), Death,
+// and Rage (registered only; its trigger is wired when the boss BehaviorTree lands).
 class AnimBlenderBoss : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -351,13 +353,33 @@ private:
 	EventBus eventBus_{};
 
 	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
 	Seconds animTimeIdle_ = 0s;
-	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeWalk_ = 0s;   // shared by the 4 directional walk clips
+	Seconds animTimeRun_ = 0s;
 	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
 	float tIdle_ = 0.f;
-	float tWalk_ = 0.f;
+	float tWalkForward_ = 0.f;
+	float tWalkBackward_ = 0.f;
+	float tWalkLeft_ = 0.f;
+	float tWalkRight_ = 0.f;
+	float tRun_ = 0.f;
 	float tAttack_ = 0.f;
-	std::string currentAttackClip_{ "Boss_Attack" };
+	// hit/death blend ratios follow the Player/Goblin convention (death highest,
+	// then hit up to 0.75, lerped in after the locomotion sum).
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+
+	// Multi-attack clips, populated by init from whatever loaded (order = lua attackIndex).
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+	// Hit-reaction clips (Boss_Hit1/Boss_Hit2). EvHit.hitAnimIndex selects one.
+	std::vector<std::string> hitClips_{};
+	std::string currentHitClip_{};
 };
 
 // 물체의 렌더링과 관련된 상태
@@ -898,6 +920,17 @@ class Isys : public Birdy {
 public:
 	Isys() = default;
 	Isys(Object&& base) : Birdy(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
+// Final boss. Distinct 14-clip rig (modelBoss/AnimBlenderBoss), but the game-state
+// EventBus (Hit/Death/ragdoll) is species-agnostic, so it inherits Goblin's EventBus
+// and ragdoll plumbing (same reuse rationale as Hobgoblin) and only swaps the blender.
+class Boss : public Goblin {
+public:
+	Boss() = default;
+	Boss(Object&& base) : Goblin(std::move(base)) {}
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };

@@ -88,6 +88,8 @@ public:
 	// Mid-boss bosses: dedicated models, routed through the Treant/Birdy corpse kind so death FX work.
 	void createGrandbaum(const ObjectInfo& info);
 	void createIsys(const ObjectInfo& info);
+	// Final boss: own 14-clip rig (AnimBlenderBoss), 1:1 combat, its own MonsterKind::Boss.
+	void createBoss(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -107,12 +109,12 @@ public:
 
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
-	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1);
+	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1, uint8 hitAnimIndex = 0);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
-	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
+	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
 	void onSkillSelect( uint16 playerId, uint8 slot );
@@ -305,6 +307,7 @@ private:
 	std::vector<std::shared_ptr<Birdy>>    birdys_{};
 	std::vector<std::shared_ptr<Slime>>    slimes_{};
 	std::vector<std::shared_ptr<Treant>>   treants_{};
+	std::vector<std::shared_ptr<Boss>>     bosses_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
@@ -371,7 +374,7 @@ private:
 	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
 	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
-	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
+	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant, Boss };
 
 	// HP bar tracking entry for non-goblin monsters (declared here so configureNetMonster's
 	// signature can reference it). Per-type maps below reuse this shape.
@@ -410,6 +413,7 @@ private:
 	std::vector<PooledMonster> birdyPool_;
 	std::vector<PooledMonster> slimePool_;
 	std::vector<PooledMonster> treantPool_;
+	std::vector<PooledMonster> bossPool_;
 	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
 	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
 
@@ -540,6 +544,7 @@ private:
 	std::unordered_map<uint16, MonsterHpEntry> birdyHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> slimeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> bossHpBars_{};
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_

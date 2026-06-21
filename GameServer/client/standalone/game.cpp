@@ -2782,10 +2782,10 @@ void Game::update(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Goblin& g) {
-			Ragdoll& rd = *g.ragdoll();
-			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
-			rd.syncToFinalXforms(
+		auto syncRagdollToAnim = [&](Object& g) {
+			Ragdoll* prd = g.ragdoll();
+			if (!prd || !prd->isActive() || !g.animBlender() || !g.model()) return;
+			prd->syncToFinalXforms(
 				g.animBlender()->finalXformData(),
 				g.model()->skeleton,
 				g.renderState().world
@@ -2795,6 +2795,10 @@ void Game::update(Milliseconds deltaTime) {
 
 		activateRagdollIfPending(*goblin_);
 		syncRagdollToAnim(*goblin_);
+		// Debug ragdoll toggle (K): the controlled caster may be the player, which the
+		// goblin_ sync above doesn't cover. Sync it too when its ragdoll is active.
+		if (auto c = editor_.controlledObject(); c && c.get() != goblin_.get())
+			syncRagdollToAnim(*c);
 	}
 
 	// 발 흙먼지 방출
@@ -3120,6 +3124,61 @@ void Game::processInput(Milliseconds deltaTime) {
 		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
 	}
 
+	// K 키: 현재 컨트롤 중인 객체(에디터 캐스터)를 래그돌화/되돌리기 토글 (디버그).
+	if ( (keyboardStateCurr_['K'] & 0x80) && !(keyboardStatePrev_['K'] & 0x80) ) {
+		toggleCasterRagdoll();
+	}
+
+}
+
+void Game::toggleCasterRagdoll() {
+	auto obj = editor_.controlledObject();
+	if (!obj) return;
+	Ragdoll* prd = obj->ragdoll();
+	if (!prd) {
+		gSharedLog << "[RagdollToggle] controlled object has no ragdoll support\n";
+		dumpLog();
+		return;
+	}
+	Ragdoll& rd = *prd;
+
+	// Already ragdolled -> revert to animated control. Deactivate + destroy the ragdoll
+	// and re-register the (still-at-activation-pos) main body so it resumes normal control.
+	if (rd.isActive()) {
+		rd.deactivate(physicsWorld_);
+		rd.destroy(physicsWorld_);
+		physicsWorld_.registerBody(&obj->body(), [p = obj.get()]() { p->rebuildBodyBVH(); });
+		obj->body().snapToCurrent();
+		gSharedLog << "[RagdollToggle] ragdoll OFF\n";
+		dumpLog();
+		return;
+	}
+
+	if (!obj->model() || !obj->model()->ragdollDef || !obj->animBlender()) {
+		gSharedLog << "[RagdollToggle] controlled object has no ragdollDef / model / blender (cannot ragdoll)\n";
+		dumpLog();
+		return;
+	}
+
+	// Build the ragdoll for the CURRENT model. The editor caster rig is hot-swappable
+	// (e.g. to Boss), and setMonsterCaster does not rebuild the ragdoll, so rebuild here.
+	if (rd.isBuilt()) rd.destroy(physicsWorld_);
+	rd.build(obj->model()->skeleton, *obj->model()->ragdollDef, physicsWorld_, obj->body().scale());
+	rd.seedFromFinalXforms(obj->animBlender()->finalXformData(), obj->model()->skeleton, obj->renderState().world);
+	rd.buildPassengers(obj->model()->skeleton, obj->animBlender()->finalXformData());
+	rd.activate(physicsWorld_);
+	physicsWorld_.unregisterBody(&obj->body());
+
+	// Per-bone random noise impulse so it visibly collapses even with gravity off
+	// (Z toggles gravity). Mirrors the death-ragdoll nudge.
+	for (const auto& rb : rd.bones()) {
+		if (rb.noiseImpulse <= 0.f || !rb.body) continue;
+		mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
+		if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 1.f, 0.f);
+		rb.body->applyImpulse(mu::Vec3(mu::NVec3(rnd)) * rb.noiseImpulse, rb.body->pos());
+	}
+	gSharedLog << "[RagdollToggle] ragdoll ON\n";
+	dumpLog();
 }
 
 void Game::cullObjects() {

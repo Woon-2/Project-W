@@ -2540,6 +2540,14 @@ void Game::createIsys(const ObjectInfo& info) {
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
 }
 
+// Final boss: own 14-clip rig, dedicated MonsterKind::Boss container/corpse routing.
+void Game::createBoss(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto boss = std::make_shared<Boss>();
+	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
+	bosses_.push_back(boss);
+}
+
 // === Client-authored corpse pipeline =======================================
 // A dead monster is detached from server-synced containers into corpses_ (with a
 // fresh RenderObjectId, carrying its HP bar). The corpse holds its ragdoll for a
@@ -2616,6 +2624,10 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		grabBar(treantHpBars_);
 		std::erase(treants_, std::static_pointer_cast<Treant>(obj));
 		break;
+	case MonsterKind::Boss:
+		grabBar(bossHpBars_);
+		std::erase(bosses_, std::static_pointer_cast<Boss>(obj));
+		break;
 	}
 	idMonsterMap_.erase(npcId);
 	if (static_cast<size_t>(npcId) < skillObjectById_.size())
@@ -2646,6 +2658,7 @@ void Game::returnMonsterToPool(Corpse& corpse) {
 	case MonsterKind::Birdy:    birdyPool_.push_back(std::move(pm));    break;
 	case MonsterKind::Slime:    slimePool_.push_back(std::move(pm));    break;
 	case MonsterKind::Treant:   treantPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Boss:     bossPool_.push_back(std::move(pm));     break;
 	}
 }
 
@@ -2664,6 +2677,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	case MonsterKind::Birdy:    pool = &birdyPool_;    break;
 	case MonsterKind::Slime:    pool = &slimePool_;    break;
 	case MonsterKind::Treant:   pool = &treantPool_;   break;
+	case MonsterKind::Boss:     pool = &bossPool_;     break;
 	}
 	if (!pool || pool->empty()) return false;
 
@@ -2733,6 +2747,12 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 		auto t = std::static_pointer_cast<Treant>(obj);
 		treants_.push_back(t);
 		if (bar) treantHpBars_[npcId] = { t.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Boss: {
+		auto b = std::static_pointer_cast<Boss>(obj);
+		bosses_.push_back(b);
+		if (bar) bossHpBars_[npcId] = { b.get(), bar, 2.5f };
 		break;
 	}
 	}
@@ -3333,7 +3353,7 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
-void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
+void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId, uint8 hitAnimIndex ) {
 	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(모든 몬스터·거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
@@ -3358,7 +3378,7 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 	if ( newHp <= 0 )
 		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
-		holdEvent( eventList_, EvHit( targetId, newHp ) );
+		holdEvent( eventList_, EvHit( targetId, newHp, hitAnimIndex ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
@@ -3409,6 +3429,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	case MonsterKind::Birdy:    createBirdy(info);    break;
 	case MonsterKind::Slime:    createSlime(info);    break;
 	case MonsterKind::Treant:   createTreant(info);   break;
+	case MonsterKind::Boss:     createBoss(info);     break;
 	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
@@ -3427,14 +3448,14 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
 
-void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
+void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex ) {
 	// Store hit velocity on any monster before applyHit so ragdoll activation can use it.
 	if (newHp <= 0) {
 		if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end()) {
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
-	applyHit(targetId, newHp, attackerId);
+	applyHit(targetId, newHp, attackerId, hitAnimIndex);
 
 	// Spawn impact VFX at the target's position.
 	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
@@ -3625,6 +3646,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& b : birdys_)    b->rebuildBodyBVH();
 	for (auto& s : slimes_)    s->rebuildBodyBVH();
 	for (auto& t : treants_)   t->rebuildBodyBVH();
+	for (auto& b : bosses_)    b->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3758,6 +3780,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(birdys_);
 	updateMonstersNet(slimes_);
 	updateMonstersNet(treants_);
+	updateMonstersNet(bosses_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3852,6 +3875,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& birdy    : birdys_)    activateAndCollect(birdy,    MonsterKind::Birdy);
 		for (auto& slime    : slimes_)    activateAndCollect(slime,    MonsterKind::Slime);
 		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
+		for (auto& boss     : bosses_)    activateAndCollect(boss,     MonsterKind::Boss);
 
 		for (auto& [objPtr, kind] : justDied)
 			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
@@ -4152,6 +4176,7 @@ void Game::renderInGame() {
 	for (auto& birdy    : birdys_)    birdy->render(gfx_);
 	for (auto& slime    : slimes_)    slime->render(gfx_);
 	for (auto& treant   : treants_)   treant->render(gfx_);
+	for (auto& boss     : bosses_)    boss->render(gfx_);
 
 	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
 	// (orb phase is drawn by orbSystem_.submitDrawEvents).
@@ -5428,7 +5453,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
 	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
-	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
+	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size() + bosses_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
@@ -5437,6 +5462,7 @@ void Game::cullObjects() {
 	std::ranges::copy(birdys_,       std::back_inserter(entities));
 	std::ranges::copy(slimes_,       std::back_inserter(entities));
 	std::ranges::copy(treants_,      std::back_inserter(entities));
+	std::ranges::copy(bosses_,       std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -5524,6 +5550,7 @@ void Game::feedbackCullResultToAnim() {
 		for (auto& b : birdys_)    resetHiZ(b);
 		for (auto& s : slimes_)    resetHiZ(s);
 		for (auto& t : treants_)   resetHiZ(t);
+		for (auto& b : bosses_)    resetHiZ(b);
 		return;
 	}
 
@@ -5540,6 +5567,7 @@ void Game::feedbackCullResultToAnim() {
 	for (auto& b : birdys_)    applyToEntity(b);
 	for (auto& s : slimes_)    applyToEntity(s);
 	for (auto& t : treants_)   applyToEntity(t);
+	for (auto& b : bosses_)    applyToEntity(b);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 

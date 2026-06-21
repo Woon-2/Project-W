@@ -6,6 +6,7 @@
 #include "GameSession.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
+#include "boss.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 #include "bomber.hpp"
@@ -75,6 +76,12 @@ public:
 		// Barriers are pure colliders (no id); unregister their bodies before destroy.
 		for (const auto& b : barriers_) {
 			if (b) physicsWorld_.unregisterBody(&b->body());
+		}
+
+		// Final boss (runtime-spawned): unregister its body before the unique_ptr dies.
+		if (boss_) {
+			physicsWorld_.unregisterBody(&boss_->body());
+			IdPool::push(boss_->getId());
 		}
 	}
 
@@ -219,10 +226,12 @@ private:
 	void setupSlime    (Slime&     s, const Level& level);
 	void setupTreant   (Treant&    t, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
+	void setupBoss     (Boss& b);   // model/anims/clips/skills/body for the final boss (uses assetManager_)
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
+	void onArenaBossEnter(Zone& zone, uint32 playerId);   // ArenaZone enter -> spawn boss at BossSpawner marker
 	// 전술 NPC 바디 셋업(type별 모델/애니/클립 선택) + 물리/objectById_ 등록. type이 클라 렌더 모델을 결정.
 	void registerTacticalNpcBody(TacticalNpc& obj, ObjectType type);
 	// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. NPC별 objType()으로 모델 라우팅.
@@ -268,6 +277,9 @@ private:
 	std::vector<Birdy>    birdys_;
 	std::vector<Slime>    slimes_;
 	std::vector<Treant>   treants_;
+	// Final boss: runtime-spawned (on ArenaZone enter), single 1:1 combatant. unique_ptr
+	// keeps a stable address; nullptr until spawned. Not part of the init monster pools.
+	std::unique_ptr<Boss> boss_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;

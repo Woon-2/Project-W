@@ -74,7 +74,7 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
     { CharacterKind::Bomber,   "Bomber",   { "Bomber_Attack1" } },
     { CharacterKind::Slime,    "Slime",    { "Slime_Attack1" } },
     { CharacterKind::Treant,   "Treant",   { "Treant_SpinKick", "Treant_Clap", "Treant_Punch" } },
-    { CharacterKind::Boss,     "Boss",     { "Boss_Attack" } },
+    { CharacterKind::Boss,     "Boss",     { "Boss_Swings", "Boss_Combo", "Boss_BackAttack", "Boss_Smite" } },
 };
 
 }   // namespace Editor
