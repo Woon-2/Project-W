@@ -1025,7 +1025,7 @@ bool MU_CALLCONV TacticalNpc::updateSlotSettled( float distToSlot ) {
             slotSettled_ = false;   // 크게 밀려나면 래치 해제 → 재접근
         }
     }
-    else if ( distToSlot < separationRadius_ * TACTICAL_SLOT_SETTLE_RADIUS_MULT ) {
+    else if ( distToSlot <= TACTICAL_SLOT_SETTLE_RADIUS ) {
         slotSettled_ = true;        // 충분히 가까우면 안착
     }
     return slotSettled_;
@@ -1068,9 +1068,15 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
                 applyPeerSeparation( room, slotDir, separationRadius_ );
             }
-            float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-                spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+            float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+            float spd = baseSpd * speedMult_;
+            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+                // 접근 가속을 슬롯에 가까워질수록 제거하고 속도를 0으로 수렴시킨다.
+                // 방패벽(speedMult=2)의 기존 최저 5.25m/s가 슬롯을 왕복하던 문제를 막는다.
+                float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+                float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+                spd = baseSpd * approachMult * slowScale;
+            }
             setFacingDir( *this, slotDir );
             setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
             return;
@@ -1101,9 +1107,13 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
     if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
         applyPeerSeparation( room, slotDir, separationRadius_ );
     }
-    float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-        spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+    float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+    float spd = baseSpd * speedMult_;
+    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+        float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+        float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+        spd = baseSpd * approachMult * slowScale;
+    }
     setFacingDir( *this, slotDir );
     setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
 }

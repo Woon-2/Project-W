@@ -44,6 +44,8 @@ struct SquadOrder {
     mu::Vec3       formationTargetPos = {};
     mu::Vec3       tacticCenter      = {};
     float          speedMult         = 1.f;
+    // RingGuard가 전역 링에서 미리 배정받은 절대 월드 슬롯. 비어 있으면 부대가 자체 계산한다.
+    std::vector<mu::Vec3> explicitSlots = {};
     float          chargeSpeedMult   = 0.f;
     float          wedgeSpacingMult  = 0.f;
     float          wedgeDamageMult   = 1.f;
@@ -91,12 +93,16 @@ public:
     void MU_CALLCONV updateBoxLeaderPos( mu::Vec3 pos );
     mu::Vec3 calcCentroid() const;
     bool     areMembersAtSlots() const;
+    bool     areMembersSettledAtSlots() const;
     bool     areChargeMembersComplete() const;
     bool     isWedgeChargeActive() const { return activeWedgeChargeId_ != 0; }
     bool     isWedgePrepared() const { return wedgePrepared_; }
     void     endActiveWedgeCharge( Room& room );
     void     releaseWedgeCharge();
     float    estimateWedgeHalfWidth( float spacingMult = 1.f, bool reserveApex = false ) const;
+    static std::vector<mu::Vec3> MU_CALLCONV calcRingSlots( mu::Vec3 center, float sectorAngle,
+        float sectorSpan, float outerRadius, int32 count, float minSlotSpacing, float laneSpacing,
+        int32 laneCapacityMultiple = 1 );
 
 private:
     void     pushCommandsToMembers( Room& room );

@@ -202,6 +202,23 @@ bool TacticalSquad::areMembersAtSlots() const {
            static_cast<float>( atSlotCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
+bool TacticalSquad::areMembersSettledAtSlots() const {
+    int32 aliveCount = 0;
+
+    for ( TacticalNpc* tnpc : memberCache_ ) {
+        if ( !tnpc || tnpc->hp() <= 0 ) {
+            continue;
+        }
+
+        ++aliveCount;
+        if ( !tnpc->isSettledAtSlot() ) {
+            return false;
+        }
+    }
+
+    return aliveCount > 0;
+}
+
 bool TacticalSquad::areChargeMembersComplete() const {
     int32 aliveCount = 0;
     int32 completeCount = 0;
@@ -281,6 +298,54 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcEncircleSlots( mu::Vec3 tar
     for ( int32 i = 0; i < count; ++i ) {
         float a = start + arc * static_cast<float>( i );
         slots.push_back( targetPos + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
+    }
+
+    return slots;
+}
+
+std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcRingSlots(
+    mu::Vec3 center, float sectorAngle, float sectorSpan, float outerRadius,
+    int32 count, float minSlotSpacing, float laneSpacing, int32 laneCapacityMultiple ) {
+    std::vector<mu::Vec3> slots;
+    if ( count <= 0 || sectorSpan <= 0.01f || outerRadius <= 0.01f || minSlotSpacing <= 0.01f ) {
+        return slots;
+    }
+
+    slots.reserve( static_cast<size_t>(count) );
+    laneSpacing = std::max( laneSpacing, minSlotSpacing );
+
+    // 보스와 겹치지 않는 안쪽 절반까지만 inward lane을 만들고, 수용량이 부족하면 바깥쪽에
+    // lane을 추가한다. 작은 반경에서 radius clamp로 같은 슬롯이 중복되는 것도 방지한다.
+    float innerFloor = std::max( laneSpacing, outerRadius * 0.5f );
+    int32 inwardLaneCount = std::max(
+        static_cast<int32>(std::floorf((outerRadius - innerFloor) / laneSpacing)) + 1, 1 );
+
+    int32 remaining = count;
+    for ( int32 lane = 0; remaining > 0; ++lane ) {
+        float radius = (lane < inwardLaneCount)
+            ? outerRadius - laneSpacing * static_cast<float>( lane )
+            : outerRadius + laneSpacing * static_cast<float>( lane - inwardLaneCount + 1 );
+
+        // 원호 길이가 아니라 실제 두 슬롯의 직선 중심 거리(chord)가 minSlotSpacing
+        // 이상이 되도록 이 반경에서 허용 가능한 최소 각도를 계산한다.
+        float chordRatio = std::clamp( minSlotSpacing / (2.f * radius), 0.f, 1.f );
+        float minSlotAngle = 2.f * std::asinf( chordRatio );
+        int32 laneCapacity = static_cast<int32>(std::floorf(sectorSpan / minSlotAngle));
+        laneCapacity = std::max( laneCapacity, 1 );
+        if ( laneCapacityMultiple > 1 && laneCapacity >= laneCapacityMultiple ) {
+            laneCapacity = (laneCapacity / laneCapacityMultiple) * laneCapacityMultiple;
+        }
+
+        int32 laneMembers = std::min( laneCapacity, remaining );
+        float arc = sectorSpan / static_cast<float>( laneMembers );
+        float start = sectorAngle - sectorSpan * 0.5f + arc * 0.5f;
+
+        for ( int32 i = 0; i < laneMembers; ++i ) {
+            float a = start + arc * static_cast<float>( i );
+            slots.push_back( center + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
+        }
+
+        remaining -= laneMembers;
     }
 
     return slots;
@@ -698,39 +763,12 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
         }
 
         std::vector<mu::Vec3> slots;
-        slots.reserve( liveMembers.size() );
-
-        if ( ord.slotSpacingScale > 1.f && ord.approachRadius > 0.01f && ord.sectorSpan > 0.01f ) {
-            float minArcSpacing = ord.slotSpacingScale;
-            int32 maxPerLane = static_cast<int32>(std::floorf((ord.sectorSpan * ord.approachRadius) / minArcSpacing ));
-            maxPerLane = std::clamp( maxPerLane, 1, liveCount );
-
-            int32 laneCount = (liveCount + maxPerLane - 1) / maxPerLane;
-            float laneSpacing = std::max( ord.slotColumnScale, 0.1f );
-
-            if ( laneCount > 1 ) {
-                float innerFloor = std::max( memberSeparationRadius_ * 2.f, ord.approachRadius * 0.5f );
-                float usableDepth = std::max( ord.approachRadius - innerFloor, 0.f );
-                laneSpacing = std::min( laneSpacing, usableDepth / static_cast<float>(laneCount - 1) );
-            }
-
-            for ( int32 lane = 0; lane < laneCount; ++lane ) {
-                int32 laneStart = lane * maxPerLane;
-                int32 laneMembers = std::min( maxPerLane, liveCount - laneStart );
-
-                if ( laneMembers <= 0 ) {
-                    continue;
-                }
-
-                float radius = ord.approachRadius - laneSpacing * static_cast<float>( lane );
-                float arc = ord.sectorSpan / static_cast<float>( laneMembers );
-                float start = ord.sectorAngle - ord.sectorSpan * 0.5f + arc * 0.5f;
-
-                for ( int32 i = 0; i < laneMembers; ++i ) {
-                    float a = start + arc * static_cast<float>( i );
-                    slots.push_back( ord.tacticCenter + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
-                }
-            }
+        if ( static_cast<int32>(ord.explicitSlots.size()) == liveCount ) {
+            slots = ord.explicitSlots;
+        }
+        else if ( ord.slotSpacingScale > 1.f && ord.approachRadius > 0.01f && ord.sectorSpan > 0.01f ) {
+            slots = calcRingSlots( ord.tacticCenter, ord.sectorAngle, ord.sectorSpan,
+                ord.approachRadius, liveCount, ord.slotSpacingScale, ord.slotColumnScale );
         }
         else {
             slots = calcEncircleSlots( ord.tacticCenter, ord.sectorAngle, ord.sectorSpan, ord.approachRadius, liveCount );

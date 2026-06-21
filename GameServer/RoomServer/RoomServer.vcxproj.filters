@@ -76,6 +76,18 @@
     <Filter Include="contents\tacticalNpc\bomber">
       <UniqueIdentifier>{0e7eb6ca-993c-414d-a0b7-21f9cc43439c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents\Npc\birdy">
+      <UniqueIdentifier>{435a4855-29c1-4357-870d-cf98f49fd338}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\bomber">
+      <UniqueIdentifier>{9e6dfbdf-7e84-4f78-80de-7d34b75f24ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\slime">
+      <UniqueIdentifier>{db6ff77a-ea25-4355-a536-24f3c76534b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\treant">
+      <UniqueIdentifier>{04b7a6ed-9743-4ee5-b521-23b8730fcdd1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -201,10 +213,6 @@
     <ClCompile Include="zone.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
-    <ClCompile Include="bomber.cpp" />
-    <ClCompile Include="birdy.cpp" />
-    <ClCompile Include="slime.cpp" />
-    <ClCompile Include="treant.cpp" />
     <ClCompile Include="TacticalNpc.cpp">
       <Filter>contents\tacticalNpc</Filter>
     </ClCompile>
@@ -225,6 +233,18 @@
     </ClCompile>
     <ClCompile Include="TacticalBomber.cpp">
       <Filter>contents\tacticalNpc\bomber</Filter>
+    </ClCompile>
+    <ClCompile Include="birdy.cpp">
+      <Filter>contents\Npc\birdy</Filter>
+    </ClCompile>
+    <ClCompile Include="bomber.cpp">
+      <Filter>contents\Npc\bomber</Filter>
+    </ClCompile>
+    <ClCompile Include="slime.cpp">
+      <Filter>contents\Npc\slime</Filter>
+    </ClCompile>
+    <ClCompile Include="treant.cpp">
+      <Filter>contents\Npc\treant</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -366,10 +386,6 @@
     <ClInclude Include="..\common\zoneDef.hpp">
       <Filter>contents\etc</Filter>
     </ClInclude>
-    <ClInclude Include="bomber.hpp" />
-    <ClInclude Include="birdy.hpp" />
-    <ClInclude Include="slime.hpp" />
-    <ClInclude Include="treant.hpp" />
     <ClInclude Include="TacticalNpc.hpp">
       <Filter>contents\tacticalNpc</Filter>
     </ClInclude>
@@ -390,6 +406,18 @@
     </ClInclude>
     <ClInclude Include="TacticalBomber.hpp">
       <Filter>contents\tacticalNpc\bomber</Filter>
+    </ClInclude>
+    <ClInclude Include="birdy.hpp">
+      <Filter>contents\Npc\birdy</Filter>
+    </ClInclude>
+    <ClInclude Include="bomber.hpp">
+      <Filter>contents\Npc\bomber</Filter>
+    </ClInclude>
+    <ClInclude Include="slime.hpp">
+      <Filter>contents\Npc\slime</Filter>
+    </ClInclude>
+    <ClInclude Include="treant.hpp">
+      <Filter>contents\Npc\treant</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
