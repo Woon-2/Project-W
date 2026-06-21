@@ -3047,14 +3047,20 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
-	// 홉고블린 아레나의 서버 권위 차단 상태와 BGM을 동기화한다.
-	// state==1은 WallHobgoblin_* 통과 불가 시점이다. 기존 곡을 빠르게 낮춘 뒤 짧은 지연을 두고
-	// 전용곡을 천천히 올리는 비대칭 전환을 사용하며, 해제 시에도 같은 방식으로 기본곡에 복귀한다.
-	if ( prefix == "WallHobgoblin" ) {
+	// 아레나별 서버 권위 차단 상태와 전용 BGM을 동기화한다. state==1은 해당 Wall이 통과 불가가
+	// 되는 시점이다. 기존 곡을 빠르게 낮춘 뒤 짧은 지연을 두고 전용곡을 천천히 올리며,
+	// state==0(전투 종료/벽 해제)이면 같은 방식으로 기본 전투곡에 복귀한다.
+	std::string_view arenaBgm;
+	if ( prefix == "WallHobgoblin" ) arenaBgm = "hobgoblin_arena";
+	else if ( prefix == "WallGrandbaum" ) arenaBgm = "grandbaum_arena";
+	else if ( prefix == "WallIsys" ) arenaBgm = "isys_arena";
+	else if ( prefix == "WallBoss" ) arenaBgm = "boss_arena";
+
+	if ( !arenaBgm.empty() ) {
 		constexpr float kArenaBgmFadeOutMs = 1100.f;
 		constexpr float kArenaBgmFadeInMs = 3400.f;
 		constexpr float kArenaBgmFadeInDelayMs = 800.f;
-		INet::ClientApp::sound().playBgm( state == 1 ? "hobgoblin_arena" : "ingame",
+		INet::ClientApp::sound().playBgm( state == 1 ? arenaBgm : std::string_view{ "ingame" },
 		                                  kArenaBgmFadeOutMs,
 		                                  kArenaBgmFadeInMs,
 		                                  kArenaBgmFadeInDelayMs );

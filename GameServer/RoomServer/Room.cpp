@@ -951,6 +951,12 @@ void Room::updateMonsterAI(Milliseconds dt) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(boss_->getId())));
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(boss_->getId()), result.hit->targetId, result.hit->newHp));
 		}
+		// Final boss is not part of updateTacticalAI(), so its arena would otherwise
+		// never reach the tactical all-dead teardown path. Release WallBoss and send
+		// S_ZoneState(0) once the boss dies so clients restore the normal combat BGM.
+		if (arenaWallsActive_ && boss_->hp() <= 0) {
+			teardownArenaWalls();
+		}
 	}
 
 	// ── Strongholds: structure destruction/rebuild + population maintenance ──
