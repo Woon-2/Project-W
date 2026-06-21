@@ -177,6 +177,9 @@
     <ClCompile Include="TacticalGoblin.cpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
     </ClCompile>
+    <ClCompile Include="BehaviorTree.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClCompile>
     <ClCompile Include="MidBossTacticBase.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
@@ -343,6 +346,9 @@
     </ClInclude>
     <ClInclude Include="TacticalGoblin.hpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClInclude>
+    <ClInclude Include="BehaviorTree.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
     <ClInclude Include="IMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
