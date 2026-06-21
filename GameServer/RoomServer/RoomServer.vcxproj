@@ -162,7 +162,7 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
-    <ClCompile Include="boss.cpp" />
+    <ClCompile Include="finalBoss.cpp" />
     <ClCompile Include="bomber.cpp" />
     <ClCompile Include="birdy.cpp" />
     <ClCompile Include="slime.cpp" />
@@ -228,7 +228,7 @@
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="goblin.hpp" />
-    <ClInclude Include="boss.hpp" />
+    <ClInclude Include="finalBoss.hpp" />
     <ClInclude Include="bomber.hpp" />
     <ClInclude Include="birdy.hpp" />
     <ClInclude Include="slime.hpp" />

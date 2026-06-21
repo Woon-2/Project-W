@@ -1,10 +1,42 @@
 # 최종 보스 1:1 전투 (Boss)
 
 미드보스(Hobgoblin/Grandbaum/Isys)는 `TacticalNpc` + platoon **전술 전투**지만,
-**최종 보스는 전술 전투가 아닌 단순 1:1 전투**다. 따라서 보스는 platoon 인프라가 아니라
-필드 몬스터 FSM인 `Npc`(Goblin/Snake의 베이스)를 기반으로 한다. 보스 전용 AI(BehaviorTree)는
-추후 별도 구현 예정이며, 그 전까지는 기본 `Npc` FSM(Idle/Patrol → Chase → AttackWindup →
-AttackRecover)으로 1:1 전투가 동작한다.
+**최종 보스는 전술 전투가 아닌 단순 1:1 전투**다. 클래스는 `class FinalBoss : public Npc`
+(`RoomServer/finalBoss.{hpp,cpp}`)로, 중간 보스(`TacticalNpc`)와 구분하기 위해 `FinalBoss`로
+명명한다. `Npc`를 상속하지만 **FSM이 아니라 자체 BehaviorTree로 AI를 구동**한다(`Npc::update`는
+`virtual`, `FinalBoss::update`가 오버라이드해 FSM `switch` 대신 BT를 틱). 공격 실행은 일반
+몬스터와 **동일한 스킬 경로**(`Room::skillStartInternal` → 권위 히트박스 + `S_SkillStart`)를
+재사용하며, 차이는 FSM 균등 랜덤(`pickAttack`) → **BT 상황 기반(거리/쿨다운) 선택**이라는 점이다.
+
+> 와이어 enum `ObjectType::Boss`와 클라 `class Boss : public Goblin`는 프로토콜/클라 호환을 위해
+> 이름을 유지한다. 서버 클래스/파일/멤버(`finalBoss_`)/메서드(`setupFinalBoss`)만 `FinalBoss`로 변경.
+
+## BehaviorTree AI (`RoomServer/finalBoss.cpp`)
+- **프레임워크**: `RoomServer/BehaviorTree.{hpp,cpp}`(`BtSelector`/`BtSequence`/`BtCondition`/
+  `BtCooldown`). `BtContext = { FinalBoss& boss; Room& room; }`(blackboard는 `FinalBoss` 멤버가 겸함).
+- **타깃 평가(`evaluateTarget`)**: 보스 전용 Zone이라 **감지 거리 없음** — `Room::getLivingPlayers()`
+  전원을 점수(현재는 거리 최근접)로 평가해 매 0.5s 또는 타깃 소실 시 재선택. `targetId_`=session id.
+- **트리 구조**:
+  ```
+  Root(Selector)
+   +- [예약] 페이즈/Rage 우선순위 가지 (미구현)
+   +- EngageSeq[Cond:HasTarget] -> Combat(Selector)
+        +- BossSkillBusyGuard                  // npcSkillActive면 Running 유지(시전 중 선점 방지)
+        +- Cooldown(6s):[dist∈(atk,gap]] -> Smite(3)      // 갭 클로저
+        +- Cooldown(5s):[dist<=atk]      -> Combo(1)       // 강타
+        +- Cooldown(7s):[dist<=atk]      -> BackAttack(2)  // 변형타
+        +- Cooldown(2.5s):[dist<=atk]    -> Swings(0)      // 경타 필러
+        +- BossChaseAction                                 // 폴백 추격
+   +- BossIdleAction                                       // 타깃 없음(드묾)
+  ```
+- **공격 리프**: `BossSkillAttackAction(idx)`가 타깃 조준 + `switchClip` + `skillStartInternal`
+  (`damageScale_`)로 1회 시전 후 `Success`(`BtCooldown`이 시전 시점부터 카운트). 이후 `BossSkillBusyGuard`가
+  스킬 종료까지 트리를 Running으로 잡아 다른 공격이 끼어들지 못하게 한다(스킬 lua 타임라인이
+  windup/hit/recover를 담당하므로 멀티페이즈 노드 불필요).
+- **빌드 시점**: `Room::setupFinalBoss`가 `addAttack` 4종 등록 **직후** `buildBehaviorTree()` 호출
+  (리프가 인덱스 0~3으로 skillId/clipKey 참조).
+- **튜닝 포인트**: 거리 밴드(`gapRange_`), 스킬별 쿨다운, `damageScale_`, 타깃 점수 함수(저HP/위협
+  가중치 추가 여지).
 
 ## 리소스
 - 모델: 클라 `resources/boss/boss.bin`, 서버 `resources/boss/bossServer.bin`
@@ -43,10 +75,12 @@ AttackRecover)으로 1:1 전투가 동작한다.
 - 클라 디스패치: `PacketManager` S_Enter/S_NpcSpawnBatch 두 switch에 `ObjectType::Boss → createBoss`.
 
 ## 서버 구조
-- `RoomServer/boss.{hpp,cpp}`: `class Boss : public Npc` + `applyBossConfig()`(HP 2000, range/속도 등).
-- `Room`: `std::unique_ptr<Boss> boss_`(단일, 런타임 스폰, 주소 안정). `updateMonsterAI`에서 인라인 틱
-  (Boss는 Goblin의 lag-comp `recordSnapshot`이 없어 tickPool 미사용). `makeSEnterPacket`에 중도
-  입장자용 포함. `~Room`에서 body unregister + id 반납.
+- `RoomServer/finalBoss.{hpp,cpp}`: `class FinalBoss : public Npc` + `applyBossConfig()`(HP 2000,
+  range/속도 등) + BT(`update` 오버라이드/`buildBehaviorTree`/리프 헬퍼). (구 `boss.{hpp,cpp}`에서 rename.)
+- `Room`: `std::unique_ptr<FinalBoss> finalBoss_`(단일, 런타임 스폰, 주소 안정). `updateMonsterAI`에서
+  인라인 틱(FinalBoss는 Goblin의 lag-comp `recordSnapshot`이 없어 tickPool 미사용). `makeSEnterPacket`에
+  중도 입장자용 포함. `~Room`에서 body unregister + id 반납. 스킬 경로로 데미지가 나가므로 `update`의
+  `result.hit`는 빈값 → 인라인 틱이 레거시 `S_NpcAttack`/`S_Hit`를 쏘지 않음(스킬 NPC와 동일).
 
 ## 클라 구조
 - `class Boss : public Goblin`(EventBus/ragdoll 재사용, `setAnimBlender`만 오버라이드 → `AnimBlenderBoss`).
@@ -73,4 +107,7 @@ AttackRecover)으로 1:1 전투가 동작한다.
   원인 확정 후 **제거**. (서버는 래그돌 없어 무관.)
 
 ## 향후
-- 보스 BehaviorTree AI(공격 페이즈/Rage 전이 등)는 별도 작업. `Boss_Rage` 트리거는 그때 연결.
+- **Rage/페이즈 전이**(미구현): BT Root 최상단의 예약 우선순위 가지 + 클라 `AnimBlenderBoss` Rage
+  트리거 + 전용 패킷이 필요. `Boss_Rage` 클립은 등록만 돼 있음.
+- 공격 거리 밴드/쿨다운/`damageScale` 콘텐츠 튜닝(스킬 lua 히트박스 사거리와 정합).
+- 타깃 점수에 저HP/위협 가중치 추가(현재는 최근접만). 돌진 등 신규 패턴은 전용 스킬 lua 저작 후 BT 리프 추가.

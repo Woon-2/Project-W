@@ -6,7 +6,7 @@
 #include "GameSession.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
-#include "boss.hpp"
+#include "finalBoss.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 #include "bomber.hpp"
@@ -79,9 +79,9 @@ public:
 		}
 
 		// Final boss (runtime-spawned): unregister its body before the unique_ptr dies.
-		if (boss_) {
-			physicsWorld_.unregisterBody(&boss_->body());
-			IdPool::push(boss_->getId());
+		if (finalBoss_) {
+			physicsWorld_.unregisterBody(&finalBoss_->body());
+			IdPool::push(finalBoss_->getId());
 		}
 	}
 
@@ -216,7 +216,7 @@ private:
 	void setupSlime    (Slime&     s, const Level& level);
 	void setupTreant   (Treant&    t, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
-	void setupBoss     (Boss& b);   // model/anims/clips/skills/body for the final boss (uses assetManager_)
+	void setupFinalBoss(FinalBoss& b);   // model/anims/clips/skills/body/BT for the final boss (uses assetManager_)
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
@@ -269,7 +269,7 @@ private:
 	std::vector<Treant>   treants_;
 	// Final boss: runtime-spawned (on ArenaZone enter), single 1:1 combatant. unique_ptr
 	// keeps a stable address; nullptr until spawned. Not part of the init monster pools.
-	std::unique_ptr<Boss> boss_;
+	std::unique_ptr<FinalBoss> finalBoss_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;

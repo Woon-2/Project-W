@@ -68,7 +68,8 @@ public:
     Npc() = default;
     Npc(Object&& base, const NpcConfig& cfg = {});
 
-    NpcUpdateResult update(Seconds dt, Room& room);
+    // virtual so FinalBoss can replace the FSM tick with its BehaviorTree.
+    virtual NpcUpdateResult update(Seconds dt, Room& room);
     void onHitImpulse() override;
 
     // Register a skill-based attack (called from Room::setupX). With at least one
@@ -91,6 +92,11 @@ public:
 
 protected:
     void applyConfig(const NpcConfig& cfg);
+
+    // Config/state accessors for derived AIs (e.g. FinalBoss BehaviorTree leaves).
+    float moveSpeed()   const { return moveSpeed_; }
+    float attackRange() const { return attackRange_; }
+    const std::vector<NpcAttack>& attacks() const { return attacks_; }
 
 private:
     void transitionTo(NpcState next);

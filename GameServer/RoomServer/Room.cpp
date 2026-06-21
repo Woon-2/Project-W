@@ -271,7 +271,7 @@ void Room::setupTreant(Treant& t, const Level& level) {
 // Final boss: standalone field NPC (1:1 combat). Registers the full 14-clip rig and
 // the four skill-based attacks; the AI picks one at random per swing (Npc::pickAttack).
 // Uses assetManager_ directly (runtime-spawned outside the init Level scope).
-void Room::setupBoss(Boss& b) {
+void Room::setupFinalBoss(FinalBoss& b) {
 	const auto& anims = assetManager_->bossAnimations();
 	b.setModel(assetManager_->modelBoss());
 	b.animController().registerClip("Idle",       findServerAnimClip(anims, "Boss_Idle"));
@@ -305,6 +305,9 @@ void Room::setupBoss(Boss& b) {
 	b.body().setRestitution(0.0f);
 	b.body().setUprightStiffness(4000.f);
 	b.body().enableMotor(true);
+	// Build the BehaviorTree AFTER addAttack so the BT attack leaves can resolve
+	// their skill ids/clip keys by index (0=Swings,1=Combo,2=BackAttack,3=Smite).
+	b.buildBehaviorTree();
 }
 
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
@@ -749,7 +752,7 @@ void Room::onArenaBossEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Boss)\n";
 
 	if (!assetManager_) return;
-	if (boss_) return;   // already spawned (one-shot guard)
+	if (finalBoss_) return;   // already spawned (one-shot guard)
 
 	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
 	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
@@ -801,16 +804,16 @@ void Room::onArenaBossEnter(Zone& zone, uint32 playerId) {
 	}
 	spawnPos = mu::Vec3(spawnPos.x(), groundHeightAtWorld(spawnPos.x(), spawnPos.z()), spawnPos.z());
 
-	boss_ = std::make_unique<Boss>();
-	boss_->setId(IdPool::pop());
-	boss_->setPos(spawnPos);
-	setupBoss(*boss_);
+	finalBoss_ = std::make_unique<FinalBoss>();
+	finalBoss_->setId(IdPool::pop());
+	finalBoss_->setPos(spawnPos);
+	setupFinalBoss(*finalBoss_);
 	// AI home: anchor the boss to its spawn with a wide activity zone (arena-sized) so
 	// it chases players across the arena instead of leashing back to the world origin.
-	boss_->setSpawnPos(spawnPos);
-	boss_->setActivityZone(spawnPos, 60.f);
+	finalBoss_->setSpawnPos(spawnPos);
+	finalBoss_->setActivityZone(spawnPos, 60.f);
 
-	Boss* raw = boss_.get();
+	FinalBoss* raw = finalBoss_.get();
 	raw->body().snapToCurrent();
 	physicsWorld_.registerBody(&raw->body(), [raw]() { raw->rebuildBodyBVH(); });
 	registerObject(raw);
@@ -934,22 +937,22 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	tickPool(slimes_);
 	tickPool(treants_);
 
-	// Final boss (runtime-spawned, single). Ticked inline: it is a Boss (no posHistory
-	// lag-comp snapshot), so it does not go through tickPool.
-	if (boss_) {
-		boss_->body().setOmega(mu::Vec3{});
-		auto result = boss_->update(dt, *this);
-		if (boss_->hp() > 0) {
+	// Final boss (runtime-spawned, single). Ticked inline: it is a FinalBoss (no
+	// posHistory lag-comp snapshot), so it does not go through tickPool.
+	if (finalBoss_) {
+		finalBoss_->body().setOmega(mu::Vec3{});
+		auto result = finalBoss_->update(dt, *this);
+		if (finalBoss_->hp() > 0) {
 			moveInfos.push_back({
-				static_cast<uint16>(boss_->getId()),
-				boss_->pos().getXmf(),
-				boss_->orient().getXmf(),
-				boss_->linearVel().getXmf()
+				static_cast<uint16>(finalBoss_->getId()),
+				finalBoss_->pos().getXmf(),
+				finalBoss_->orient().getXmf(),
+				finalBoss_->linearVel().getXmf()
 			});
 		}
 		if (result.hit) {
-			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(boss_->getId())));
-			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(boss_->getId()), result.hit->targetId, result.hit->newHp));
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(finalBoss_->getId())));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(finalBoss_->getId()), result.hit->targetId, result.hit->newHp));
 		}
 	}
 
@@ -1256,16 +1259,16 @@ void Room::enter(GameSession* session) {
 	pushMonsterInfo(treants_, ObjectType::Treant);
 
 	// Final boss (runtime-spawned): include so a late joiner sees the ongoing fight.
-	if (boss_ && boss_->hp() > 0) {
+	if (finalBoss_ && finalBoss_->hp() > 0) {
 		objInfos.push_back(ObjectInfo{
 			.type = ObjectType::Boss,
-			.objectId = static_cast<uint16>(boss_->getId()),
+			.objectId = static_cast<uint16>(finalBoss_->getId()),
 			.materialSetIdx = 0,
-			.hp = boss_->hp(),
-			.maxHp = boss_->maxHp(),
-			.pos = boss_->pos().getXmf(),
-			.orient = boss_->orient().getXmf(),
-			.scale = boss_->scale().getXmf(),
+			.hp = finalBoss_->hp(),
+			.maxHp = finalBoss_->maxHp(),
+			.pos = finalBoss_->pos().getXmf(),
+			.orient = finalBoss_->orient().getXmf(),
+			.scale = finalBoss_->scale().getXmf(),
 		});
 	}
 
@@ -1486,7 +1489,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		// every client plays the same reaction (matches the authoritative hitbox timing).
 		// Single-hit monsters ignore the index (always 0).
 		uint8 hitAnimIndex = 0;
-		if (boss_ && tgt == boss_.get()) {
+		if (finalBoss_ && tgt == finalBoss_.get()) {
 			static thread_local std::mt19937 hitRng{ std::random_device{}() };
 			hitAnimIndex = static_cast<uint8>(hitRng() & 1u);
 		}
