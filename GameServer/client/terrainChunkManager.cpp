@@ -8,6 +8,8 @@
 #include "light.hpp"           // Light::shadowVisible (shadow-frustum culling)
 #include "errorHandling.hpp"   // setD3DName
 #include "minimapTerrainPipeline.hpp"
+#include "minimapPropPipeline.hpp"
+#include "mesh.hpp"   // Mesh/SubMesh/Material for minimap prop draw events
 #include "../common/scatterTransform.hpp"
 
 #include <cmath>
@@ -700,6 +702,30 @@ void TerrainChunkManager::submitMinimapDrawEvents(GFX& gfx) const {
                 gfx.addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent{
                     .terrain = td,
                     .world   = mu::translate(slot.object->pos())
+                });
+            }
+        }
+    }
+}
+
+void TerrainChunkManager::submitMinimapPropDrawEvents(GFX& gfx, mu::Vec3 bakeCenter, float coverageWorld) const {
+    if (resolvedProtos_.empty() || coverageWorld <= 0.f) return;
+    // Cull to the bake square (+ a margin so a prop straddling the edge still draws).
+    const float halfCull = coverageWorld * 0.5f + 20.f;
+    const float cx = bakeCenter.x();
+    const float cz = bakeCenter.z();
+    for (const auto& [key, slot] : chunks_) {
+        if (!(slot.state == State::Ready || slot.state == State::Expiring)) continue;
+        for (const auto& inst : slot.scatter) {
+            if (inst.protoIdx >= resolvedProtos_.size()) continue;
+            const auto& proto = resolvedProtos_[inst.protoIdx];
+            if (!proto.collidable) continue;   // BVH props (trees/rocks) only; skip grass/flowers
+            if (std::abs(inst.worldAABB.center.x() - cx) > halfCull ||
+                std::abs(inst.worldAABB.center.z() - cz) > halfCull) continue;
+            for (const auto& part : proto.parts) {
+                gfx.addMinimapPropDrawEvent(MinimapPropPipeline::DrawEvent{
+                    .mesh = part.mesh, .subMesh = part.subMesh, .material = part.material,
+                    .world = part.meshXform * inst.world
                 });
             }
         }

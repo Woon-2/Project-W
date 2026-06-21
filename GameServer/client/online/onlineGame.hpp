@@ -322,6 +322,10 @@ private:
 	// Object* 로 두어 고블린/뱀/버섯 등 종류와 무관하게 통합 순회한다.
 	// ragdoll 등 몬스터 공통 동작은 Object의 가상 접근자로 접근.
 	std::unordered_map<uint16, Object*> idMonsterMap_{};
+	// 보스/중간보스(Boss/Grandbaum/Isys) npc id 집합. 스폰 시(서버 ObjectType 권위) 기록하며,
+	// 미니맵 아이콘이 일반 몬스터(빨강)와 보스(주황)를 구별하는 데 쓴다(RTTI/dynamic_cast 무의존).
+	// idMonsterMap_에 없는 id는 순회되지 않으므로 죽은 보스의 잔존 엔트리는 무해(리스폰 시 재삽입).
+	std::unordered_set<uint16> bossNpcIds_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -463,6 +467,11 @@ private:
 	// --- Minimap (top-left, North-up; background cache re-baked on chunk load/unload) ---
 	MinimapHUD minimap_{};
 	std::vector<MinimapEntityIcon> minimapIcons_{};
+	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
+	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk
+	// load/unload or when the player drifts > kMinimapRebakeMoveThreshold from this center.
+	mu::Vec3 minimapBakedCenter_{};
+	float    minimapBakedCoverage_ = 0.f;
 	unsigned     myWeaponOrdinal_    = 0;
 	int          dialSlotAssetId_[3] = { -1, -1, -1 };
 	int          basicSkillAssetId_  = -1;
@@ -571,8 +580,6 @@ private:
 		float            hpBarVisibleSeconds = 0.f;  // remaining seconds to show after a hit
 	};
 	std::unordered_map<uint16, StrongholdHpEntry> strongholdHpBars_{};
-
-	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

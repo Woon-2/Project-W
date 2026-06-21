@@ -49,6 +49,13 @@ public:
     // world-space radius around the player, so every loaded chunk is a candidate).
     void submitMinimapDrawEvents(GFX& gfx) const;
 
+    // Submits minimap prop draw events for ready chunks' BVH scatter props (trees/rocks/
+    // mesh landmarks) whose footprint falls within the bake square (centerXZ ± coverage/2).
+    // Foliage/grass (non-BVH) is skipped so the minimap isn't flooded. Baked top-down over
+    // the terrain so forests/landmarks show on the minimap.
+    void submitMinimapPropDrawEvents(GFX& gfx, mu::Vec3 bakeCenter, float coverageWorld) const;
+
+
     // True if a chunk has loaded or unloaded since the last clearMinimapDirty() call.
     // Polled once per frame by the renderer to decide whether the cached minimap
     // background (terrain + fog-of-war mask) needs to be re-baked.

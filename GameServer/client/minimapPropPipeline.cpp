@@ -1,10 +1,31 @@
 #include "pch.hpp"
-#include "minimapFogBlurPipeline.hpp"
+#include "minimapPropPipeline.hpp"
 #include "shader.hpp"
-#include "sharedResources.hpp"
+#include "mesh.hpp"
 #include "errorHandling.hpp"
 
-namespace MinimapFogBlurPipeline {
+namespace MinimapPropPipeline {
+
+void layoutMeshIfNeeded(const Mesh& mesh) {
+    if (mesh.vbViewsByPipeline.contains("MinimapPropPipeline")) {
+        return;
+    }
+
+    auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("MinimapPropPipeline");
+    auto& vbViews = pvbViews->second;
+    vbViews.reserve(2u);   // Position, UV
+
+    const auto checkVB = [&](const std::string& key) {
+        DISPLAY_ERROR_STR(mesh.vbIdxMap.contains(key),
+            "[GFX Error] MinimapPropPipeline::layoutMeshIfNeeded: VB key '" + key + "' not found.", false);
+    };
+
+    checkVB(mesh.name + "_VB_Position");
+    checkVB(mesh.name + "_VB_UV");
+
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Position")]);
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_UV")]);
+}
 
 Dispatcher::Dispatcher(
     const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
@@ -12,19 +33,24 @@ Dispatcher::Dispatcher(
     DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
     DescriptorPool* pCmpSamPool,
     const std::shared_ptr<RootSig>& rootSig,
-    const ComPtr<ID3D12PipelineState>& blurShader,
+    const ComPtr<ID3D12PipelineState>& shader,
     const ComPtr<ID3D12CommandQueue>& cmdQ,
+    const D3D12_VIEWPORT& viewport,
+    const D3D12_RECT& scissorRect,
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv,
     Fence* pFence,
     Resources* pResources,
     CommandListPool* commandListPool,
-    std::size_t roomIdx,
-    float blurRadiusTexels
+    std::vector<DrawEvent>&& drawEvents,
+    const mu::Mat4x4& viewProj,
+    std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-    rootSig_(rootSig), blurShader_(blurShader), cmdQ_(cmdQ),
+    rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
+    viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv),
     pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
-    roomIdx_(roomIdx), blurRadiusTexels_(blurRadiusTexels),
+    drawEvents_(std::move(drawEvents)), viewProj_(viewProj), roomIdx_(roomIdx),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
     rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
@@ -33,14 +59,13 @@ Dispatcher::Dispatcher(
     rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")) {}
 
 void Dispatcher::render() {
-    if (!SharedResources::Minimap::created) {
+    if (drawEvents_.empty()) {
         return;
     }
-    auto& m = SharedResources::Minimap::minimapData;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-        "[GFX Error] MinimapFogBlurPipeline::render: no command list available.", false
+        "[GFX Error] MinimapPropPipeline::render: no command list available.", false
     );
     if (!cmdCtx.cmdList) {
         return;
@@ -67,40 +92,37 @@ void Dispatcher::render() {
     pSamPool_->bind(cmdList, rootParamIdxSamPool_);
     pCmpSamPool_->bind(cmdList, rootParamIdxCmpSamPool_);
 
-    cmdList->SetPipelineState(blurShader_.Get());
+    cmdList->SetPipelineState(shader_.Get());
+    cmdList->OMSetRenderTargets(1u, &rtv_, false, nullptr);
+    cmdList->RSSetViewports(1u, &viewport_);
+    cmdList->RSSetScissorRects(1u, &scissorRect_);
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    const float texelSize = 1.f / static_cast<float>(m.size);
-    auto vp = D3D12_VIEWPORT{ 0.f, 0.f, static_cast<float>(m.size), static_cast<float>(m.size), 0.f, 1.f };
-    auto sc = D3D12_RECT{ 0, 0, static_cast<LONG>(m.size), static_cast<LONG>(m.size) };
-    cmdList->RSSetViewports(1u, &vp);
-    cmdList->RSSetScissorRects(1u, &sc);
+    const std::size_t count = std::min<std::size_t>(drawEvents_.size(), kMaxDrawEvents);
+    for (std::size_t i = 0u; i < count; ++i) {
+        const auto& ev = drawEvents_[i];
+        if (!ev.mesh || !ev.subMesh || !ev.material) continue;
 
-    auto doPass = [&](u32t pass, const BindlessIndex& src, D3D12_CPU_DESCRIPTOR_HANDLE dstRtv, bool horizontal) {
-        auto pdd = MinimapFogBlurShader::PerDrawcallData{
-            .idxSrc            = src,
-            .srcTexelSize      = XMFLOAT2(texelSize, texelSize),
-            .blurRadiusTexels  = blurRadiusTexels_,
-            .horizontal        = horizontal ? 1u : 0u
+        auto pdd = MinimapPropShader::PerDrawcallData{
+            .wvp = mu::transpose(ev.world * viewProj_).getXmf()
         };
-        pResources_->perDrawcallData.cbuffers[pass].stage(roomIdx_, &pdd, 1u);
-        cmdList->OMSetRenderTargets(1u, &dstRtv, false, nullptr);
-        pResources_->perDrawcallData.cbuffers[pass].bind(cmdList, rootParamIdxPDD_, roomIdx_);
-        cmdList->DrawInstanced(3u, 1u, 0u, 0u);
-    };
+        pdd.idxAlbedo   = ev.material->mapAlbedo.idxSrv;
+        pdd.tint        = ev.material->constantAlbedo;
+        pdd.alphaCutoff = ev.material->constantAlphaCutoff;
 
-    // Pass 1 (horizontal): texA (terrain cache result, SRV) -> texB (RTV).
-    SharedResources::Minimap::transitionToRead(/*useA=*/true, cmdList);
-    SharedResources::Minimap::transitionToWrite(/*useA=*/false, cmdList);
-    doPass(0u, m.texA.idxSrv, m.rtvB, /*horizontal=*/true);
+        pResources_->perDrawcallData.cbuffers[i].stage(roomIdx_, &pdd, 1u);
+        pResources_->perDrawcallData.cbuffers[i].bind(cmdList, rootParamIdxPDD_, roomIdx_);
 
-    // Pass 2 (vertical + composite): texB (SRV) -> texA (RTV). Final result lands in texA.
-    SharedResources::Minimap::transitionToRead(/*useA=*/false, cmdList);
-    SharedResources::Minimap::transitionToWrite(/*useA=*/true, cmdList);
-    doPass(1u, m.texB.idxSrv, m.rtvA, /*horizontal=*/false);
+        layoutMeshIfNeeded(*ev.mesh);
+        const auto& vbViews = ev.mesh->vbViewsByPipeline.at("MinimapPropPipeline");
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(
+            0u, static_cast<UINT>(vbViews.size()), vbViews.data()), false);
 
-    // Leave texA readable for the minimap UI quad to sample.
-    SharedResources::Minimap::transitionToRead(/*useA=*/true, cmdList);
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&ev.subMesh->ibView), false);
+
+        const UINT indexCount = ev.subMesh->ibView.SizeInBytes / sizeof(u32t);
+        DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+    }
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR( hrClose, false );
@@ -114,4 +136,4 @@ void Dispatcher::render() {
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
-}   // namespace MinimapFogBlurPipeline
+}   // namespace MinimapPropPipeline

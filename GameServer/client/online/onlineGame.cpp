@@ -422,22 +422,6 @@ void Game::setupStage() {
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 
-	hiZStatsLabel_ = static_cast<UI::Label*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Label>())
-	);
-	hiZStatsLabel_->name    = "hiZStatsLabel";
-	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
-	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
-	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
-	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
-	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
-	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
-	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
-	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
-	hiZStatsLabel_->setFontSize(18.0f);
-	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
-	hiZStatsLabel_->setText(L"HiZ: OFF");
-
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
 	gfx_.setMaxRenderObjectId(1000u);
@@ -2601,6 +2585,7 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 	auto grandbaum = std::make_shared<Grandbaum>();
 	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 void Game::createIsys(const ObjectInfo& info) {
@@ -2608,6 +2593,7 @@ void Game::createIsys(const ObjectInfo& info) {
 	auto isys = std::make_shared<Isys>();
 	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 // Final boss: own 14-clip rig, dedicated MonsterKind::Boss container/corpse routing.
@@ -2616,6 +2602,7 @@ void Game::createBoss(const ObjectInfo& info) {
 	auto boss = std::make_shared<Boss>();
 	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
 	bosses_.push_back(boss);
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 // === Client-authored corpse pipeline =======================================
@@ -4103,17 +4090,6 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		}
 
-		if (hiZStatsLabel_) {
-			if (gfx_.isHiZCullEnabled()) {
-				const auto stats = gfx_.getHiZStats();
-				wchar_t buf[64];
-				swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
-				hiZStatsLabel_->setText(buf);
-			} else {
-				hiZStatsLabel_->setText(L"HiZ: OFF");
-			}
-		}
-
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4318,21 +4294,35 @@ void Game::renderInGame() {
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 
-		// Minimap background cache: re-baked only when the streamed chunk set changes
-		// (TerrainChunkManager::minimapDirty()), never every frame.
-		if (chunkManager_.minimapDirty()) {
-			gfx_.requestMinimapRebake();
-			chunkManager_.submitMinimapDrawEvents(gfx_);
-			gfx_.setMinimapCamera(MinimapTerrainPipeline::CameraData{
-				.view = mu::lookAt(
-					player_->pos() + mu::Vec3(0.f, GFX::kMinimapWorldRadius * 4.f, 0.f),
-					player_->pos(), mu::NVec3(0.f, 0.f, 1.f)),
-				.proj = mu::ortho(
-					-GFX::kMinimapWorldRadius, GFX::kMinimapWorldRadius,
-					-GFX::kMinimapWorldRadius, GFX::kMinimapWorldRadius,
-					0.1f, GFX::kMinimapWorldRadius * 8.f)
-			});
-			chunkManager_.clearMinimapDirty();
+		// Minimap background cache. The texture covers a fixed kMinimapCoverageWorld-sized
+		// square centered on the player; the HUD scrolls it via a per-frame UV sub-rect. It is
+		// a single shared RT, re-baked only when needed: on a chunk load/unload (new terrain),
+		// or when the player drifts > kMinimapRebakeMoveThreshold from the baked center (so the
+		// view never reaches the texture edge). Coverage is sized to the view (not the 200m
+		// chunk) to keep enough px/m for splat + prop detail.
+		{
+			const mu::Vec3 p = player_->pos();
+			const float dx = p.x() - minimapBakedCenter_.x();
+			const float dz = p.z() - minimapBakedCenter_.z();
+			const bool moved = (dx * dx + dz * dz) >
+				(GFX::kMinimapRebakeMoveThreshold * GFX::kMinimapRebakeMoveThreshold);
+			const bool firstBake = (minimapBakedCoverage_ <= 0.f);
+			if (chunkManager_.minimapDirty() || moved || firstBake) {
+				chunkManager_.clearMinimapDirty();
+				minimapBakedCenter_   = mu::Vec3(p.x(), 0.f, p.z());
+				minimapBakedCoverage_ = GFX::kMinimapCoverageWorld;
+
+				gfx_.requestMinimapRebake();
+				chunkManager_.submitMinimapDrawEvents(gfx_);
+				chunkManager_.submitMinimapPropDrawEvents(gfx_, minimapBakedCenter_, minimapBakedCoverage_);
+				const float H = minimapBakedCoverage_ * 0.5f;
+				gfx_.setMinimapCamera(MinimapTerrainPipeline::CameraData{
+					.view = mu::lookAt(
+						minimapBakedCenter_ + mu::Vec3(0.f, minimapBakedCoverage_ * 4.f, 0.f),
+						minimapBakedCenter_, mu::NVec3(0.f, 0.f, 1.f)),
+					.proj = mu::ortho(-H, H, -H, H, 0.1f, minimapBakedCoverage_ * 8.f)
+				});
+			}
 		}
 	}
 
@@ -4358,12 +4348,12 @@ void Game::renderInGame() {
 	}
 	for (const auto& [id, obj] : idMonsterMap_) {
 		if (!obj) continue;
-		const bool isBossLike = dynamic_cast<Boss*>(obj) || dynamic_cast<Grandbaum*>(obj) || dynamic_cast<Isys*>(obj);
+		const bool isBossLike = bossNpcIds_.count(id) != 0;
 		minimapIcons_.push_back(MinimapEntityIcon{
 			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
 		});
 	}
-	minimap_.render(gfx_, player_->pos(), GFX::kMinimapWorldRadius, minimapIcons_,
+	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 
@@ -5535,6 +5525,13 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		std::chrono::steady_clock::now().time_since_epoch()).count();
 
 	if (!playerDead_ && !uiManager_.needsCursor()) {
+		// Shift+wheel zooms the minimap; plain wheel selects a skill slot.
+		// (WM_MOUSEWHEEL carries no MK_SHIFT here, so read the keyboard snapshot.)
+		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		if (shiftHeld) {
+			while (wheelAccum_ >= WHEEL_DELTA) { wheelAccum_ -= WHEEL_DELTA; minimap_.zoomIn(); }
+			while (wheelAccum_ <= -WHEEL_DELTA) { wheelAccum_ += WHEEL_DELTA; minimap_.zoomOut(); }
+		} else {
 		// Wheel selection (one notch = one slot). Up = prev, down = next.
 		while (wheelAccum_ >= WHEEL_DELTA) {
 			wheelAccum_ -= WHEEL_DELTA;
@@ -5545,6 +5542,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			wheelAccum_ += WHEEL_DELTA;
 			skillDial_.selectNext();
 			sendSelectSkillPacket(static_cast<uint8>(skillDial_.selected()));
+		}
 		}
 
 		// Wheel click (middle button): use the selected skill if it has a stack and

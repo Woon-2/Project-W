@@ -485,20 +485,24 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `docs/scatterSystem.md` | Scatter 시스템 설계: 포맷 v3(per-instance Rot 쿼터니언·Align To Ground 베이크), 이름 매핑(ModelExtractor targetName), 자동 인스턴싱, 알파 컷아웃(+albedo 맵 누락 클리핑 함정), 빌보드, 충돌(ScatterCollider 구현) |
 | `docs/scatterAuthoringGuide.md` | 지형에 Tree/Rock/Flower/Bush/Plant 띄우는 실전 작성 가이드(ModelExtractor→TerrainExtractor→DDS 변환→배치→실행, 트러블슈팅) |
 
-**미니맵 (top-down, North-up, 캐시):**
+**미니맵 (top-down, North-up; 월드 고정 베이크 + 매 프레임 UV 스크롤):**
+
+> 캐시 텍스처는 **플레이어 중심의 고정 크기(`kMinimapCoverageWorld`=360m) 월드 영역**에 베이크되고, HUD가 매 프레임 플레이어 위치 기준 **UV sub-rect**로 스크롤한다(플레이어 중앙 고정, 지형이 반대로 흐름). **단일 RT**(per-room 아님; 직렬 큐라 해저드 없음, 깜빡임 근본 해소). 재굽기는 청크 로드/언로드 **또는 플레이어가 베이크 중심에서 50m(`kMinimapRebakeMoveThreshold`) 이상 이동** 시 1프레임으로 수행. 커버리지는 청크 크기(200m)와 무관하게 시야 기준이라 splat·prop이 또렷(1024px). 미로드 영역은 검정→fog-of-war 블러.
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `TerrainChunkManager::minimapDirty()`/`clearMinimapDirty()`/`markMinimapDirty()` | `terrainChunkManager.hpp` | 청크 로드(`activateChunkRenderAndPhysics`)/언로드(`update()` toUnload 루프) 시 세팅되는 dirty 플래그 — 미니맵 배경 재굽기 트리거(폴링) |
-| `TerrainChunkManager::submitMinimapDrawEvents()` | `terrainChunkManager.cpp` | `submitDrawEvents()`와 별도 경량 경로: Ready/Expiring 청크 전부를 컬링 없이 `MinimapTerrainPipeline::DrawEvent`로 제출 |
-| `MinimapTerrainPipeline` | `minimapTerrainPipeline.hpp/.cpp` + `minimapTerrain.hlsl` | diffuse-only(노멀/라이팅/그림자 없음) 경량 지형 패스. PS는 alpha=1 고정 출력(로드된 영역 마스크) |
-| `MinimapFogBlurPipeline` | `minimapFogBlurPipeline.hpp/.cpp` + `minimapFogBlur.hlsl` | 2-pass(가로/세로) box blur, BloomPipeline의 fullscreen-triangle 패턴 차용. 세로 패스에서 `finalRGB=lerp(black,srcRGB,blurredAlpha)` 합성까지 수행(fog-of-war) |
-| `SharedResources::Minimap` | `sharedResources.hpp/.cpp` | texA/texB ping-pong RT(R8G8B8A8, RTV+SRV, depth 없음). 지형 패스→texA, 블러 2-pass가 texA↔texB 핑퐁, 최종은 texA |
-| `GFX::requestMinimapRebake/addMinimapDrawEvent/setMinimapCamera/minimapTextureForThisFrame` | `gfx.hpp/.cpp` | Portrait 패턴과 동일하되 "활성 시 매 프레임" 대신 "dirty 요청 시 1회"만 `render()`에서 재굽기 실행 |
-| `GFX::kMinimapRTSize/kMinimapWorldRadius/kMinimapFogBlurRadiusTexels` | `gfx.hpp` | 캐시 해상도(512)/월드 반경(60m)/페이드 폭(텍셀) 상수 |
-| `MinimapHUD` | `client/ui/minimapHUD.hpp/.cpp` | 좌상단 고정 위젯: 프레임(단색)+배경(캐시 텍스처)+엔티티 아이콘(단색 quad, `gfx.solidColorTex()`). 아이콘은 3D 렌더 없이 world XZ→로컬 오프셋 선형 변환(North-up) |
+| `TerrainChunkManager::minimapDirty()`/`clearMinimapDirty()`/`markMinimapDirty()` | `terrainChunkManager.hpp` | 청크 로드/언로드 시 세팅되는 dirty 플래그(폴링 트리거) |
+| `TerrainChunkManager::submitMinimapDrawEvents()` | `terrainChunkManager.cpp` | 컬링 없이 Ready/Expiring 청크 전부를 `MinimapTerrainPipeline::DrawEvent`로 제출(베이크 center/coverage는 onlineGame이 player pos + `GFX::kMinimapCoverageWorld`로 계산) |
+| `MinimapTerrainPipeline` | `minimapTerrainPipeline.hpp/.cpp` + `minimapTerrain.hlsl` | splat-blend diffuse 지형 패스. PS alpha=1 고정(로드 영역 마스크) |
+| `MinimapPropPipeline` | `minimapPropPipeline.hpp/.cpp` + `minimapProp.hlsl` | scatter prop(나무/바위 등 **BVH prop만**) top-down albedo + alpha-cutout 베이크(지형 texA 위에 겹쳐 그림). 풀(grass/flowers, 비-BVH)은 미니맵 도배 방지로 제외. 텍스처 위에 그려 fog 마스크(alpha=1)에도 기여 |
+| `TerrainChunkManager::submitMinimapPropDrawEvents()` | `terrainChunkManager.cpp` | Ready 청크의 collidable(BVH) scatter 인스턴스 part를 `MinimapPropPipeline::DrawEvent`로 제출 |
+| `MinimapFogBlurPipeline` | `minimapFogBlurPipeline.hpp/.cpp` + `minimapFogBlur.hlsl` | 2-pass separable로 **alpha(커버리지 마스크)만** 블러하고 **RGB는 중심 탭으로 선명 통과**, `finalRGB = sharpRGB × blurredAlpha`로 합성. fog는 가장자리만 페이드(지형 색은 안 뭉갬). ※RGB까지 블러하던 버그로 미니맵 전체가 흐렸던 것 수정 |
+| `SharedResources::Minimap` | `sharedResources.hpp/.cpp` | **단일** texA/texB ping-pong RT(R8G8B8A8, `created` 플래그). 초기 상태 PIXEL_SHADER_RESOURCE(첫 베이크 전 샘플 시 상태 불일치 방지) |
+| `GFX::requestMinimapRebake/addMinimapDrawEvent/addMinimapPropDrawEvent/setMinimapCamera/minimapTextureForThisFrame` | `gfx.hpp/.cpp` | 요청 프레임에 단일 RT를 1프레임으로 베이크(지형→prop→fog블러) |
+| `GFX::kMinimapRTSize/kMinimapCoverageWorld/kMinimapRebakeMoveThreshold/kMinimapWorldRadius/kMinimapFogBlurRadiusTexels` | `gfx.hpp` | 캐시 해상도(1024)/커버리지(360m)/이동 재굽기 임계(50m)/기본 시야 반경(60m, 줌 base)/페이드 폭(48텍셀) |
+| `MinimapHUD` | `client/ui/minimapHUD.hpp/.cpp` | **우상단**(제거된 Hi-Z 디버그 프린트 자리) 위젯: 프레임+배경(UV 스크롤 sub-rect)+아이콘. 크기·위치 해상도 상대화(`uiScale=min(sw/1024,sh/768)`), 줌(`zoomIn/zoomOut`, Shift+휠), 아이콘 크기 축소(몬스터 3.5/파티 5/본인 6.5/보스 8 px×uiScale) |
 | `MinimapEntityIcon` | `client/ui/minimapHUD.hpp` | `{worldPos, Kind}` — Self(초록)/Party(파랑)/Monster(빨강)/Boss(주황) |
-| `Online::Game::minimap_`/`minimapIcons_` | `online/onlineGame.hpp/.cpp` | `idPlayerMap_`(본인+파티원)/`idMonsterMap_`(몬스터) 순회로 아이콘 수집. 보스/중간보스 판별은 `dynamic_cast<Boss*>`/`<Grandbaum*>`/`<Isys*>` |
+| `Online::Game::minimap_`/`minimapIcons_`/`minimapBakedCenter_`/`minimapBakedCoverage_`/`bossNpcIds_` | `online/onlineGame.hpp/.cpp` | 아이콘 수집(`idPlayerMap_`/`idMonsterMap_`), 재굽기 트리거(청크 dirty 또는 50m 이동), Shift+휠 줌(`processInputGame`). 보스 판별은 스폰 시 채운 `bossNpcIds_` 집합(서버 ObjectType 권위, RTTI 무의존) |
 | `unityScripts/TerrainExtractor.cs` | 지형+산포 추출(Export All Chunks). chunks_index v3 작성, `ScanPrototypes`(이름=매핑키), `GatherScatter`(트리=treeInstances·디테일=`ComputeDetailInstanceTransforms`), per-instance `Rot` 쿼터니언에 Align To Ground 틸트 베이크 |
 | `unityScripts/ModelExtractor.cs` | 프롭/캐릭터 `.bin` 추출. LODGroup이면 **LOD0만**(`CollectLODRenderers`/`IsRendererUsable`), `FindAlbedoTexture`(셰이더 TexEnv 폴백으로 albedo 견고 추출), `cAlbedo` 흰색 기본값 |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |

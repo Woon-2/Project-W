@@ -60,6 +60,7 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMinimapTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createMinimapPropShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -829,6 +830,21 @@ struct PerDrawcallData {
 };
 
 }	// namespace MinimapTerrainShader
+
+// MinimapPropShader — top-down albedo (+ alpha-cutout) bake of scatter props (trees/rocks)
+// into the minimap background cache, so forests/landmarks show. minimapProp.hlsl.
+namespace MinimapPropShader {
+
+// Matches cbuffer PerDrawcallData : register(b0) in minimapProp.hlsl.
+struct PerDrawcallData {
+    XMFLOAT4X4    wvp;          // world * minimap ortho view * proj (per instance/part)
+    BindlessIndex idxAlbedo;    // int4 (idxRange < 0 => use tint only)
+    XMFLOAT4      tint;         // material constantAlbedo (rgb*a)
+    float         alphaCutoff;  // foliage alpha test (0 = opaque)
+    float         _pad[3];
+};
+
+}	// namespace MinimapPropShader
 
 // TerrainShadowMapShader
 namespace TerrainShadowMapShader {

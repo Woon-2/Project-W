@@ -319,6 +319,7 @@ void GFX::init() {
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("MinimapTerrainShader", createMinimapTerrainShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("MinimapPropShader", createMinimapPropShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShadowMapShader", createTerrainShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShadowMapCSMShader", createTerrainShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShaderCSMDebug", createPBRShaderCSMDebug(device_.Get(), defaultRootSig.get()));
@@ -1003,14 +1004,17 @@ void GFX::addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent&& drawEvent) {
 	drawEventsMinimap_.push_back(std::move(drawEvent));
 }
 
+void GFX::addMinimapPropDrawEvent(MinimapPropPipeline::DrawEvent&& drawEvent) {
+	drawEventsMinimapProp_.push_back(std::move(drawEvent));
+}
+
 void GFX::setMinimapCamera(const MinimapTerrainPipeline::CameraData& cameraData) {
 	cameraDataMinimap_ = cameraData;
 }
 
 const Texture* GFX::minimapTextureForThisFrame() const {
-	if (SharedResources::Minimap::minimapData.empty()) return nullptr;
-	const auto roomIdx = frameIdx_ % backBuffers_.size();
-	return &SharedResources::Minimap::minimapData[roomIdx].texA;
+	if (!SharedResources::Minimap::created) return nullptr;
+	return &SharedResources::Minimap::minimapData.texA;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -1428,13 +1432,17 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 			backBuffers_.size(), ("Skinned_Main_PerFrameData" + sfx)
 		);
 	}
-	// 미니맵 배경 캐시 RT 쌍(texA/texB) — 청크 변경 시에만 재굽는 작은 정사각 RT.
+	// 미니맵 배경 캐시 RT 쌍(texA/texB) — 단일 인스턴스(per-room 아님; 위 SharedResources::Minimap 주석 참조).
 	SharedResources::Minimap::addMinimapRT(
-		device_.Get(), kMinimapRTSize, backBuffers_.size(), rtvPool_, srvTexPool_
+		device_.Get(), kMinimapRTSize, rtvPool_, srvTexPool_
 	);
 	resourcesMinimapTerrain_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(MinimapTerrainShader::PerDrawcallData), MinimapTerrainPipeline::kMaxDrawEvents,
 		backBuffers_.size(), "MinimapTerrain_PerDrawcallData"
+	);
+	resourcesMinimapProp_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(MinimapPropShader::PerDrawcallData), MinimapPropPipeline::kMaxDrawEvents,
+		backBuffers_.size(), "MinimapProp_PerDrawcallData"
 	);
 	resourcesMinimapFogBlur_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(MinimapFogBlurShader::PerDrawcallData), MinimapFogBlurPipeline::kPassCount,
@@ -2987,9 +2995,15 @@ void GFX::render() {
 		for (auto& dq : drawEventsLobbyPortrait_) dq.clear();
 	}
 
-	// ===== 미니맵 배경 캐시 재굽기 (청크 변경 시 1회만 — Portrait와 달리 매 프레임 실행 안 함) =====
-	if (minimapRebakeRequested_ && !SharedResources::Minimap::minimapData.empty()) {
+	// ===== 미니맵 배경 캐시 재굽기 (재굽기 요청 프레임에만; 단일 RT라 1프레임으로 충분) =====
+	if (minimapRebakeRequested_ && SharedResources::Minimap::created) {
+		// per-room CB용 인덱스(RT는 단일). 재굽기는 드물어 CB는 cyclic 재사용으로 충분.
 		const auto roomIdx = frameIdx_ % backBuffers_.size();
+		auto& m = SharedResources::Minimap::minimapData;
+		const auto vp = D3D12_VIEWPORT{ 0.f, 0.f,
+			static_cast<float>(kMinimapRTSize), static_cast<float>(kMinimapRTSize), 0.f, 1.f };
+		const auto sc = D3D12_RECT{ 0, 0,
+			static_cast<LONG>(kMinimapRTSize), static_cast<LONG>(kMinimapRTSize) };
 
 		// (1) texA를 RENDER_TARGET으로 전환 + 투명 클리어.
 		{
@@ -2997,8 +3011,8 @@ void GFX::render() {
 			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cc) && cc.cmdList) {
 				DISPLAY_ERROR_DX_HR(cc.cmdAlloc->Reset(), false);
 				DISPLAY_ERROR_DX_HR(cc.cmdList->Reset(cc.cmdAlloc.Get(), nullptr), false);
-				SharedResources::Minimap::transitionToWrite(roomIdx, /*useA=*/true, cc.cmdList.Get());
-				SharedResources::Minimap::clearMinimapRT(roomIdx, /*useA=*/true, cc.cmdList.Get());
+				SharedResources::Minimap::transitionToWrite(/*useA=*/true, cc.cmdList.Get());
+				SharedResources::Minimap::clearMinimapRT(/*useA=*/true, cc.cmdList.Get());
 				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
 				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
 				cmdQ_->ExecuteCommandLists(1u, cls);
@@ -3006,14 +3020,8 @@ void GFX::render() {
 			}
 		}
 
-		// (2) 로드된 청크들을 texA에 그린다 (diffuse만, alpha=1 = 로드된 영역 마스크).
+		// (2) 로드된 청크들을 texA에 그린다 (diffuse splat-blend, alpha=1 = 로드된 영역 마스크).
 		{
-			const auto& m = SharedResources::Minimap::minimapData[roomIdx];
-			const auto vp = D3D12_VIEWPORT{ 0.f, 0.f,
-				static_cast<float>(kMinimapRTSize), static_cast<float>(kMinimapRTSize), 0.f, 1.f };
-			const auto sc = D3D12_RECT{ 0, 0,
-				static_cast<LONG>(kMinimapRTSize), static_cast<LONG>(kMinimapRTSize) };
-
 			auto minimapTerrainDispatcher = MinimapTerrainPipeline::Dispatcher(
 				tmpDescriptorHeaps,
 				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -3026,6 +3034,22 @@ void GFX::render() {
 			minimapTerrainDispatcher.render();
 		}
 		dumpLog();
+
+		// (2b) scatter prop(나무/바위)을 같은 texA에 top-down albedo로 굽힘(지형 위에 겹쳐 그림).
+		if (!drawEventsMinimapProp_.empty()) {
+			auto minimapPropDispatcher = MinimapPropPipeline::Dispatcher(
+				tmpDescriptorHeaps,
+				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+				&samPool_, &cmpSamPool_,
+				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapPropShader"),
+				cmdQ_, vp, sc, m.rtvA,
+				&fenceToSignal, &resourcesMinimapProp_, &cmdListPool_,
+				std::move(drawEventsMinimapProp_),
+				cameraDataMinimap_.view * cameraDataMinimap_.proj, roomIdx
+			);
+			minimapPropDispatcher.render();
+			dumpLog();
+		}
 
 		// (3) fog-of-war 블러 2-pass + 합성 (texA<->texB 핑퐁, 최종 결과는 texA에 남는다).
 		{
@@ -3043,6 +3067,7 @@ void GFX::render() {
 
 		minimapRebakeRequested_ = false;
 		drawEventsMinimap_.clear();
+		drawEventsMinimapProp_.clear();
 	}
 
 	// Ui Pipeline의 rendering

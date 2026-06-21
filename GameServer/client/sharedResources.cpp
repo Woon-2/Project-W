@@ -1159,7 +1159,8 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 
 namespace Minimap {
 
-std::vector<MinimapRTData> minimapData;
+MinimapRTData minimapData;
+bool          created = false;
 
 namespace {
 
@@ -1169,8 +1170,10 @@ Texture createMinimapTex( ID3D12Device* device, u32t size,
 ) {
 	constexpr DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color = {0.f, 0.f, 0.f, 0.f} };
+	// 초기 상태 PIXEL_SHADER_RESOURCE: 첫 재굽기 전 UI가 샘플해도 리소스 상태 불일치
+	// (디버그 레이어 에러)가 나지 않도록 한다(내용은 투명, 첫 재굽기에서 채워짐).
 	Texture tex = createTexture( device, size, size, format,
-		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 		clearVal
 	);
 	setD3DName(tex.res.Get(), name);
@@ -1197,31 +1200,25 @@ Texture createMinimapTex( ID3D12Device* device, u32t size,
 }	// anonymous namespace
 
 void addMinimapRT( ID3D12Device* device, u32t size,
-	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool
 ) {
-	minimapData.reserve(roomCnt);
+	if (created) return;
 
-	for (std::size_t r = 0u; r < roomCnt; ++r) {
-		MinimapRTData m{};
-		m.size = size;
+	minimapData = MinimapRTData{};
+	minimapData.size = size;
+	minimapData.texA = createMinimapTex(device, size, rtvPool, srvTexPool, "Minimap_TexA");
+	minimapData.texB = createMinimapTex(device, size, rtvPool, srvTexPool, "Minimap_TexB");
+	minimapData.rtvA = rtvPool.cpuHandle(minimapData.texA.idxRtv);
+	minimapData.rtvB = rtvPool.cpuHandle(minimapData.texB.idxRtv);
+	minimapData.curStateA = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	minimapData.curStateB = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
-		const auto suffix = "[" + std::to_string(r) + "]";
-		m.texA = createMinimapTex(device, size, rtvPool, srvTexPool, ("Minimap_TexA" + suffix).c_str());
-		m.texB = createMinimapTex(device, size, rtvPool, srvTexPool, ("Minimap_TexB" + suffix).c_str());
-
-		m.rtvA = rtvPool.cpuHandle(m.texA.idxRtv);
-		m.rtvB = rtvPool.cpuHandle(m.texB.idxRtv);
-		m.curStateA = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		m.curStateB = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-		minimapData.push_back(std::move(m));
-	}
+	created = true;
 }
 
-void transitionToWrite(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
-	auto& m = minimapData[roomIdx];
-	Texture& tex = useA ? m.texA : m.texB;
-	auto& state  = useA ? m.curStateA : m.curStateB;
+void transitionToWrite(bool useA, ID3D12GraphicsCommandList* cmdList) {
+	Texture& tex = useA ? minimapData.texA : minimapData.texB;
+	auto& state  = useA ? minimapData.curStateA : minimapData.curStateB;
 	if (state != D3D12_RESOURCE_STATE_RENDER_TARGET) {
 		transitionResourceState(cmdList, tex.res.Get(),
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -1231,10 +1228,9 @@ void transitionToWrite(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList
 	}
 }
 
-void transitionToRead(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
-	auto& m = minimapData[roomIdx];
-	Texture& tex = useA ? m.texA : m.texB;
-	auto& state  = useA ? m.curStateA : m.curStateB;
+void transitionToRead(bool useA, ID3D12GraphicsCommandList* cmdList) {
+	Texture& tex = useA ? minimapData.texA : minimapData.texB;
+	auto& state  = useA ? minimapData.curStateA : minimapData.curStateB;
 	if (state != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
 		transitionResourceState(cmdList, tex.res.Get(),
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -1244,10 +1240,9 @@ void transitionToRead(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList*
 	}
 }
 
-void clearMinimapRT(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
-	auto& m = minimapData[roomIdx];
+void clearMinimapRT(bool useA, ID3D12GraphicsCommandList* cmdList) {
 	const float kTransparent[4] = { 0.f, 0.f, 0.f, 0.f };
-	cmdList->ClearRenderTargetView(useA ? m.rtvA : m.rtvB, kTransparent, 0u, nullptr);
+	cmdList->ClearRenderTargetView(useA ? minimapData.rtvA : minimapData.rtvB, kTransparent, 0u, nullptr);
 }
 
 }	// namespace Minimap
