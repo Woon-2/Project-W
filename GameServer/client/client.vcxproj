@@ -594,6 +594,10 @@
     <None Include="..\resources\skills\birdy_attack1.lua" />
     <None Include="..\resources\skills\birdy_attack2.lua" />
     <None Include="..\resources\skills\bomber_attack1.lua" />
+    <None Include="..\resources\skills\boss_backattack.lua" />
+    <None Include="..\resources\skills\boss_combo.lua" />
+    <None Include="..\resources\skills\boss_smite.lua" />
+    <None Include="..\resources\skills\boss_swings.lua" />
     <None Include="..\resources\skills\crystals_cross_fade.lua" />
     <None Include="..\resources\skills\crystals_front_attack.lua" />
     <None Include="..\resources\skills\energy_explosion_arrow.lua" />

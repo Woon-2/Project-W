@@ -2795,8 +2795,8 @@ void Game::update(Milliseconds deltaTime) {
 
 		activateRagdollIfPending(*goblin_);
 		syncRagdollToAnim(*goblin_);
-		// Debug ragdoll toggle (K): the controlled caster may be the player, which the
-		// goblin_ sync above doesn't cover. Sync it too when its ragdoll is active.
+		// The controlled caster (K toggle) may be the player, which the goblin_ sync above
+		// doesn't cover. Sync it too when its ragdoll is active.
 		if (auto c = editor_.controlledObject(); c && c.get() != goblin_.get())
 			syncRagdollToAnim(*c);
 	}
@@ -3135,11 +3135,7 @@ void Game::toggleCasterRagdoll() {
 	auto obj = editor_.controlledObject();
 	if (!obj) return;
 	Ragdoll* prd = obj->ragdoll();
-	if (!prd) {
-		gSharedLog << "[RagdollToggle] controlled object has no ragdoll support\n";
-		dumpLog();
-		return;
-	}
+	if (!prd) return;
 	Ragdoll& rd = *prd;
 
 	// Already ragdolled -> revert to animated control. Deactivate + destroy the ragdoll
@@ -3149,16 +3145,10 @@ void Game::toggleCasterRagdoll() {
 		rd.destroy(physicsWorld_);
 		physicsWorld_.registerBody(&obj->body(), [p = obj.get()]() { p->rebuildBodyBVH(); });
 		obj->body().snapToCurrent();
-		gSharedLog << "[RagdollToggle] ragdoll OFF\n";
-		dumpLog();
 		return;
 	}
 
-	if (!obj->model() || !obj->model()->ragdollDef || !obj->animBlender()) {
-		gSharedLog << "[RagdollToggle] controlled object has no ragdollDef / model / blender (cannot ragdoll)\n";
-		dumpLog();
-		return;
-	}
+	if (!obj->model() || !obj->model()->ragdollDef || !obj->animBlender()) return;
 
 	// Build the ragdoll for the CURRENT model. The editor caster rig is hot-swappable
 	// (e.g. to Boss), and setMonsterCaster does not rebuild the ragdoll, so rebuild here.
@@ -3177,8 +3167,6 @@ void Game::toggleCasterRagdoll() {
 		if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 1.f, 0.f);
 		rb.body->applyImpulse(mu::Vec3(mu::NVec3(rnd)) * rb.noiseImpulse, rb.body->pos());
 	}
-	gSharedLog << "[RagdollToggle] ragdoll ON\n";
-	dumpLog();
 }
 
 void Game::cullObjects() {

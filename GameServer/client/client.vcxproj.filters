@@ -411,6 +411,12 @@
     <ClCompile Include="ui\skillDialHUD.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="energyOrbPipeline.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="energyOrbSystem.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -818,6 +824,12 @@
     <ClInclude Include="ui\skillDialHUD.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="energyOrbPipeline.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="energyOrbSystem.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -923,6 +935,7 @@
     <FxCompile Include="trail.hlsl" />
     <FxCompile Include="piercing.hlsl" />
     <FxCompile Include="piercingSlash.hlsl" />
+    <FxCompile Include="energyOrb.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="bindless.hlsli">
@@ -1025,6 +1038,18 @@
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
     <None Include="..\resources\skills\treant_spinkick.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\boss_backattack.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\boss_combo.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\boss_smite.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\boss_swings.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
   </ItemGroup>
