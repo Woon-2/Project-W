@@ -617,7 +617,7 @@ private:
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
 	uint16                   hostId_ = 0;
-	uint16                   myId_   = 0;
+	uint16                   myLobbyId_ = 0;
 	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 

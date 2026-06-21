@@ -779,7 +779,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::lobbyCreateRoom/JoinRoom/LeaveRoom/StartGame()` | `onlineGame.cpp` (UI 버튼 콜백) | LobbyServer로 요청 패킷 전송(C_CreateRoom/C_JoinRoom/C_LeaveRoom/C_GameStart). 상태 변경은 응답 핸들러에서 수행 |
 | `Game::onLobbyCreated/onLobbyJoined/onLobbyPlayerJoined/onLobbyPlayerLeft/onGameStart()` | `onlineGame.cpp` (lobby 액션 직후, public) | LobbyServer 응답 처리. `PacketManager`가 `LobbyScene`의 `SleepEx(1,true)` alertable 대기에서 호출. 룸 상태/슬롯/호스트 갱신 후 `refreshLobbyUI()`. `onGameStart`는 현재 로그만(RoomServer 핸드오프 후속) |
 | `Game::createStronghold/onStrongholdState/applyHit` | `onlineGame.cpp` | 거점은 `Stronghold`(Object+EventBus, AnimBlender 없음; `object.hpp`) 클래스. enter의 hp/maxHp로 생성. `applyHit`은 EvHit/EvDeath 발행만(거점/고블린 공통), 디스패치 루프 `resolveObject`가 `strongholdHpBars_`로 거점 해소 → 데미지 넘버 생성. `onStrongholdState`: 파괴(state=1)는 setHp 없이 EvDeath, 재건(state=0)은 setHp(full)+EvRespawn. 파괴상태=`isDead()`. 상세: `RoomServer/docs/strongholdSystem.md` §10 |
-| `Game::lobbyDisplayName(uint16)` | `onlineGame.cpp` | sessionId → 표시 이름(본인 `myId_`=`"나"`, 그 외 `"Player_<id>"`) |
+| `Game::lobbyDisplayName(uint16)` | `onlineGame.cpp` | sessionId → 표시 이름(본인 `myLobbyId_`=`"나"`, 그 외 `"Player_<id>"`) |
 | `Game::LobbyScene()` 진입부 | `onlineGame.cpp` | `SleepEx(1,true)` + `ClientApp::send()`로 로비 네트워크 펌핑(InGameScene와 동일 패턴) |
 
 **Game 멤버 변수 (game.hpp #81-135):**

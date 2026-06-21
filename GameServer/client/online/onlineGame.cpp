@@ -3344,7 +3344,10 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 
 void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs ) {
 	// 로컬 플레이어만 처리한다(다른 플레이어의 넉백은 그쪽 클라가 실행해 S_Move로 위치가 동기화됨).
-	if ( playerId != myId_ || player_ == nullptr ) {
+	// 서버는 RoomServer의 session->id()를 대상 ID로 보내므로, 인게임 정식 ID인
+	// player_->getId()(== S_Enter의 playerId)와 비교해야 한다. myLobbyId_(로비 sessionId)는
+	// RoomServer ID와 체계가 달라 여기서 쓰면 일부 플레이어가 자기 넉백을 놓친다.
+	if ( player_ == nullptr || playerId != static_cast<uint16>( player_->getId() ) ) {
 		return;
 	}
 	knockbackDir_           = mu::Vec3( dirX, 0.f, dirZ );
@@ -4543,7 +4546,7 @@ void Game::refreshLobbyUI() {
 		vs.players.push_back(LobbyUI::PlayerSlot{
 			p.name,
 			p.sessionId == hostId_,
-			p.sessionId == myId_,
+			p.sessionId == myLobbyId_,
 			p.weaponType
 		});
 	}
@@ -4848,7 +4851,7 @@ void Game::enterInGame() {
 }
 
 std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		return L"나";
 	}
 	return L"Player_" + std::to_wstring(sessionId);
@@ -4890,7 +4893,7 @@ void Game::lobbyLeaveRoom() {
 	roomCode_.clear();
 	isHost_ = false;
 	hostId_ = 0;
-	myId_   = 0;
+	myLobbyId_   = 0;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
@@ -4926,7 +4929,7 @@ void Game::lobbyStartGame() {
 }
 
 void Game::lobbySelectWeapon(int direction) {
-	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myLobbyId_ == 0) {
 		return;
 	}
 
@@ -4935,7 +4938,7 @@ void Game::lobbySelectWeapon(int direction) {
 	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
 
 	for (auto& p : lobbyPlayers_) {
-		if (p.sessionId == myId_) {
+		if (p.sessionId == myLobbyId_) {
 			p.weaponType = selectedLobbyWeapon_;
 			break;
 		}
@@ -4950,7 +4953,7 @@ void Game::lobbySelectWeapon(int direction) {
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
@@ -4969,7 +4972,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 		return;
 	}
 
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
@@ -4978,7 +4981,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	lobbyPlayers_.clear();
 	for (const LobbyPlayerInfo& info : playerInfos) {
 		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
-		if (info.sessionId == myId_) {
+		if (info.sessionId == myLobbyId_) {
 			selectedLobbyWeapon_ = info.weaponType;
 		}
 	}
@@ -5005,7 +5008,7 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 	// 호스트가 떠났으면 서버 규칙과 동일하게 남은 목록의 front를 새 호스트로 본다.
 	if (sessionId == hostId_ && !lobbyPlayers_.empty()) {
 		hostId_ = lobbyPlayers_.front().sessionId;
-		isHost_ = (myId_ == hostId_);
+		isHost_ = (myLobbyId_ == hostId_);
 	}
 
 	refreshLobbyUI();
@@ -5024,7 +5027,7 @@ void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) 
 			break;
 		}
 	}
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		selectedLobbyWeapon_ = weaponType;
 	}
 	refreshLobbyUI();
