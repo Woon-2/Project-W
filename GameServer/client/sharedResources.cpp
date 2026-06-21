@@ -1157,6 +1157,101 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 
 }	// namespace Portrait
 
+namespace Minimap {
+
+std::vector<MinimapRTData> minimapData;
+
+namespace {
+
+// 미니맵 캐시 RT(R8G8B8A8_UNORM)를 생성하고 RTV + bindless SRV를 등록한다.
+Texture createMinimapTex( ID3D12Device* device, u32t size,
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color = {0.f, 0.f, 0.f, 0.f} };
+	Texture tex = createTexture( device, size, size, format,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	createRTV(device, tex, D3D12_RENDER_TARGET_VIEW_DESC{
+		.Format        = format,
+		.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = 0u, .PlaneSlice = 0u }
+	}, rtvPool);
+
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = format,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::BilinearClamp);
+
+	return tex;
+}
+
+}	// anonymous namespace
+
+void addMinimapRT( ID3D12Device* device, u32t size,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+) {
+	minimapData.reserve(roomCnt);
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		MinimapRTData m{};
+		m.size = size;
+
+		const auto suffix = "[" + std::to_string(r) + "]";
+		m.texA = createMinimapTex(device, size, rtvPool, srvTexPool, ("Minimap_TexA" + suffix).c_str());
+		m.texB = createMinimapTex(device, size, rtvPool, srvTexPool, ("Minimap_TexB" + suffix).c_str());
+
+		m.rtvA = rtvPool.cpuHandle(m.texA.idxRtv);
+		m.rtvB = rtvPool.cpuHandle(m.texB.idxRtv);
+		m.curStateA = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		m.curStateB = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+		minimapData.push_back(std::move(m));
+	}
+}
+
+void transitionToWrite(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
+	auto& m = minimapData[roomIdx];
+	Texture& tex = useA ? m.texA : m.texB;
+	auto& state  = useA ? m.curStateA : m.curStateB;
+	if (state != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+		transitionResourceState(cmdList, tex.res.Get(),
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_RENDER_TARGET
+		);
+		state = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	}
+}
+
+void transitionToRead(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
+	auto& m = minimapData[roomIdx];
+	Texture& tex = useA ? m.texA : m.texB;
+	auto& state  = useA ? m.curStateA : m.curStateB;
+	if (state != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+		transitionResourceState(cmdList, tex.res.Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+		);
+		state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	}
+}
+
+void clearMinimapRT(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList) {
+	auto& m = minimapData[roomIdx];
+	const float kTransparent[4] = { 0.f, 0.f, 0.f, 0.f };
+	cmdList->ClearRenderTargetView(useA ? m.rtvA : m.rtvB, kTransparent, 0u, nullptr);
+}
+
+}	// namespace Minimap
+
 namespace HiZMap {
 
 std::vector<HiZMapData> hiZMaps;

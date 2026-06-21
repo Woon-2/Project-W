@@ -34,6 +34,7 @@ ComPtr<ID3D12PipelineState> createTonemapResolveShader(ID3D12Device* device, ID3
 ComPtr<ID3D12PipelineState> createBloomPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBloomDownsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createMinimapFogBlurShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -55,6 +56,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createMinimapTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -805,6 +807,25 @@ struct PerFrameData {
 
 }	// namespace TerrainShader
 
+// MinimapTerrainShader — lightweight diffuse-only terrain pass for the minimap
+// background cache (no normal map, lighting, or shadow). minimapTerrain.hlsl.
+namespace MinimapTerrainShader {
+
+constexpr int MAX_TERRAIN_LAYERS = TerrainShader::MAX_TERRAIN_LAYERS;
+
+// Matches cbuffer PerDrawcallData : register(b0) in minimapTerrain.hlsl.
+struct PerDrawcallData {
+    XMFLOAT4X4    wvp;        // world * minimap ortho view * proj
+
+    BindlessIndex idxSplatMap;
+    BindlessIndex idxDiffuse[MAX_TERRAIN_LAYERS];
+    XMFLOAT4      tiling[MAX_TERRAIN_LAYERS];   // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    int           layerCount;
+    float         _pdd0[3];
+};
+
+}	// namespace MinimapTerrainShader
+
 // TerrainShadowMapShader
 namespace TerrainShadowMapShader {
 // Matches cbuffer PerDrawcallData : register(b0) in terrainShadowMap.hlsl (non-CSM)
@@ -1117,6 +1138,22 @@ struct PerDrawcallData {
 };
 
 }	// namespace BloomShader
+
+// MinimapFogBlurShader — 2-pass (horizontal/vertical) box blur over the minimap
+// terrain cache's alpha (loaded-chunk mask), with the vertical pass also compositing
+// finalRGB = lerp(black, srcRGB, blurredAlpha) so the UI quad needs no extra blend math.
+// minimapFogBlur.hlsl.
+namespace MinimapFogBlurShader {
+
+// Matches cbuffer PerDrawcallData : register(b0) in minimapFogBlur.hlsl.
+struct PerDrawcallData {
+	BindlessIndex idxSrc;          // source SRV (raw terrain cache, or the horizontal-pass result)
+	XMFLOAT2      srcTexelSize;    // 1 / source dimensions
+	float         blurRadiusTexels;// fog fade width, in source texels
+	u32t          horizontal;      // 1 = horizontal pass, 0 = vertical pass (+ composite)
+};
+
+}	// namespace MinimapFogBlurShader
 
 // TwoSidesShader
 // Port of Unity Shader Graphs/HS_Blend_TwoSides.

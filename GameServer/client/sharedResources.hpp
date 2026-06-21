@@ -288,6 +288,39 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 }	// namespace Portrait
 
+// 미니맵 배경 캐시: 지형(diffuse) + fog-of-war 마스크(alpha=로드된 영역)를 청크 변경 시에만
+// 다시 굽는 작은 정사각 RT 쌍. texA/texB는 ping-pong 버퍼(둘 다 RTV+SRV) — 지형 패스는
+// texA에 쓰고, fog 블러 2-pass(가로/세로)가 texA<->texB를 오가며 마지막에 texA에 최종
+// (지형*마스크) 결과를 남긴다. depth는 사용하지 않는다(지형 청크는 XZ상 겹치지 않음).
+struct MinimapRTData {
+	Texture texA;   // R8G8B8A8_UNORM — RTV + bindless SRV
+	Texture texB;   // R8G8B8A8_UNORM — RTV + bindless SRV
+	u32t    size;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvA;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvB;
+	D3D12_RESOURCE_STATES curStateA;
+	D3D12_RESOURCE_STATES curStateB;
+};
+
+namespace Minimap {
+
+// minimapData[roomIdx]: roomIdx번째 방의 미니맵 캐시 RT 쌍. addMinimapRT() 전에는 비어 있다.
+extern std::vector<MinimapRTData> minimapData;
+
+// roomCnt개 방 각각에 대해 size x size 크기의 RT 2장(texA/texB)을 생성한다.
+// rtvPool: RT 2개 × roomCnt, srvTexPool: SRV 2개 × roomCnt.
+void addMinimapRT( ID3D12Device* device, u32t size,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+);
+
+// useA == true면 texA를, false면 texB를 대상으로 상태를 전환/클리어한다.
+void transitionToWrite(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList);
+void transitionToRead(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList);
+// 투명(0,0,0,0)으로 클리어한다. 호출 전 transitionToWrite()로 RENDER_TARGET 상태여야 한다.
+void clearMinimapRT(std::size_t roomIdx, bool useA, ID3D12GraphicsCommandList* cmdList);
+
+}	// namespace Minimap
+
 namespace HiZMap {
 
 // Reversed-Z(near=1.0, far=0.0): clearDepth를 0.0f보다 큰 값으로 설정함으로써

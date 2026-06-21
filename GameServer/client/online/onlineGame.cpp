@@ -4242,6 +4242,23 @@ void Game::renderInGame() {
 		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+
+		// Minimap background cache: re-baked only when the streamed chunk set changes
+		// (TerrainChunkManager::minimapDirty()), never every frame.
+		if (chunkManager_.minimapDirty()) {
+			gfx_.requestMinimapRebake();
+			chunkManager_.submitMinimapDrawEvents(gfx_);
+			gfx_.setMinimapCamera(MinimapTerrainPipeline::CameraData{
+				.view = mu::lookAt(
+					player_->pos() + mu::Vec3(0.f, GFX::kMinimapWorldRadius * 4.f, 0.f),
+					player_->pos(), mu::NVec3(0.f, 0.f, 1.f)),
+				.proj = mu::ortho(
+					-GFX::kMinimapWorldRadius, GFX::kMinimapWorldRadius,
+					-GFX::kMinimapWorldRadius, GFX::kMinimapWorldRadius,
+					0.1f, GFX::kMinimapWorldRadius * 8.f)
+			});
+			chunkManager_.clearMinimapDirty();
+		}
 	}
 
 	// Floating damage numbers: drawn just before the HUD so they share the UI pass
@@ -4253,6 +4270,25 @@ void Game::renderInGame() {
 	// so submit the dial first; uiManager_.render() (below) then draws the panel's
 	// scrim/popup on top when it is open.
 	skillDial_.render(gfx_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top));
+
+	// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
+	// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
+	minimapIcons_.clear();
+	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
+	for (const auto& [id, p] : idPlayerMap_) {
+		if (id == myId_ || !p) continue;
+		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
+	}
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (!obj) continue;
+		const bool isBossLike = dynamic_cast<Boss*>(obj) || dynamic_cast<Grandbaum*>(obj) || dynamic_cast<Isys*>(obj);
+		minimapIcons_.push_back(MinimapEntityIcon{
+			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
+		});
+	}
+	minimap_.render(gfx_, player_->pos(), GFX::kMinimapWorldRadius, minimapIcons_,
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 

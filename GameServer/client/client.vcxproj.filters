@@ -210,6 +210,12 @@
     <ClCompile Include="BloomPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="minimapTerrainPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="minimapFogBlurPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -411,6 +417,9 @@
     <ClCompile Include="ui\skillDialHUD.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="ui\minimapHUD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="energyOrbPipeline.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -591,6 +600,12 @@
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="BloomPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="minimapTerrainPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="minimapFogBlurPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
@@ -824,6 +839,9 @@
     <ClInclude Include="ui\skillDialHUD.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="ui\minimapHUD.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="energyOrbPipeline.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -863,6 +881,12 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="bloom.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="minimapTerrain.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="minimapFogBlur.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="sample.hlsl">

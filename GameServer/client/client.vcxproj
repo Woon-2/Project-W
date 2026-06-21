@@ -233,6 +233,8 @@
     <ClCompile Include="iblPrecomputePipeline.cpp" />
     <ClCompile Include="TonemapPipeline.cpp" />
     <ClCompile Include="BloomPipeline.cpp" />
+    <ClCompile Include="minimapTerrainPipeline.cpp" />
+    <ClCompile Include="minimapFogBlurPipeline.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -291,6 +293,7 @@
     <ClCompile Include="ui\widgets\KillCountWidget.cpp" />
     <ClCompile Include="ui\digitAtlas.cpp" />
     <ClCompile Include="ui\skillDialHUD.cpp" />
+    <ClCompile Include="ui\minimapHUD.cpp" />
     <ClCompile Include="damageNumberSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -381,6 +384,8 @@
     <ClInclude Include="iblPrecomputePipeline.hpp" />
     <ClInclude Include="TonemapPipeline.hpp" />
     <ClInclude Include="BloomPipeline.hpp" />
+    <ClInclude Include="minimapTerrainPipeline.hpp" />
+    <ClInclude Include="minimapFogBlurPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
     <ClInclude Include="ServerSession.hpp" />
@@ -430,6 +435,7 @@
     <ClInclude Include="ui\widgets\KillCountWidget.hpp" />
     <ClInclude Include="ui\digitAtlas.hpp" />
     <ClInclude Include="ui\skillDialHUD.hpp" />
+    <ClInclude Include="ui\minimapHUD.hpp" />
     <ClInclude Include="damageNumberSystem.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -526,6 +532,14 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="bloom.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="minimapTerrain.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="minimapFogBlur.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

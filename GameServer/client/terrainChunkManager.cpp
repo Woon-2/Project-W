@@ -7,6 +7,7 @@
 #include "threadPool.hpp"
 #include "light.hpp"           // Light::shadowVisible (shadow-frustum culling)
 #include "errorHandling.hpp"   // setD3DName
+#include "minimapTerrainPipeline.hpp"
 #include "../common/scatterTransform.hpp"
 
 #include <cmath>
@@ -513,6 +514,7 @@ void TerrainChunkManager::update(mu::Vec3 playerWorldPos, Milliseconds dt) {
         if (it == chunks_.end()) continue;
         unloadChunk(it->second);
         chunks_.erase(it);
+        minimapDirty_ = true;
     }
 
     drainCompletedBuilds();
@@ -622,6 +624,7 @@ void TerrainChunkManager::activateChunkRenderAndPhysics(LoadedChunk& slot) {
     registerChunkScatterCollider(slot);
 
     slot.state = State::Ready;
+    minimapDirty_ = true;
 }
 
 void TerrainChunkManager::unloadChunk(LoadedChunk& slot) {
@@ -686,6 +689,19 @@ void TerrainChunkManager::submitDrawEvents(GFX& gfx, const Light& light) {
 
             slot.object->render(gfx);
             submitScatterDrawEvents(gfx, slot, light);
+        }
+    }
+}
+
+void TerrainChunkManager::submitMinimapDrawEvents(GFX& gfx) const {
+    for (const auto& [key, slot] : chunks_) {
+        if ((slot.state == State::Ready || slot.state == State::Expiring) && slot.object) {
+            if (const auto* td = slot.object->terrainData()) {
+                gfx.addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent{
+                    .terrain = td,
+                    .world   = mu::translate(slot.object->pos())
+                });
+            }
         }
     }
 }

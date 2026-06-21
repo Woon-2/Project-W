@@ -155,7 +155,7 @@ void GFX::init() {
 
 	// Descriptor Heap 및 Pool들 생성
 	// RTV 슬롯 (room 최대 3 가정, room당): backbuffer 1 + GBuffer 4 + SceneColor 1 + Portrait 1
-	//   + Bloom mip chain (최대 6) = 13 → 13 × 3 rooms = 39 → 여유 포함 64.
+	//   + Bloom mip chain (최대 6) + Minimap(texA/texB) 2 = 15 → 15 × 3 rooms = 45 → 여유 포함 64.
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
 		.NumDescriptors = 64u,
@@ -312,6 +312,7 @@ void GFX::init() {
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("MinimapTerrainShader", createMinimapTerrainShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShadowMapShader", createTerrainShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShadowMapCSMShader", createTerrainShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShaderCSMDebug", createPBRShaderCSMDebug(device_.Get(), defaultRootSig.get()));
@@ -326,6 +327,7 @@ void GFX::init() {
 	shaders_.try_emplace("BloomPrefilterShader",            createBloomPrefilterShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BloomDownsampleShader",           createBloomDownsampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BloomUpsampleShader",             createBloomUpsampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("MinimapFogBlurShader",            createMinimapFogBlurShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLIrradianceShader",             createIBLIrradianceShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLPrefilterShader",              createIBLPrefilterShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLBRDFLUTShader",                createIBLBRDFLUTShader(device_.Get(), defaultRootSig.get()));
@@ -971,6 +973,25 @@ XMFLOAT4 GFX::lobbyPortraitCellUvScaleBias(u32t slot) const {
 	return XMFLOAT4(scaleX, 1.f, biasX, 0.f);
 }
 
+// ===== 미니맵 배경 캐시 =====
+void GFX::requestMinimapRebake() {
+	minimapRebakeRequested_ = true;
+}
+
+void GFX::addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent&& drawEvent) {
+	drawEventsMinimap_.push_back(std::move(drawEvent));
+}
+
+void GFX::setMinimapCamera(const MinimapTerrainPipeline::CameraData& cameraData) {
+	cameraDataMinimap_ = cameraData;
+}
+
+const Texture* GFX::minimapTextureForThisFrame() const {
+	if (SharedResources::Minimap::minimapData.empty()) return nullptr;
+	const auto roomIdx = frameIdx_ % backBuffers_.size();
+	return &SharedResources::Minimap::minimapData[roomIdx].texA;
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const PBRDeferredPipeline::DrawEvent& drawEvent) {
 	drawEventsPBRDeferredPipeline_.push_back(drawEvent);
@@ -1382,6 +1403,19 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 			backBuffers_.size(), ("Skinned_Main_PerFrameData" + sfx)
 		);
 	}
+	// 미니맵 배경 캐시 RT 쌍(texA/texB) — 청크 변경 시에만 재굽는 작은 정사각 RT.
+	SharedResources::Minimap::addMinimapRT(
+		device_.Get(), kMinimapRTSize, backBuffers_.size(), rtvPool_, srvTexPool_
+	);
+	resourcesMinimapTerrain_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(MinimapTerrainShader::PerDrawcallData), MinimapTerrainPipeline::kMaxDrawEvents,
+		backBuffers_.size(), "MinimapTerrain_PerDrawcallData"
+	);
+	resourcesMinimapFogBlur_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(MinimapFogBlurShader::PerDrawcallData), MinimapFogBlurPipeline::kPassCount,
+		backBuffers_.size(), "MinimapFogBlur_PerDrawcallData"
+	);
+
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
@@ -2905,6 +2939,64 @@ void GFX::render() {
 		// (4) per-frame 채널 clear (매 프레임 add → 누적 방지). draw event는 move로 비워졌다.
 		lightDataLobbyPortrait_.clear();
 		for (auto& dq : drawEventsLobbyPortrait_) dq.clear();
+	}
+
+	// ===== 미니맵 배경 캐시 재굽기 (청크 변경 시 1회만 — Portrait와 달리 매 프레임 실행 안 함) =====
+	if (minimapRebakeRequested_ && !SharedResources::Minimap::minimapData.empty()) {
+		const auto roomIdx = frameIdx_ % backBuffers_.size();
+
+		// (1) texA를 RENDER_TARGET으로 전환 + 투명 클리어.
+		{
+			CommandContext cc{};
+			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cc) && cc.cmdList) {
+				DISPLAY_ERROR_DX_HR(cc.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Reset(cc.cmdAlloc.Get(), nullptr), false);
+				SharedResources::Minimap::transitionToWrite(roomIdx, /*useA=*/true, cc.cmdList.Get());
+				SharedResources::Minimap::clearMinimapRT(roomIdx, /*useA=*/true, cc.cmdList.Get());
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
+				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
+				cmdQ_->ExecuteCommandLists(1u, cls);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
+			}
+		}
+
+		// (2) 로드된 청크들을 texA에 그린다 (diffuse만, alpha=1 = 로드된 영역 마스크).
+		{
+			const auto& m = SharedResources::Minimap::minimapData[roomIdx];
+			const auto vp = D3D12_VIEWPORT{ 0.f, 0.f,
+				static_cast<float>(kMinimapRTSize), static_cast<float>(kMinimapRTSize), 0.f, 1.f };
+			const auto sc = D3D12_RECT{ 0, 0,
+				static_cast<LONG>(kMinimapRTSize), static_cast<LONG>(kMinimapRTSize) };
+
+			auto minimapTerrainDispatcher = MinimapTerrainPipeline::Dispatcher(
+				tmpDescriptorHeaps,
+				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+				&samPool_, &cmpSamPool_,
+				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapTerrainShader"),
+				cmdQ_, vp, sc, m.rtvA,
+				&fenceToSignal, &resourcesMinimapTerrain_, &cmdListPool_,
+				std::move(drawEventsMinimap_), cameraDataMinimap_, roomIdx
+			);
+			minimapTerrainDispatcher.render();
+		}
+		dumpLog();
+
+		// (3) fog-of-war 블러 2-pass + 합성 (texA<->texB 핑퐁, 최종 결과는 texA에 남는다).
+		{
+			auto minimapFogBlurDispatcher = MinimapFogBlurPipeline::Dispatcher(
+				tmpDescriptorHeaps,
+				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+				&samPool_, &cmpSamPool_,
+				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapFogBlurShader"),
+				cmdQ_, &fenceToSignal, &resourcesMinimapFogBlur_, &cmdListPool_,
+				roomIdx, kMinimapFogBlurRadiusTexels
+			);
+			minimapFogBlurDispatcher.render();
+		}
+		dumpLog();
+
+		minimapRebakeRequested_ = false;
+		drawEventsMinimap_.clear();
 	}
 
 	// Ui Pipeline의 rendering

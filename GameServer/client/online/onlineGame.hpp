@@ -37,6 +37,7 @@
 #include "../energyOrbSystem.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
+#include "../ui/minimapHUD.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -446,6 +447,10 @@ private:
 	// --- Stack-charge skill HUD ---
 	SkillDialHUD skillDial_{};
 	SkillLoadout skillLoadout_{};
+
+	// --- Minimap (top-left, North-up; background cache re-baked on chunk load/unload) ---
+	MinimapHUD minimap_{};
+	std::vector<MinimapEntityIcon> minimapIcons_{};
 	unsigned     myWeaponOrdinal_    = 0;
 	int          dialSlotAssetId_[3] = { -1, -1, -1 };
 	int          basicSkillAssetId_  = -1;

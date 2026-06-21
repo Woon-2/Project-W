@@ -44,6 +44,19 @@ public:
     // camera frustum set via setCullCamera(), which only gates the gbuffer/Hi-Z path.)
     void submitDrawEvents(GFX& gfx, const Light& light);
 
+    // Submits a lightweight minimap terrain draw event for every ready chunk, with no
+    // frustum/shadow culling (the minimap orthographic camera always covers a fixed
+    // world-space radius around the player, so every loaded chunk is a candidate).
+    void submitMinimapDrawEvents(GFX& gfx) const;
+
+    // True if a chunk has loaded or unloaded since the last clearMinimapDirty() call.
+    // Polled once per frame by the renderer to decide whether the cached minimap
+    // background (terrain + fog-of-war mask) needs to be re-baked.
+    bool minimapDirty() const { return minimapDirty_; }
+    void clearMinimapDirty() { minimapDirty_ = false; }
+    // Forces the next minimapDirty() check to report true (first frame after scene load).
+    void markMinimapDirty() { minimapDirty_ = true; }
+
     // Camera frustum + eye position for per-instance scatter culling. Call once per frame
     // before submitDrawEvents(). The frustum drives BVH-prop view-frustum culling; the eye
     // position selects near-camera BVH props as Hi-Z occluders. (Distinct from the player
@@ -220,6 +233,10 @@ private:
     std::unordered_map<int64_t, LoadedChunk>  chunks_;
     std::unordered_map<int64_t, const ChunkIndexEntry*> indexByCoord_;
     std::vector<PendingUnload> graveyard_;
+
+    // Set whenever a chunk transitions Loading->Ready or is unloaded; cleared by the
+    // renderer once it has re-baked the minimap cache (see minimapDirty()).
+    bool minimapDirty_ = true;
 
     float chunkSizeX_ = 0.f;   // uniform cell size (from the first index entry)
     float chunkSizeZ_ = 0.f;

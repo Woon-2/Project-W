@@ -27,6 +27,8 @@
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
 #include "terrainPipeline.hpp"
+#include "minimapTerrainPipeline.hpp"
+#include "minimapFogBlurPipeline.hpp"
 #include "terrainDeferredPipeline.hpp"
 #include "spriteAnimation.hpp"
 #include "pbrDeferredPipeline.hpp"
@@ -321,6 +323,21 @@ public:
 	// 슬롯 slot 셀의 sub-rect uvScaleBias(uv' = uv*xy + zw)를 반환한다.
 	XMFLOAT4 lobbyPortraitCellUvScaleBias(u32t slot) const;
 
+	// ===== 미니맵 배경 캐시 (지형 diffuse + fog-of-war, 청크 변경 시에만 재굽기) =====
+	static constexpr u32t kMinimapRTSize       = 512u;   // 캐시 RT 해상도(정사각)
+	static constexpr float kMinimapWorldRadius = 60.f;   // 미니맵이 덮는 월드 반경(미터)
+	static constexpr float kMinimapFogBlurRadiusTexels = 24.f;  // fog-of-war 페이드 폭(텍셀)
+
+	// 이번 프레임 render()가 미니맵 캐시를 재굽도록 요청한다. TerrainChunkManager가
+	// minimapDirty()를 보고 호출 — Portrait와 달리 요청된 프레임 한 번만 수행된다.
+	void requestMinimapRebake();
+	// 재굽기 패스에 지형 청크 draw event를 제출한다(요청되지 않은 프레임에는 버려진다).
+	void addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent&& drawEvent);
+	// 미니맵 직교 카메라(North-up, 플레이어 중심)를 설정한다.
+	void setMinimapCamera(const MinimapTerrainPipeline::CameraData& cameraData);
+	// 마지막으로 재굽힌 미니맵 캐시의 최종(블러+합성 완료) 텍스처. 매 프레임 UI가 샘플한다.
+	const Texture* minimapTextureForThisFrame() const;
+
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
@@ -495,6 +512,12 @@ private:
 	PBRSkinnedPipeline::LightData mainDirectionalLightLobbyPortrait_{};      // cascadeCount=0 (no-shadow)
 	PBRSkinnedPipeline::FrameData frameDataLobbyPortrait_{};
 	bool lobbyPortraitActive_ = false;
+
+	std::vector<MinimapTerrainPipeline::DrawEvent> drawEventsMinimap_{};
+	MinimapTerrainPipeline::Resources  resourcesMinimapTerrain_{};
+	MinimapFogBlurPipeline::Resources  resourcesMinimapFogBlur_{};
+	MinimapTerrainPipeline::CameraData cameraDataMinimap_{};
+	bool minimapRebakeRequested_ = false;
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};
