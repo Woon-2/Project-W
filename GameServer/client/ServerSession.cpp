@@ -6,6 +6,13 @@
 
 extern bool gClose;
 
+namespace {
+uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+}
+
 bool ServerSession::connect() {
 	if (::connect(sock_, reinterpret_cast<const SOCKADDR*>(&netAddr_.sockAddr()), sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
 		return false;
@@ -71,6 +78,14 @@ void ServerSession::registerSend() {
 	wsaBufs.reserve(sendOver_.sendBuffers.size());
 
 	for(auto sendBuf : sendOver_.sendBuffers) {
+		// Time-sync t0 must describe the actual socket-send boundary, not the
+		// earlier frame where the buffer entered pendingSendBuffers_. Otherwise
+		// the frame queue delay biases the NTP offset into the future.
+		if (sendBuf->writeSize() >= sizeof(CTimeSyncPacket)) {
+			auto* header = reinterpret_cast<PacketHeader*>(sendBuf->data());
+			if (header->type == PacketType::C_TimeSync)
+				reinterpret_cast<CTimeSyncPacket*>(sendBuf->data())->clientSendMs = networkNowMs();
+		}
 		 wsaBufs.emplace_back(WSABUF{
 			.len = static_cast<ULONG>(sendBuf->writeSize()),
 			.buf = reinterpret_cast<char*>(sendBuf->data())
