@@ -5,7 +5,7 @@
 
 local skill = Skill()
 skill.name            = "Boss_Smite"
-skill.totalDurationMs = 3600
+skill.totalDurationMs = 1200
 skill.interruptible   = false
 
 skill:addEvent(0, "PlayAnimation", {
@@ -14,15 +14,16 @@ skill:addEvent(0, "PlayAnimation", {
     blendTime   = 0.1
 })
 
-skill:addEvent(1500, "SpawnHitbox", {
+skill:addEvent(700, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.3, 2.2, 2.4, 1.4, 2.0, 0, 0, 0) },
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 1000,
     onHit               = OnHit({ damage = 55, vfxId = 255, impulseStrength = 1800.0, impulseDir = Vec3(0, 0.4, 1) })
 })
 
-skill:addEvent(2000, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1100, "DestroyHitbox", { slot = 0 })
 
 return skill

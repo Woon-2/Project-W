@@ -15,25 +15,39 @@ skill:addEvent(0, "PlayAnimation", {
 })
 
 -- First strike.
-skill:addEvent(700, "SpawnHitbox", {
+skill:addEvent(750, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.6, 1.8, 1.6, 1.1, 1.4, 0, 0, 0) },
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 500,
     onHit               = OnHit({ damage = 22, vfxId = 255, impulseStrength = 700.0, impulseDir = Vec3(0, 0.1, 1) })
 })
-skill:addEvent(1000, "DestroyHitbox", { slot = 0 })
+skill:addEvent(1050, "DestroyHitbox", { slot = 0 })
 
 -- Second, stronger strike.
-skill:addEvent(1700, "SpawnHitbox", {
+skill:addEvent(1400, "SpawnHitbox", {
     slot                = 1,
-    localOBBs           = { OBB(0.0, 0.6, 2.0, 2.0, 1.2, 1.6, 0, 0, 0) },
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 1,
     hitGroupCooldownMs  = 500,
     onHit               = OnHit({ damage = 30, vfxId = 255, impulseStrength = 1200.0, impulseDir = Vec3(0, 0.25, 1) })
 })
-skill:addEvent(2100, "DestroyHitbox", { slot = 1 })
+skill:addEvent(1700, "DestroyHitbox", { slot = 1 })
+
+-- Third, strongest strike.
+skill:addEvent(2400, "SpawnHitbox", {
+    slot                = 2,
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
+    applyAttachRotation = true,
+    hitGroup            = 2,
+    hitGroupCooldownMs  = 500,
+    onHit               = OnHit({ damage = 40, vfxId = 255, impulseStrength = 1400.0, impulseDir = Vec3(0, 0.25, 1) })
+})
+skill:addEvent(2800, "DestroyHitbox", { slot = 2 })
 
 return skill
