@@ -6,7 +6,7 @@ TacticalNpcConfig TacticalSlime::trooperConfig() {
 	// "못 잡는 딜러"가 되지 않도록 공격력 하향(주 위협은 보스). 슬라임은 Slime_Attack1 스킬을 시전하므로
 	// 실제 데미지 레버는 attackDamageScale(= lua damage 9 × scale). attackDamage는 레거시 폴백(스킬 없을 때만, 미사용).
 	return TacticalNpcConfig{
-		.maxHp             = 60.f,
+		.maxHp             = 600.f,
 		.moveSpeed         = 2.5f,
 		.attackRange       = 2.6f,
 		.attackDamage      = 8.f,
