@@ -37,7 +37,7 @@ skill:addVFX(13, "effects/energy_explosion_arrow.json", {
     }
 })
 
-skill:addEvent(0, "PlayAnimation", {
+skill:addEvent(250, "PlayAnimation", {
     clipName    = "Combat_Bow_Attack01",
     attackIndex = 1,
     blendTime   = 0.1
