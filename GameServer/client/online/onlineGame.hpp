@@ -40,6 +40,7 @@
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../ui/minimapHUD.hpp"
+#include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -191,9 +192,6 @@ private:
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
-	void setupTacticalZoneIntroUI();
-	void triggerTacticalZoneIntro(std::string_view arenaPrefix);
-	void updateTacticalZoneIntro(float deltaTimeSec);
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -499,25 +497,9 @@ private:
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
-	// Tactical arena entry title card. WallBoss prepends a dedicated WARNING phase.
-	UI::Panel* tacticalZoneIntroRoot_ = nullptr;
-	UI::Panel* tacticalZoneIntroScrim_ = nullptr;
-	UI::Image* tacticalZoneIntroBanner_ = nullptr;
-	UI::Image* tacticalZoneIntroEmblem_ = nullptr;
-	UI::Panel* tacticalZoneIntroLineLeft_ = nullptr;
-	UI::Panel* tacticalZoneIntroLineRight_ = nullptr;
-	UI::Label* tacticalZoneIntroCategory_ = nullptr;
-	UI::Label* tacticalZoneIntroTitle_ = nullptr;
-	UI::Panel* tacticalZoneWarningScrim_ = nullptr;
-	UI::Image* tacticalZoneWarningNoise_ = nullptr;
-	UI::Image* tacticalZoneWarningGlitchRed_ = nullptr;
-	UI::Image* tacticalZoneWarningGlitchCyan_ = nullptr;
-	UI::Label* tacticalZoneWarningText_ = nullptr;
-	UI::Label* tacticalZoneWarningTextRed_ = nullptr;
-	UI::Label* tacticalZoneWarningTextCyan_ = nullptr;
-	float tacticalZoneIntroElapsed_ = 0.f;
-	bool tacticalZoneIntroActive_ = false;
-	bool tacticalZoneIntroHasWarning_ = false;
+	// Tactical arena entry title card (self-contained overlay module; the boss
+	// arena adds a WARNING phase). onlineGame only owns it and delegates.
+	UI::TacticalZoneIntro tacticalZoneIntro_{};
 
 	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
 	GameSettings         settings_{};
