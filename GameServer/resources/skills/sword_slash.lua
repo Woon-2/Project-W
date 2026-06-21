@@ -12,8 +12,9 @@ skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(1, "effects/sword_slash_1.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_2H_Attack",
+    attackIndex = 0,
+    blendTime   = 0.1
 })
 
 skill:addEvent(100, "PlayVFX", {

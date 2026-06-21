@@ -981,8 +981,12 @@ void Room::updatePlayerAnimations(Milliseconds dt) {
 	static constexpr float kWalkThreshold = 0.3f;
 	for (auto* s : sessions_) {
 		auto* player = s->player();
-		const float speed = player->linearVel().len();
-		player->animController().switchClip(speed > kWalkThreshold ? "Run_Forward" : "Idle");
+		// 스킬 시전 중이면 스킬 PlayAnimation이 구동하는 공격 클립을 보존한다
+		// (idle/run으로 덮어쓰면 뼈 부착 히트박스 위치가 클라와 어긋난다).
+		if (!skillSystem_.hasActiveSkill(static_cast<i32t>(player->getId()))) {
+			const float speed = player->linearVel().len();
+			player->animController().switchClip(speed > kWalkThreshold ? "Run_Forward" : "Idle");
+		}
 		player->updateAnimBones(dt);
 	}
 }
@@ -1096,6 +1100,50 @@ GameSession* Room::findLivingSessionByPlayerId(int32 playerId) const {
 	return (it->second->player()->hp() > 0) ? it->second : nullptr;
 }
 
+// 장착 무기에 맞춰 플레이어 AnimController에 클립을 등록한다(클라 AnimBlenderPlayer와 동일 매핑).
+// idle/run/hit/death는 의미 키로, 공격 클립은 실제 클립 이름을 키로 등록한다
+// (스킬 PlayAnimation이 clipName으로 직접 switchClip 하므로).
+static void registerPlayerAnimClips(Player& player, const std::vector<ServerAnimClip>& anims) {
+	const char* idle; const char* hit;
+	const char* runF; const char* runB; const char* runR; const char* runL;
+	std::vector<const char*> attacks;
+
+	switch (player.weaponType()) {
+	case PlayerWeaponType::Katana:       // 검(2H)
+		idle = "Combat_2H_Ready"; hit = "Combat_2H_Hit";
+		runF = "Run_2H_Forward"; runB = "Run_2H_Backwards"; runR = "Run_2H_Right"; runL = "Run_2H_Left";
+		attacks = { "Combat_2H_Attack", "Combat_2H_Attack01", "Combat_2H_AttackSpecial" };
+		break;
+	case PlayerWeaponType::SpearHook:    // 창(1H)
+		idle = "Combat_1H_Ready"; hit = "Combat_1H_Hit";
+		runF = "Run_1H_Forward"; runB = "Run_1H_Backwards"; runR = "Run_1H_Right"; runL = "Run_1H_Left";
+		attacks = { "Combat_1H_Attack", "Combat_1H_Attack02" };
+		break;
+	case PlayerWeaponType::CrystalWand:  // 완드(1H run 공용)
+		idle = "Combat_Cast_Ready"; hit = "Combat_Cast_Hit";
+		runF = "Run_1H_Forward"; runB = "Run_1H_Backwards"; runR = "Run_1H_Right"; runL = "Run_1H_Left";
+		attacks = { "Combat_CastAttack", "Combat_Cast_Attack02", "Combat_Defend_AttackSpecial", "Combat_Cast_SpellA_Start" };
+		break;
+	case PlayerWeaponType::HeavyArrow:   // 활
+	default:
+		idle = "Combat_Bow_Ready"; hit = "Combat_Bow_Hit";
+		runF = "Run_Bow_Forward"; runB = "Run_Bow_Backwards"; runR = "Run_Bow_Right"; runL = "Run_Bow_Left";
+		attacks = { "Combat_Bow_Attack", "Combat_Bow_Attack01", "Combat_Bow_AttackSpecial" };
+		break;
+	}
+
+	auto& ac = player.animController();
+	ac.registerClip("Idle",         findServerAnimClip(anims, idle));
+	ac.registerClip("Hit",          findServerAnimClip(anims, hit));
+	ac.registerClip("Run_Forward",  findServerAnimClip(anims, runF));
+	ac.registerClip("Run_Backward", findServerAnimClip(anims, runB));
+	ac.registerClip("Run_Right",    findServerAnimClip(anims, runR));
+	ac.registerClip("Run_Left",     findServerAnimClip(anims, runL));
+	ac.registerClip("Death",        findServerAnimClip(anims, "Death"));
+	for (const char* a : attacks)
+		ac.registerClip(a, findServerAnimClip(anims, a));
+}
+
 void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
@@ -1117,11 +1165,7 @@ void Room::enter(GameSession* session) {
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
-		player->animController().registerClip("Idle",         findServerAnimClip(*anims, "Player_Idle0"));
-		player->animController().registerClip("Run_Forward",  findServerAnimClip(*anims, "Player_Run_Forward"));
-		player->animController().registerClip("Run_Backward", findServerAnimClip(*anims, "Player_Run_Backward"));
-		player->animController().registerClip("Run_Left",     findServerAnimClip(*anims, "Player_Run_Left"));
-		player->animController().registerClip("Run_Right",    findServerAnimClip(*anims, "Player_Run_Right"));
+		registerPlayerAnimClips(*player, *anims);
 		player->animController().switchClip("Idle");
 	}
 

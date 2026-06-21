@@ -13,6 +13,60 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	for (auto& clip : assetManager.playerAnimations()) {
 		pushTargetClip(clip->name, clip);
 	}
+	// 무기 미지정 컨텍스트(standalone 등)에서도 유효한 클립 세트를 갖도록 기본값으로 초기화한다.
+	// online에서는 무기 장착 시 setWeaponType이 다시 호출된다.
+	setWeaponType(weaponType_);
+}
+
+// 장착 무기에 따라 idle/hit/4방향 run/공격 클립 이름 세트를 재구성한다.
+// 클립 매핑은 docs/CODE_INDEX.md(§5) 및 플레이어 무기 애니메이션 설계 표를 따른다.
+void AnimBlenderPlayer::setWeaponType(PlayerWeaponType weaponType) {
+	weaponType_ = weaponType;
+
+	switch (weaponType) {
+	case PlayerWeaponType::Katana:       // 검(2H)
+		clipIdle_        = "Combat_2H_Ready";
+		clipHit_         = "Combat_2H_Hit";
+		clipRunForward_  = "Run_2H_Forward";
+		clipRunBackward_ = "Run_2H_Backwards";
+		clipRunRight_    = "Run_2H_Right";
+		clipRunLeft_     = "Run_2H_Left";
+		attackClips_     = { "Combat_2H_Attack", "Combat_2H_Attack01", "Combat_2H_AttackSpecial" };
+		break;
+	case PlayerWeaponType::SpearHook:    // 창(1H)
+		clipIdle_        = "Combat_1H_Ready";
+		clipHit_         = "Combat_1H_Hit";
+		clipRunForward_  = "Run_1H_Forward";
+		clipRunBackward_ = "Run_1H_Backwards";
+		clipRunRight_    = "Run_1H_Right";
+		clipRunLeft_     = "Run_1H_Left";
+		attackClips_     = { "Combat_1H_Attack", "Combat_1H_Attack02" };
+		break;
+	case PlayerWeaponType::CrystalWand:  // 완드(이동은 1H run 공용)
+		clipIdle_        = "Combat_Cast_Ready";
+		clipHit_         = "Combat_Cast_Hit";
+		clipRunForward_  = "Run_1H_Forward";
+		clipRunBackward_ = "Run_1H_Backwards";
+		clipRunRight_    = "Run_1H_Right";
+		clipRunLeft_     = "Run_1H_Left";
+		attackClips_     = { "Combat_CastAttack", "Combat_Cast_Attack02", "Combat_Defend_AttackSpecial", "Combat_Cast_SpellA_Start" };
+		break;
+	case PlayerWeaponType::HeavyArrow:   // 활
+		clipIdle_        = "Combat_Bow_Ready";
+		clipHit_         = "Combat_Bow_Hit";
+		clipRunForward_  = "Run_Bow_Forward";
+		clipRunBackward_ = "Run_Bow_Backwards";
+		clipRunRight_    = "Run_Bow_Right";
+		clipRunLeft_     = "Run_Bow_Left";
+		attackClips_     = { "Combat_Bow_Attack", "Combat_Bow_Attack01", "Combat_Bow_AttackSpecial" };
+		break;
+	}
+
+	// 무기 전환 시 진행 중이던 공격 오버레이는 리셋한다.
+	currentAttackClip_.clear();
+	cooldownAttack_ = 0ms;
+	animTimeAttack_ = 0s;
+	tAttack_ = 0.f;
 }
 
 // pOwner의 물리 정보에 따라
@@ -37,28 +91,16 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	// tRun 구하기
 	const auto tRun = std::clamp( (speed - runBlendRangeStart) / (runBlendRangeEnd - runBlendRangeStart), 0.f, 1.f );
 
-	// tIdle 구하기 (tIdle0_ 및 tIdle1_)
-	// 움직이지 않은 채 motionlessThreshold 시간이 지났다면 idle1 애니메이션을,
-	// 그렇지 않으면 조준 idle0 애니메이션을 재생하도록 한다.
-	const auto aimlessThreshold = 2s;
-	const auto aimBlendRangeStart = aimlessThreshold - 100ms;
-	const auto aimBlendRangeEnd = aimlessThreshold + 400ms;
-
 	const auto tIdleBase = 1.f - tRun;
 
-	// Idle 애니메이션들은 그냥 계속 돌린다.
+	// Idle(무기별 Ready) 애니메이션은 그냥 계속 돌린다.
 	// 딱히 멈추지 않아도 부자연스럽진 않다.
-	animTimeIdle0_ += deltaTime;
-	const auto durationIdle = targetClip("Player_Idle0")->duration;
-	while (animTimeIdle0_ > durationIdle) {
-		animTimeIdle0_ -= durationIdle;
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip(clipIdle_)->duration;
+	while (animTimeIdle_ > durationIdle) {
+		animTimeIdle_ -= durationIdle;
 	}
-	animTimeIdle1_ += deltaTime;
-	const auto durationIdleAim = targetClip("Player_Idle1")->duration;
-	while (animTimeIdle1_ > durationIdle) {
-		animTimeIdle1_ -= durationIdle;
-	}
-	tIdle0_ = tIdleBase;
+	tIdle_ = tIdleBase;
 
 	// run 애니메이션이 필요하다고 판단되었으면,
 	// 객체가 움직이고 있는 방향과 바라보고 있는 방향을 통해
@@ -88,10 +130,6 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunRight_ = tRun * wRight / total;
 
 		animTimeRun_ += deltaTime;
-
-		if (tRun >= 1.f) {
-			accMotionless_ = 0s;
-		}
 	}
 	else {
 		// 완전한 idle 애니메이션이 재생되고 있다면
@@ -102,8 +140,19 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunRight_ = 0.f;
 
 		animTimeRun_ = 0s;
+	}
 
-		accMotionless_ += deltaTime;
+	// 공격 오버레이: 선택된 무기 공격 클립을 idle/run 위에 얹는다.
+	// cooldownAttack_은 EvAttack 수신 시 클립 길이로 설정되어, 클립이 끝나면 오버레이가 사라진다.
+	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
+		const auto durationAttack = targetClip(currentAttackClip_)->duration;
+		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
+		tAttack_ = std::clamp( animTimeAttack_ / 100ms, 0.f, 1.f );
+		cooldownAttack_ -= deltaTime;
+	}
+	else {
+		animTimeAttack_ = 0s;
+		tAttack_ = 0.f;
 	}
 
 	// death 애니메이션은 가장 우선순위가 높게 계산된다.
@@ -139,8 +188,8 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	}
 
 	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
-	// Run_Forward 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
-	const auto durationRun = targetClip("Player_Run_Forward")->duration;
+	// forward run 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
+	const auto durationRun = targetClip(clipRunForward_)->duration;
 	while (animTimeRun_ > durationRun) {
 		animTimeRun_ -= durationRun;
 	}
@@ -149,35 +198,41 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
+	const bool hasAttack = !currentAttackClip_.empty();
 
 	// 개별 애니메이션의 프레임을 업데이트한다.
-	updateFrames("Player_Idle0", animTimeIdle0_);
-	updateFrames("Player_Idle1", animTimeIdle1_);
-	updateFrames("Player_Hit", animTimeHit_);
-	updateFrames("Player_Death", animTimeDeath_);
-	updateFrames("Player_Run_Forward", animTimeRun_);
-	updateFrames("Player_Run_Backward", animTimeRun_);
-	updateFrames("Player_Run_Left", animTimeRun_);
-	updateFrames("Player_Run_Right", animTimeRun_);
+	updateFrames(clipIdle_, animTimeIdle_);
+	updateFrames(clipHit_, animTimeHit_);
+	updateFrames(kClipDeath, animTimeDeath_);
+	updateFrames(clipRunForward_, animTimeRun_);
+	updateFrames(clipRunBackward_, animTimeRun_);
+	updateFrames(clipRunLeft_, animTimeRun_);
+	updateFrames(clipRunRight_, animTimeRun_);
+	if (hasAttack) updateFrames(currentAttackClip_, animTimeAttack_);
 
 	if (mode_ == Mode::Baked) {
 		// death는 우선도가 가장 높음
 		if (tDeath_ > 0.01f) {
-			auto& deathClip = targetClip("Player_Death");
+			auto& deathClip = targetClip(kClipDeath);
 			finalBakedClipId_ = deathClip->id;
 			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
 		}
+		// 그 다음 공격 애니메이션 우선도 높게 주기
+		else if (hasAttack && tAttack_ > 0.01f) {
+			auto& attackClip = targetClip(currentAttackClip_);
+			finalBakedClipId_ = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+		}
 		else {
 			// baked animation에는 hit 제외시킴
-			float weights[] = { tIdle0_, tIdle1_, tRunForward_, tRunBackward_, tRunLeft_, tRunRight_ };
-			Seconds animTimes[] = { animTimeIdle0_, animTimeIdle1_, animTimeRun_, animTimeRun_, animTimeRun_, animTimeRun_ };
+			float weights[] = { tIdle_, tRunForward_, tRunBackward_, tRunLeft_, tRunRight_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeRun_, animTimeRun_, animTimeRun_, animTimeRun_ };
 			const AnimClip* clips[] = {
-				targetClip("Player_Idle0").get(),
-				targetClip("Player_Idle1").get(),
-				targetClip("Player_Run_Forward").get(),
-				targetClip("Player_Run_Backward").get(),
-				targetClip("Player_Run_Left").get(),
-				targetClip("Player_Run_Right").get()
+				targetClip(clipIdle_).get(),
+				targetClip(clipRunForward_).get(),
+				targetClip(clipRunBackward_).get(),
+				targetClip(clipRunLeft_).get(),
+				targetClip(clipRunRight_).get()
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_ = clips[i]->id;
@@ -188,26 +243,27 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
 		auto& localXforms = localXformData();
-		auto& framesIdle0 = curFrames("Player_Idle0");
-		auto& framesIdle1 = curFrames("Player_Idle1");
-		auto& framesHit = curFrames("Player_Hit");
-		auto& framesDeath = curFrames("Player_Death");
-		auto& framesRunForward = curFrames("Player_Run_Forward");
-		auto& framesRunBackward = curFrames("Player_Run_Backward");
-		auto& framesRunLeft = curFrames("Player_Run_Left");
-		auto& framesRunRight = curFrames("Player_Run_Right");
+		auto& framesIdle = curFrames(clipIdle_);
+		auto& framesHit = curFrames(clipHit_);
+		auto& framesDeath = curFrames(kClipDeath);
+		auto& framesRunForward = curFrames(clipRunForward_);
+		auto& framesRunBackward = curFrames(clipRunBackward_);
+		auto& framesRunLeft = curFrames(clipRunLeft_);
+		auto& framesRunRight = curFrames(clipRunRight_);
+		auto* framesAttack = hasAttack ? &curFrames(currentAttackClip_) : nullptr;
 
 		// 애니메이션의 프레임들을 블렌딩한다.
 		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 			WeightedAnimFrame frames[] = {
-				WeightedAnimFrame{ .frame = framesIdle0[i], .w = tIdle0_ },
-				WeightedAnimFrame{ .frame = framesIdle1[i], .w = tIdle1_ },
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 				WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
 				WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
 				WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
 				WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			// 공격 오버레이 보간
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
 			// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
 			// death animation 보간
@@ -243,10 +299,23 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	//	break;
 
 	case EventType::Hit:
-	// 플레이어는 전용 공격 클립이 없어 hit 오버레이를 공격 모션으로 재사용한다.
-	case EventType::Attack:
 		pOwner->animTimeHit_ = 0s;
 		pOwner->cooldownHit_ = 600ms;
+		break;
+
+	case EventType::Attack:
+		// 스킬 PlayAnimation에서 전파된 attackIndex로 무기 공격 클립을 선택한다(목록 범위로 clamp).
+		// 콤보/반복은 스킬 타임라인이 다중 PlayAnimation으로 매번 이 분기를 재트리거한다.
+		if (!pOwner->attackClips_.empty()) {
+			const auto idx = std::clamp<int>(
+				static_cast<const EvAttack*>(event)->attackIndex, 0,
+				static_cast<int>(pOwner->attackClips_.size()) - 1);
+			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
+			pOwner->animTimeAttack_ = 0s;
+			// 오버레이 길이 = 선택된 공격 클립 길이.
+			pOwner->cooldownAttack_ = std::chrono::duration_cast<Milliseconds>(
+				pOwner->targetClip(pOwner->currentAttackClip_)->duration);
+		}
 		break;
 
 	case EventType::Death:

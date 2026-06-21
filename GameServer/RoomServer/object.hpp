@@ -94,6 +94,10 @@ public:
 
 	virtual void onHitImpulse() {}
 
+	// 플레이어 식별: 스킬 PlayAnimation 이벤트가 공격 클립을 구동할 대상인지 구분한다
+	// (몬스터는 AI 상태머신이 애니메이션을 구동하므로 PlayAnimation은 no-op).
+	virtual bool isPlayer() const { return false; }
+
 	void setMaterialSetIdx(uint32 idx) { materialSetIdx_ = idx; }
 	uint32 materialSetIdx() const { return materialSetIdx_; }
 
@@ -204,6 +208,8 @@ public:
 
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
+
+	bool isPlayer() const override { return true; }
 
 	void setWeaponType(PlayerWeaponType weaponType) { weaponType_ = weaponType; }
 	PlayerWeaponType weaponType() const { return weaponType_; }

@@ -256,7 +256,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
-| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. `Online::Game::equipPlayerWeapon()`이 오른손 소켓에 장착(onlineGame.{hpp,cpp}) |
+| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. `Online::Game::equipPlayerWeapon()`이 **무기 모델의 단일 SocketOffset 키(SocketType)를 읽어 해당 손에 장착**(Bow=왼손, 나머지=오른손; 하드코딩 RightHand 제거) + 캐릭터 `AnimBlenderPlayer::setWeaponType` 호출로 무기별 클립 세트 적용(onlineGame.{hpp,cpp}) |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
 | 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
@@ -279,7 +279,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `EvHit` struct | `event.hpp #88-100` | targetId, hp, `hitAnimIndex`(u8): 서버 권위 선택 피격 리액션 클립 인덱스(다중 hit 리그 Boss=Hit1/Hit2). 단일 hit 몬스터는 무시. `S_SkillHit`→`onSkillHit`→`applyHit`→`EvHit` 전파 |
 | `EvBlood` struct | `event.hpp #96-101` | victimId |
 | `EvDeath` struct | `event.hpp #102-107` | victimId |
-| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case) |
+| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case). 플레이어도 무기별 `attackClips_`에 동일 적용 |
+| `PlayAnimation` 이벤트 | `skill/skillTypes.hpp` | `clipName[32]`(클·서버 미러; 서버가 플레이어 공격 클립을 이 이름으로 `switchClip`)+`blendTime`+`attackIndex`. 클라는 attackIndex로, 서버는 clipName으로 클립 선택. 서버 핸들러는 owner가 `isPlayer()`일 때만 동작(몬스터는 AI 구동, no-op) — `RoomServer/skill/skillSystem.cpp` |
 | `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
 | `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
 | `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
@@ -332,7 +333,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #16` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `AnimBlenderPlayer` | `object.hpp #16` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive` |
 | `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
 | `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
 | `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |

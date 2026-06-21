@@ -89,9 +89,9 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char  clipName[24];
+        char  clipName[32];  // null-terminated, max 31 chars (server switches player clip by this name)
         float blendTime;
-        u8t   attackIndex;   // mirror of client field (struct parity; server does not parse it)
+        u8t   attackIndex;   // mirror of client field (struct parity)
     } playAnimation;
 
     struct PlayVFX {

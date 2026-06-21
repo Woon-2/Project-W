@@ -7,6 +7,7 @@
 #include "event.hpp"
 #include "rigidBody.hpp"
 #include "ragdoll.hpp"
+#include "protocol.hpp"   // PlayerWeaponType (무기별 애니메이션 세트 선택)
 
 class AssetManager;
 class Object;
@@ -28,28 +29,47 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	// 장착 무기에 따라 idle/hit/4방향 run/공격 클립 세트를 재구성한다.
+	// (장착 시점에 Object의 anim blender로부터 호출됨)
+	void setWeaponType(PlayerWeaponType weaponType);
+
 	Seconds runAnimTime() const { return animTimeRun_; }
-	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
+	Seconds runDuration() const { return targetClip(clipRunForward_)->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
 
-	Seconds accMotionless_ = 0s;
+	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+	// 무기별로 해석된 클립 이름(setWeaponType에서 갱신). death는 전 무기 공용 상수.
+	std::string clipIdle_{};
+	std::string clipHit_{};
+	std::string clipRunForward_{};
+	std::string clipRunBackward_{};
+	std::string clipRunRight_{};
+	std::string clipRunLeft_{};
+	static constexpr const char* kClipDeath = "Death";
+	// 무기별 공격 클립 순서 목록(EvAttack.attackIndex로 인덱싱, 스킬 PlayAnimation에서 전파).
+	// 콤보/반복은 스킬 타임라인이 서로 다른 시각의 PlayAnimation으로 구동한다.
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};   // 현재 선택된 공격 클립(비면 공격 없음)
+
+	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
 	Milliseconds cooldownDeath_ = 0ms;
-	Seconds animTimeIdle0_ = 0s;
-	Seconds animTimeIdle1_ = 0s;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	Seconds animTimeDeath_ = 0s;
-	float tIdle0_ = 0.f;
-	float tIdle1_ = 0.f;
+	float tIdle_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
 	float tRunRight_ = 0.f;
+	// 공격 오버레이 비율. idle/run 블렌딩 위에 선택된 공격 클립을 얹는다.
+	float tAttack_ = 0.f;
 	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
 	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을

@@ -22,8 +22,9 @@ skill:addVFX(6, "effects/Crystals front attack_ParticleSystems.json", {
 })
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_Cast_Attack02",
+    attackIndex = 1,
+    blendTime   = 0.1
 })
 
 skill:addEvent(150, "PlayVFX", {

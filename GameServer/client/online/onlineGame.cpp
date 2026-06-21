@@ -479,13 +479,28 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 }
 
 void Game::equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType) {
+	// 무기 모델은 단일 SocketOffset만 가지며, 그 SocketType(오른손/왼손)으로
+	// 어느 손에 부착할지 데이터 주도로 결정한다(현재 Bow=왼손, 나머지=오른손).
+	const Model* weaponModel = assetManager_.playerWeaponModel(weaponType);
+	auto socketType = Bone::SocketType::RightHand;
+	if (weaponModel && !weaponModel->socketOffsets.empty()) {
+		socketType = weaponModel->socketOffsets.begin()->first;
+	}
+
+	// 무기 전환 시 이전 손의 무기도 확실히 제거한다.
 	obj.disequip(Bone::SocketType::RightHand);
+	obj.disequip(Bone::SocketType::LeftHand);
 
 	Equipment eq{};
-	eq.socketType = Bone::SocketType::RightHand;
+	eq.socketType = socketType;
 	eq.object = std::make_unique<Object>();
-	eq.object->setModel(assetManager_.playerWeaponModel(weaponType));
+	eq.object->setModel(weaponModel);
 	obj.equip(std::move(eq));
+
+	// 장착 캐릭터의 애니메이션 블렌더에 무기 종류를 알려 클립 세트를 맞춘다.
+	if (auto* playerBlender = dynamic_cast<AnimBlenderPlayer*>(obj.animBlender())) {
+		playerBlender->setWeaponType(weaponType);
+	}
 }
 
 void Game::syncLobbyCharacterWeapons() {
@@ -498,6 +513,7 @@ void Game::syncLobbyCharacterWeapons() {
 		}
 		else {
 			lobbyChars_[i]->disequip(Bone::SocketType::RightHand);
+			lobbyChars_[i]->disequip(Bone::SocketType::LeftHand);
 		}
 	}
 }

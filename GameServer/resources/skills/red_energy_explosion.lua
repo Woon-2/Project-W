@@ -16,8 +16,9 @@ skill.interruptible    = true
 skill:addVFX(8, "effects/red_energy_explosion.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_Cast_SpellA_Start",
+    attackIndex = 3,
+    blendTime   = 0.1
 })
 
 -- Impact point: 5m in front of the caster, dropped onto the terrain surface.

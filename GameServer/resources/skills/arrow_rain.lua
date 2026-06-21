@@ -33,8 +33,9 @@ skill:addVFX(12, "effects/arrow_rain.json", {
 })
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_Bow_AttackSpecial",
+    attackIndex = 2,
+    blendTime   = 0.1
 })
 
 skill:addEvent(120, "PlayVFX", {
