@@ -945,7 +945,8 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
 
         constexpr float TWO_PI = 2.f * 3.14159265f;
         float angle = r1 * TWO_PI;
-        float radius = CONFUSED_WANDER_RADIUS * (0.25f + 0.75f * r2);
+        float radius = CONFUSED_WANDER_RADIUS * (
+            CONFUSED_TARGET_MIN_RADIUS_MULT + (1.f - CONFUSED_TARGET_MIN_RADIUS_MULT) * r2 );
         confusedTarget_ = confusedAnchor_ + mu::Vec3( std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius );
         confusedRetargetTimer_ = CONFUSED_RETARGET_MIN + CONFUSED_RETARGET_SPAN * r1;
         distToTarget = (pos() - confusedTarget_).len();
@@ -969,7 +970,7 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
         moveDir = norm3( confusedAnchor_ - pos() );
     }
 
-    float spd = moveSpeed_ * CONFUSED_SPEED_MULT;
+    float spd = std::min( moveSpeed_ * CONFUSED_SPEED_MULT, CONFUSED_MAX_SPEED );
     setFacingDir( *this, moveDir );
     setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }

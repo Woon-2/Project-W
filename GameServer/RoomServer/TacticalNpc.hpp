@@ -294,11 +294,13 @@ protected:
     static constexpr float TACTICAL_PRESSURE_RADIUS_OFFSET_SPAN       = 3.0f;
     static constexpr float TACTICAL_RECOVER_SEPARATION_DRIFT_MULT     = 0.03f;
     static constexpr float CONFUSED_WANDER_RADIUS                     = 15.0f;
+    static constexpr float CONFUSED_TARGET_MIN_RADIUS_MULT            = 0.5f;
     static constexpr float CONFUSED_SEPARATION_RADIUS                 = 4.0f;
     static constexpr float CONFUSED_SEPARATION_WEIGHT                 = 0.55f;
-    static constexpr float CONFUSED_SPEED_MULT                        = 1.f;
-    static constexpr Seconds CONFUSED_RETARGET_MIN{ 0.35f };
-    static constexpr Seconds CONFUSED_RETARGET_SPAN{ 0.75f };
+    static constexpr float CONFUSED_SPEED_MULT                        = 2.f;
+    static constexpr float CONFUSED_MAX_SPEED                         = 8.f;
+    static constexpr Seconds CONFUSED_RETARGET_MIN{ 0.6f };
+    static constexpr Seconds CONFUSED_RETARGET_SPAN{ 0.8f };
 };
 
 #endif // tactical_npc_hpp
