@@ -89,6 +89,10 @@ public:
 	float damageTakenMultiplier() const { return damageTakenMultiplier_; }
 	void setDamageTakenMultiplier(float m) { damageTakenMultiplier_ = m; }
 
+	// 전술 대형 등에서 피격 판정과 피해는 유지하되 스킬 OnHit impulse만 무시한다.
+	bool hitImpulseImmune() const { return hitImpulseImmune_; }
+	void setHitImpulseImmune(bool v) { hitImpulseImmune_ = v; }
+
 	Faction faction() const { return faction_; }
 	void setFaction(Faction f) { faction_ = f; }
 
@@ -174,6 +178,7 @@ private:
 	std::vector<mu::Mat4x4> boneWorldXforms_;
 	bool canReceiveDamage_ = false;
 	float damageTakenMultiplier_ = 1.f;
+	bool hitImpulseImmune_ = false;
 	Faction faction_ = Faction::Neutral;
 
 	float cameraPitch_{};

@@ -2707,6 +2707,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 			std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj.get()),
 			barrierObjects_.end());
 	}
+	obj->setHitImpulseImmune(false);
 
 	const u32t cid = c.corpseId;
 	corpses_.push_back(std::move(c));
@@ -2755,6 +2756,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	obj->setHidden(false);
 	obj->setHiddenByOrb(false);
 	obj->setDead(false);                    // reused corpse: clear death state up front
+	obj->setHitImpulseImmune(false);        // 전술 면역 상태를 새 네트워크 객체가 물려받지 않게 한다.
 	obj->body().setLinearVel(mu::Vec3{});   // drop any stale death-frame velocity
 	obj->netInterpAcc_ = 0s;                // start network interpolation fresh
 	// Keep the pooled object's renderObjectId (stable per object) — do NOT allocate a fresh
@@ -3186,7 +3188,7 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 }
 
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
-void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
+void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId) {
 	for (uint16 id : npcIds) {
 		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
 		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
@@ -3194,6 +3196,7 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 		if (it == idMonsterMap_.end() || !it->second) continue;
 
 		Object* obj = it->second;
+		obj->setHitImpulseImmune(active);
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);
@@ -3203,6 +3206,14 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 			barrierObjects_.erase(
 				std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj),
 				barrierObjects_.end());
+		}
+	}
+
+	// 보스는 실제 barrier 목록에는 넣지 않고 로컬 스킬 impulse만 차단한다.
+	if (impulseOnlyNpcId != SNpcBarrierPacket::INVALID_NPC_ID) {
+		auto it = idMonsterMap_.find(impulseOnlyNpcId);
+		if (it != idMonsterMap_.end() && it->second) {
+			it->second->setHitImpulseImmune(active);
 		}
 	}
 }
@@ -3457,6 +3468,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
 		Object* npc = it->second;
 		npc->setHp( newHp );
+		npc->setHitImpulseImmune( false );
 		npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 		npc->setHiddenByOrb( false );
 		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.

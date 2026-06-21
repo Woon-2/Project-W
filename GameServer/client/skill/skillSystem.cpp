@@ -972,7 +972,9 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (oh.impulseStrength > 0.f) {
             Object* target = lookupObject(ctx, hr.targetObjectId);
             Object* owner  = lookupObject(ctx, hb.ownerObjectId);
-            if (target && owner) {
+            // 온라인 방패벽 대상은 서버 권위 위치와 동일하게 로컬 예측 impulse도
+            // 생략한다. 피격 VFX와 서버 피해 처리는 위 경로에서 그대로 유지된다.
+            if (target && owner && !target->hitImpulseImmune()) {
                 mu::Vec3 impulseJ =
                     mu::Vec3(mu::Vec4(oh.impulseDirLocal, 0.f) * owner->renderState().world)
                     * oh.impulseStrength;

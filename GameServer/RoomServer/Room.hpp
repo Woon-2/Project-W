@@ -188,7 +188,7 @@ public:
 	// 링 형성 순간 안쪽 플레이어를 바깥으로 넉백(클라 권한 이동잠금: S_PlayerKnockback).
 	void MU_CALLCONV knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius);
 	// 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환/해제(콜리전 마스크 토글).
-	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
+	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds, uint32_t impulseOnlyNpcId);
 	void clearShieldWallBlockers();
 
 private:
@@ -300,6 +300,7 @@ private:
 	// GrandBaum/Isis는 전용 모델 추가 전까지 Goblin placeholder.
 	ObjectType                                  platoonLeaderObjType_{ ObjectType::Goblin };
 	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
+	uint32_t                                    shieldWallImpulseOnlyNpcId_{ SNpcBarrierPacket::INVALID_NPC_ID }; // barrier는 아니지만 impulse 면역인 보스
 	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;

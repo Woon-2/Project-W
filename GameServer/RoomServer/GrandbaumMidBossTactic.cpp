@@ -219,7 +219,7 @@ void GrandbaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeade
             }
         }
     }
-    room.setShieldWallBlockers( blockerIds );
+    room.setShieldWallBlockers( blockerIds, leader.getId() );
 }
 
 /*------------------------------------------------------------

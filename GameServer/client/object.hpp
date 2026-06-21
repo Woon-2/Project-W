@@ -532,6 +532,10 @@ public:
 	void setBarrierActive(bool v) { barrierActive_ = v; }
 	bool isBarrierActive() const  { return barrierActive_; }
 
+	// 서버 전술 상태가 지정하는 피격 impulse 면역. barrier 여부와 분리되어 보스에도 적용된다.
+	void setHitImpulseImmune(bool v) { hitImpulseImmune_ = v; }
+	bool hitImpulseImmune() const    { return hitImpulseImmune_; }
+
 	// 모델 상태(isDead_ 플래그)만 갱신한다.
 	// 사망/부활 애니메이션은 EvDeath/EvRespawn 이벤트가 EventBus를 통해 구동한다.
 	void setDead(bool dead) {
@@ -623,6 +627,7 @@ protected:
 	i32t maxHp_{};
 	Faction faction_ = Faction::Neutral;
 	bool barrierActive_ = false;
+	bool hitImpulseImmune_ = false;
 
 	// --- 접지 중력 게이팅 상태 (updateGroundedGravityGate가 관리) ---
 	// grounded_      : 현재 접지 여부(중력 게이트 off 상태와 동일).

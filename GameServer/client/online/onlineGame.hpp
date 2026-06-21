@@ -98,9 +98,9 @@ public:
 
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
-	// 서버가 전술 차단벽(barrier)을 토글. active NPC들을 클라에서 '플레이어를 막는 벽'으로
-	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
-	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
+	// 서버가 전술 차단벽(barrier)을 토글. npcIds는 플레이어 차단+impulse 면역,
+	// impulseOnlyNpcId는 차단벽 등록 없이 impulse 면역만 설정한다.
+	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId);
 
 	// 서버가 지정한 NPC들을 즉시 숨김(비표시) 처리. 사망과 달리 시체/래그돌 없이 화면에서 제거하며,
 	// 복귀는 onNpcRespawn이 hidden을 해제한다. PacketManager가 S_NpcHide 수신 시 호출.

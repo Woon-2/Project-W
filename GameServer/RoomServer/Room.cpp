@@ -2149,10 +2149,20 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 // ShieldWall 중 슬라임을 "차단벽"으로 클라에 통지한다. 플레이어 차단은 클라 권위
 // (resolveBarrierSeparation)가 전담하고, 서버에서는 형성 중 바깥 링이 안쪽 링의 진입을 막지 않도록
 // 방패벽 슬라임끼리만 물리 충돌을 끈다. Player/Boss 통과와 지형 충돌은 기존 설정을 유지한다.
-void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
+void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds, uint32_t impulseOnlyNpcId) {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
 	constexpr uint32_t SHIELD_WALL_SLIME_MASK =
 		~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
+
+	// 이전 impulse-only 대상이 바뀌면 면역을 먼저 원복한다.
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ != impulseOnlyNpcId
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* previous = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			previous->setHitImpulseImmune(false);
+		}
+	}
 
 	// 살아있는 blocker가 갱신 목록에서 빠진 경우 ShieldWall 설정을 즉시 원복한다.
 	// 죽은 NPC는 이미 물리 월드에서 빠졌지만 같은 처리는 무해하다.
@@ -2163,6 +2173,7 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
 		}
 	}
 
@@ -2172,31 +2183,52 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(CollisionLayer::Slime);
 			npc->body().setCollisionMask(SHIELD_WALL_SLIME_MASK);
+			npc->setHitImpulseImmune(true);
+		}
+	}
+
+	// 보스는 플레이어 차단벽에는 포함하지 않고 스킬 피격 impulse만 차단한다.
+	if (impulseOnlyNpcId != INVALID_NPC_ID && impulseOnlyNpcId < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[impulseOnlyNpcId]) {
+			protectedNpc->setHitImpulseImmune(true);
 		}
 	}
 
 	shieldWallBlockerIds_ = blockerIds;
+	shieldWallImpulseOnlyNpcId_ = impulseOnlyNpcId;
 	// on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
 	if (!shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			true, blockerIds, static_cast<uint16>(impulseOnlyNpcId)));
 		shieldWallBarrierOn_ = true;
 	}
 }
 
 void Room::clearShieldWallBlockers() {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
 	for (uint32_t id : shieldWallBlockerIds_) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
+		}
+	}
+
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			protectedNpc->setHitImpulseImmune(false);
 		}
 	}
 
 	if (shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			false, shieldWallBlockerIds_, static_cast<uint16>(shieldWallImpulseOnlyNpcId_)));
 		shieldWallBarrierOn_ = false;
 	}
 	shieldWallBlockerIds_.clear();
+	shieldWallImpulseOnlyNpcId_ = INVALID_NPC_ID;
 }
 
 // ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────

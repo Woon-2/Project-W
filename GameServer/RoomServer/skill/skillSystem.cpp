@@ -941,7 +941,9 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (oh.impulseStrength > 0.f) {
             Object* tgt   = lookupObject(ctx, hr.targetObjectId);
             Object* owner = lookupObject(ctx, hb.ownerObjectId);
-            if (tgt && owner) {
+            // ShieldWall 대상은 피해/피격 이벤트를 그대로 받되 대형을 무너뜨리는
+            // OnHit impulse만 무시한다. AI velocity motor와 지형 반응은 계속 동작한다.
+            if (tgt && owner && !tgt->hitImpulseImmune()) {
                 mu::Mat4x4 orientMat(owner->orient());
                 mu::Vec3 impulseJ = mu::Vec3(mu::Vec4(oh.impulseDirLocal, 0.f) * orientMat)
                                     * oh.impulseStrength;

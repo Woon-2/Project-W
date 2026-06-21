@@ -336,7 +336,8 @@ void PacketManager::handleSNpcBarrierPacket(byte* buffer, int32 len) {
 		ids.push_back(list[i].npcId);
 	}
 
-	INet::ClientApp::onlineGame()->setNpcBarrier(pkt->active != 0, ids);
+	INet::ClientApp::onlineGame()->setNpcBarrier(
+		pkt->active != 0, ids, pkt->impulseOnlyNpcId);
 }
 
 void PacketManager::handleSNpcHidePacket(byte* buffer, int32 len) {

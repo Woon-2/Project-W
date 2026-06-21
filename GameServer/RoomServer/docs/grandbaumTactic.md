@@ -49,6 +49,10 @@ broadcast → 클라 `Game::setNpcBarrier`가 barrier 등록 → `Game::resolveB
 슬라임을 선분 캡슐로 이어 로컬 플레이어를 밀어낸다(하드 월).
 > **하지 말 것**: 서버에서 슬라임 mask에 Player 충돌을 켜면, 플레이어 바디(Kinematic)가 슬라임(Dynamic)을
 > **밀어내** 벽이 무너진다(클라 슬라임은 Kinematic이라 안 밀리지만 서버 변위가 broadcast됨). 패킷 전용이 정답.
+
+ShieldWall 활성 중에는 벽 슬라임과 그랜드밤 보스 모두 스킬 `OnHit` impulse를 무시한다. 보스 ID는
+`S_NpcBarrier.impulseOnlyNpcId`로 별도 전달하므로 보스는 플레이어 차단벽에는 포함되지 않으며, 피해·피격 연출과
+슬라임의 RingGuard 이동은 그대로 유지된다. ShieldWall 종료 시 양쪽 면역을 즉시 해제한다.
 > **버그였던 부분**: `setNpcBarrier`가 `idGoblinMap_`(goblin/hobgoblin 전용)에서 조회해 **슬라임이 안 잡혀
 > barrier가 아예 비활성**이었다(플레이어가 그냥 통과). 전 몬스터를 담는 `idMonsterMap_`(Object*) 조회로 수정.
 > 또 연속 벽이 되려면 인접 슬라임이 `kBarrierLinkDist 2.9` 이내여야 해 슬라임 `separationRadius`를 3.0→2.0으로 낮춤.

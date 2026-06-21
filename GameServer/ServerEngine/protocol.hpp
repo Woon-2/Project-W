@@ -263,7 +263,10 @@ struct SNpcBarrierInfo {
 };
 
 struct SNpcBarrierPacket : public PacketHeader {
+	static constexpr uint16 INVALID_NPC_ID = 0xFFFFu;
+
 	uint8  active;       // 1 = 벽 켜기, 0 = 끄기
+	uint16 impulseOnlyNpcId; // 실제 barrier에는 포함하지 않고 피격 impulse만 차단할 NPC
 	uint16 dataOffset;
 	uint16 npcCount;
 
