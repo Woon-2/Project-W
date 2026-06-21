@@ -6,6 +6,13 @@
 #include "ObjectPool.hpp"
 #include "Room.hpp"
 
+namespace {
+uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+}
+
 void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
 	
@@ -36,6 +43,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 
 	case PacketType::C_SelectSkill:
 		handleCSelectSkillPacket(session, buffer, len);
+		break;
+
+	case PacketType::C_TimeSync:
+		handleCTimeSyncPacket(session, buffer, len);
 		break;
 
 	default:
@@ -87,20 +98,27 @@ void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, i
 }
 
 void PacketManager::handleCAttackPacket( GameSession* session, byte* buffer, int32 len ) {
-	uint64 clientMs = reinterpret_cast<CAttackPacket*>(buffer)->clientMs;
-	session->room()->doAsync( [ session, clientMs ]() {
-		session->room()->attack( session->id(), clientMs );
+	uint64 actionServerMs = reinterpret_cast<CAttackPacket*>(buffer)->actionServerMs;
+	session->room()->doAsync( [ session, actionServerMs ]() {
+		session->room()->attack( session->id(), actionServerMs );
 	} );
 }
 
 void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<CSkillStartPacket*>(buffer);
 	uint32 skillAssetId = pkt->skillAssetId;
-	uint64 clientMs     = pkt->clientMs;
+	uint64 actionServerMs = pkt->actionServerMs;
 	uint32 skillSeed    = pkt->skillSeed;
-	session->room()->doAsync( [session, skillAssetId, clientMs, skillSeed]() {
-		session->room()->skillStart( session->id(), skillAssetId, clientMs, skillSeed );
+	session->room()->doAsync( [session, skillAssetId, actionServerMs, skillSeed]() {
+		session->room()->skillStart( session->id(), skillAssetId, actionServerMs, skillSeed );
 	} );
+}
+
+void PacketManager::handleCTimeSyncPacket(GameSession* session, byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<CTimeSyncPacket*>(buffer);
+	const uint64 serverReceiveMs = networkNowMs();
+	const uint64 serverSendMs = networkNowMs();
+	session->send(makeSTimeSyncPacket(pkt->clientSendMs, serverReceiveMs, serverSendMs));
 }
 
 void PacketManager::handleCSelectSkillPacket( GameSession* session, byte* buffer, int32 len ) {
@@ -456,6 +474,23 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->skillSeed    = skillSeed;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 clientSendMs,
+	                                                            uint64 serverReceiveMs,
+	                                                            uint64 serverSendMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(STimeSyncPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<STimeSyncPacket>();
+	pkt->clientSendMs = clientSendMs;
+	pkt->serverReceiveMs = serverReceiveMs;
+	pkt->serverSendMs = serverSendMs;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_TimeSync;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

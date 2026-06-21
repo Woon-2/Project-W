@@ -87,8 +87,8 @@ public:
 	// 디버그 전용: 안티치트 클램프를 우회해 플레이어를 pos로 즉시 이동(아레나 zone 트리거 테스트).
 	void debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
-	void attack(int32 sessionId, uint64 clientMs);
-	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
+	void attack(int32 sessionId, uint64 actionServerMs);
+	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an

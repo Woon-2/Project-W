@@ -26,6 +26,32 @@
 #include "treant.hpp"
 #include <span>
 
+namespace {
+constexpr uint64 kMaxLagCompensationMs = 250;
+
+uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+struct ValidatedActionTime {
+	uint64 timestampMs;
+	uint16 ageMs;
+	bool valid;
+};
+
+ValidatedActionTime validateActionTime(uint64 actionServerMs, uint64 serverNowMs) {
+	if (actionServerMs == 0 || actionServerMs > serverNowMs)
+		return { serverNowMs, 0, false };
+
+	const uint64 ageMs = serverNowMs - actionServerMs;
+	if (ageMs > kMaxLagCompensationMs)
+		return { serverNowMs, 0, false };
+
+	return { actionServerMs, static_cast<uint16>(ageMs), true };
+}
+}
+
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
 	if (id >= static_cast<int>(objectById_.size()))
@@ -747,11 +773,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 
 	rebuildAggroCount();
 
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
+	const uint64 serverNow = networkNowMs();
 
 	// Angular velocity 고정 (물리 solver 누적 방지)
 	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
@@ -1291,7 +1313,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 	if (sessionIt == idSessionMap_.end()) {
 		std::cout << "[DIAG skillStart] sid=" << sessionId << " FIND_FAIL (not in idSessionMap_)\n";
@@ -1335,14 +1357,16 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 			static_cast<uint16>(player->getId()), static_cast<uint8>(slot), player->skillCharge(slot)));
 	}
 
-	// Compute elapsed time for lag compensation (same pattern as attack())
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
-	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
-	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
+	// The client reports an estimate in the server's monotonic clock domain.
+	// Treat it only as a bounded lag-compensation hint; invalid/future/stale values
+	// fall back to receive time so a client can never force an unbounded fast-forward.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint16 elapsedMs = actionTime.ageMs;
+	std::cout << "[DIAG skillTime] actionServerMs=" << actionServerMs
+	          << " serverNowMs=" << serverNow
+	          << " elapsedMs=" << elapsedMs
+	          << " valid=" << actionTime.valid << "\n";
 
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic
@@ -1404,7 +1428,7 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 		skillSeed));
 }
 
-void Room::attack(int32 sessionId, uint64 clientMs) {
+void Room::attack(int32 sessionId, uint64 actionServerMs) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 
 	if (sessionIt == idSessionMap_.end()) {
@@ -1428,8 +1452,11 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		player->pos(), player->forward(), kHalfExtent, kOffsetFwd
 	);
 
-	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
-	uint64 targetMs = clientMs;
+	// Rewind only within the server-validated 250 ms window. Unsynchronized,
+	// future, or stale timestamps use the current server receive time.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint64 targetMs = actionTime.timestampMs;
 
 	// Legacy player melee (lag-comp rewind). New monster pools are damageable via the
 	// skill system (objectById_), so they are not added to this vestigial path.

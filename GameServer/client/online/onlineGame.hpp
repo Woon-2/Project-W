@@ -124,6 +124,8 @@ public:
 	void onPlayerHp( uint16 playerId, int32 newHp );
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
+	void beginServerTimeSync();
+	void onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -157,6 +159,12 @@ private:
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
+	void updateServerTimeSync();
+	void requestServerTimeSync();
+	uint64 estimatedServerTimeMs() const;
+	int64  serverClockOffsetMs_{ 0 };
+	uint64 nextTimeSyncClientMs_{ 0 };
+	bool   serverClockSynchronized_{ false };
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
 	void updatePartyHpHudLayout();

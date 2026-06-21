@@ -66,6 +66,13 @@ static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerF
 static constexpr int     kMaxPhysicsScaleK    = 4;
 static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
+static constexpr uint64  kTimeSyncIntervalMs  = 10000;
+static constexpr int64   kMaxAcceptedSyncRttMs = 2000;
+
+static uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
@@ -3583,6 +3590,7 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
+	updateServerTimeSync();
 
 	if (player_ == nullptr) {
 		return;
@@ -5171,21 +5179,59 @@ void Game::sendMouseMovePacket() {
 }
 
 void Game::sendAttackPacket() {
-	uint64 clientMs = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count());
-	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
+	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(estimatedServerTimeMs()));
 }
 
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
-	uint64 clientMs = static_cast<uint64>(
-		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count()));
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+	const uint64 actionServerMs = estimatedServerTimeMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
 	std::cout << "[DIAG C_SkillStart SEND] asset=" << skillAssetId
-	          << " myPid=" << (player_ ? static_cast<uint16>(player_->getId()) : 0) << "\n";
+	          << " myPid=" << (player_ ? static_cast<uint16>(player_->getId()) : 0)
+	          << " actionServerMs=" << actionServerMs
+	          << " timeSynced=" << serverClockSynchronized_ << "\n";
+}
+
+void Game::beginServerTimeSync() {
+	serverClockSynchronized_ = false;
+	serverClockOffsetMs_ = 0;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = networkNowMs() + kTimeSyncIntervalMs;
+}
+
+void Game::updateServerTimeSync() {
+	if (nextTimeSyncClientMs_ == 0) return;
+	const uint64 now = networkNowMs();
+	if (now < nextTimeSyncClientMs_) return;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = now + kTimeSyncIntervalMs;
+}
+
+void Game::requestServerTimeSync() {
+	const uint64 clientSendMs = networkNowMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCTimeSyncPacket(clientSendMs));
+}
+
+void Game::onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs) {
+	const uint64 clientReceiveMs = networkNowMs();
+	if (clientReceiveMs < clientSendMs || serverSendMs < serverReceiveMs) return;
+
+	const int64 t0 = static_cast<int64>(clientSendMs);
+	const int64 t1 = static_cast<int64>(serverReceiveMs);
+	const int64 t2 = static_cast<int64>(serverSendMs);
+	const int64 t3 = static_cast<int64>(clientReceiveMs);
+	const int64 rttMs = (t3 - t0) - (t2 - t1);
+	if (rttMs < 0 || rttMs > kMaxAcceptedSyncRttMs) return;
+
+	serverClockOffsetMs_ = ((t1 - t0) + (t2 - t3)) / 2;
+	serverClockSynchronized_ = true;
+	std::cout << "[TimeSync] rttMs=" << rttMs
+	          << " offsetMs=" << serverClockOffsetMs_ << "\n";
+}
+
+uint64 Game::estimatedServerTimeMs() const {
+	if (!serverClockSynchronized_) return 0;
+	const int64 estimated = static_cast<int64>(networkNowMs()) + serverClockOffsetMs_;
+	return estimated > 0 ? static_cast<uint64>(estimated) : 0;
 }
 
 void Game::castSkillByName(std::string_view name) {
