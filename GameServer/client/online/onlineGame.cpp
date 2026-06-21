@@ -76,18 +76,53 @@ static constexpr float    kBarrierMagicMinDiameter = 8.f;
 static constexpr float    kBarrierMagicMaxDiameter = 24.f;
 static constexpr int      kBarrierMagicRenderOrder = 4;
 static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
-static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
 
 static float barrierMagicDiameter(const MarkerDef& m) {
 	const float wallHeight = std::fabs(m.scale.y());
 	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
 }
 
-static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
-	if (m.name == "WallHobgoblin_0") {
-		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
-	}
-	return mu::Vec3{};
+// 입장 표시 마법진(magic circle)의 지역별 위치/회전 보정 테이블.
+//
+// Wall 마커 하나가 ① 물리 일방향 벽(makeOneWayWall, 실제 벽 슬랩 위)과 ② 입장 표시 마법진
+// (실제 통과 길목 중앙)을 겸한다. 벽 슬랩이 길목보다 넓거나 한쪽으로 치우치면 둘이 어긋나
+// 마법진이 길목에서 벗어나고(위치), 마커 방향에 따라 비뚤게 보일 수도 있다(회전). 그 차이를
+// 마커 이름별 로컬 오프셋 + 추가 회전으로 보정한다.
+//
+// offset    : 마커 로컬 위치 오프셋(circlePos에서 m.orient.rotate 적용). 보통 벽 폭(span) 축으로
+//             밀어 길목 중앙에 맞춘다. y=높이, z/x=수평 슬라이드.
+// rotateDeg : 마커 로컬 축 기준 추가 회전(도). x/y/z = 마커 로컬 X/Y/Z축 회전. planeFix와
+//             markerOrient 사이에 적용되어 벽 방향을 기준으로 돈다. 원하는 각이 나올 때까지
+//             축을 바꿔가며 조절. 둘 다 0이면 보정 없음(현재 동작 그대로).
+struct BarrierMagicAdjust {
+	mu::Vec3 offset{};      // 마커 로컬 위치 오프셋
+	mu::Vec3 rotateDeg{};   // 마커 로컬 추가 회전(도, x/y/z축)
+};
+
+static const std::unordered_map<std::string, BarrierMagicAdjust>& barrierMagicAdjustTable() {
+	// chunks_index.bin의 모든 Wall 마커. { offset(x,y,z), rotateDeg(x,y,z) }. 표에 없으면 보정 없음.
+	static const std::unordered_map<std::string, BarrierMagicAdjust> kTable{
+		// 보스 아레나(Arena_Boss)
+		{ "WallBoss",         { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 그란바움 아레나(Arena_Grandbaum)
+		{ "WallGrandbaum_0",  { mu::Vec3{ 0.f,   0.f, -10.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_1",  { mu::Vec3{ 0.f,   0.f,  0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_2",  { mu::Vec3{ 0.f,   0.f,  -5.0f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 홉고블린 아레나(Arena_Hobgoblin)
+		{ "WallHobgoblin_0",  { mu::Vec3{ 0.f,   0.f,  12.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },   // 길목 중앙으로 +12(기존 값)
+		{ "WallHobgoblin_1",  { mu::Vec3{ 0.f,  -5.f,   7.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 이시스 아레나(Arena_Isys)
+		{ "WallIsys_0",       { mu::Vec3{ 0.f, -10.f, -20.f }, mu::Vec3{ 0.f, 45.f, 0.f } } },
+		{ "WallIsys_1",       { mu::Vec3{ 0.f,  -5.f, -15.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallIsys_2",       { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+	};
+	return kTable;
+}
+
+static BarrierMagicAdjust barrierMagicAdjust(const MarkerDef& m) {
+	const auto& table = barrierMagicAdjustTable();
+	if (auto it = table.find(m.name); it != table.end()) return it->second;
+	return {};
 }
 
 // "Arena_X" zone 태그 -> "WallX" 마커 prefix. 아레나 후방 Wall 일방향 벽(arenaWalls_)과 장식용
@@ -2914,11 +2949,16 @@ void Game::rebuildBarrierMagicCircleQuads() {
 			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
 
 			const float diameter = barrierMagicDiameter(m);
-			const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+			const BarrierMagicAdjust adj = barrierMagicAdjust(m);
+			const mu::Vec3 circlePos = m.pos + m.orient.rotate(adj.offset);
 			BarrierMagicCircleQuad quad{};
 			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
 			           * mu::translate(circlePos);
-			quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+			// 추가 회전은 planeFix와 markerOrient 사이에 끼워 마커 로컬축 기준으로 적용(rotateDeg=0이면 항등).
+			const mu::Mat4x4 extraRot = mu::rotateXH(mu::Degree(adj.rotateDeg.x()))
+			                          * mu::rotateYH(mu::Degree(adj.rotateDeg.y()))
+			                          * mu::rotateZH(mu::Degree(adj.rotateDeg.z()));
+			quad.rotation = kBarrierMagicQuadPlaneFix * extraRot * mu::Mat4x4(m.orient);
 			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
 			quad.sortPos = circlePos;
 			barrierMagicCircleQuads_.push_back(quad);
@@ -5283,15 +5323,18 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		// (구버전은 전체 3D 속도를 kPlayerMaxSpeed로 클램프해, 이동 중 낙하 시
 		//  물리가 적분한 y속도까지 매 프레임 재스케일 → 물리 damping과 이중으로 감속됐다.
 		//  standalone Game::processInput과 동일하게 y를 보존한다.)
+		// [임시 디버그] F8 부스트 시 가속률과 속도 상한을 함께 배율로 키운다(평상시 배율=1).
+		const float dbgMaxSpeed = kPlayerMaxSpeed * debugSpeedMultiplier_;
+
 		const auto fullVel = player_->velocity();
-		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * debugSpeedMultiplier_ * Seconds(deltaTime).count());
 		float newX = fullVel.x() + accel.x();
 		float newZ = fullVel.z() + accel.z();
 
 		// x/z 속도만 클램프 (y는 건드리지 않음).
 		const float hSpd2 = newX * newX + newZ * newZ;
-		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+		if (hSpd2 > dbgMaxSpeed * dbgMaxSpeed) {
+			const float scale = dbgMaxSpeed / std::sqrt(hSpd2);
 			newX *= scale;
 			newZ *= scale;
 		}
@@ -5322,6 +5365,12 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Grandbaum" );
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
 		debugTeleportToArena( "Arena_Isys" );
+
+	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
+	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
+		debugSpeedMultiplier_ = (debugSpeedMultiplier_ > 1.f) ? 1.f : 5.f;
+		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
+	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.

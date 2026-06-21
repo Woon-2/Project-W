@@ -2246,6 +2246,10 @@ void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
 		obj.animController().registerClip("Attack", findServerAnimClip(*anims, p + "_Attack1"));
 	obj.animController().switchClip("Idle");
 	obj.setCanReceiveDamage(true);
+	// Tactical NPCs (troopers and the PlatoonLeader boss) grant skill charge on death like
+	// their field counterparts. Keyed by objType so each variant uses its monster's value;
+	// boss objTypes (Hobgoblin/Grandbaum/Isys) read their own chargeConfig.lua entries.
+	obj.setKillChargeReward(assetManager_->chargeConfig().monsterCharge(type));
 
 	obj.body().setMotionType(MotionType::Dynamic);
 	obj.body().setMass(70.f);

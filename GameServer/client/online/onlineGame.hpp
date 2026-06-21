@@ -148,6 +148,10 @@ private:
 	// server moves its authoritative pos (bypassing the anti-cheat clamp) and the zone Enter fires.
 	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
 	void debugTeleportToArena(const std::string& tag);
+
+	// [임시 디버그] F8 토글로 켜는 로컬 플레이어 이동 속도 배율(1x↔5x). 서버 C_Move(20Hz)×7m/packet
+	// 클램프 한도(≈140m/s) 안이라 온라인에서도 러버밴딩 없음. 제거 시 이 멤버 + processInput의 적용부/F8 핸들러만 삭제.
+	float debugSpeedMultiplier_{ 1.f };
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
