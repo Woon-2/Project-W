@@ -36,7 +36,7 @@ skill:addEvent(600, "SpawnHitbox", {
 
 skill:addEvent(600, "SpawnHitbox", {
     slot                = 2,
-    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.5, 0.7, 0.5, 0, 0, 0) },
+    localOBBs           = { OBB(0.0, -0.1, 0.0, 0.5, 0.9, 0.5, 0, 0, 0) },
     attach              = BoneAttach("TreantLFoot"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,
