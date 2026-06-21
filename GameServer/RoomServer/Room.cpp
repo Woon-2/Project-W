@@ -1284,9 +1284,6 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
 		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		const int32 newHp = std::max(prevHp - dmg, 0);
-		std::cout << "[DIAG applydmg] attacker=" << hit->attackerId << " target=" << hit->targetId
-		          << " hitDmg=" << hit->damage << " mult=" << tgt->damageTakenMultiplier()
-		          << " prevHp=" << prevHp << " newHp=" << newHp << "\n";
 		tgt->setHp(newHp);
 		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
@@ -1316,22 +1313,10 @@ void Room::updateSkillSystem(Milliseconds dt) {
 void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 	if (sessionIt == idSessionMap_.end()) {
-		std::cout << "[DIAG skillStart] sid=" << sessionId << " FIND_FAIL (not in idSessionMap_)\n";
 		return;
 	}
 
 	auto* player = sessionIt->second->player();
-	{
-		const uint32 pid = player->getId();
-		const bool ownerSlotOk = (pid < objectById_.size()) && (objectById_[pid] == player);
-		const SkillAsset* dbgAsset = findSkillAsset(skillAssetId);
-		std::cout << "[DIAG skillStart] sid=" << sessionId
-		          << " pid=" << pid
-		          << " asset=" << skillAssetId
-		          << " name=" << (dbgAsset ? dbgAsset->name : std::string("NULL"))
-		          << " pos=(" << player->pos().x() << "," << player->pos().y() << "," << player->pos().z() << ")"
-		          << " ownerSlotOk=" << ownerSlotOk << "\n";
-	}
 	if (player->hp() <= 0) return;
 
 	// Stack-charge gate: selectable skills need >=1 stack and an elapsed cooldown.
@@ -1363,10 +1348,6 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerM
 	const uint64 serverNow = networkNowMs();
 	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
 	const uint16 elapsedMs = actionTime.ageMs;
-	std::cout << "[DIAG skillTime] actionServerMs=" << actionServerMs
-	          << " serverNowMs=" << serverNow
-	          << " elapsedMs=" << elapsedMs
-	          << " valid=" << actionTime.valid << "\n";
 
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic

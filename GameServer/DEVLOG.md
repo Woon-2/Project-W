@@ -1610,4 +1610,4 @@ HobgoblinSpawner at (5024.86, 41.1, 5023.5)
 - `client Release x64` 빌드 성공
 - 정상 동기화 시 서버의 `[DIAG skillTime]` 로그에서 `valid=1`, `elapsedMs=0~250` 범위인지 확인한다.
 - `valid=0`이어도 서버 수신 시각으로 안전하게 폴백되어 공격 판정은 유지된다.
-- 현장 검증이 끝날 때까지 `[TimeSync]`, `[DIAG C_SkillStart SEND]`, `[DIAG skillTime]` 등 관련 진단 로그를 유지한다.
+- 현장 검증에 사용한 `[TimeSync]`, `[DIAG C_SkillStart SEND]`, `[DIAG skillTime]` 등 관련 진단 로그는 검증 완료 후 제거했다.

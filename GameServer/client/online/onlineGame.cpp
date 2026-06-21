@@ -5185,10 +5185,6 @@ void Game::sendAttackPacket() {
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 	const uint64 actionServerMs = estimatedServerTimeMs();
 	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
-	std::cout << "[DIAG C_SkillStart SEND] asset=" << skillAssetId
-	          << " myPid=" << (player_ ? static_cast<uint16>(player_->getId()) : 0)
-	          << " actionServerMs=" << actionServerMs
-	          << " timeSynced=" << serverClockSynchronized_ << "\n";
 }
 
 void Game::beginServerTimeSync() {
@@ -5224,8 +5220,6 @@ void Game::onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 
 
 	serverClockOffsetMs_ = ((t1 - t0) + (t2 - t3)) / 2;
 	serverClockSynchronized_ = true;
-	std::cout << "[TimeSync] rttMs=" << rttMs
-	          << " offsetMs=" << serverClockOffsetMs_ << "\n";
 }
 
 uint64 Game::estimatedServerTimeMs() const {
@@ -5238,7 +5232,6 @@ void Game::castSkillByName(std::string_view name) {
 	const SkillAsset* asset = skillSystem_.findAsset(name);
 	if (!asset) return;
 	if (skillSystem_.hasActiveSkill(player_->getId())) return;
-	std::cout << "[DIAG cast] name=" << name << " assetId=" << asset->id << "\n";
 
 	// Per-cast deterministic seed: used locally AND sent to the server
 	// (C_SkillStart) so server hitboxes / remote visuals match exactly.

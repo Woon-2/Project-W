@@ -331,11 +331,6 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         const int slot = def.slot;
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
-        std::cout << "[DIAG hitbox] ownerObjId=" << inst.ownerObjectId
-                  << " ownerFound=" << (owner != nullptr)
-                  << " ownerFaction=" << (owner ? static_cast<int>(owner->faction()) : -1)
-                  << " targetMask=" << (owner ? hostileMask(owner->faction()) : 0u) << "\n";
-
         if (def.attach.type == AttachType::Bone) {
             int oldH = inst.getBoneHandle(slot);
             if (oldH >= 0) freeHitbox(oldH);
@@ -859,9 +854,6 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
         if (!hb.active) continue;
-        std::cout << "[DIAG hbentry] owner=" << hb.ownerObjectId << " obbs=" << hb.worldOBBs.size()
-                  << " aabbC=(" << hb.worldAABB.center.x() << "," << hb.worldAABB.center.y() << "," << hb.worldAABB.center.z() << ")"
-                  << " mask=" << hb.targetMask << "\n";
         if (hb.worldOBBs.empty()) continue;
         hitboxEntries_.push_back({ hb.worldAABB, hi, hb.targetMask });
     }
@@ -878,7 +870,6 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
 
         Object*    target   = c.target;
         const i32t targetId = static_cast<i32t>(target->getId());
-        std::cout << "[DIAG cand] owner=" << hb.ownerObjectId << " target=" << targetId << "\n";
         if (targetId == hb.ownerObjectId) continue;
 
         // Hit group cooldown
@@ -910,7 +901,6 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
             if (r.hit) { coeff = flatDamage ? 1.0f : r.damageCoeff; hit = true; break; }
         }
         if (hit) {
-            std::cout << "[DIAG narrowhit] owner=" << hb.ownerObjectId << " target=" << targetId << " coeff=" << coeff << "\n";
             pendingHits_.push_back({ c.hitboxIdx, targetId, coeff });
             if (hb.instanceIdx >= 0 && hb.instanceIdx < poolSize) {
                 SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
@@ -937,11 +927,6 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         // A zero-damage hitbox (e.g. a non-penetrating projectile trigger whose
         // payload is the spawned burst) carries no damage event -- only its consume
         // side effect below.
-        std::cout << "[DIAG hitresult] owner=" << (instPtr ? instPtr->ownerObjectId : -1)
-                  << " target=" << hr.targetObjectId
-                  << " ohDmg=" << oh.damage
-                  << " coeff=" << hr.damageCoeff
-                  << " scale=" << (instPtr ? instPtr->damageScale : 0.f) << "\n";
         if (!ctx.clientPredictionOnly && instPtr && oh.damage != 0) {
             holdEvent((*ctx.evList), EvSkillHit{
                 hr.targetObjectId,
