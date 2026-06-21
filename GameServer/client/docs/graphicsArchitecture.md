@@ -297,6 +297,14 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   추가, `illuminateCSM`/terrain ambient에 **가산**(기존 globalAmbient 유지 위). inline tonemap은 forward 유지.
 - **포트레이트 무회귀**: 로비 포트레이트는 `FrameData::iblIntensity=0`으로 스테이징(스튜디오 globalAmbient 유지, 환경광 미수신).
   메인 forward/deferred는 1.0.
+- **포트레이트 장착 무기(non-skinned) 듀얼 디스패처**: 로비 포트레이트 RT(`gfx.hpp`의 슬롯별 `cameraDataLobbyPortrait_`/
+  `lightDataLobbyPortrait_`/`frameDataLobbyPortrait_`)는 원래 캐릭터 본체용 `PBRSkinnedPipeline::Dispatcher` 1개만
+  썼는데, 장착 무기는 항상 non-skinned 정적 메시라 같은 슬롯에 `PBRPipeline::Dispatcher`를 병렬로 추가했다(메인
+  씬의 PBR/PBRSkinned 듀얼 디스패처 패턴과 동일, `gfx.cpp` 포트레이트 렌더 루프). 카메라/라이트/프레임 데이터는
+  `PBRPipeline`과 `PBRSkinnedPipeline`의 대응 구조체가 필드 구성이 동일해 디스패치 시점에 인라인 변환만 하고
+  별도 GFX 멤버는 늘리지 않았다. 제출 경로: `Object::renderPortrait()`가 본체(스킨드) 제출 후 `equipments_`를
+  순회해 `Object::renderPortraitEquipment()` → `GFX::addLobbyPortraitDrawEventStatic()`(`drawEventsLobbyPortraitStatic_`,
+  `resourcesLobbyPortraitStatic_`) 경로로 제출한다. shadowPass는 미수행(mainPass만).
 
 **4) Tonemap resolve (`tonemapResolve.hlsl`, `TonemapPipeline`)** — 단일 톤매핑 지점
 - fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → **3D LUT color grading** → backbuffer.

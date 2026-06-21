@@ -444,6 +444,11 @@ public:
 	// 컬링 플래그(메인 카메라 기준)는 무시하고 항상 그린다.
 	void MU_CALLCONV renderPortrait(GFX& gfx, u32t slot);
 
+	// renderPortrait()의 부속 객체(장착 무기 등) 전용 렌더. 무기 메시는 항상
+	// non-skinned 정적 메시이므로 PBRPipeline 포트레이트 채널로 제출한다.
+	// worldXform은 호출자가 소켓 본 변환까지 합성해 전달하는 최종 월드 행렬이다.
+	void MU_CALLCONV renderPortraitEquipment(GFX& gfx, u32t slot, mu::Mat4x4 worldXform);
+
 	virtual void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {}
 
 	// 이미 init된 AnimBlender 인스턴스를 채택한다(소유권 이전). 기존 블렌더는

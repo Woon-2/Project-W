@@ -278,6 +278,7 @@ void Game::setupLobbyCharacters() {
 	}
 
 	updateLobbyCharacterTransforms();
+	syncLobbyCharacterWeapons();
 }
 
 void Game::updateLobbyCharacterTransforms() {
@@ -475,6 +476,30 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 	}
 
 	return L"player";
+}
+
+void Game::equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType) {
+	obj.disequip(Bone::SocketType::RightHand);
+
+	Equipment eq{};
+	eq.socketType = Bone::SocketType::RightHand;
+	eq.object = std::make_unique<Object>();
+	eq.object->setModel(assetManager_.playerWeaponModel(weaponType));
+	obj.equip(std::move(eq));
+}
+
+void Game::syncLobbyCharacterWeapons() {
+	if (lobbyChars_.empty()) return;
+
+	for (std::size_t i = 0u; i < lobbyChars_.size(); ++i) {
+		if (!lobbyChars_[i]) continue;
+		if (i < lobbyPlayers_.size()) {
+			equipPlayerWeapon(*lobbyChars_[i], lobbyPlayers_[i].weaponType);
+		}
+		else {
+			lobbyChars_[i]->disequip(Bone::SocketType::RightHand);
+		}
+	}
 }
 
 void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
@@ -2029,6 +2054,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*player_, playerInfo.weaponType);
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
@@ -2157,6 +2183,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2202,6 +2229,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -4599,6 +4627,7 @@ void Game::refreshLobbyUI() {
 		});
 	}
 	lobbyUI_.refresh(vs);
+	syncLobbyCharacterWeapons();
 
 	// 메인 메뉴를 벗어나면 설정창은 닫는다(기존 동작 보존).
 	if (!vs.inMainMenu) settingsPanel_.close();

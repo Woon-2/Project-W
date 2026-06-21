@@ -256,6 +256,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
+| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. `Online::Game::equipPlayerWeapon()`이 오른손 소켓에 장착(onlineGame.{hpp,cpp}) |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
 | 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
@@ -379,6 +380,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
+| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1483,#1491,#1509` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(Online::Game::equipPlayerWeapon, onlineGame.cpp) |
+| `Object::render()` 부속 객체 루프 | `object.cpp #1277` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
+| `Object::renderPortrait()` | `object.cpp #1310` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
+| `Object::renderPortraitEquipment()` | `object.cpp #1348` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
 | `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
 | `Object::render()` | `object.cpp #843` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |

@@ -34,6 +34,7 @@ public:
 	const Texture* heavyArrow() const { return &heavyArrow_; }
 	const Texture* uiLeftButton() const { return &uiLeftButton_; }
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
+	const Model* playerWeaponModel(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
 	// Skill dial icon resolved by compiled skill asset name (e.g. "SlashWave").
@@ -125,6 +126,11 @@ private:
 	Model modelCube_{};
 	Model modelStronghold_{};
 	Model modelPlayer_{};
+	// 무기 모델 (오른손 소켓 장착용, PlayerWeaponType별 1:1).
+	Model modelKatana_{};
+	Model modelSpearHook_{};
+	Model modelCrystalWand_{};
+	Model modelHeavyArrow_{};
 	Model modelGoblin_{};
 	Model modelHobgoblin_{};
 	Model modelSnake_{};

@@ -162,6 +162,10 @@ private:
 	void sendSelectSkillPacket(uint8 slot);
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
+	// 오른손 소켓에 weaponType에 해당하는 무기를 (재)장착한다. 인게임/로비 포트레이트 공용.
+	void equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType);
+	// lobbyChars_[i]를 lobbyPlayers_[i].weaponType과 동기화한다(인덱스 1:1 대응).
+	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
 	void registerInGamePartyPlayer(uint16 playerId);

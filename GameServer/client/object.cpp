@@ -1264,15 +1264,15 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
-		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
-			gfx.addDrawEvent( BVPipeline::DrawEvent{
-				.world   = offsetXform * renderState_.worldBVs[i],
-				.bvModel = BVPipeline::BVModel::Box,
-				.color   = bvColor_
-			} );
-		}
-	}
+	//if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	//	for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
+	//		gfx.addDrawEvent( BVPipeline::DrawEvent{
+	//			.world   = offsetXform * renderState_.worldBVs[i],
+	//			.bvModel = BVPipeline::BVModel::Box,
+	//			.color   = bvColor_
+	//		} );
+	//	}
+	//}
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {
@@ -1295,6 +1295,10 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 			// (둘 중 하나는 무조건 단위 행렬이다. 둘을 곱셈으로 이은 것에 헷갈리지 말자.)
 			// 이다.
 			// equipment는 cullObjects()에서 독립적으로 컬링되지 않으므로 부모의 컬링 상태를 상속한다.
+			const auto offsetMtx = equipment.object->renderState_.pModel->socketOffsets.at(equipment.socketType)
+				* skeleton.bones->at( skeleton.socketToBoneIdx.at(equipment.socketType) ).toDress
+				* renderState_.animBlender->finalXformData()[ skeleton.socketToBoneIdx.at(equipment.socketType) ]
+				* offsetXform * renderState_.world;
 			equipment.object->setFrustumCulled(renderState_.viewFrustumCulled);
 			equipment.object->setShadowCulled(shadowLightFrustumCulled_);
 			equipment.object->render( gfx,
@@ -1320,6 +1324,39 @@ void MU_CALLCONV Object::renderPortrait(GFX& gfx, u32t slot) {
 			gfx.addLobbyPortraitDrawEvent(slot, PBRSkinnedPipeline::DrawEvent{
 				.world             = meshXform * renderState_.world,
 				.boneXforms        = renderState_.animBlender->finalXformData(),
+				.mesh              = &mesh,
+				.subMesh           = &mesh.subMeshes[i],
+				.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+				.viewFrustumCulled = false,   // 포트레이트 카메라는 항상 캐릭터를 본다.
+				.shadowCulled      = true,    // shadow pass 미수행.
+			});
+		}
+	}
+
+	// 부속 객체(장착 무기 등). 행렬 체인은 render()의 동일 로직을 미러링한다
+	// (단, 포트레이트는 부모 offsetXform이 없으므로 마지막 항은 renderState_.world뿐이다).
+	if (renderState_.animBlender) {
+		auto& skeleton = pModel->skeleton;
+
+		for (auto& equipment : equipments_) {
+			equipment.object->renderPortraitEquipment( gfx, slot,
+				equipment.object->renderState_.pModel->socketOffsets.at(equipment.socketType)
+				* skeleton.bones->at( skeleton.socketToBoneIdx.at(equipment.socketType) ).toDress
+				* renderState_.animBlender->finalXformData()[ skeleton.socketToBoneIdx.at(equipment.socketType) ]
+				* renderState_.world
+			);
+		}
+	}
+}
+
+void MU_CALLCONV Object::renderPortraitEquipment(GFX& gfx, u32t slot, mu::Mat4x4 worldXform) {
+	const auto pModel = renderState_.pModel;
+	if (!pModel) return;
+
+	for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
+		for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
+			gfx.addLobbyPortraitDrawEventStatic(slot, PBRPipeline::DrawEvent{
+				.world             = meshXform * worldXform,
 				.mesh              = &mesh,
 				.subMesh           = &mesh.subMeshes[i],
 				.material          = &mesh.materialSets[materialSetIdx_].materials[i],

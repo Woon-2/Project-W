@@ -311,9 +311,13 @@ public:
 	static constexpr u32t kMaxPortraitDrawEventsPerSlot = 64u;
 	static constexpr u32t kMaxPortraitBonesPerCharacter = 256u;
 	static constexpr u32t kMaxPortraitBonesPerSlot = kMaxPortraitBonesPerCharacter * kMaxPortraitDrawEventsPerSlot;
+	// 슬롯당 장착 무기 1개분의 submesh 상한(non-skinned 정적 메시).
+	static constexpr u32t kMaxPortraitStaticDrawEventsPerSlot = 16u;
 
 	// 슬롯 slot의 캐릭터 스킨드 draw event를 제출한다(포워드 PBRSkinnedPipeline).
 	void addLobbyPortraitDrawEvent(u32t slot, PBRSkinnedPipeline::DrawEvent&& drawEvent);
+	// 슬롯 slot의 장착 무기(non-skinned) draw event를 제출한다(포워드 PBRPipeline).
+	void addLobbyPortraitDrawEventStatic(u32t slot, PBRPipeline::DrawEvent&& drawEvent);
 	// 슬롯 slot의 포트레이트 카메라를 설정한다.
 	void setLobbyPortraitCamera(u32t slot, const PBRSkinnedPipeline::CameraData& cameraData);
 	// 포트레이트 조명(로비 방향광, 모든 슬롯 공유)을 추가한다. shadow는 끄되 direct light는 넣는다.
@@ -525,6 +529,11 @@ private:
 	PBRSkinnedPipeline::LightData mainDirectionalLightLobbyPortrait_{};      // cascadeCount=0 (no-shadow)
 	PBRSkinnedPipeline::FrameData frameDataLobbyPortrait_{};
 	bool lobbyPortraitActive_ = false;
+	// 슬롯별 장착 무기(non-skinned) draw event. 카메라/조명/프레임 데이터는 위 스킨드 포트레이트
+	// 값(cameraDataLobbyPortrait_/lightDataLobbyPortrait_/frameDataLobbyPortrait_)을 그대로
+	// PBRPipeline 타입으로 변환해 공유한다(필드 구성 동일, 별도 멤버 불필요).
+	std::array<std::vector<PBRPipeline::DrawEvent>, kMaxPortraitSlots> drawEventsLobbyPortraitStatic_{};
+	std::array<PBRPipeline::Resources, kMaxPortraitSlots> resourcesLobbyPortraitStatic_{};
 
 	std::vector<MinimapTerrainPipeline::DrawEvent> drawEventsMinimap_{};
 	std::vector<MinimapPropPipeline::DrawEvent>    drawEventsMinimapProp_{};

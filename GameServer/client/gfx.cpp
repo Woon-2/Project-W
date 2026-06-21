@@ -965,6 +965,11 @@ void GFX::addLobbyPortraitDrawEvent(u32t slot, PBRSkinnedPipeline::DrawEvent&& d
 	drawEventsLobbyPortrait_[slot].push_back(std::move(drawEvent));
 }
 
+void GFX::addLobbyPortraitDrawEventStatic(u32t slot, PBRPipeline::DrawEvent&& drawEvent) {
+	if (slot >= kMaxPortraitSlots) return;
+	drawEventsLobbyPortraitStatic_[slot].push_back(std::move(drawEvent));
+}
+
 void GFX::setLobbyPortraitCamera(u32t slot, const PBRSkinnedPipeline::CameraData& cameraData) {
 	if (slot >= kMaxPortraitSlots) return;
 	cameraDataLobbyPortrait_[slot] = cameraData;
@@ -1430,6 +1435,27 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 		res.mainPass.perFrameData.init(
 			device_.Get(), sizeof(PBRSkinnedShader::PerFrameData),
 			backBuffers_.size(), ("Skinned_Main_PerFrameData" + sfx)
+		);
+	}
+	// 포트레이트 슬롯별 장착 무기(non-skinned) 전용 Resources (mainPass만, 소용량).
+	for (u32t s = 0u; s < kMaxPortraitSlots; ++s) {
+		auto& res = resourcesLobbyPortraitStatic_[s];
+		const auto sfx = "_PortraitStatic" + std::to_string(s);
+		res.mainPass.perInstanceData.init(
+			device_.Get(), sizeof(PBRShader::PerInstanceData) * kMaxPortraitStaticDrawEventsPerSlot,
+			backBuffers_.size(), ("PBR_Main_PerInstanceData" + sfx)
+		);
+		res.mainPass.perDrawcallData = createConstantBufferArray(
+			device_.Get(), sizeof(PBRShader::PerDrawcallData), kMaxPortraitStaticDrawEventsPerSlot,
+			backBuffers_.size(), ("PBR_Main_PerDrawcallData" + sfx)
+		);
+		res.mainPass.lightData.init(
+			device_.Get(), sizeof(PBRShader::Light) * 32u,
+			backBuffers_.size(), ("PBR_Main_LightData" + sfx)
+		);
+		res.mainPass.perFrameData.init(
+			device_.Get(), sizeof(PBRShader::PerFrameData),
+			backBuffers_.size(), ("PBR_Main_PerFrameData" + sfx)
 		);
 	}
 	// 미니맵 배경 캐시 RT 쌍(texA/texB) — 단일 인스턴스(per-room 아님; 위 SharedResources::Minimap 주석 참조).
@@ -2941,7 +2967,7 @@ void GFX::render() {
 		// (2) 슬롯별 캐릭터 그리기 (셀 viewport + 전용 카메라/Resources). shadow off.
 		mainDirectionalLightLobbyPortrait_.cascadeCount = 0u;
 		for (u32t s = 0u; s < kMaxPortraitSlots; ++s) {
-			if (drawEventsLobbyPortrait_[s].empty()) continue;
+			if (drawEventsLobbyPortrait_[s].empty() && drawEventsLobbyPortraitStatic_[s].empty()) continue;
 
 			const auto cellViewport = D3D12_VIEWPORT{
 				.TopLeftX = static_cast<FLOAT>(s * kPortraitCellW),
@@ -2958,21 +2984,68 @@ void GFX::render() {
 				.bottom = static_cast<LONG>(kPortraitCellH)
 			};
 
-			auto portraitDispatcher = PBRSkinnedPipeline::Dispatcher(
-				tmpDescriptorHeaps,
-				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
-				&samPool_, &cmpSamPool_, &dsvPool_,
-				rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
-				shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, cellViewport, cellScissor,
-				pData.rtv, pData.dsv,
-				&fenceToSignal, &resourcesLobbyPortrait_[s], threadPool_, &cmdListPool_,
-				std::move(drawEventsLobbyPortrait_[s]),
-				std::vector<PBRSkinnedPipeline::LightData>(lightDataLobbyPortrait_),	// 슬롯별 복사
-				mainDirectionalLightLobbyPortrait_, cameraDataLobbyPortrait_[s], frameDataLobbyPortrait_,
-				roomIdx
-			);
-			portraitDispatcher.sortDrawEvents();
-			portraitDispatcher.mainPass();	// shadowPass 미호출
+			if (!drawEventsLobbyPortrait_[s].empty()) {
+				auto portraitDispatcher = PBRSkinnedPipeline::Dispatcher(
+					tmpDescriptorHeaps,
+					&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+					&samPool_, &cmpSamPool_, &dsvPool_,
+					rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
+					shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, cellViewport, cellScissor,
+					pData.rtv, pData.dsv,
+					&fenceToSignal, &resourcesLobbyPortrait_[s], threadPool_, &cmdListPool_,
+					std::move(drawEventsLobbyPortrait_[s]),
+					std::vector<PBRSkinnedPipeline::LightData>(lightDataLobbyPortrait_),	// 슬롯별 복사
+					mainDirectionalLightLobbyPortrait_, cameraDataLobbyPortrait_[s], frameDataLobbyPortrait_,
+					roomIdx
+				);
+				portraitDispatcher.sortDrawEvents();
+				portraitDispatcher.mainPass();	// shadowPass 미호출
+			}
+
+			// 장착 무기(non-skinned). 카메라/조명/프레임 데이터는 스킨드 포트레이트 값을
+			// PBRPipeline 타입으로 변환해 그대로 재사용한다(필드 구성 동일).
+			if (!drawEventsLobbyPortraitStatic_[s].empty()) {
+				const auto toStaticLight = [](const PBRSkinnedPipeline::LightData& l) {
+					return PBRPipeline::LightData{
+						.pos = l.pos, .dir = l.dir, .color = l.color, .intensity = l.intensity,
+						.cosTheta = l.cosTheta, .cosPhi = l.cosPhi, .falloff = l.falloff, .atten = l.atten,
+						.type = static_cast<PBRPipeline::LightData::Type>(l.type),
+						.isMainDirectionalLight = l.isMainDirectionalLight,
+						.cascadeViews = l.cascadeViews, .cascadeProjs = l.cascadeProjs,
+						.cascadeSplitsFarV = l.cascadeSplitsFarV, .cascadeCount = l.cascadeCount,
+						.cascadeNormalOffsets = l.cascadeNormalOffsets, .cascadeCameraPos = l.cascadeCameraPos
+					};
+				};
+				std::vector<PBRPipeline::LightData> staticLights{};
+				staticLights.reserve(lightDataLobbyPortrait_.size());
+				for (const auto& l : lightDataLobbyPortrait_) staticLights.push_back(toStaticLight(l));
+
+				const auto staticCamera = PBRPipeline::CameraData{
+					.view = cameraDataLobbyPortrait_[s].view,
+					.proj = cameraDataLobbyPortrait_[s].proj,
+					.pos  = cameraDataLobbyPortrait_[s].pos
+				};
+				const auto staticFrame = PBRPipeline::FrameData{
+					.globalAmbient = frameDataLobbyPortrait_.globalAmbient,
+					.iblIntensity  = frameDataLobbyPortrait_.iblIntensity
+				};
+
+				auto portraitStaticDispatcher = PBRPipeline::Dispatcher(
+					tmpDescriptorHeaps,
+					&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+					&samPool_, &cmpSamPool_, &dsvPool_,
+					rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
+					shaders_.at("ShadowMapCSMShader"), cmdQ_, cellViewport, cellScissor,
+					pData.rtv, pData.dsv,
+					&fenceToSignal, &resourcesLobbyPortraitStatic_[s], threadPool_, &cmdListPool_,
+					std::move(drawEventsLobbyPortraitStatic_[s]),
+					std::move(staticLights),
+					toStaticLight(mainDirectionalLightLobbyPortrait_), staticCamera, staticFrame,
+					roomIdx
+				);
+				portraitStaticDispatcher.sortDrawEvents();
+				portraitStaticDispatcher.mainPass();	// shadowPass 미호출
+			}
 		}
 		dumpLog();
 
@@ -2993,6 +3066,7 @@ void GFX::render() {
 		// (4) per-frame 채널 clear (매 프레임 add → 누적 방지). draw event는 move로 비워졌다.
 		lightDataLobbyPortrait_.clear();
 		for (auto& dq : drawEventsLobbyPortrait_) dq.clear();
+		for (auto& dq : drawEventsLobbyPortraitStatic_) dq.clear();
 	}
 
 	// ===== 미니맵 배경 캐시 재굽기 (재굽기 요청 프레임에만; 단일 RT라 1프레임으로 충분) =====

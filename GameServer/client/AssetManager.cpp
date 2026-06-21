@@ -39,6 +39,21 @@ const Texture* AssetManager::playerWeaponIcon(PlayerWeaponType weaponType) const
 	}
 }
 
+const Model* AssetManager::playerWeaponModel(PlayerWeaponType weaponType) const {
+	switch (weaponType) {
+	case PlayerWeaponType::Katana:
+		return &modelKatana_;
+	case PlayerWeaponType::SpearHook:
+		return &modelSpearHook_;
+	case PlayerWeaponType::CrystalWand:
+		return &modelCrystalWand_;
+	case PlayerWeaponType::HeavyArrow:
+		return &modelHeavyArrow_;
+	default:
+		return &modelKatana_;
+	}
+}
+
 const Texture* AssetManager::skillIconByAssetName(std::string_view n) const {
 	if (n == "SlashWave")            return &skillIconSlashWave_;
 	if (n == "Slash7")               return &skillIconSlash7_;
@@ -82,6 +97,28 @@ void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) 
 		.modelPath = "../resources/models/player/player.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
+	} );
+
+	// 무기 모델. 로비 포트레이트에서도 즉시 보여야 하므로 Phase 1에서 로드한다.
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/sword/sword.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelKatana_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/spear/spear.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelSpearHook_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/wand/wand.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelCrystalWand_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bow/bow.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelHeavyArrow_
 	} );
 
 	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
