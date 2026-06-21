@@ -83,6 +83,17 @@ mu::Vec3 MU_CALLCONV Room::randomSpawnInDiscAvoidingProps(
 	                    // sample; staticDepenetration resolves residual overlap.
 }
 
+bool MU_CALLCONV Room::isTacticalFormationPositionOpen(
+	mu::Vec3 candidate, const Object& footprintSource) const
+{
+	const Model* model = footprintSource.model();
+	if (!model || model->bvh.empty()) return true;
+
+	const BVH worldBVH = makeWorldBVH(model->bvh, candidate,
+		footprintSource.body().orient(), footprintSource.body().scale());
+	return !physicsWorld_.overlapsAnyStaticObstacle(candidate, worldBVH);
+}
+
 void Room::setupGoblin(Goblin& g, const Level& level) {
 	const auto& anims = level.assetManager->goblinAnimations();
 	g.setModel(level.assetManager->modelGoblin());
@@ -1248,13 +1259,9 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		if (!tgt) continue;
 
 		const int32 prevHp = tgt->hp();
-		int32 newHp = std::max(prevHp - hit->damage, 0);
-		
-		// 이 로직으로 교체해야 함.
-		// 받는 피해 배율 적용(기본 1.0; Grandbaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
-		//int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
-		//int32 newHp = std::max(tgt->hp() - dmg, 0);
-		
+		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
+		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
+		const int32 newHp = std::max(prevHp - dmg, 0);
 		tgt->setHp(newHp);
 		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
@@ -1433,7 +1440,9 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
 			const int32 prevHp = o->hp();
-			int32 newHp = std::max(prevHp - kDamage, 0);
+			// 받는 피해 배율 적용(스킬 히트와 동일; Grandbaum 평상시 슬라임/ShieldWall 중 보스 0.1).
+			const int32 dmg    = static_cast<int32>(kDamage * o->damageTakenMultiplier());
+			const int32 newHp  = std::max(prevHp - dmg, 0);
 			o->setHp(newHp);
 			noteAndMaybeReward(static_cast<int32>(player->getId()), o, prevHp, newHp);
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(o->getId()), newHp));
@@ -1676,7 +1685,7 @@ void Room::teardownArenaWalls() {
 // 클리어된 인카운터의 tactical 컨테이너를 전부 비운다. 참조 방향(PlatoonLeader → TacticalSquad
 // (raw ptr) → TacticalNpc(raw ptr))을 따라 상위부터 정리해 dangling 참조 가능성을 없앤다.
 // physicsWorld_/npcBodyOwner_ 해제는 justDied 시점에 이미 끝났을 것이나, 두 호출 모두
-// find-then-erase로 idempotent이므로 방어적으로 다시 호출해도 안전(removeTacticalNpcById와 동일 패턴).
+// find-then-erase로 idempotent이므로 방어적으로 다시 호출해도 안전하다.
 // nextWedgeChargeId_(단조 증가 ID)/platoonLeaderObjType_/activeArenaZoneId_는 다음 스폰 시 덮어쓰므로
 // 건드리지 않는다.
 void Room::cleanupTacticalEncounter() {
@@ -1958,23 +1967,22 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 
 	// 부대별 config는 몬스터별 Tactical 클래스에서(단일 출처). 보스 config는 인카운터 고유.
 	const TacticalNpcConfig slimeCfg = TacticalSlime::trooperConfig();
-	const TacticalNpcConfig snakeCfg = TacticalSnake::trooperConfig();
 	TacticalNpcConfig bossCfg{
 		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
 		.separationRadius = 4.f, .separationWeight = 0.3f,
-		.attackDamageScale = 3.0f   // boss reuses the Treant skill roster but hits ~3x harder
+		.attackDamageScale = 5.0f   // 보스 공격력 레버(Treant 스킬 × scale, 주 위협). attackDamage는 레거시 폴백(미사용). 튜닝값.
 	};
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
-	// 부대 구성: 0,1,2 = 슬라임, 3 = 뱀. 인원은 시뮬(A12/B12/C48/D10) 기반(난이도 튜닝 가능).
+	// 부대 구성: 0~3 모두 슬라임(DR 토글 재설계 — 뱀 부대 제거). 인원 12/12/48/10.
 	struct GrandbaumSquadDef { const TacticalNpcConfig* cfg; ObjectType type; int count; };
 	const GrandbaumSquadDef squadDefs[] = {
-		{ &slimeCfg, ObjectType::Slime, 12 },
-		{ &slimeCfg, ObjectType::Slime, 12 },
-		{ &slimeCfg, ObjectType::Slime, 48 },
-		{ &snakeCfg, ObjectType::Snake, 10 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
 	};
 
 	for (int s = 0; s < 4; ++s) {
@@ -1990,6 +1998,9 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
 			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			// 평상시 슬라임은 받는 피해 90% 경감(단단) → 플레이어가 보스를 공격하도록 유도.
+			// ShieldWall 중에는 GrandbaumMidBossTactic이 1.0으로 풀어 취약하게, 종료 시 0.1로 복귀.
+			npc->setDamageTakenMultiplier(0.1f);
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -2110,29 +2121,37 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 	}
 }
 
-// ShieldWall 중 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환한다. 평소 trooper는 Player를
-// 통과(~(Player|Boss))하지만, 여기서 Player 충돌을 다시 켜(~Boss) 링이 벽처럼 막히게 한다.
+// ShieldWall 중 슬라임을 "차단벽"으로 클라에 통지한다. 플레이어 차단은 클라 권위
+// (resolveBarrierSeparation)가 전담하고, 서버에서는 형성 중 바깥 링이 안쪽 링의 진입을 막지 않도록
+// 방패벽 슬라임끼리만 물리 충돌을 끈다. Player/Boss 통과와 지형 충돌은 기존 설정을 유지한다.
 void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
-	// 이전 ids 충돌설정 원복(broadcast 없이) — 매 틱 살아있는 슬라임 ids 갱신 대응.
+	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
+	constexpr uint32_t SHIELD_WALL_SLIME_MASK =
+		~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime);
+
+	// 살아있는 blocker가 갱신 목록에서 빠진 경우 ShieldWall 설정을 즉시 원복한다.
+	// 죽은 NPC는 이미 물리 월드에서 빠졌지만 같은 처리는 무해하다.
 	for (uint32_t id : shieldWallBlockerIds_) {
+		if (std::find(blockerIds.begin(), blockerIds.end(), id) != blockerIds.end())
+			continue;
+
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
-			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
 		}
 	}
-	// 블로커: Slime 카테고리 부여 + Player 충돌 재활성(~Boss). 추가로 증원 뱀(Snake)을 mask에서
-	// 제외해 뱀이 링을 통과해도 진형이 물리적으로 밀리지 않게 한다.
+
+	// 모든 방패벽 슬라임을 동일한 Slime 카테고리로 묶고 그 카테고리를 mask에서 제외한다.
+	// 상호 필터가 실패하므로 동료 링을 통과할 수 있지만 다른 물리 레이어와의 충돌은 유지된다.
 	for (uint32_t id : blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(CollisionLayer::Slime);
-			npc->body().setCollisionMask(~(CollisionLayer::Boss | CollisionLayer::Snake));
+			npc->body().setCollisionMask(SHIELD_WALL_SLIME_MASK);
 		}
 	}
-	shieldWallBlockerIds_ = blockerIds;
 
-	// 클라에 블로커 활성 통지(Goblin divide와 동일 S_NpcBarrier 경로 재사용). 플레이어 이동은 클라
-	// 권한이라 서버 마스크만으론 못 막는다 → 클라가 슬라임을 barrier로 등록해 로컬 물리로 밀어내게 한다.
-	// setShieldWallBlockers는 매 틱 호출되므로 on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
+	shieldWallBlockerIds_ = blockerIds;
+	// on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
 	if (!shieldWallBarrierOn_) {
 		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
 		shieldWallBarrierOn_ = true;
@@ -2140,12 +2159,14 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 }
 
 void Room::clearShieldWallBlockers() {
+	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
 	for (uint32_t id : shieldWallBlockerIds_) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
-			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
 		}
 	}
+
 	if (shieldWallBarrierOn_) {
 		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
 		shieldWallBarrierOn_ = false;
@@ -2290,99 +2311,6 @@ void Room::broadcastEncounterSpawn() {
 	broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
 }
 
-TacticalNpc* Room::spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId) {
-	if (!assetManager_) return nullptr;
-
-	Object base;
-	base.setPos(mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z()));
-	auto npc = std::make_unique<TacticalNpc>(std::move(base), cfg);
-	registerTacticalNpcBody(*npc, ObjectType::Snake);
-	npc->setObjType(ObjectType::Snake);
-	// 그랜드밤 뱀 웨이브 전용 스포너. Snake 카테고리 부여 후 플레이어/보스 통과(경로 차단 방지)에
-	// 더해 방패벽 슬라임(Slime)도 mask에서 제외 → 링을 통과해도 진형을 물리적으로 밀지 않는다.
-	// (추후 다른 종류 웨이브에 재사용한다면 호출부에서 충돌 설정을 분기할 것.)
-	npc->body().setCollisionCategory(CollisionLayer::Snake);
-	npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime));
-	npc->setSquadId(squadId);
-
-	TacticalNpc* raw = npc.get();
-	tacticalNpcs_.push_back(std::move(npc));
-	return raw;
-}
-
-TacticalSquad* Room::addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad) {
-	TacticalSquad* raw = squad.get();
-	tacticalSquads_.push_back(std::move(squad));
-	return raw;
-}
-
-void Room::removeTacticalNpcById(uint32_t id) {
-	for (auto it = tacticalNpcs_.begin(); it != tacticalNpcs_.end(); ++it) {
-		if (*it && (*it)->getId() == id) {
-			Object* raw = it->get();
-			physicsWorld_.unregisterBody(&raw->body());
-			npcBodyOwner_.erase(&raw->body());
-			unregisterObject(raw);          // objectById_ 슬롯 정리(스킬 히트 후보에서 제외)
-			IdPool::push(id);
-			tacticalNpcs_.erase(it);
-			return;
-		}
-	}
-}
-
-void Room::removeTacticalSquadById(int32 squadId) {
-	for (auto it = tacticalSquads_.begin(); it != tacticalSquads_.end(); ++it) {
-		if (*it && (*it)->getSquadId() == squadId) {
-			tacticalSquads_.erase(it);
-			return;
-		}
-	}
-}
-
-void Room::broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds) {
-	std::vector<ObjectInfo> spawnInfos;
-	spawnInfos.reserve(npcIds.size());
-	for (uint32_t id : npcIds) {
-		TacticalNpc* o = findTacticalNpcById(id);
-		if (!o) continue;
-		spawnInfos.push_back(ObjectInfo{
-			.type           = o->objType(),   // per-NPC model (e.g. Grandbaum snake waves render as Snake)
-			.objectId       = static_cast<uint16>(o->getId()),
-			.materialSetIdx = 0,
-			.hp             = o->hp(),
-			.maxHp          = o->maxHp(),
-			.pos            = o->pos().getXmf(),
-			.orient         = o->orient().getXmf(),
-			.scale          = o->scale().getXmf(),
-		});
-	}
-	if (!spawnInfos.empty()) {
-		broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
-	}
-}
-
-void Room::reviveTacticalNpc(uint32_t id, mu::Vec3 pos) {
-	TacticalNpc* npc = findTacticalNpcById(id);
-	if (!npc) return;
-
-	pos = mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z());
-	npc->reviveAt(pos);
-	// 사망 시 물리 바디가 제거됐으므로 재등록한다(reviveAt은 객체 상태만 복구).
-	physicsWorld_.registerBody(&npc->body(), [npc]() { npc->rebuildBodyBVH(); });
-	npcBodyOwner_[&npc->body()] = npc;
-	npc->body().snapToCurrent();
-
-	broadcast(PacketManager::makeSNpcRespawnPacket(static_cast<uint16>(id), npc->hp(), pos.getXmf()));
-}
-
-void Room::despawnTacticalNpcHidden(uint32_t id) {
-	TacticalNpc* npc = findTacticalNpcById(id);
-	if (!npc || npc->hp() <= 0) return;   // 이미 죽은 뱀은 그대로(reviveOriginalSnakeSquad가 부활 처리)
-
-	// 정상 사망과 동일 상태로 전환: hp 0 + 물리 바디 제거(객체는 시체로 유지 → roster 기반 부활 가능).
-	// setHp(0)만 하면 justDied가 안 켜져 물리가 남고 부활 시 이중 등록되므로, 여기서 명시적으로 제거한다.
-	npc->setHp(0);
-	physicsWorld_.unregisterBody(&npc->body());
-	npcBodyOwner_.erase(&npc->body());
-	// 클라 숨김 통지(S_NpcHide)는 호출부에서 살아있던 id들을 묶어 한 번에 broadcast한다.
-}
+// (Grandbaum 뱀 증원 웨이브용 런타임 NPC/분대 소환·디스폰 인프라는 DR 토글 재설계로 제거됨.
+//  spawnTacticalWaveNpc / addDynamicTacticalSquad / removeTacticalNpcById / removeTacticalSquadById /
+//  broadcastTacticalNpcSpawn / reviveTacticalNpc / despawnTacticalNpcHidden — 전부 미사용이라 삭제.)

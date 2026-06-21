@@ -44,13 +44,17 @@ struct SquadOrder {
     mu::Vec3       formationTargetPos = {};
     mu::Vec3       tacticCenter      = {};
     float          speedMult         = 1.f;
+    // RingGuard가 전역 링에서 미리 배정받은 절대 월드 슬롯. 비어 있으면 부대가 자체 계산한다.
+    std::vector<mu::Vec3> explicitSlots = {};
     float          chargeSpeedMult   = 0.f;
+    float          chargeAcceleration = 0.f;
     float          wedgeSpacingMult  = 0.f;
     float          wedgeDamageMult   = 1.f;
     bool           reserveWedgeApex  = false;
     bool           waitForChargeRelease = false; // WedgeCharge only: 준비된 쐐기를 release 전까지 대기
     mu::Vec3       wedgeApexPos      = {};        // WedgeCharge only: 준비 정점을 명시 지정(회랑 입구)
     bool           hasWedgeApex      = false;     // true면 부대 위치 기준 대신 wedgeApexPos 사용
+    bool           avoidStaticObstacles = false;  // Isys 집결/쐐기 슬롯을 인접 빈 바닥으로 보정
     std::vector<uint32> targetIds  = {};
 };
 
@@ -91,12 +95,17 @@ public:
     void MU_CALLCONV updateBoxLeaderPos( mu::Vec3 pos );
     mu::Vec3 calcCentroid() const;
     bool     areMembersAtSlots() const;
+    bool     areMembersSettledAtSlots() const;
     bool     areChargeMembersComplete() const;
     bool     isWedgeChargeActive() const { return activeWedgeChargeId_ != 0; }
     bool     isWedgePrepared() const { return wedgePrepared_; }
     void     endActiveWedgeCharge( Room& room );
     void     releaseWedgeCharge();
+    void     forceStartWedgeCharge();
     float    estimateWedgeHalfWidth( float spacingMult = 1.f, bool reserveApex = false ) const;
+    static std::vector<mu::Vec3> MU_CALLCONV calcRingSlots( mu::Vec3 center, float sectorAngle,
+        float sectorSpan, float outerRadius, int32 count, float minSlotSpacing, float laneSpacing,
+        int32 laneCapacityMultiple = 1 );
 
 private:
     void     pushCommandsToMembers( Room& room );

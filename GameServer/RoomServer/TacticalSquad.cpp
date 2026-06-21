@@ -202,6 +202,73 @@ bool TacticalSquad::areMembersAtSlots() const {
            static_cast<float>( atSlotCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
+static mu::Vec3 findSafeFormationSlot( Room& room, mu::Vec3 desired,
+                                       const TacticalNpc& npc,
+                                       const std::vector<mu::Vec3>& occupied,
+                                       float minSpacing ) {
+    constexpr float SEARCH_STEP = 1.5f;
+    constexpr int32 SEARCH_RINGS = 4;   // 최대 6m
+    constexpr int32 SAMPLES_PER_RING = 12;
+
+    auto isUsable = [&]( mu::Vec3 candidate ) {
+        candidate = mu::Vec3( candidate.x(), room.groundHeightAtWorld( candidate.x(), candidate.z() ), candidate.z() );
+        if ( !room.isTacticalFormationPositionOpen( candidate, npc ) ) {
+            return false;
+        }
+        float minSpacingSq = minSpacing * minSpacing;
+        for ( const mu::Vec3& used : occupied ) {
+            float dx = candidate.x() - used.x();
+            float dz = candidate.z() - used.z();
+            if ( dx * dx + dz * dz < minSpacingSq ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    mu::Vec3 groundDesired( desired.x(), room.groundHeightAtWorld( desired.x(), desired.z() ), desired.z() );
+    if ( isUsable( groundDesired ) ) {
+        return groundDesired;
+    }
+
+    constexpr float TWO_PI = 2.f * 3.14159265f;
+    float angleOffset = static_cast<float>(npc.getId() % SAMPLES_PER_RING) * (TWO_PI / SAMPLES_PER_RING);
+    for ( int32 ring = 1; ring <= SEARCH_RINGS; ++ring ) {
+        float radius = SEARCH_STEP * static_cast<float>( ring );
+        for ( int32 sample = 0; sample < SAMPLES_PER_RING; ++sample ) {
+            float angle = angleOffset + TWO_PI * static_cast<float>( sample ) / static_cast<float>( SAMPLES_PER_RING );
+            mu::Vec3 candidate = groundDesired + mu::Vec3( std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius );
+            candidate = mu::Vec3( candidate.x(), room.groundHeightAtWorld( candidate.x(), candidate.z() ), candidate.z() );
+            if ( isUsable( candidate ) ) {
+                return candidate;
+            }
+        }
+    }
+
+    // 현재 위치는 이미 물리 정리된 위치이므로 최종 폴백으로 사용한다. 이 멤버가 도착 판정을
+    // 즉시 만족하더라도 다른 멤버와 전술 진행을 영구히 막지 않는 편이 안전하다.
+    mu::Vec3 current = npc.pos();
+    current = mu::Vec3( current.x(), room.groundHeightAtWorld( current.x(), current.z() ), current.z() );
+    return room.isTacticalFormationPositionOpen( current, npc ) ? current : groundDesired;
+}
+
+bool TacticalSquad::areMembersSettledAtSlots() const {
+    int32 aliveCount = 0;
+
+    for ( TacticalNpc* tnpc : memberCache_ ) {
+        if ( !tnpc || tnpc->hp() <= 0 ) {
+            continue;
+        }
+
+        ++aliveCount;
+        if ( !tnpc->isSettledAtSlot() ) {
+            return false;
+        }
+    }
+
+    return aliveCount > 0;
+}
+
 bool TacticalSquad::areChargeMembersComplete() const {
     int32 aliveCount = 0;
     int32 completeCount = 0;
@@ -281,6 +348,63 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcEncircleSlots( mu::Vec3 tar
     for ( int32 i = 0; i < count; ++i ) {
         float a = start + arc * static_cast<float>( i );
         slots.push_back( targetPos + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
+    }
+
+    return slots;
+}
+
+void TacticalSquad::forceStartWedgeCharge() {
+    if ( currentOrder_.type != SquadOrderType::WedgeCharge || wedgePrepared_ || wedgeMemberCache_.empty() ) {
+        return;
+    }
+    wedgePrepared_ = true;
+    wedgeChargeReleased_ = true;
+    orderDirty_ = true;
+}
+
+std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcRingSlots(
+    mu::Vec3 center, float sectorAngle, float sectorSpan, float outerRadius,
+    int32 count, float minSlotSpacing, float laneSpacing, int32 laneCapacityMultiple ) {
+    std::vector<mu::Vec3> slots;
+    if ( count <= 0 || sectorSpan <= 0.01f || outerRadius <= 0.01f || minSlotSpacing <= 0.01f ) {
+        return slots;
+    }
+
+    slots.reserve( static_cast<size_t>(count) );
+    laneSpacing = std::max( laneSpacing, minSlotSpacing );
+
+    // 보스와 겹치지 않는 안쪽 절반까지만 inward lane을 만들고, 수용량이 부족하면 바깥쪽에
+    // lane을 추가한다. 작은 반경에서 radius clamp로 같은 슬롯이 중복되는 것도 방지한다.
+    float innerFloor = std::max( laneSpacing, outerRadius * 0.5f );
+    int32 inwardLaneCount = std::max(
+        static_cast<int32>(std::floorf((outerRadius - innerFloor) / laneSpacing)) + 1, 1 );
+
+    int32 remaining = count;
+    for ( int32 lane = 0; remaining > 0; ++lane ) {
+        float radius = (lane < inwardLaneCount)
+            ? outerRadius - laneSpacing * static_cast<float>( lane )
+            : outerRadius + laneSpacing * static_cast<float>( lane - inwardLaneCount + 1 );
+
+        // 원호 길이가 아니라 실제 두 슬롯의 직선 중심 거리(chord)가 minSlotSpacing
+        // 이상이 되도록 이 반경에서 허용 가능한 최소 각도를 계산한다.
+        float chordRatio = std::clamp( minSlotSpacing / (2.f * radius), 0.f, 1.f );
+        float minSlotAngle = 2.f * std::asinf( chordRatio );
+        int32 laneCapacity = static_cast<int32>(std::floorf(sectorSpan / minSlotAngle));
+        laneCapacity = std::max( laneCapacity, 1 );
+        if ( laneCapacityMultiple > 1 && laneCapacity >= laneCapacityMultiple ) {
+            laneCapacity = (laneCapacity / laneCapacityMultiple) * laneCapacityMultiple;
+        }
+
+        int32 laneMembers = std::min( laneCapacity, remaining );
+        float arc = sectorSpan / static_cast<float>( laneMembers );
+        float start = sectorAngle - sectorSpan * 0.5f + arc * 0.5f;
+
+        for ( int32 i = 0; i < laneMembers; ++i ) {
+            float a = start + arc * static_cast<float>( i );
+            slots.push_back( center + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
+        }
+
+        remaining -= laneMembers;
     }
 
     return slots;
@@ -501,6 +625,8 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
             wedgeMemberCache_.clear();
             wedgePrepareSlots_.clear();
             wedgeExitSlots_.clear();
+            std::vector<mu::Vec3> occupiedPrepareSlots;
+            std::vector<mu::Vec3> occupiedExitSlots;
 
             std::vector<bool> slotUsed( slots.size(), false );
             if ( ord.reserveWedgeApex && !slotUsed.empty() ) {
@@ -536,8 +662,18 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 slotUsed[ bestSlot ] = true;
 
                 mu::Vec3 prepareSlot = slots[ bestSlot ];
+                if ( ord.avoidStaticObstacles ) {
+                    prepareSlot = findSafeFormationSlot(
+                        room, prepareSlot, *tnpc, occupiedPrepareSlots, memberSeparationRadius_ );
+                }
                 mu::Vec3 rel = prepareSlot - prepareApex;
                 mu::Vec3 exitSlot = exitApex + rel;
+                if ( ord.avoidStaticObstacles ) {
+                    exitSlot = findSafeFormationSlot(
+                        room, exitSlot, *tnpc, occupiedExitSlots, memberSeparationRadius_ );
+                }
+                occupiedPrepareSlots.push_back( prepareSlot );
+                occupiedExitSlots.push_back( exitSlot );
 
                 wedgeMemberIds_.push_back( tnpc->getId() );
                 wedgeMemberCache_.push_back( tnpc );
@@ -582,8 +718,9 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 .chargeDir = forward,
                 .chargeCenter = targetCenter,
                 .impactRadius = std::max( WEDGE_IMPACT_RADIUS, memberAttackRange_ ),
-                .impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f) ,
-                .passDistance = WEDGE_PASS_DISTANCE
+					.impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f) ,
+					.passDistance = WEDGE_PASS_DISTANCE,
+					.chargeAcceleration = ord.chargeAcceleration
             };
             tnpc->receiveCommand( cmd );
         }
@@ -664,6 +801,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
         faceDir = (fl > 0.01f) ? faceDir * (1.f / fl) : mu::Vec3( 1.f, 0.f, 0.f );
 
         std::vector<mu::Vec3> slots = calcDenseSlots( center, faceDir, count, ord.slotSpacingScale, ord.slotColumnScale, ord.slotColumnCount );
+        std::vector<mu::Vec3> occupiedSlots;
 
         for ( int32 i = 0; i < count; ++i ) {
             TacticalNpc* tnpc = memberCache_[ i ];
@@ -671,10 +809,16 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 continue;
             }
 
+            mu::Vec3 slot = slots[ i ];
+            if ( ord.avoidStaticObstacles ) {
+                slot = findSafeFormationSlot( room, slot, *tnpc, occupiedSlots, memberSeparationRadius_ );
+            }
+            occupiedSlots.push_back( slot );
+
             auto cmd = TacticalCommand{
 				.type = (ord.type == SquadOrderType::FormationGuard) ? TacticalCommandType::GuardSlot : TacticalCommandType::HoldSlot,
 				.targetId = ord.targetId,
-				.slotOffset = slots[ i ],
+				.slotOffset = slot,
 				.speedMult = ord.speedMult
             };
             tnpc->receiveCommand( cmd );
@@ -698,39 +842,12 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
         }
 
         std::vector<mu::Vec3> slots;
-        slots.reserve( liveMembers.size() );
-
-        if ( ord.slotSpacingScale > 1.f && ord.approachRadius > 0.01f && ord.sectorSpan > 0.01f ) {
-            float minArcSpacing = ord.slotSpacingScale;
-            int32 maxPerLane = static_cast<int32>(std::floorf((ord.sectorSpan * ord.approachRadius) / minArcSpacing ));
-            maxPerLane = std::clamp( maxPerLane, 1, liveCount );
-
-            int32 laneCount = (liveCount + maxPerLane - 1) / maxPerLane;
-            float laneSpacing = std::max( ord.slotColumnScale, 0.1f );
-
-            if ( laneCount > 1 ) {
-                float innerFloor = std::max( memberSeparationRadius_ * 2.f, ord.approachRadius * 0.5f );
-                float usableDepth = std::max( ord.approachRadius - innerFloor, 0.f );
-                laneSpacing = std::min( laneSpacing, usableDepth / static_cast<float>(laneCount - 1) );
-            }
-
-            for ( int32 lane = 0; lane < laneCount; ++lane ) {
-                int32 laneStart = lane * maxPerLane;
-                int32 laneMembers = std::min( maxPerLane, liveCount - laneStart );
-
-                if ( laneMembers <= 0 ) {
-                    continue;
-                }
-
-                float radius = ord.approachRadius - laneSpacing * static_cast<float>( lane );
-                float arc = ord.sectorSpan / static_cast<float>( laneMembers );
-                float start = ord.sectorAngle - ord.sectorSpan * 0.5f + arc * 0.5f;
-
-                for ( int32 i = 0; i < laneMembers; ++i ) {
-                    float a = start + arc * static_cast<float>( i );
-                    slots.push_back( ord.tacticCenter + mu::Vec3( std::cosf( a ), 0.f, std::sinf( a ) ) * radius );
-                }
-            }
+        if ( static_cast<int32>(ord.explicitSlots.size()) == liveCount ) {
+            slots = ord.explicitSlots;
+        }
+        else if ( ord.slotSpacingScale > 1.f && ord.approachRadius > 0.01f && ord.sectorSpan > 0.01f ) {
+            slots = calcRingSlots( ord.tacticCenter, ord.sectorAngle, ord.sectorSpan,
+                ord.approachRadius, liveCount, ord.slotSpacingScale, ord.slotColumnScale );
         }
         else {
             slots = calcEncircleSlots( ord.tacticCenter, ord.sectorAngle, ord.sectorSpan, ord.approachRadius, liveCount );

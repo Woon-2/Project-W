@@ -3181,10 +3181,12 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
 void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 	for (uint16 id : npcIds) {
-		auto it = idGoblinMap_.find(id);
-		if (it == idGoblinMap_.end() || !it->second) continue;
+		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
+		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
+		auto it = idMonsterMap_.find(id);
+		if (it == idMonsterMap_.end() || !it->second) continue;
 
-		Object* obj = it->second.get();
+		Object* obj = it->second;
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);

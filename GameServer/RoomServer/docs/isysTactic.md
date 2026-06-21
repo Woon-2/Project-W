@@ -27,7 +27,7 @@ Isys는 Grandbaum(수동적 생존형)과 대비되는 **능동적 섬멸형** �
 | `RetreatForPincer` | 보스 고속 후퇴(모터), 4스쿼드 후방 슬롯 집결(`FormationHold`) | 보스 도착 & 슬롯 집결, 또는 `RETREAT_TIMEOUT(5s)` → `RegroupBombers` |
 | `RegroupBombers` | Bomber 2스쿼드가 적 군집 측면에 돌격 라인 형성 | 슬롯 집결, 또는 `REGROUP_TIMEOUT(3.5s)` → `FirstBomberWedge` |
 | `FirstBomberWedge` | Bomber 1차 쐐기(`WedgeCharge`) + 동시에 Buddy 재집결 착수 | charge 완료/`PINCER_TIMEOUT(7s)` & buddy 생존 → `RegroupBuddies` |
-| `RegroupBuddies` | Buddy 라인 형성, 보스 본체가 쐐기 apex에 합류(자리 예약) | Buddy 슬롯 집결 & 보스 ready → `SecondBuddyWedge` |
+| `RegroupBuddies` | Buddy 라인 형성, 보스 본체가 쐐기 apex에 합류(자리 예약) | Buddy 슬롯 집결 & 보스 ready, 또는 4초 타임아웃 → `SecondBuddyWedge` |
 | `SecondBuddyWedge` | Buddy 2차 쐐기 + 보스 직접 가세 → **피해 ×1.5** | charge 완료/타임아웃 → `Cooldown` → `Engage` |
 
 ## 핵심 메커니즘
@@ -71,6 +71,14 @@ score 기반 타깃 + `BOSS_TARGET_SWITCH_MARGIN`). 추가로 **피해 반응 Ba
 Grandbaum과 달리 Isys는 **새 패킷·넉백·피해경감·동적소환이 일절 없는** 순수 서버 AI 포팅이다.
 `MidBossTactics.cpp/.hpp`는 이미 `.vcxproj`에 포함되어 신규 파일/프로젝트 수정도 없다.
 
+### ⑤ 장애물 안전 슬롯과 교착 방지
+
+Isys의 `FormationHold`/`WedgeCharge`만 정적 장애물 회피 옵션을 사용한다. 각 슬롯은 XZ 위치의 지형 높이로
+Y를 맞춘 뒤 scatter prop과 아레나 벽/Static BVH 중첩을 검사한다. 막힌 슬롯은 1.5m 간격으로 최대 6m까지
+가까운 빈 바닥을 탐색하며 다른 슬롯과 NPC 분리 반경을 유지한다. 나무·바위 위 높이는 사용하지 않는다.
+쐐기 준비가 2.5초를 넘으면 현재 인원으로 강제 돌진하고, Buddy 재집결은 4초 후 2차 쐐기로 넘어가므로
+일부 NPC가 이동 경로에서 막혀도 전술 전체가 정지하지 않는다.
+
 ## 보스 고속 이동 — 모터 변환 (중요)
 
 시뮬은 보스를 `setPosition` 직접 적분(후퇴 ×15.5, 쐐기 돌진 ×28, 백스텝 ×20)으로 움직이지만,
@@ -82,7 +90,7 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 | 근접 chase | `BOSS_CHASE_SPEED_MULT` 1.0 | 5.35 |
 | 후퇴 | `RETREAT_LEADER_SPEED_MULT` 6.0 | 15.5 |
 | 쐐기 합류 이동 | `ISIS_BOSS_WEDGE_JOIN_SPEED_MULT` 6.0 | 15.5 |
-| 쐐기 돌진 | `ISIS_BOSS_WEDGE_CHARGE_SPEED_MULT` 8.0 | 28.0 |
+| 쐐기 돌진 | `ISIS_BOSS_WEDGE_CHARGE_SPEED_MULT` 10.0 | 28.0 |
 | 백스텝 | `BOSS_BACKSTEP_SPEED_MULT` 4.0 | 20.0 |
 
 ## 스케일 결정
@@ -90,8 +98,8 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 - **월드 거리/반경/슬롯 오프셋**은 인게임 스케일 **×~0.4** 적용(주석에 시뮬 원본 병기). 예:
   `ISIS_RETREAT_MIN_DIST 36`(시뮬 90), `RETREAT_BUDDY_SIDE_OFFSET 11`(시뮬 28), `CLUSTER_RADIUS 8`(시뮬 20),
   `BOSS_BACKSTEP_DIST 7`(시뮬 18).
-- **시간/비율/카운트/점수/spacing**(0.80, ×1000−d, 350, ×1.5, 타이머 5/3.5/7, 쿨다운 7~13,
-  spacing/column scale)은 **시뮬 원본 유지**.
+- **시간/비율/카운트/점수/spacing**(0.80, ×1000−d, 350, ×1.5, 타이머 5/3.5/7,
+  spacing/column scale)은 **시뮬 원본 유지**하며, 협공 사이클 쿨다운은 게임 템포에 맞춰 **15~21초**로 조정한다.
 - `WEDGE_PREP_APEX_DISTANCE`/`WEDGE_EXIT_DISTANCE`는 `TacticalSquad`의 GameServer 값(4/14, 인게임 스케일)을
   자동 사용.
 
@@ -116,6 +124,8 @@ GameServer 보스는 **물리 속도 모터(`setDesiredVel`)** 로 움직인다(
 
 - config(스폰): Buddy 80HP/4spd, Bomber 45HP/5spd, 보스 2000HP/4spd(홉고블린/Grandbaum 보스 선례).
   부대 인원 시뮬 원본 유지 — **Buddy 12/12 + Bomber 40/40 = 104기 + 보스(총 105기/방)**. → M3 성능 확인/튜닝 대상.
+- Isys 쐐기 부대는 `chargeSpeedMult 2.0`으로 Buddy 24m/s, Bomber 30m/s를 목표로 하며, 부대와 보스 모두
+  돌진 중 모터 가속도를 60m/s²로 일시 상향하고 종료 시 원래 값으로 복원한다.
 - 모델: 전용 Isys/Buddy/Bomber 에셋 추가 전까지 `modelGoblin()`/`ObjectType::Goblin` 재사용(Grandbaum 선례).
 
 ## 빌드 상태

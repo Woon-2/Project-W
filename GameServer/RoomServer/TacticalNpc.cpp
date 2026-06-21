@@ -126,6 +126,7 @@ void TacticalNpc::receiveCommand( const TacticalCommand& cmd ) {
 }
 
 void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
+    restoreChargeMotorAcceleration();
     setPos( p );
     setLinearVel( mu::Vec3{} );      // 순간이동 잔여 속도 제거
     setDesiredVel( mu::Vec3{} );     // motor 목표도 정지
@@ -166,9 +167,20 @@ void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
 
 // ─── transitionTo ─────────────────────────────────────────────────────────────
 
+void TacticalNpc::restoreChargeMotorAcceleration() {
+    if ( !chargeMotorOverrideActive_ ) {
+        return;
+    }
+    body().setMotorMaxAcceleration( savedChargeMotorAcceleration_ );
+    chargeMotorOverrideActive_ = false;
+}
+
 void TacticalNpc::transitionTo( TacticalNpcState next ) {
     if ( state_ == next ) {
         return;
+    }
+    if ( state_ == TacticalNpcState::ChargeThrough && next != TacticalNpcState::ChargeThrough ) {
+        restoreChargeMotorAcceleration();
     }
     if ( next == TacticalNpcState::AttackWindup ) {
         windupTimer_ = 0s;
@@ -250,6 +262,13 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         impactDamage_   = pendingCmd_.impactDamage;
         passDistance_   = pendingCmd_.passDistance;
         speedMult_      = pendingCmd_.speedMult;
+        if ( pendingCmd_.chargeAcceleration > 0.f ) {
+            if ( !chargeMotorOverrideActive_ ) {
+                savedChargeMotorAcceleration_ = body().motor().maxAcceleration;
+                chargeMotorOverrideActive_ = true;
+            }
+            body().setMotorMaxAcceleration( pendingCmd_.chargeAcceleration );
+        }
         chargeComplete_ = false;
         transitionTo( TacticalNpcState::ChargeThrough );
         break;
@@ -945,7 +964,8 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
 
         constexpr float TWO_PI = 2.f * 3.14159265f;
         float angle = r1 * TWO_PI;
-        float radius = CONFUSED_WANDER_RADIUS * (0.25f + 0.75f * r2);
+        float radius = CONFUSED_WANDER_RADIUS * (
+            CONFUSED_TARGET_MIN_RADIUS_MULT + (1.f - CONFUSED_TARGET_MIN_RADIUS_MULT) * r2 );
         confusedTarget_ = confusedAnchor_ + mu::Vec3( std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius );
         confusedRetargetTimer_ = CONFUSED_RETARGET_MIN + CONFUSED_RETARGET_SPAN * r1;
         distToTarget = (pos() - confusedTarget_).len();
@@ -969,7 +989,7 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
         moveDir = norm3( confusedAnchor_ - pos() );
     }
 
-    float spd = moveSpeed_ * CONFUSED_SPEED_MULT;
+    float spd = std::min( moveSpeed_ * CONFUSED_SPEED_MULT, CONFUSED_MAX_SPEED );
     setFacingDir( *this, moveDir );
     setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }
@@ -1025,7 +1045,7 @@ bool MU_CALLCONV TacticalNpc::updateSlotSettled( float distToSlot ) {
             slotSettled_ = false;   // 크게 밀려나면 래치 해제 → 재접근
         }
     }
-    else if ( distToSlot < separationRadius_ * TACTICAL_SLOT_SETTLE_RADIUS_MULT ) {
+    else if ( distToSlot <= TACTICAL_SLOT_SETTLE_RADIUS ) {
         slotSettled_ = true;        // 충분히 가까우면 안착
     }
     return slotSettled_;
@@ -1068,9 +1088,15 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
                 applyPeerSeparation( room, slotDir, separationRadius_ );
             }
-            float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-                spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+            float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+            float spd = baseSpd * speedMult_;
+            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+                // 접근 가속을 슬롯에 가까워질수록 제거하고 속도를 0으로 수렴시킨다.
+                // 방패벽(speedMult=2)의 기존 최저 5.25m/s가 슬롯을 왕복하던 문제를 막는다.
+                float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+                float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+                spd = baseSpd * approachMult * slowScale;
+            }
             setFacingDir( *this, slotDir );
             setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
             return;
@@ -1101,9 +1127,13 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
     if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
         applyPeerSeparation( room, slotDir, separationRadius_ );
     }
-    float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-        spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+    float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+    float spd = baseSpd * speedMult_;
+    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+        float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+        float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+        spd = baseSpd * approachMult * slowScale;
+    }
     setFacingDir( *this, slotDir );
     setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
 }
