@@ -79,6 +79,7 @@ private:
     GameSession* selectPrimaryTarget( Room& room, const PlatoonLeader& leader ) const;
     uint32  selectStrikeEngageTarget( Room& room, const PlatoonLeader& leader, const StrikeTask& task ) const;
     void    updateActiveStrikeEngage( Room& room, PlatoonLeader& leader, bool forceAll );
+    void    forceActiveWedgeCharges();
     Seconds rollCooldown();
     bool    hasLiveBomberSquad( const PlatoonLeader& leader ) const;
     bool    hasLiveBuddySquad( const PlatoonLeader& leader ) const;
@@ -90,13 +91,19 @@ private:
     void    selectBossJoinedBuddySquad( const PlatoonLeader& leader );
     void    resetBossBuddyWedgeJoin();
     bool    isBossJoinedBuddySquad( const TacticalSquad* squad ) const;
-    bool    ensureBossBuddyWedgeJoin( Room& room, const PlatoonLeader& leader );
+    bool    ensureBossBuddyWedgeJoin( Room& room, PlatoonLeader& leader );
     bool    isBossBuddyWedgeJoinReady( const PlatoonLeader& leader ) const;
     bool    areSecondStrikePrepSquadsAtSlots() const;
     bool    isSecondStrikePrepReady( const PlatoonLeader& leader ) const;
-    void MU_CALLCONV setupBossBuddyWedgeJoin( TacticalSquad* squad, const StrikeCluster& strikeCluster, mu::Vec3 squadCenter );
+    void MU_CALLCONV setupBossBuddyWedgeJoin( Room& room, PlatoonLeader& leader,
+                                              TacticalSquad* squad, const StrikeCluster& strikeCluster,
+                                              mu::Vec3 squadCenter );
+    mu::Vec3 MU_CALLCONV findSafeBossFormationPosition(
+        Room& room, const PlatoonLeader& leader, mu::Vec3 desired ) const;
     void    syncBossBuddyWedgeChargeStart( const PlatoonLeader& leader );
     void    updateBossBuddyWedgeJoin( Seconds dt, PlatoonLeader& leader );
+    void    applyBossWedgeMotorBoost( PlatoonLeader& leader );
+    void    restoreBossWedgeMotorBoost( PlatoonLeader& leader );
 
     // 보스 근접 전투 — Goblin updateBossPersonalCombat 미러 + 피해 반응 Backstep/Retreat 추가.
     bool         updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader );
@@ -114,6 +121,7 @@ private:
     bool               tacticsUnlocked_{ false };
     bool               engageOrderIssued_{ false };
     bool               pincerIssued_{ false };
+    bool               wedgeForceStartIssued_{ false };
     Seconds            engageRefreshTimer_{};
     Seconds            phaseTimer_{};
     Seconds            cooldownTimer_{};
@@ -136,6 +144,8 @@ private:
     mu::Vec3  bossBuddyWedgePreparePos_{};
     mu::Vec3  bossBuddyWedgeExitPos_{};
     mu::Vec3  bossBuddyWedgeDir_{ 1.f, 0.f, 0.f };
+    bool      bossWedgeMotorBoostActive_{ false };
+    float     savedBossWedgeMotorAcceleration_{ 20.f };
 
     // 보스 근접 전투 상태
     BossPersonalState  bossPersonalState_{ BossPersonalState::EvaluateTarget };
@@ -173,6 +183,8 @@ private:
     static constexpr float   MAX_COOLDOWN                 = 13.0f;   // 초
     static constexpr Seconds RETREAT_TIMEOUT{ 5.0f };
     static constexpr Seconds REGROUP_TIMEOUT{ 3.5f };
+    static constexpr Seconds BUDDY_REGROUP_TIMEOUT{ 4.0f };
+    static constexpr Seconds WEDGE_PREP_FORCE_TIMEOUT{ 2.5f };
     static constexpr Seconds PINCER_TIMEOUT{ 7.0f };
     static constexpr float   ISIS_RETREAT_EXTRA_DIST      = 14.f;    // 시뮬 35
     static constexpr float   ISIS_RETREAT_MIN_DIST        = 36.f;    // 시뮬 90
@@ -193,11 +205,12 @@ private:
     static constexpr float   BUDDY_COLUMN_SCALE           = 1.0f;
     static constexpr int32   BUDDY_COLUMN_COUNT           = 2;
     static constexpr float   BUDDY_SPEED_MULT             = 0.75f;
-    static constexpr float   ISIS_WEDGE_SPEED_MULT        = 1.50f;   // squad 쐐기 돌진(chargeSpeedMult)
+    static constexpr float   ISIS_WEDGE_SPEED_MULT        = 2.0f;    // Buddy 24m/s, Bomber 30m/s
+    static constexpr float   ISIS_WEDGE_MOTOR_ACCELERATION = 60.f;
     static constexpr float   ISIS_BUDDY_WEDGE_SPACING_MULT = 1.90f;
     static constexpr float   ISIS_BOSS_JOINED_WEDGE_DAMAGE_MULT = 1.50f;   // 2차 결정타 ×1.5(wedgeDamageMult)
     static constexpr float   ISIS_BOSS_WEDGE_JOIN_SPEED_MULT  = 6.0f;  // 모터 캡(시뮬 15.5)
-    static constexpr float   ISIS_BOSS_WEDGE_CHARGE_SPEED_MULT = 8.0f; // 모터 캡(시뮬 28)
+    static constexpr float   ISIS_BOSS_WEDGE_CHARGE_SPEED_MULT = 10.0f;
     static constexpr float   ISIS_BOSS_WEDGE_JOIN_READY_DIST  = 1.5f;
     static constexpr float   ISIS_BOSS_WEDGE_PREP_ARRIVE_DIST = 1.0f;
     static constexpr float   ISIS_BOSS_WEDGE_CHARGE_ARRIVE_DIST = 0.75f;

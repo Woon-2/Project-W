@@ -126,6 +126,7 @@ void TacticalNpc::receiveCommand( const TacticalCommand& cmd ) {
 }
 
 void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
+    restoreChargeMotorAcceleration();
     setPos( p );
     setLinearVel( mu::Vec3{} );      // 순간이동 잔여 속도 제거
     setDesiredVel( mu::Vec3{} );     // motor 목표도 정지
@@ -166,9 +167,20 @@ void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
 
 // ─── transitionTo ─────────────────────────────────────────────────────────────
 
+void TacticalNpc::restoreChargeMotorAcceleration() {
+    if ( !chargeMotorOverrideActive_ ) {
+        return;
+    }
+    body().setMotorMaxAcceleration( savedChargeMotorAcceleration_ );
+    chargeMotorOverrideActive_ = false;
+}
+
 void TacticalNpc::transitionTo( TacticalNpcState next ) {
     if ( state_ == next ) {
         return;
+    }
+    if ( state_ == TacticalNpcState::ChargeThrough && next != TacticalNpcState::ChargeThrough ) {
+        restoreChargeMotorAcceleration();
     }
     if ( next == TacticalNpcState::AttackWindup ) {
         windupTimer_ = 0s;
@@ -250,6 +262,13 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         impactDamage_   = pendingCmd_.impactDamage;
         passDistance_   = pendingCmd_.passDistance;
         speedMult_      = pendingCmd_.speedMult;
+        if ( pendingCmd_.chargeAcceleration > 0.f ) {
+            if ( !chargeMotorOverrideActive_ ) {
+                savedChargeMotorAcceleration_ = body().motor().maxAcceleration;
+                chargeMotorOverrideActive_ = true;
+            }
+            body().setMotorMaxAcceleration( pendingCmd_.chargeAcceleration );
+        }
         chargeComplete_ = false;
         transitionTo( TacticalNpcState::ChargeThrough );
         break;

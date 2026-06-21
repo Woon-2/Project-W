@@ -83,6 +83,17 @@ mu::Vec3 MU_CALLCONV Room::randomSpawnInDiscAvoidingProps(
 	                    // sample; staticDepenetration resolves residual overlap.
 }
 
+bool MU_CALLCONV Room::isTacticalFormationPositionOpen(
+	mu::Vec3 candidate, const Object& footprintSource) const
+{
+	const Model* model = footprintSource.model();
+	if (!model || model->bvh.empty()) return true;
+
+	const BVH worldBVH = makeWorldBVH(model->bvh, candidate,
+		footprintSource.body().orient(), footprintSource.body().scale());
+	return !physicsWorld_.overlapsAnyStaticObstacle(candidate, worldBVH);
+}
+
 void Room::setupGoblin(Goblin& g, const Level& level) {
 	const auto& anims = level.assetManager->goblinAnimations();
 	g.setModel(level.assetManager->modelGoblin());

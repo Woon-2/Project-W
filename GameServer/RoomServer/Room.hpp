@@ -156,6 +156,10 @@ public:
 	// setModel/setScale/setOrient applied. Used by Stronghold to place/revive monsters.
 	mu::Vec3 MU_CALLCONV randomSpawnInDiscAvoidingProps(
 		mu::Vec3 center, float radius, const Object& footprintSource) const;
+	// Ground-snapped candidate가 scatter/arena wall/Static 구조물과 겹치지 않는지 검사.
+	// Isys 전술 대형 슬롯 보정용이며 동적 NPC/플레이어는 검사하지 않는다.
+	bool MU_CALLCONV isTacticalFormationPositionOpen(
+		mu::Vec3 candidate, const Object& footprintSource) const;
 
 	// Bind terrain height/normal callbacks onto a skill dispatch context so
 	// AttachType::Ground hitboxes snap to the same surface the client uses.

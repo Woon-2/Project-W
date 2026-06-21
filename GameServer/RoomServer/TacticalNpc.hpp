@@ -55,6 +55,7 @@ struct TacticalCommand {
     float               impactRadius     = 3.f;
     float               impactDamage     = 0.f;
     float               passDistance     = 6.f;
+    float               chargeAcceleration = 0.f;   // 0이면 기존 모터 가속 유지
     bool                useHoldFacing    = false;
     mu::Vec3            holdFacing       = {};
 };
@@ -179,6 +180,7 @@ protected:
     // 예약이 STALE_TIME 동안 진척 없이 끊길 때: 슬롯 반납 + 해당 타깃을 blocked로 표시.
     void        releaseStaleAttackReservation( Room& room, float currentDist );
     void        resetPressureWaitTarget();
+    void        restoreChargeMotorAcceleration();
     void        refreshPressureWaitScatterOffsets();
     mu::Vec3    computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 targetFacing ) const;
     void        moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing );
@@ -237,6 +239,8 @@ protected:
     uint32 pressureWaitScatterSeed_{ 0 };
     bool  pressureWaitDesiredValid_{ false };
     bool  pressureReentering_{ false };
+    bool  chargeMotorOverrideActive_{ false };
+    float savedChargeMotorAcceleration_{ 20.f };
     uint32 reservedAttackTargetId_{ 0 };
     Seconds reservedAttackStaleTimer_{};
     // 직전 틱까지의 타깃 접근 거리(진척 추적용). 일정량 접근하면 예약 리스를 갱신한다.

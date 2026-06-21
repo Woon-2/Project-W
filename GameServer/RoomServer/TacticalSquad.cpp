@@ -202,6 +202,56 @@ bool TacticalSquad::areMembersAtSlots() const {
            static_cast<float>( atSlotCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
+static mu::Vec3 findSafeFormationSlot( Room& room, mu::Vec3 desired,
+                                       const TacticalNpc& npc,
+                                       const std::vector<mu::Vec3>& occupied,
+                                       float minSpacing ) {
+    constexpr float SEARCH_STEP = 1.5f;
+    constexpr int32 SEARCH_RINGS = 4;   // 최대 6m
+    constexpr int32 SAMPLES_PER_RING = 12;
+
+    auto isUsable = [&]( mu::Vec3 candidate ) {
+        candidate = mu::Vec3( candidate.x(), room.groundHeightAtWorld( candidate.x(), candidate.z() ), candidate.z() );
+        if ( !room.isTacticalFormationPositionOpen( candidate, npc ) ) {
+            return false;
+        }
+        float minSpacingSq = minSpacing * minSpacing;
+        for ( const mu::Vec3& used : occupied ) {
+            float dx = candidate.x() - used.x();
+            float dz = candidate.z() - used.z();
+            if ( dx * dx + dz * dz < minSpacingSq ) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    mu::Vec3 groundDesired( desired.x(), room.groundHeightAtWorld( desired.x(), desired.z() ), desired.z() );
+    if ( isUsable( groundDesired ) ) {
+        return groundDesired;
+    }
+
+    constexpr float TWO_PI = 2.f * 3.14159265f;
+    float angleOffset = static_cast<float>(npc.getId() % SAMPLES_PER_RING) * (TWO_PI / SAMPLES_PER_RING);
+    for ( int32 ring = 1; ring <= SEARCH_RINGS; ++ring ) {
+        float radius = SEARCH_STEP * static_cast<float>( ring );
+        for ( int32 sample = 0; sample < SAMPLES_PER_RING; ++sample ) {
+            float angle = angleOffset + TWO_PI * static_cast<float>( sample ) / static_cast<float>( SAMPLES_PER_RING );
+            mu::Vec3 candidate = groundDesired + mu::Vec3( std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius );
+            candidate = mu::Vec3( candidate.x(), room.groundHeightAtWorld( candidate.x(), candidate.z() ), candidate.z() );
+            if ( isUsable( candidate ) ) {
+                return candidate;
+            }
+        }
+    }
+
+    // 현재 위치는 이미 물리 정리된 위치이므로 최종 폴백으로 사용한다. 이 멤버가 도착 판정을
+    // 즉시 만족하더라도 다른 멤버와 전술 진행을 영구히 막지 않는 편이 안전하다.
+    mu::Vec3 current = npc.pos();
+    current = mu::Vec3( current.x(), room.groundHeightAtWorld( current.x(), current.z() ), current.z() );
+    return room.isTacticalFormationPositionOpen( current, npc ) ? current : groundDesired;
+}
+
 bool TacticalSquad::areMembersSettledAtSlots() const {
     int32 aliveCount = 0;
 
@@ -301,6 +351,15 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcEncircleSlots( mu::Vec3 tar
     }
 
     return slots;
+}
+
+void TacticalSquad::forceStartWedgeCharge() {
+    if ( currentOrder_.type != SquadOrderType::WedgeCharge || wedgePrepared_ || wedgeMemberCache_.empty() ) {
+        return;
+    }
+    wedgePrepared_ = true;
+    wedgeChargeReleased_ = true;
+    orderDirty_ = true;
 }
 
 std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcRingSlots(
@@ -566,6 +625,8 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
             wedgeMemberCache_.clear();
             wedgePrepareSlots_.clear();
             wedgeExitSlots_.clear();
+            std::vector<mu::Vec3> occupiedPrepareSlots;
+            std::vector<mu::Vec3> occupiedExitSlots;
 
             std::vector<bool> slotUsed( slots.size(), false );
             if ( ord.reserveWedgeApex && !slotUsed.empty() ) {
@@ -601,8 +662,18 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 slotUsed[ bestSlot ] = true;
 
                 mu::Vec3 prepareSlot = slots[ bestSlot ];
+                if ( ord.avoidStaticObstacles ) {
+                    prepareSlot = findSafeFormationSlot(
+                        room, prepareSlot, *tnpc, occupiedPrepareSlots, memberSeparationRadius_ );
+                }
                 mu::Vec3 rel = prepareSlot - prepareApex;
                 mu::Vec3 exitSlot = exitApex + rel;
+                if ( ord.avoidStaticObstacles ) {
+                    exitSlot = findSafeFormationSlot(
+                        room, exitSlot, *tnpc, occupiedExitSlots, memberSeparationRadius_ );
+                }
+                occupiedPrepareSlots.push_back( prepareSlot );
+                occupiedExitSlots.push_back( exitSlot );
 
                 wedgeMemberIds_.push_back( tnpc->getId() );
                 wedgeMemberCache_.push_back( tnpc );
@@ -647,8 +718,9 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 .chargeDir = forward,
                 .chargeCenter = targetCenter,
                 .impactRadius = std::max( WEDGE_IMPACT_RADIUS, memberAttackRange_ ),
-                .impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f) ,
-                .passDistance = WEDGE_PASS_DISTANCE
+					.impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f) ,
+					.passDistance = WEDGE_PASS_DISTANCE,
+					.chargeAcceleration = ord.chargeAcceleration
             };
             tnpc->receiveCommand( cmd );
         }
@@ -729,6 +801,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
         faceDir = (fl > 0.01f) ? faceDir * (1.f / fl) : mu::Vec3( 1.f, 0.f, 0.f );
 
         std::vector<mu::Vec3> slots = calcDenseSlots( center, faceDir, count, ord.slotSpacingScale, ord.slotColumnScale, ord.slotColumnCount );
+        std::vector<mu::Vec3> occupiedSlots;
 
         for ( int32 i = 0; i < count; ++i ) {
             TacticalNpc* tnpc = memberCache_[ i ];
@@ -736,10 +809,16 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 continue;
             }
 
+            mu::Vec3 slot = slots[ i ];
+            if ( ord.avoidStaticObstacles ) {
+                slot = findSafeFormationSlot( room, slot, *tnpc, occupiedSlots, memberSeparationRadius_ );
+            }
+            occupiedSlots.push_back( slot );
+
             auto cmd = TacticalCommand{
 				.type = (ord.type == SquadOrderType::FormationGuard) ? TacticalCommandType::GuardSlot : TacticalCommandType::HoldSlot,
 				.targetId = ord.targetId,
-				.slotOffset = slots[ i ],
+				.slotOffset = slot,
 				.speedMult = ord.speedMult
             };
             tnpc->receiveCommand( cmd );
