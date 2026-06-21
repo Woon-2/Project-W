@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>경로 안내 연출(Path Guidance) 검토</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a313c;
+    --txt:#d7dde5; --muted:#8b95a3; --accent:#5ad1ff; --accent2:#ffd166;
+    --good:#5ad19a; --warn:#ffc14d; --bad:#ff7a85;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;line-height:1.65;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 96px;}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.3px;}
+  h2{font-size:22px;margin:48px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  h3{font-size:17px;margin:0 0 4px;}
+  .sub{color:var(--muted);margin:0 0 8px;}
+  p{margin:8px 0;}
+  code{background:#0a0d12;border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-family:Consolas,monospace;font-size:13px;color:var(--accent);}
+  .lead{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:10px;padding:16px 20px;margin:20px 0;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media(max-width:820px){.grid{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 18px 16px;display:flex;flex-direction:column;}
+  .card .preview{background:#0a0d12;border:1px solid var(--line);border-radius:8px;
+    height:130px;margin:10px 0 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  .tag{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;
+    padding:2px 9px;margin:0 4px 4px 0;border:1px solid var(--line);color:var(--muted);}
+  .tag.reuse{color:var(--good);border-color:#27583f;background:#102018;}
+  .tag.new{color:var(--accent2);border-color:#5a4a1d;background:#201a0d;}
+  .tag.star{color:#fff;background:#1d3a4a;border-color:#2d6f8f;}
+  ul{margin:8px 0;padding-left:18px;}
+  li{margin:3px 0;}
+  .pro{color:var(--good);} .con{color:var(--bad);}
+  .meter{display:flex;gap:10px;margin:8px 0 4px;flex-wrap:wrap;}
+  .meter .m{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;}
+  .meter .m .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .meter .m .v{font-size:14px;font-weight:600;margin-top:2px;}
+  .dots{letter-spacing:2px;}
+  .d-good{color:var(--good);} .d-mid{color:var(--warn);} .d-bad{color:var(--bad);}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);color:var(--txt);font-weight:600;}
+  tr:nth-child(even) td{background:#12171e;}
+  .rec{background:linear-gradient(135deg,#13212b,#1a1410);border:1px solid #2d6f8f;
+    border-radius:12px;padding:20px 22px;margin:18px 0;}
+  .rec h3{color:var(--accent);}
+  .foot{color:var(--muted);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:14px;}
+  .stepnum{display:inline-flex;width:22px;height:22px;border-radius:50%;background:#1d3a4a;
+    color:#fff;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-right:6px;}
+  .note{font-size:13px;color:var(--muted);}
+  svg{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>경로 안내 연출 (Path Guidance) 설계 검토</h1>
+  <p class="sub">플레이어가 맵에서 나아가야 할 경로를 알려주는 시각 연출 · 엔진 재사용성/난이도 종합 검토 · 2026-06-21</p>
+
+  <div class="lead">
+    <b>목표</b> — 맵 상에서 다음 목적지로 향하는 경로를 시각적으로 안내한다. 경로 데이터는
+    <b>Unity에서 저작</b>하여 추출/임포트하며, 우리 엔진의 기존 렌더 파이프라인을 최대한 재사용해
+    구현 비용 대비 연출 효과가 높은 방법을 고른다.
+  </div>
+
+  <!-- ============ 엔진 인벤토리 ============ -->
+  <h2>1. 재사용 가능한 엔진 자산 (난이도 판단 근거)</h2>
+  <table>
+    <tr><th>자산</th><th>핵심 특성</th><th>경로 연출 활용</th></tr>
+    <tr>
+      <td><code>TrailPipeline</code><br><span class="note">trailPipeline.* / trail.hlsl</span></td>
+      <td>카메라-페이싱 리본 스트립. 명시적 정점 배열(<code>TrailVertexCPU.pos</code>, ≤32/draw),
+          additive 옵션, 타일/스트레치 UV + <code>currentSystemTime</code> 스크롤.</td>
+      <td class="pro">흐르는 빛 줄기에 거의 그대로 사용. <b>최고의 재사용성.</b></td>
+    </tr>
+    <tr>
+      <td><code>EnergyOrbPipeline</code><br><span class="note">energyOrb.hlsl</span></td>
+      <td>SceneColorHDR에 <b>additive 자체발광 포인트 스프라이트</b>(블룸 전). 둥근 soft-dot,
+          HDR 색. 단 <b>몬스터 submesh 스키닝에 결합</b>(<code>spawnFromMonster</code>).</td>
+      <td>빛나는 구체 룩 재사용 가능. 단 경로용은 스키닝 의존성을 떼어낸 경량 변형 필요.</td>
+    </tr>
+    <tr>
+      <td><code>BillboardPipeline</code> /<br><code>MeshParticlePipeline</code></td>
+      <td>텍스처-시트 빌보드 / 3D 메시 파티클(회전·UV프레임). 파티클 시스템 전반 가동 중.</td>
+      <td>화살표 스프라이트 또는 3D 화살표 메시 배치에 사용.</td>
+    </tr>
+    <tr>
+      <td><code>TerrainHeightField</code><br><span class="note">terrain.hpp</span></td>
+      <td><code>getHeightAt(x,z)</code> 양선형 높이 + <code>getNormalAt</code> 표면 노멀.
+          단 지형은 <b>청크 스트리밍</b>(TerrainChunkManager)이라 해당 청크 조회 필요.</td>
+      <td>임의 경로점을 지면에 투영 + 노멀 정렬. 모든 지면 밀착 연출의 공통 기반.</td>
+    </tr>
+    <tr>
+      <td><code>MarkerDef</code> 섹션<br><span class="note">markerDef.hpp / LevelMarker.cs</span></td>
+      <td><code>chunks_index.bin</code>의 Marker 섹션을 <b>서버·클라가 함께 파싱</b>.
+          <code>{type,name,pos,orient,scale}</code>. TerrainExtractor가 베이크.</td>
+      <td>경로 데이터 Unity→엔진 추출의 기성 통로(아래 4장).</td>
+    </tr>
+    <tr>
+      <td><code>worldToScreen</code> + UIPipeline</td>
+      <td>월드→스크린 투영(데미지 넘버에서 사용 중) + 9-slice/스프라이트 HUD.</td>
+      <td>화면 가장자리 나침반(보조 연출)에 사용.</td>
+    </tr>
+    <tr>
+      <td><span class="con">데칼 시스템 — <b>없음</b></span></td>
+      <td>지면에 텍스처를 투영하는 전용 데칼 파이프라인이 현재 없음.</td>
+      <td>지면 투영 룬/경로(방법 E)는 신규 파이프라인 필요 → 난이도 상승 요인.</td>
+    </tr>
+  </table>
+  <p class="note">＊블룸: EnergyOrb·Trail의 additive 출력은 SceneColorHDR → 블룸 패스로 들어가 발광이 공짜로 입혀짐.
+  지면 밀착 연출은 모두 <code>TerrainHeightField</code>로 경로 폴리라인을 지면에 재투영하면 Unity Y 정밀도와 무관하게 지면에 딱 붙는다.</p>
+
+  <!-- ============ 방법 카드 ============ -->
+  <h2>2. 연출 방법 후보 (5종 + 보조 1종)</h2>
+  <div class="grid">
+
+    <!-- A. 지형 화살표 -->
+    <div class="card">
+      <h3>A. 지형 화살표 <span class="note">(제안 1)</span></h3>
+      <p class="sub">지면을 따라 화살표를 배치해 방향을 직접 지시</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <path d="M0 95 Q150 70 300 90" stroke="#2a313c" stroke-width="2" fill="none"/>
+          <g fill="#ffd166">
+            <path d="M40 92 l18 -7 l-18 -7 l5 7 z"/>
+            <path d="M110 86 l18 -7 l-18 -7 l5 7 z"/>
+            <path d="M180 82 l18 -6 l-18 -7 l5 7 z"/>
+            <path d="M250 86 l18 -7 l-18 -7 l5 7 z"/>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <span class="tag reuse">Billboard / MeshParticle 재사용</span>
+        <span class="tag new">배치·정렬 로직 신규</span>
+      </div>
+      <ul>
+        <li class="pro">방향성이 <b>가장 명확</b>(화살표는 곧 방향). 초보자 친화.</li>
+        <li class="con">게임적·인위적으로 보이기 쉽고 "마법적" 분위기와 거리.</li>
+        <li class="con">경사·요철에서 클리핑/뜨는 느낌 → 노멀 정렬 + 높이 오프셋 필수.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-mid">명확하나 평범 ●●●○○</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-good">낮음~중 ●●○○○</div></div>
+      </div>
+      <p class="note">신규 파이프라인 없음. 작업: 경로 등간격 샘플 → 지면 노멀 정렬 → 화살표 에셋 + 스크롤/펄스.</p>
+    </div>
+
+    <!-- B. 빛나는 구체 -->
+    <div class="card">
+      <h3>B. 빛나는 구체 흩뿌리기 <span class="note">(제안 2)</span></h3>
+      <p class="sub">경로에 자체발광 구체를 일정 간격으로 배치</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <defs><radialGradient id="g1"><stop offset="0" stop-color="#bff0ff"/><stop offset="1" stop-color="#1a3a4a" stop-opacity="0"/></radialGradient></defs>
+          <path d="M0 95 Q150 70 300 90" stroke="#2a313c" stroke-width="2" fill="none"/>
+          <g fill="url(#g1)">
+            <circle cx="40" cy="90" r="14"/><circle cx="100" cy="83" r="14"/>
+            <circle cx="160" cy="79" r="14"/><circle cx="220" cy="80" r="14"/><circle cx="280" cy="86" r="14"/>
+          </g>
+          <g fill="#eaffff"><circle cx="40" cy="90" r="3"/><circle cx="100" cy="83" r="3"/><circle cx="160" cy="79" r="3"/><circle cx="220" cy="80" r="3"/><circle cx="280" cy="86" r="3"/></g>
+        </svg>
+      </div>
+      <div>
+        <span class="tag reuse">EnergyOrb 룩 재사용</span>
+        <span class="tag new">스키닝 의존성 분리 필요</span>
+      </div>
+      <ul>
+        <li class="pro">부드럽고 <b>마법적·앰비언트</b>. HDR+블룸 발광이 공짜.</li>
+        <li class="con">방향성이 <b>약함</b> — 점들의 나열에서 진행 방향을 유추해야 함.</li>
+        <li class="con">EnergyOrb는 submesh 스키닝에 묶여 있어 경량 glow-sprite 경로(또는 additive 빌보드)로 재구성 필요.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-good">아름다움 ●●●●○</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-good">낮음~중 ●●○○○</div></div>
+      </div>
+      <p class="note">빌보드 additive + soft-dot로 가면 Low. EnergyOrb 파이프라인 정식 재사용이면 Medium(스키닝 분리).</p>
+    </div>
+
+    <!-- C. 흐르는 빛 리본 -->
+    <div class="card" style="border-color:#2d6f8f;">
+      <h3>C. 흐르는 빛의 리본 <span class="tag star">추천</span></h3>
+      <p class="sub">지면을 따라 흐르는 한 줄기 빛(물줄기/에너지 강)</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <defs><linearGradient id="g2" x1="0" x2="1"><stop offset="0" stop-color="#5ad1ff" stop-opacity="0"/><stop offset=".5" stop-color="#5ad1ff"/><stop offset="1" stop-color="#bff7ff"/></linearGradient></defs>
+          <path d="M0 96 Q150 68 300 88" stroke="url(#g2)" stroke-width="13" fill="none" stroke-linecap="round" opacity=".35"/>
+          <path d="M0 96 Q150 68 300 88" stroke="url(#g2)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <g fill="#fff"><polygon points="250,80 262,76 250,72"/><polygon points="200,78 212,74 200,70"/></g>
+        </svg>
+      </div>
+      <div>
+        <span class="tag reuse">TrailPipeline 직접 재사용</span>
+        <span class="tag star">방향성 강함</span>
+      </div>
+      <ul>
+        <li class="pro"><b>연속적이고 우아</b>. 타일 UV 스크롤이 목적지 방향으로 흐르며 <b>방향을 명확히</b> 전달.</li>
+        <li class="pro">TrailPipeline을 거의 그대로 재사용 + additive/HDR 블룸.</li>
+        <li class="con">리본이 카메라-페이싱이라 지면 스침각에서 어색 → <b>지면-정렬 변형</b>(노멀 기준)이 바람직.</li>
+        <li class="con">32정점/draw 한계 → 긴 경로는 세그먼트 체이닝.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-good">우아+직관 ●●●●●</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-mid">중 ●●●○○</div></div>
+      </div>
+      <p class="note">작업: 폴리라인 리샘플 → 지면 높이 conform → 세그먼트 체이닝 → 스크롤 UV 배선 → 플레이어/목적지 근처 페이드.</p>
+    </div>
+
+    <!-- D. 길잡이 위습 -->
+    <div class="card" style="border-color:#2d6f8f;">
+      <h3>D. 길잡이 정령(Wisp) <span class="tag star">추천(보완)</span></h3>
+      <p class="sub">밝은 구체가 플레이어 앞에서 경로를 따라 날아감</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <path d="M0 96 Q150 68 300 88" stroke="#2a313c" stroke-width="2" fill="none" stroke-dasharray="4 6"/>
+          <path d="M120 82 Q160 73 205 76" stroke="#bff7ff" stroke-width="3" fill="none" opacity=".5"/>
+          <circle cx="210" cy="76" r="16" fill="#bff0ff" opacity=".35"/>
+          <circle cx="210" cy="76" r="6" fill="#fff"/>
+          <circle cx="55" cy="92" r="9" fill="#2a313c"/><text x="48" y="112" fill="#8b95a3" font-size="11">player</text>
+        </svg>
+      </div>
+      <div>
+        <span class="tag reuse">EnergyOrb + Trail 재사용</span>
+        <span class="tag new">경로추종 무버 신규(경량)</span>
+      </div>
+      <ul>
+        <li class="pro"><b>움직임으로 방향을 100% 전달</b>. 맵 전체를 칠하지 않아 깔끔, 긴 경로에도 비용 일정.</li>
+        <li class="pro">정석적 연출(Fable의 빵부스러기, Ori). 꼬리 트레일 붙이면 혜성 룩.</li>
+        <li class="con">국소 방향만 보여줌(전체 경로 미표시) → 방법 C와 병행 시 최상.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-good">매력+직관 ●●●●○</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-good">낮음~중 ●●○○○</div></div>
+      </div>
+      <p class="note">경로추종 무버는 단순(리드 거리/속도/재출발). 렌더는 구체+트레일 재사용. 핵심은 손맛 튜닝.</p>
+    </div>
+
+    <!-- E. 지면 투영 룬 -->
+    <div class="card">
+      <h3>E. 지면 투영 룬/텍스처 경로</h3>
+      <p class="sub">지면에 텍스처(룬/점선/화살표)를 칠한 경로</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <path d="M0 100 Q150 74 300 92 L300 102 Q150 84 0 110 Z" fill="#1d3a4a" opacity=".5"/>
+          <path d="M20 100 Q150 79 285 95" stroke="#5ad1ff" stroke-width="2" fill="none" stroke-dasharray="2 10"/>
+          <g fill="#5ad1ff" opacity=".8"><circle cx="60" cy="96" r="2.5"/><circle cx="120" cy="89" r="2.5"/><circle cx="180" cy="86" r="2.5"/><circle cx="240" cy="88" r="2.5"/></g>
+        </svg>
+      </div>
+      <div>
+        <span class="tag new">데칼 파이프라인 없음 → 신규</span>
+      </div>
+      <ul>
+        <li class="pro"><b>지면 밀착·가독성 최고</b>, "퀘스트 길" 느낌. 텍스처 안에 화살표로 방향까지.</li>
+        <li class="con">전용 <b>데칼 시스템이 없음</b>. (a)진짜 데칼=고비용, (b)지면 conform 스트립 메시=중간.</li>
+        <li class="con">경사면 z-fighting/관통 처리, 신규 코드 최다.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-good">최고 가독 ●●●●●</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-bad">중~높음 ●●●●○</div></div>
+      </div>
+      <p class="note">(b) 스트립 메시 경로는 사실상 "지면-정렬판 방법 C". 둘을 합치면 한 파이프라인으로 수렴 가능.</p>
+    </div>
+
+    <!-- F. 보조: UI 나침반 -->
+    <div class="card">
+      <h3>F. 화면 가장자리 나침반 <span class="note">(보조)</span></h3>
+      <p class="sub">2D HUD 화살표가 다음 목적지를 가리킴</p>
+      <div class="preview">
+        <svg width="300" height="120" viewBox="0 0 300 120">
+          <rect x="6" y="6" width="288" height="108" rx="8" fill="none" stroke="#2a313c"/>
+          <g fill="#ffd166"><path d="M150 18 l10 16 l-20 0 z"/></g>
+          <circle cx="150" cy="64" r="6" fill="#2a313c"/>
+          <text x="120" y="100" fill="#8b95a3" font-size="11">offscreen goal ↑</text>
+        </svg>
+      </div>
+      <div>
+        <span class="tag reuse">worldToScreen + UI 재사용</span>
+      </div>
+      <ul>
+        <li class="pro">목적지가 화면 밖일 때 강력. 어떤 3D 방법과도 <b>병행 가능</b>.</li>
+        <li class="con">단독으로는 "연출"이라기보다 기능적 HUD. 메인 연출의 보완재.</li>
+      </ul>
+      <div class="meter">
+        <div class="m"><div class="k">시각 효과</div><div class="v d-mid">기능적 ●●○○○</div></div>
+        <div class="m"><div class="k">구현 난이도</div><div class="v d-good">낮음 ●○○○○</div></div>
+      </div>
+      <p class="note">메인 후보가 아니라, 선택한 3D 연출에 얹는 옵션으로 검토.</p>
+    </div>
+
+  </div>
+
+  <!-- ============ 비교 매트릭스 ============ -->
+  <h2>3. 종합 비교</h2>
+  <table>
+    <tr>
+      <th>방법</th><th>방향 전달</th><th>분위기</th><th>엔진 재사용</th>
+      <th>신규 파이프라인</th><th>난이도</th><th>맵 점유</th>
+    </tr>
+    <tr>
+      <td><b>A. 지형 화살표</b></td><td class="d-good">매우 명확</td><td class="d-mid">게임적</td>
+      <td class="d-good">Billboard/MeshParticle</td><td class="d-good">불필요</td><td class="d-good">낮~중</td><td>중</td>
+    </tr>
+    <tr>
+      <td><b>B. 빛나는 구체</b></td><td class="d-bad">약함</td><td class="d-good">마법적</td>
+      <td class="d-mid">EnergyOrb(분리)</td><td class="d-mid">경량 신규 가능</td><td class="d-good">낮~중</td><td>중</td>
+    </tr>
+    <tr style="outline:2px solid #2d6f8f;">
+      <td><b>C. 흐르는 빛 리본 ★</b></td><td class="d-good">강함(흐름)</td><td class="d-good">우아·마법적</td>
+      <td class="d-good">Trail 직접</td><td class="d-good">불필요(변형 권장)</td><td class="d-mid">중</td><td>경로 전체</td>
+    </tr>
+    <tr style="outline:2px solid #2d6f8f;">
+      <td><b>D. 길잡이 위습 ★</b></td><td class="d-good">강함(움직임)</td><td class="d-good">매력적</td>
+      <td class="d-good">Orb+Trail</td><td class="d-mid">무버 신규(경량)</td><td class="d-good">낮~중</td><td>국소</td>
+    </tr>
+    <tr>
+      <td><b>E. 지면 투영 룬</b></td><td class="d-good">명확(텍스처내)</td><td class="d-good">퀘스트감</td>
+      <td class="d-bad">신규 필요</td><td class="d-bad">데칼/스트립 신규</td><td class="d-bad">중~높</td><td>경로 전체</td>
+    </tr>
+    <tr>
+      <td><b>F. UI 나침반</b></td><td class="d-good">명확(화면밖)</td><td class="d-mid">기능적</td>
+      <td class="d-good">worldToScreen+UI</td><td class="d-good">불필요</td><td class="d-good">낮음</td><td>없음(HUD)</td>
+    </tr>
+  </table>
+
+  <!-- ============ Unity 추출 ============ -->
+  <h2>4. Unity에서 경로 저작 → 추출/임포트</h2>
+  <p>경로는 곧 <b>순서가 있는 점들의 폴리라인</b>이다. 우리 추출 통로는 이미
+  <code>chunks_index.bin</code> + <code>TerrainExtractor</code> 한 곳으로 모여 있으므로 세 단계로 옵션이 갈린다.</p>
+
+  <table>
+    <tr><th>옵션</th><th>Unity 저작 방식</th><th>추출/파싱 변경</th><th>평가</th></tr>
+    <tr>
+      <td><b>① LevelMarker 빵부스러기</b></td>
+      <td><code>LevelMarker</code>를 점마다 배치, <code>markerType="PathPt"</code>,
+          <code>markerName="&lt;pathId&gt;_&lt;index&gt;"</code></td>
+      <td class="d-good"><b>익스포터 무변경.</b> 클라/서버가 type 필터 후 name의 index로 정렬</td>
+      <td>가장 빠른 착수. 점 많으면 저작이 번거로움</td>
+    </tr>
+    <tr>
+      <td><b>② Path 컴포넌트 + 신규 섹션</b></td>
+      <td><code>PathMarker</code> MonoBehaviour가 waypoint 리스트(또는 Unity Spline) 보유,
+          드래그로 곡선 저작</td>
+      <td class="d-mid">TerrainExtractor에 "Path" 섹션 베이크 추가 + 클라/서버 파서 추가</td>
+      <td><b>생산용 권장.</b> 저작 쾌적, 데이터가 1엔티티로 깔끔</td>
+    </tr>
+    <tr>
+      <td><b>③ Spline 리샘플 베이크</b></td>
+      <td>②와 동일 저작 + 추출 시 곡선을 <b>등호장(等弧長) 리샘플</b>해 균일 폴리라인으로 굽기</td>
+      <td class="d-mid">②의 확장(추출기에서 리샘플)</td>
+      <td>리본/구체 간격이 균일 → 연출 품질↑. 권장</td>
+    </tr>
+  </table>
+  <p class="lead">
+    <b>런타임 지면 conform.</b> 어느 옵션이든 임포트한 폴리라인의 XZ만 신뢰하고, Y는 클라에서
+    <code>TerrainHeightField::getHeightAt</code>로 재투영(+소량 오프셋)한다. → Unity Y 정밀도/지형 수정과
+    무관하게 항상 지면에 밀착. 노멀 정렬이 필요한 화살표/스트립은 <code>getNormalAt</code> 사용.
+    경로는 게임플레이가 아닌 <b>연출 데이터</b>이므로 (Zone처럼) 클라 단독 처리도 가능.
+  </p>
+  <p class="note">권장 진행: <b>옵션 ① 로 빠르게 프로토타입 → 연출 확정 후 ②/③ 으로 생산 파이프 정식화.</b>
+  추출 데이터 형태(폴리라인)는 셋 다 동일하므로 연출 코드는 그대로 재사용된다.</p>
+
+  <!-- ============ 추천 ============ -->
+  <h2>5. 추천</h2>
+  <div class="rec">
+    <h3>주연출: C. 흐르는 빛의 리본 &nbsp;＋&nbsp; 보완: D. 길잡이 위습</h3>
+    <p>
+      <b>C</b>는 <code>TrailPipeline</code>을 거의 그대로 재사용하면서 흐름 방향으로 <b>방향성을 강하게</b> 전달하고,
+      additive/HDR 블룸으로 "마법적인 길" 분위기를 살린다 — 재사용성·연출효과·방향성의 균형이 가장 좋다.
+      유일한 추가 작업은 카메라-페이싱 리본을 <b>지면-정렬</b>로 바꾸는 변형 정도.
+    </p>
+    <p>
+      <b>D</b>를 함께 두면 긴 경로에서 "지금 당장 어디로?"를 움직임으로 못박아 주며,
+      C가 깔아둔 빛 줄기 위를 위습이 흐르는 그림이 완성된다. 둘 다 EnergyOrb/Trail 자산을 공유해 추가 비용이 작다.
+    </p>
+    <p class="note">대안: 빠른 착수/최소 위험을 원하면 <b>B(빛나는 구체, 제안 2)</b>가 가장 가볍다.
+    가독성 1순위·"퀘스트 길" 톤을 원하면 <b>E</b>지만 신규 파이프라인 비용을 감수해야 한다.
+    어떤 선택이든 <b>F(UI 나침반)</b>는 화면 밖 목적지 보완으로 저비용 추가 가능.</p>
+  </div>
+
+  <h2>6. 다음 단계</h2>
+  <p><span class="stepnum">1</span> 이 문서로 <b>연출 방법</b>과 <b>Unity 추출 옵션</b>을 함께 결정.</p>
+  <p><span class="stepnum">2</span> 결정되면 <b>plan mode</b>로 이행 — 데이터 포맷(폴리라인 섹션), 임포트/지면 conform,
+     렌더 파이프라인 변경(지면-정렬 리본 등), 시스템 클래스 설계, 동시성/스트리밍 엣지케이스까지 상세 설계.</p>
+
+  <p class="foot">검토 근거 파일: <code>trailPipeline.hpp</code> · <code>energyOrb.hlsl</code> · <code>energyOrbSystem.hpp</code> ·
+  <code>terrain.hpp</code> · <code>markerDef.hpp</code> · <code>unityScripts/LevelMarker.cs</code> · <code>CODE_INDEX.md</code> ·
+  <code>graphicsArchitecture.md</code>. 이 파일: <code>client/docs/pathGuidanceReview.html</code></p>
+
+</div>
+</body>
+</html>

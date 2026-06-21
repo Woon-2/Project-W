@@ -1,128 +1,120 @@
 # Grandbaum(그랜드밤) 중간보스 전술 — 설계/구현 문서
 
-NPCAI 프로토타입(`D:\source\repos\Project-W\NPCAI\NPCAI\sim`)의 Grandbaum 전술을 `RoomServer`로
-포팅한 결과를 기록한다. 홉고블린(`GoblinMidBossTactic`) 포팅 인프라를 재사용한다.
+## 재설계(2026-06-21): "피해경감(DR) 토글" 방식
 
-## 전술 개요
+기존 뱀 매복(후퇴→증원 웨이브 소환→숨김→전멸→부활) 설계는 **전투 중 NPC/스쿼드를 런타임 생성·삭제**
+하는 구조라 ShieldWall 발동 즈음 크래시가 났다(특히 `Room::removeTacticalNpcById`가 NPC를 free하면서
+`TacticalSquad::memberCache_`의 raw 포인터를 스크럽하지 않아 use-after-free 가능). 이를 **전부 제거**하고,
+처음 스폰된 NPC만으로 돌아가는 단일 메커니즘으로 재설계했다.
 
-Grandbaum의 전술은 **단 하나(ShieldWall)**. 보스는 평소 표적 우선순위 melee만 하고, 보스 HP가
-**66% / 33%** 에 도달하면 각 1회 ShieldWall이 발동한다.
+**핵심: 슬라임이 받는 피해 경감(DR)을 상황에 따라 토글한다.** 뱀 부대는 슬라임으로 교체(뱀 특수로직 제거).
 
-- **발동 게이트** (둘 다 충족해야 발동, 하나라도 불충족 시 스킵→Cooldown):
-  - 살아있는 슬라임 ≥ 10 (`MIN_SHIELD_WALL_SLIME_COUNT`)
-  - 살아있는 원본 뱀 ≥ 1 (뱀이 없으면 매복이 성립 안 함)
-- **발동 효과**: 슬라임이 보스를 원형으로 둘러싸 **하드 블로커(플레이어 통과 불가)** 가 되고,
-  **보스 + 슬라임이 받는 피해 90% 감소(×0.1)**. 슬라임을 뚫고 보스에게 접근 불가.
-- **파훼(보스를 다시 취약하게)**: 오직 뱀.
-  - 예방: 발동 전(해당 HP 도달 전) 원본 뱀 부대 전멸 → 발동 스킵.
-  - 해제: 발동 후 등장하는 증원 뱀 웨이브를 전부 처치 → ShieldWall 종료.
-- 루프: `Engage` ⇄ `ShieldWall` → `Cooldown(8s)` → `Engage`. 두 발동(66/33)은 독립적이며 NPC가
-  이월되지 않는다.
+| 상태 | 보스 DR | 슬라임 DR | 의도 |
+|---|---|---|---|
+| 평상시(Engage/Cooldown) | 1.0 (취약) | **0.1 (90% 경감, 단단)** | 슬라임 처치가 비효율 → 플레이어가 보스 집중(보스가 먼저 죽음). 평상시 슬라임이 거의 안 죽어 **2페이즈용 슬라임 보존** |
+| ShieldWall 발동 중 | **0.1 (보호)** | **1.0 (취약)** | 보스는 못 뚫음 → 벽 슬라임(취약)을 처치 |
+| 보스 사망 후(혼란) | (사망) | **1.0 (취약)** | 잔여 슬라임 정리 → 아레나 벽 해제 |
 
-### 보스 표적 우선순위 (`selectBossMeleeTarget`)
+### 전투 흐름
 
-원본 뱀 보존 중(`shieldWallTriggerStage_ < 2`)에 한해 **SnakeThreat > SlimeThreat**, 그 외엔 항상
-**Nearest**. 자기 자원(뱀/슬라임)을 위협하는 플레이어를 우선 응징한다.
+1. **평상시**: 슬라임 단단(0.1)·보스 취약 → 플레이어가 보스 집중. 슬라임은 `issueStableEngage`로 교전.
+2. **66% / 33% 도달 → ShieldWall 발동**: 플레이어 넉백 + 전 슬라임 부대가 보스를 원형 벽(RingGuard)으로
+   감싸 **하드 블로커**가 되고 **보스 DR 0.1(보호)**. 단 **이때만 슬라임 DR을 1.0으로 풀어 취약**하게 한다.
+   HP가 66%와 33%를 서로 다른 시점에 통과하면 각 단계에서 한 번씩 발동한다. 한 번의 전술 업데이트에서
+   66%를 건너뛰고 바로 33% 이하가 되면 현재 HP 단계 2를 한 번만 소비하므로 ShieldWall도 한 번만 발동한다.
+   첫 ShieldWall 중 33% 이하가 되면 현재 벽 파훼 직후 Cooldown 없이 두 번째로 발동한다. Cooldown 중 33%에
+   도달하면 남은 Cooldown을 중단하고 즉시 발동해, 보스가 취약한 동안 사망해 2차 발동이 유실되지 않게 한다.
+3. **파훼**: 벽 슬라임을 형성 시점 대비 `SHIELD_BREAK_KILL_FRACTION`(0.2) 이상 처치해야만
+   ShieldWall 종료 → 평상시 DR 복귀 → `Cooldown(8s)` → `Engage`.
+4. **보스 사망**: `onLeaderDead`에서 잔여(혼란 상태) 슬라임 DR을 영구 1.0으로 해제 → 깔끔히 정리.
 
-### 뱀 매복 4단계 (`SnakeAmbushStage`)
+발동 게이트: **살아있는 슬라임 ≥ `MIN_SHIELD_WALL_SLIME_COUNT`(10)** 만 충족하면 발동, 아니면 스킵→Cooldown.
+2페이즈가 가능한 이유: 평상시 슬라임이 단단해 거의 안 죽으므로 33% 발동 시에도 벽을 세울 슬라임이 남는다.
 
-`Evasion`(원본 뱀 개별 회피·산개) → `RetreatingOriginal`(원본 뱀 외곽 후퇴 →
-외곽 도착/타임아웃 시 웨이브 소환 직후 **퇴장(숨김)**) →
-`WaveActive`(증원 웨이브 = 원본수×10, 최대 60, 4의 배수 / `DistributedEngage`) →
-`ReturningOriginal`(웨이브 전멸 시 종료 + 원본 뱀 부활/복귀).
+## 핵심 메커니즘
 
-**원본 뱀 퇴장(숨김)**: 후퇴만 시키면 원본 뱀이 외곽에 정지한 채 웨이브 내내 플레이어에게 노출되므로,
-`despawnOriginalSnakeSquad`가 후퇴 완료한 원본 뱀을 서버 상태상 사망(hp0+물리제거, 객체는 시체로
-유지 → roster 부활 가능)으로 전환하고 클라엔 `S_NpcHide`로 **시체/죽는 연출 없이 즉시 숨김**.
-복귀는 `reviveOriginalSnakeSquad`(`hp<=0` 분기 → `reviveTacticalNpc`→`S_NpcRespawn`)가 hidden 해제.
+### 1. 데미지 경감 적용부 (필수 — 기존엔 비활성)
+`Object::damageTakenMultiplier_`(기본 1.0). **기존엔 적용부가 주석 처리돼 동작하지 않았다.** 재설계의 토대라
+두 플레이어→NPC 경로 모두에서 활성화:
+- 스킬 피격: `Room::updateSkillSystem`에서 `hit->damage × tgt->damageTakenMultiplier()`.
+- 레거시 평타: `tryMeleeTactical`(스킬과 별도 경로)에서 동일하게 `kDamage × o->damageTakenMultiplier()`.
 
-## 클라-서버 핵심 과제
+DR 토글은 `GrandbaumMidBossTactic`이 소유: `applyNormalDamageProfile`(보스1.0/슬라임0.1+블로커해제) /
+`applyShieldWallProtection`(보스0.1/슬라임1.0+블로커) / `setAllSlimeDamageMultiplier`. 스폰 시 슬라임 0.1 초기화.
 
-### 1. 데미지 경감 (ShieldWall 90%)
-`Object::damageTakenMultiplier_`(기본 1.0). 스킬 피격 적용부(`Room::updateSkillSystem`)에서
-`hit->damage × tgt->damageTakenMultiplier()`. `applyShieldWallProtection`이 보스+슬라임에 0.1 적용/해제.
-
-### 2. 슬라임 하드 블로커
-평소 전술 trooper는 `setCollisionMask(~(Player|Boss))`로 플레이어를 통과. ShieldWall 중에는
-`Room::setShieldWallBlockers`가 슬라임 마스크를 `~Boss`로 바꿔 **플레이어와 충돌(벽)**, 종료 시
-`clearShieldWallBlockers`가 원복. 슬라임은 클라에도 존재하므로 클라 로컬 물리도 자연히 막힌다.
+### 2. 슬라임 차단벽 (전적으로 클라 권위)
+차단은 **클라 barrier가 전담**한다(goblin divide와 동일). `Room::setShieldWallBlockers`는 **서버 충돌을 일절
+건드리지 않고**(슬라임은 스폰 기본 mask `~(Player|Boss)`=플레이어 통과 유지) `S_NpcBarrier(true, ids)` 패킷만
+broadcast → 클라 `Game::setNpcBarrier`가 barrier 등록 → `Game::resolveBarrierSeparation`(매 프레임)이 인접 살아있는
+슬라임을 선분 캡슐로 이어 로컬 플레이어를 밀어낸다(하드 월).
+> **하지 말 것**: 서버에서 슬라임 mask에 Player 충돌을 켜면, 플레이어 바디(Kinematic)가 슬라임(Dynamic)을
+> **밀어내** 벽이 무너진다(클라 슬라임은 Kinematic이라 안 밀리지만 서버 변위가 broadcast됨). 패킷 전용이 정답.
+> **버그였던 부분**: `setNpcBarrier`가 `idGoblinMap_`(goblin/hobgoblin 전용)에서 조회해 **슬라임이 안 잡혀
+> barrier가 아예 비활성**이었다(플레이어가 그냥 통과). 전 몬스터를 담는 `idMonsterMap_`(Object*) 조회로 수정.
+> 또 연속 벽이 되려면 인접 슬라임이 `kBarrierLinkDist 2.9` 이내여야 해 슬라임 `separationRadius`를 3.0→2.0으로 낮춤.
+> **한계(설계상)**: 죽은 슬라임은 연결에서 제외돼 그 자리에 **틈**이 생기고, 빠른 대시는 순간 관통 여지가
+> 있다. 즉 벽은 완전 불가침이 아니다. 그래서 **ShieldWall 중 보스 DR 0.1을 유지**해, 틈으로 진입해 보스를
+> 직접 녹이는 우회(치즈)를 막고 파훼가 반드시 "슬라임 처치 수"로 일어나게 한다.
 
 ### 3. 플레이어 넉백 + 이동잠금 (이동 권한 = 클라)
-플레이어 이동은 **클라이언트 권한**(클라가 위치 계산→`C_Move`, 서버는 신뢰+클램프). 서버가
-`player->setPos()`로 밀어도 클라가 덮어쓰므로 무효 → **서버→클라 명령 패킷** 방식.
-- 신규 패킷 `S_PlayerKnockback{ playerId, dirX, dirZ, speed, knockMs, postLockMs }`.
-- 서버 `Room::knockPlayersOutOfShieldWall`: 링 안쪽 플레이어에게 발행 + `GameSession`에 클램프 면제 부여.
-- 클라 `Game::onPlayerKnockback`/`processInputGame`: `knockMs`(0.32s) 강제 이동 → `postLockMs`(1.2s)
-  입력잠금. 두 구간 모두 위치를 `C_Move`로 서버에 반영(권한 유지). 서버는 그동안 클램프 면제.
+링 형성 순간 안쪽 플레이어를 밖으로 밀어낸다. 신규 패킷 `S_PlayerKnockback{ playerId, dirX, dirZ, speed,
+knockMs, postLockMs }`. 서버 `Room::knockPlayersOutOfShieldWall`(살아있는 플레이어만 순회 — NPC 포인터
+미접촉, 크래시 무관) + `GameSession` 클램프 면제. 클라 `Game::onPlayerKnockback`이 로컬 넉백+입력잠금.
+형성 완료 또는 `SHIELD_WALL_FORM_KNOCK_MAX` 6초 경과 시 **반복 넉백만** 중단한다. 6초는 ShieldWall
+종료 시간이 아니며, 슬라임 barrier·보스 DR·ShieldWall 페이즈는 파훼 전까지 계속 유지된다.
 
-### 4. 전투 중 동적 소환/디스폰 (증원 웨이브)
-`Room::spawnTacticalWaveNpc`(바디 등록) / `addDynamicTacticalSquad` / `removeTacticalNpcById` /
-`removeTacticalSquadById` / `broadcastTacticalNpcSpawn`(클라 통지 `S_NpcSpawnBatch`) /
-`reviveTacticalNpc`(부활 시 물리 재등록 + `S_NpcRespawn`).
-`tacticalNpcs_`는 `unique_ptr` 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
-(분대/NPC 순회 이전)에 즉시 push/erase해도 안전. 살아있는 웨이브 강제 정리는 `setHp(0)+S_Hit`로 대체한다.
-
-### 5. NPC 숨김 (원본 뱀 퇴장)
-신규 패킷 `S_NpcHide{ npcId[] }`. `Room::despawnTacticalNpcHidden`이 서버 상태를 사망(hp0+물리제거,
-객체 유지)으로 두고, 호출부(`despawnOriginalSnakeSquad`)가 살아있던 id를 묶어 `S_NpcHide` broadcast.
-클라(`Object::hidden_`, 공통 베이스)는 사망(`isDead_`/시체/래그돌)과 별개로 **렌더/업데이트/HP바에서
-완전 제외**(`Game::hideNpcs`). 복귀는 `S_NpcRespawn`이 `hidden_`을 해제(`Game::onNpcRespawn`).
-`hidden_`은 타입 독립이라 전용 NPC 타입 도입 시 `hideNpcs`의 id 조회만 통합하면 됨.
+### 4. 밸런스
+평상시 슬라임은 단단해 못 잡으므로 "못 잡는 딜러"가 되지 않도록 위협을 보스로 집중. **공격력 레버는
+`attackDamageScale`** — 등록 스킬을 쓰는 NPC의 데미지는 `skillSystem.cpp:933`에서 `lua damage × damageCoeff ×
+attackDamageScale`로 산정되며, 레거시 `TacticalNpcConfig::attackDamage`는 스킬 없을 때만 쓰이는 폴백(미사용).
+- 슬라임 공격↓: `TacticalSlime::trooperConfig()` `attackDamageScale 0.3`(슬라임 = Slime_Attack1 lua 9 × 0.3).
+- 보스 공격↑: `bossCfg`(spawnGrandbaumEncounter) `attackDamageScale 5.0`(보스 = Treant 스킬 × 5.0).
+- 수치는 실검증 튜닝용 플레이스홀더.
 
 ## 주요 파일
 
 | 파일 | 내용 |
 |---|---|
-| `GrandbaumMidBossTactic.hpp/.cpp` | `GrandbaumMidBossTactic`(보스별 전용 파일). NPCAI 구조 미러. 공용 유틸은 `MidBossTacticBase.hpp/.cpp`. |
-| `Room.hpp/.cpp` | `spawnGrandbaumEncounter`(이종 4부대), `onArenaGrandbaumEnter`, ShieldWall/넉백/동적소환 헬퍼, 데미지 훅, `move` 클램프 면제. |
+| `GrandbaumMidBossTactic.hpp/.cpp` | DR 토글 전술 전체(보스 melee, ShieldWall 발동/형성/파훼, DR 프로파일). |
+| `Room.cpp` | `spawnGrandbaumEncounter`(슬라임 4부대 12/12/48/10 + 초기 DR 0.1), `onArenaGrandbaumEnter`, 데미지 경감 적용부(2곳), ShieldWall 넉백/블로커 헬퍼. |
+| `TacticalSlime.cpp` | 슬라임 trooper config(공격력 하향). |
 | `object.hpp` | `damageTakenMultiplier_`. |
-| `GameSession.hpp` | 넉백 클램프 면제 타이머. |
-| `ServerEngine/protocol.hpp` | `S_PlayerKnockback` 패킷. |
-| `RoomServer/PacketManager.*` | `makeSPlayerKnockbackPacket`. |
-| `client/PacketManager.*`, `client/online/onlineGame.*` | 넉백 핸들러 + 로컬 상태머신. |
+| `ServerEngine/protocol.hpp`, `PacketManager.*` | `S_PlayerKnockback`, `S_NpcBarrier`. |
+| `client/online/onlineGame.cpp` | 넉백 핸들러, `setNpcBarrier`/`resolveBarrierSeparation`(벽 차단). |
 
-## 교전 배정 / 공격권 예약
-
-- **공격권 예약**은 `TacticalNpc` 자체 기능. 상태 핸들러가 `canEnterAttackSlot()` →
-  `Room::tryReserveTacticalAttackSlot`(targetId당 최대 5슬롯, `tacticalNpcs_` 전체 후보)를 직접 호출 →
-  전술 무관. Grandbaum 슬라임/뱀/웨이브 모두 자동 적용(보스는 1기라 불필요).
-- **슬라임 부대(0,1,2) Engage**는 `MidBossTacticBase::issueStableEngage`(균형배정 + 생존중 고정,
-  Goblin/Grandbaum 공용)를 재사용. 원본 뱀(3)은 personal 회피(HoldSlot), 증원 웨이브는
-  `DistributedEngage`. (issueStableEngage는 원래 GoblinMidBossTactic private였으나 base로 승격.)
+> 제거됨: `spawnTacticalWaveNpc`/`addDynamicTacticalSquad`/`removeTacticalNpcById`/`removeTacticalSquadById`/
+> `broadcastTacticalNpcSpawn`/`reviveTacticalNpc`/`despawnTacticalNpcHidden`(런타임 스폰·디스폰 인프라, 전부
+> 미사용·크래시 원인). 전술의 뱀 매복/웨이브/숨김·부활/SnakeAmbushStage 일체. `TacticalSnake`는 현재 미사용.
+> `S_NpcHide`/`S_NpcRespawn`/`S_NpcSpawnBatch`(전투 중)도 더 이상 발생하지 않음(초기 스폰 배치는 유지).
 
 ## 트리거
 
-Zone 태그 `"Arena_Grandbaum"` + 마커 `WallGrandbaum_0/1/2`(후방벽), `GrandbaumSpawner`(없으면 Wall
-중점 fallback). 해당 아레나 진입만으로 트리거된다. (과거 한자리 비교용 디버그 트리거
-`HOBGOBLIN_DEBUG_TACTIC`는 제거됨 — `Arena_Hobgoblin`은 다시 홉고블린 전용.)
+Zone 태그 `"Arena_Grandbaum"` + 마커 `WallGrandbaum_0/1/2`(후방벽), `GrandbaumSpawner`(없으면 Wall 중점
+fallback). 해당 아레나 진입만으로 트리거. (마커는 `resources/terrains/chunks_index.bin`에 저작돼 있음.)
 
-## 스탯/상수 (인게임 스케일)
+## 상수 (`GrandbaumMidBossTactic.hpp`)
 
-- 거리/반경/슬롯간격 상수는 **인게임 스케일 ×~0.4 적용 완료**(코드에 시뮬 원본 병기, 예:
-  `SNAKE_OUTER_RADIUS 26`(시뮬 64), 링 반경 `3~5`(시뮬 7~12)). 실검증 후 미세조정.
-  시간/비율(경감 0.1, 66/33, ×10/최대60, 락 타이머)·카운트는 시뮬 원본 유지.
-- config(스폰): 슬라임 60HP/4spd, 뱀 45HP/8spd, 보스 2000HP/4spd (홉고블린 보스 2000 선례).
-  부대 A12/B12/C48/D10. → 모두 M3 튜닝 대상.
-- 모델: 전용 슬라임/뱀/보스 에셋 추가 전까지 `modelGoblin()`/`ObjectType::Goblin` 재사용(홉고블린과 동일).
-
-## 빌드 순서(완료 상태)
-
-- **M1**: 데미지 훅, 전술 골격(표적우선순위/뱀회피/ShieldWall 발동·링·경감·블로커), 넉백. → 예방 경로 동작.
-- **M2**: 동적 소환 인프라 + 뱀 매복 풀 루프(후퇴→웨이브→전멸→종료→부활). → 해제 경로 동작.
-- **M3**: 거리 상수 인게임 스케일(×~0.4) 적용 + 본 문서/메모리 작성 완료. **실제 client 검증·밸런싱은
-  `Arena_Grandbaum` 레벨 마커 저작 후** 진행(미완).
-
-RoomServer · client 모두 Debug/x64 빌드 통과.
+- HP 임계 66%/33%, `MIN_SHIELD_WALL_SLIME_COUNT 10`, 링 반경 `3~8`, `SHIELD_BREAK_KILL_FRACTION 0.2`,
+  `SHIELD_WALL_FORM_KNOCK_MAX 6s`, `TACTIC_COOLDOWN_DURATION 8s`,
+  보스 DR/슬라임 평상시 DR `0.1`. 거리/반경/비율은 실검증 튜닝 대상.
+- **방패벽 연속성**: RingGuard는 전역 고유 슬롯을 다겹(multi-lane) 링으로 생성한다. ShieldWall 중에는
+  슬라임 상호 물리 충돌을 끄고 원주·방사 슬롯 간격을 1.4로 유지한다. 클라 barrier 연결거리
+  (`kBarrierLinkDist 2.9`)보다 충분히 짧아 연속 벽이 유지된다. 80마리 기준 지름 16m,
+  `32@8.0 / 28@6.6 / 20@5.2`의 3겹을 형성한다.
+- **생존 인원 기반 수축**: 다음 ShieldWall은 살아있는 슬라임 수로 반경을 다시 계산한다. 모든 링의 원주
+  간격을 2.8 이하로 제한하므로, 64마리는 기존 `32/28/4@8m`의 성긴 안쪽 링 대신 지름 약 12.8m,
+  `28@6.4 / 20@5.0 / 16@3.6`의 닫힌 3겹을 형성한다. 넉백 안전 반경도 함께 수축한다.
 
 ## 검증 방법
 
-실행 검증은 `client`로(DummyClient 아님). RoomServer+LobbyServer+client 기동 → 방 입장 →
-`Arena_Grandbaum` zone 진입.
-1. 예방: 66% 전 뱀 부대(D) 전멸 → 66% 도달 시 ShieldWall **스킵** 확인.
-2. 해제: 뱀 남긴 채 66% 도달 → 슬라임 링(통과 불가)+보스 90% 경감 → 증원 웨이브 스폰 → 전멸 시
-   링 해제·재취약. 33%에서 1회 재현(독립).
-3. 넉백: 링 형성 시 안쪽 플레이어 0.32s 밀려남 + 1.2s 입력잠금.
-4. 표적 우선순위: 뱀 근처 플레이어 우선 추적.
+실행 검증은 `client`로(DummyClient 아님). RoomServer+LobbyServer+client 기동 → 방 입장 → `Arena_Grandbaum` 진입.
+1. **DR 동작**: 평상시 슬라임 타격은 1/10 데미지, 보스 타격은 풀데미지.
+2. **발동/파훼**: 66% 도달 → 넉백 + 슬라임 벽(통과 불가, 죽은 자리 틈) + 보스 보호 + 슬라임 취약, **크래시 없음**.
+   벽 슬라임 일정 수 처치 → 실드 해제·보스 재취약. 30초 이상 대기만 해서는 해제되지 않음. 33% 재현(보존된 슬라임으로 벽).
+   `100%→60%→30%`는 총 2회, 한 번에 `100%→30%`는 총 1회만 발동하고 HP 회복 후 재하락해도 중복 발동하지 않는다.
+   첫 ShieldWall 중 33% 도달 시 파훼 직후 연속 발동하며, Cooldown 중 도달 시 다음 전술 틱에 즉시 발동한다.
+3. **치즈 방지**: 틈으로 보스 접근해도 보스 DR로 직접 처치 비효율 → 결국 슬라임 처치로 파훼.
+4. **보스 사후**: 잔여 슬라임 취약 전환 → 정리 → 아레나 벽 해제.
+5. **엣지**: 슬라임 임계 미만이면 ShieldWall 스킵.
 
-> **주의**: 디버그 fallback이 제거됐으므로 `Arena_Grandbaum` zone과 `WallGrandbaum_*`/`GrandbaumSpawner`
-> 마커가 레벨에 저작돼 있어야 Grandbaum이 스폰된다(미저작 시 인카운터 스킵).
+RoomServer Debug/x64 빌드 통과(경고 0/오류 0). 클라 코드 변경 없음(기존 바이너리 호환).

@@ -167,6 +167,7 @@
     <ClCompile Include="birdy.cpp" />
     <ClCompile Include="slime.cpp" />
     <ClCompile Include="treant.cpp" />
+    <ClCompile Include="BehaviorTree.cpp" />
     <ClCompile Include="MidBossTacticBase.cpp" />
     <ClCompile Include="GoblinMidBossTactic.cpp" />
     <ClCompile Include="GrandbaumMidBossTactic.cpp" />
@@ -232,6 +233,7 @@
     <ClInclude Include="birdy.hpp" />
     <ClInclude Include="slime.hpp" />
     <ClInclude Include="treant.hpp" />
+    <ClInclude Include="BehaviorTree.hpp" />
     <ClInclude Include="IMidBossTactic.hpp" />
     <ClInclude Include="MidBossTacticBase.hpp" />
     <ClInclude Include="GoblinMidBossTactic.hpp" />

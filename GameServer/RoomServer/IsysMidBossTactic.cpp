@@ -108,6 +108,10 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
                 issueRegroupBuddies( room, leader );   // 1차 돌격과 동시에 Buddy 재집결 착수
             }
         }
+        if ( !wedgeForceStartIssued_ && phaseTimer_ >= WEDGE_PREP_FORCE_TIMEOUT ) {
+            forceActiveWedgeCharges();
+            wedgeForceStartIssued_ = true;
+        }
         updateActiveStrikeEngage( room, leader, /*forceAll=*/false );
         bool timeout = phaseTimer_ >= PINCER_TIMEOUT;
         if ( timeout ) {
@@ -139,7 +143,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
             return;
         }
         updateBossBuddyWedgeJoin( dt, leader );
-        if ( isSecondStrikePrepReady( leader ) ) {
+        if ( isSecondStrikePrepReady( leader ) || phaseTimer_ >= BUDDY_REGROUP_TIMEOUT ) {
             enterPhase( Phase::SecondBuddyWedge, leader );
         }
     }
@@ -148,6 +152,10 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
         if ( !pincerIssued_ ) {
             issueWedgeStrike( room, leader, /*useBuddy=*/true, /*penalty=*/true, /*remember=*/false );
             pincerIssued_ = true;
+        }
+        if ( !wedgeForceStartIssued_ && phaseTimer_ >= WEDGE_PREP_FORCE_TIMEOUT ) {
+            forceActiveWedgeCharges();
+            wedgeForceStartIssued_ = true;
         }
         syncBossBuddyWedgeChargeStart( leader );
         updateBossBuddyWedgeJoin( dt, leader );
@@ -203,7 +211,7 @@ void IsysMidBossTactic::enterCooldown( PlatoonLeader& leader ) {
 }
 
 void IsysMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
-    // (M2: 진행 중 쐐기 정리 추가 예정)
+    restoreBossWedgeMotorBoost( leader );
     MidBossTacticBase::onLeaderDead( room, leader );
 }
 
@@ -212,6 +220,7 @@ void IsysMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
     phaseTimer_ = 0s;
     engageOrderIssued_ = false;
     pincerIssued_ = false;
+    wedgeForceStartIssued_ = false;
     activeStrikeSquads_.clear();
     activeStrikeTasks_.clear();
 
@@ -231,6 +240,10 @@ void IsysMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
     }
 
     resetBossPersonalCombat( leader );
+
+    if ( next != Phase::SecondBuddyWedge ) {
+        restoreBossWedgeMotorBoost( leader );
+    }
 
     if ( next == Phase::Engage || next == Phase::Cooldown ) {
         engageRefreshTimer_ = 0s;
@@ -721,6 +734,7 @@ void IsysMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader
     float currentBossDist = ( leader.pos() - playerCentroid ).len();
     float retreatDist = std::max( currentBossDist + ISIS_RETREAT_EXTRA_DIST, ISIS_RETREAT_MIN_DIST );
     retreatTargetPos_ = playerCentroid + awayDir * retreatDist;
+    retreatTargetPos_ = findSafeBossFormationPosition( room, leader, retreatTargetPos_ );
 
     mu::Vec3 forward = playerCentroid - retreatTargetPos_;
     float forwardLen = forward.len();
@@ -748,6 +762,7 @@ void IsysMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader
         ord.slotColumnScale = columnScale;
         ord.slotColumnCount = columnCount;
         ord.speedMult = RETREAT_SPEED_MULT;
+        ord.avoidStaticObstacles = true;
         squad->receiveOrder( ord );
     };
 
@@ -873,12 +888,14 @@ void IsysMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
         ord.targetIds = strikeCluster.cluster.playerIds;
         ord.tacticCenter = strikeCluster.cluster.centroid;
         ord.chargeSpeedMult = ISIS_WEDGE_SPEED_MULT;
+        ord.chargeAcceleration = ISIS_WEDGE_MOTOR_ACCELERATION;
+        ord.avoidStaticObstacles = true;
         if ( useBuddySquads ) {
             ord.wedgeSpacingMult = ISIS_BUDDY_WEDGE_SPACING_MULT;
             if ( isBossJoinedBuddySquad( squad ) ) {
                 ord.wedgeDamageMult = ISIS_BOSS_JOINED_WEDGE_DAMAGE_MULT;   // 보스 합류 결정타 ×1.5
                 ord.reserveWedgeApex = true;                                // 보스용 apex 슬롯 비움
-                setupBossBuddyWedgeJoin( squad, strikeCluster, squad->calcCentroid() );
+                setupBossBuddyWedgeJoin( room, leader, squad, strikeCluster, squad->calcCentroid() );
                 bossBuddyWedgeChargeComplete_ = false;
                 bossJoinedStrikeIssued = true;
             }
@@ -932,6 +949,7 @@ void IsysMidBossTactic::issueBomberRegroup( Room& room, TacticalSquad* squad,
     ord.slotColumnScale = BOMBER_REGROUP_COLUMN_SCALE;
     ord.slotColumnCount = BOMBER_REGROUP_COLUMN_COUNT;
     ord.speedMult = BOMBER_REGROUP_SPEED_MULT;
+    ord.avoidStaticObstacles = true;
     squad->receiveOrder( ord );
 }
 
@@ -959,6 +977,7 @@ void MU_CALLCONV IsysMidBossTactic::issueBuddyColumn( Room& /*room*/, TacticalSq
     ord.slotColumnScale = BUDDY_COLUMN_SCALE;
     ord.slotColumnCount = BUDDY_COLUMN_COUNT;
     ord.speedMult = BUDDY_SPEED_MULT;
+    ord.avoidStaticObstacles = true;
     squad->receiveOrder( ord );
 }
 
@@ -1010,6 +1029,14 @@ void IsysMidBossTactic::updateActiveStrikeEngage( Room& room, PlatoonLeader& lea
     }
 }
 
+void IsysMidBossTactic::forceActiveWedgeCharges() {
+    for ( TacticalSquad* squad : activeStrikeSquads_ ) {
+        if ( squad && !squad->isEmpty() ) {
+            squad->forceStartWedgeCharge();
+        }
+    }
+}
+
 /*-------------------------------
    IsysMidBossTactic — 보스 2차 쐐기 합류
 -------------------------------*/
@@ -1051,7 +1078,7 @@ bool IsysMidBossTactic::isBossJoinedBuddySquad( const TacticalSquad* squad ) con
         squad->getSquadId() == bossJoinedBuddySquadIndex_;
 }
 
-bool IsysMidBossTactic::ensureBossBuddyWedgeJoin( Room& /*room*/, const PlatoonLeader& leader ) {
+bool IsysMidBossTactic::ensureBossBuddyWedgeJoin( Room& room, PlatoonLeader& leader ) {
     const auto& squads = leader.getSquads();
     auto selectedSquadAlive = [&]() {
         for ( int i = 0; i < 2; ++i ) {
@@ -1102,7 +1129,8 @@ bool IsysMidBossTactic::ensureBossBuddyWedgeJoin( Room& /*room*/, const PlatoonL
             return true;   // 아직 집결 중 — prepare pos는 집결 완료 후 산출
         }
         int32 clusterIdx = ( secondStrikeClusters_.size() > 1 ) ? std::min( i, 1 ) : 0;
-        setupBossBuddyWedgeJoin( squad, secondStrikeClusters_[ static_cast<size_t>( clusterIdx ) ], squad->calcCentroid() );
+        setupBossBuddyWedgeJoin( room, leader, squad,
+            secondStrikeClusters_[ static_cast<size_t>( clusterIdx ) ], squad->calcCentroid() );
         return bossBuddyWedgeJoinActive_;
     }
 
@@ -1136,8 +1164,10 @@ bool IsysMidBossTactic::isSecondStrikePrepReady( const PlatoonLeader& leader ) c
     return secondStrikePrepIssued_ && areSecondStrikePrepSquadsAtSlots() && isBossBuddyWedgeJoinReady( leader );
 }
 
-void MU_CALLCONV IsysMidBossTactic::setupBossBuddyWedgeJoin( TacticalSquad* squad,
-                                                             const StrikeCluster& strikeCluster, mu::Vec3 squadCenter ) {
+void MU_CALLCONV IsysMidBossTactic::setupBossBuddyWedgeJoin( Room& room, PlatoonLeader& leader,
+                                                             TacticalSquad* squad,
+                                                             const StrikeCluster& strikeCluster,
+                                                             mu::Vec3 squadCenter ) {
     if ( !isBossJoinedBuddySquad( squad ) ) {
         return;
     }
@@ -1146,8 +1176,42 @@ void MU_CALLCONV IsysMidBossTactic::setupBossBuddyWedgeJoin( TacticalSquad* squa
 
     bossBuddyWedgeJoinActive_ = true;
     bossBuddyWedgeDir_ = forward;
-    bossBuddyWedgePreparePos_ = squadCenter + forward * TacticalSquad::WEDGE_PREP_APEX_DISTANCE;
-    bossBuddyWedgeExitPos_ = strikeCluster.cluster.centroid + forward * TacticalSquad::WEDGE_EXIT_DISTANCE;
+    bossBuddyWedgePreparePos_ = findSafeBossFormationPosition(
+        room, leader, squadCenter + forward * TacticalSquad::WEDGE_PREP_APEX_DISTANCE );
+    bossBuddyWedgeExitPos_ = findSafeBossFormationPosition(
+        room, leader, strikeCluster.cluster.centroid + forward * TacticalSquad::WEDGE_EXIT_DISTANCE );
+}
+
+mu::Vec3 MU_CALLCONV IsysMidBossTactic::findSafeBossFormationPosition(
+    Room& room, const PlatoonLeader& leader, mu::Vec3 desired ) const {
+    constexpr float SEARCH_STEP = 1.5f;
+    constexpr int32 SEARCH_RINGS = 4;
+    constexpr int32 SAMPLES_PER_RING = 12;
+    constexpr float TWO_PI = 2.f * 3.14159265f;
+
+    auto groundSnap = [&]( mu::Vec3 p ) {
+        return mu::Vec3( p.x(), room.groundHeightAtWorld( p.x(), p.z() ), p.z() );
+    };
+
+    desired = groundSnap( desired );
+    if ( room.isTacticalFormationPositionOpen( desired, leader ) ) {
+        return desired;
+    }
+
+    float angleOffset = static_cast<float>(leader.getId() % SAMPLES_PER_RING) * (TWO_PI / SAMPLES_PER_RING);
+    for ( int32 ring = 1; ring <= SEARCH_RINGS; ++ring ) {
+        float radius = SEARCH_STEP * static_cast<float>( ring );
+        for ( int32 sample = 0; sample < SAMPLES_PER_RING; ++sample ) {
+            float angle = angleOffset + TWO_PI * static_cast<float>( sample ) / static_cast<float>( SAMPLES_PER_RING );
+            mu::Vec3 candidate = groundSnap( desired + mu::Vec3(
+                std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius ) );
+            if ( room.isTacticalFormationPositionOpen( candidate, leader ) ) {
+                return candidate;
+            }
+        }
+    }
+
+    return groundSnap( leader.pos() );
 }
 
 void IsysMidBossTactic::syncBossBuddyWedgeChargeStart( const PlatoonLeader& leader ) {
@@ -1182,6 +1246,7 @@ void IsysMidBossTactic::updateBossBuddyWedgeJoin( Seconds /*dt*/, PlatoonLeader&
     if ( dist <= arriveDist ) {
         if ( bossBuddyWedgeChargeStarted_ ) {
             bossBuddyWedgeChargeComplete_ = true;
+            restoreBossWedgeMotorBoost( leader );
         }
         if ( bossBuddyWedgeDir_.len2() > 0.01f ) {
             leader.setFacing( bossBuddyWedgeDir_ );
@@ -1191,5 +1256,25 @@ void IsysMidBossTactic::updateBossBuddyWedgeJoin( Seconds /*dt*/, PlatoonLeader&
     }
 
     float speedMult = bossBuddyWedgeChargeStarted_ ? ISIS_BOSS_WEDGE_CHARGE_SPEED_MULT : ISIS_BOSS_WEDGE_JOIN_SPEED_MULT;
+    if ( bossBuddyWedgeChargeStarted_ ) {
+        applyBossWedgeMotorBoost( leader );
+    }
     moveBossToward( leader, targetPos, speedMult );
+}
+
+void IsysMidBossTactic::applyBossWedgeMotorBoost( PlatoonLeader& leader ) {
+    if ( bossWedgeMotorBoostActive_ ) {
+        return;
+    }
+    savedBossWedgeMotorAcceleration_ = leader.body().motor().maxAcceleration;
+    leader.body().setMotorMaxAcceleration( ISIS_WEDGE_MOTOR_ACCELERATION );
+    bossWedgeMotorBoostActive_ = true;
+}
+
+void IsysMidBossTactic::restoreBossWedgeMotorBoost( PlatoonLeader& leader ) {
+    if ( !bossWedgeMotorBoostActive_ ) {
+        return;
+    }
+    leader.body().setMotorMaxAcceleration( savedBossWedgeMotorAcceleration_ );
+    bossWedgeMotorBoostActive_ = false;
 }

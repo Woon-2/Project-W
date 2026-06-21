@@ -115,6 +115,17 @@ Mesh buildPointMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+// Builds a proxy point-cloud mesh (N dummy vertices) exposing the EnergyOrbPipeline
+// input slots (Position/BoneIndices/BoneWeights/UV) + an index buffer [0..N-1] + one
+// SubMesh. Intended for "free orbs" (e.g. the path-guidance wisp): with morphT=1 the
+// shader places each vertex via pointInUnitSphere(SV_VertexID), so only the vertex
+// COUNT matters — start positions/bones are irrelevant. Pair with a single identity
+// bone palette in the DrawEvent.
+Mesh buildOrbProxyMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, u32t pointCount = 128u
+);
+
 struct Skeleton;
 
 // 애니메이션에 쓰이는 한 개의 본을 나타내는 구조체

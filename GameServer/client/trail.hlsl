@@ -34,7 +34,8 @@ cbuffer PerDrawcallData : register(b0) {
 
     float    trailLifetime;
     float    currentSystemTime;
-    float2   pad0;
+    float    flowSpeed;             // Tile-mode UV scroll along the trail; 0 = static (default)
+    uint     alignMode;             // 0 = camera-facing (default), 1 = ground-aligned (world-up)
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -83,12 +84,19 @@ PSInput VSMain(uint vid : SV_VertexID) {
     float  tlen    = length(tangent);
     tangent = (tlen > 1e-5f) ? (tangent / tlen) : float3(1.f, 0.f, 0.f);
 
-    float3 viewDir = cameraPos - posW;
-    float  vlen    = length(viewDir);
-    viewDir = (vlen > 1e-5f) ? (viewDir / vlen) : float3(0.f, 0.f, 1.f);
-
-    float3 sideDir = cross(tangent, viewDir);
-    float  slen    = length(sideDir);
+    // Across-strip direction. Camera-facing (default) billboards the ribbon toward
+    // the eye; ground-aligned expands across world-up so the ribbon lies flat on
+    // terrain (path-on-ground look).
+    float3 sideDir;
+    if (alignMode == 1u) {
+        sideDir = cross(tangent, float3(0.f, 1.f, 0.f));
+    } else {
+        float3 viewDir = cameraPos - posW;
+        float  vlen    = length(viewDir);
+        viewDir = (vlen > 1e-5f) ? (viewDir / vlen) : float3(0.f, 0.f, 1.f);
+        sideDir = cross(tangent, viewDir);
+    }
+    float slen = length(sideDir);
     sideDir = (slen > 1e-5f) ? (sideDir / slen) : float3(0.f, 1.f, 0.f);
 
     // segmentT: 0 at the oldest vertex (tail), 1 at the newest vertex (head).
@@ -108,7 +116,8 @@ PSInput VSMain(uint vid : SV_VertexID) {
     if (textureMode == 0u) {
         v = 1.f - segmentT;
     } else {
-        v = vCur.cumulativeDist / max(tileLength, 1e-3f);
+        // Tile mode: scroll V over time so the texture flows toward the trail head.
+        v = vCur.cumulativeDist / max(tileLength, 1e-3f) - currentSystemTime * flowSpeed;
     }
     ret.uv = float2(u, v);
 

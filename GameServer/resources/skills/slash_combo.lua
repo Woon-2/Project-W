@@ -11,6 +11,7 @@ skill.cooldownMs       = 2400
 skill.totalDurationMs  = 2000
 skill.interruptible    = true
 
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(3, "effects/slash_combo.json")
   
 skill:addEvent(0, "PlayAnimation", {
@@ -32,10 +33,14 @@ skill:addEvent(1250, "PlaySound", { sound = "sword_slash_finish" })
 
 local onHit = OnHit({
     damage          = 35,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.1, 1.0)
 })
+
+-- 피니셔(1250ms 더블 아크, slot 10/11)는 더 큰 혈흔으로 극적인 마무리 연출.
+local onHitFinisher = deepCopy(onHit)
+onHitFinisher.vfxScale = 2.5
 
 skill:addEvent(150, "SpawnHitbox", {
     slot                = 0,
@@ -144,7 +149,7 @@ skill:addEvent(1250, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 3,
     hitGroupCooldownMs  = 300,
-    onHit               = onHit
+    onHit               = onHitFinisher
 })
 
 skill:addEvent(1250, "SpawnHitbox", {
@@ -154,7 +159,7 @@ skill:addEvent(1250, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 3,
     hitGroupCooldownMs  = 300,
-    onHit               = onHit
+    onHit               = onHitFinisher
 })
 
 skill:addEvent(350, "DestroyHitbox", { slot = 0 })

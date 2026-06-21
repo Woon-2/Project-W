@@ -76,18 +76,53 @@ static constexpr float    kBarrierMagicMinDiameter = 8.f;
 static constexpr float    kBarrierMagicMaxDiameter = 24.f;
 static constexpr int      kBarrierMagicRenderOrder = 4;
 static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
-static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
 
 static float barrierMagicDiameter(const MarkerDef& m) {
 	const float wallHeight = std::fabs(m.scale.y());
 	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
 }
 
-static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
-	if (m.name == "WallHobgoblin_0") {
-		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
-	}
-	return mu::Vec3{};
+// 입장 표시 마법진(magic circle)의 지역별 위치/회전 보정 테이블.
+//
+// Wall 마커 하나가 ① 물리 일방향 벽(makeOneWayWall, 실제 벽 슬랩 위)과 ② 입장 표시 마법진
+// (실제 통과 길목 중앙)을 겸한다. 벽 슬랩이 길목보다 넓거나 한쪽으로 치우치면 둘이 어긋나
+// 마법진이 길목에서 벗어나고(위치), 마커 방향에 따라 비뚤게 보일 수도 있다(회전). 그 차이를
+// 마커 이름별 로컬 오프셋 + 추가 회전으로 보정한다.
+//
+// offset    : 마커 로컬 위치 오프셋(circlePos에서 m.orient.rotate 적용). 보통 벽 폭(span) 축으로
+//             밀어 길목 중앙에 맞춘다. y=높이, z/x=수평 슬라이드.
+// rotateDeg : 마커 로컬 축 기준 추가 회전(도). x/y/z = 마커 로컬 X/Y/Z축 회전. planeFix와
+//             markerOrient 사이에 적용되어 벽 방향을 기준으로 돈다. 원하는 각이 나올 때까지
+//             축을 바꿔가며 조절. 둘 다 0이면 보정 없음(현재 동작 그대로).
+struct BarrierMagicAdjust {
+	mu::Vec3 offset{};      // 마커 로컬 위치 오프셋
+	mu::Vec3 rotateDeg{};   // 마커 로컬 추가 회전(도, x/y/z축)
+};
+
+static const std::unordered_map<std::string, BarrierMagicAdjust>& barrierMagicAdjustTable() {
+	// chunks_index.bin의 모든 Wall 마커. { offset(x,y,z), rotateDeg(x,y,z) }. 표에 없으면 보정 없음.
+	static const std::unordered_map<std::string, BarrierMagicAdjust> kTable{
+		// 보스 아레나(Arena_Boss)
+		{ "WallBoss",         { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 그란바움 아레나(Arena_Grandbaum)
+		{ "WallGrandbaum_0",  { mu::Vec3{ 0.f,   0.f, -10.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_1",  { mu::Vec3{ 0.f,   0.f,  0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_2",  { mu::Vec3{ 0.f,   0.f,  -5.0f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 홉고블린 아레나(Arena_Hobgoblin)
+		{ "WallHobgoblin_0",  { mu::Vec3{ 0.f,   0.f,  12.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },   // 길목 중앙으로 +12(기존 값)
+		{ "WallHobgoblin_1",  { mu::Vec3{ 0.f,  -5.f,   7.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 이시스 아레나(Arena_Isys)
+		{ "WallIsys_0",       { mu::Vec3{ 0.f, -10.f, -20.f }, mu::Vec3{ 0.f, 45.f, 0.f } } },
+		{ "WallIsys_1",       { mu::Vec3{ 0.f,  -5.f, -15.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallIsys_2",       { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+	};
+	return kTable;
+}
+
+static BarrierMagicAdjust barrierMagicAdjust(const MarkerDef& m) {
+	const auto& table = barrierMagicAdjustTable();
+	if (auto it = table.find(m.name); it != table.end()) return it->second;
+	return {};
 }
 
 // "Arena_X" zone 태그 -> "WallX" 마커 prefix. 아레나 후방 Wall 일방향 벽(arenaWalls_)과 장식용
@@ -187,6 +222,18 @@ void Game::setupStageVisual() {
 	clientZoneSystem_.build(chunkManager_.zones());
 	bindZoneHandlers();
 	rebuildBarrierMagicCircleQuads();
+
+	// Path guidance (cosmetic, client-only): build polylines from "PathPt" markers
+	// and create the shared free-orb proxy mesh used to render the guiding wisp.
+	pathGuide_.build(chunkManager_.markers());
+	if (orbProxyMesh_.subMeshes.empty()) {
+		gfx_.recordTerrainResourceLoad(
+			[this](ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, DescriptorPool&, Fence& fence) {
+				orbProxyMesh_ = buildOrbProxyMesh(device, cmdList, fence, 128u);
+			},
+			/*wait=*/ true
+		);
+	}
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
@@ -757,6 +804,28 @@ void Game::setParticle()
 		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
 		return cfg;
 	};
+
+	// ── Blood hit effect (칼/창/완드 공통 피격 혈흔, vfxId 0) ──────────────────
+	// Alpha Blend(MatUnlit) + Plane 곡면 메시 + 3x3 스프라이트 시트 플립북.
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/blood_hit.json",
+			"Particle System (4)"
+		);
+		cfg.renderer.pMesh = assetManager_.meshBloodPlane();
+		cfg.renderer.pSubMesh = assetManager_.meshBloodPlane()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshBloodPlane()->subMeshes[0];
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.bloodTex(),
+			.blend   = ps::BlendMode::Alpha,
+		};
+		// 피격 위치에 고정되도록 World 시뮬레이션으로 강제(Unity 원본은 Local).
+		// 공유 인스턴스를 연속 타격에 재사용해도 기존 혈흔이 끌려오지 않게 한다.
+		cfg.main.simulationSpace = ps::MainModule::SimulationSpace::World;
+		cfg.renderer.renderOrder = 2;
+		bloodEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
 
 	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
 	{
@@ -2035,6 +2104,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
 		// same skill .lua PlayVFX events resolve identically in online mode.
 		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
 		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
@@ -2911,11 +2981,16 @@ void Game::rebuildBarrierMagicCircleQuads() {
 			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
 
 			const float diameter = barrierMagicDiameter(m);
-			const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+			const BarrierMagicAdjust adj = barrierMagicAdjust(m);
+			const mu::Vec3 circlePos = m.pos + m.orient.rotate(adj.offset);
 			BarrierMagicCircleQuad quad{};
 			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
 			           * mu::translate(circlePos);
-			quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+			// 추가 회전은 planeFix와 markerOrient 사이에 끼워 마커 로컬축 기준으로 적용(rotateDeg=0이면 항등).
+			const mu::Mat4x4 extraRot = mu::rotateXH(mu::Degree(adj.rotateDeg.x()))
+			                          * mu::rotateYH(mu::Degree(adj.rotateDeg.y()))
+			                          * mu::rotateZH(mu::Degree(adj.rotateDeg.z()));
+			quad.rotation = kBarrierMagicQuadPlaneFix * extraRot * mu::Mat4x4(m.orient);
 			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
 			quad.sortPos = circlePos;
 			barrierMagicCircleQuads_.push_back(quad);
@@ -3126,10 +3201,12 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
 void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 	for (uint16 id : npcIds) {
-		auto it = idGoblinMap_.find(id);
-		if (it == idGoblinMap_.end() || !it->second) continue;
+		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
+		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
+		auto it = idMonsterMap_.find(id);
+		if (it == idMonsterMap_.end() || !it->second) continue;
 
-		Object* obj = it->second.get();
+		Object* obj = it->second;
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);
@@ -3457,25 +3534,9 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 	}
 	applyHit(targetId, newHp, attackerId, hitAnimIndex);
 
-	// Spawn impact VFX at the target's position.
-	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
-	if (asset && !asset->hitboxDefs.empty()) {
-		const u8t vfxId = asset->hitboxDefs[0].onHit.hitVfxId;
-		if (vfxId != 0xFF && vfxId < static_cast<u8t>(skillVfxById_.size())
-		    && skillVfxById_[vfxId])
-		{
-			Object* target = nullptr;
-			if (player_ && static_cast<uint16>(player_->getId()) == targetId)
-				target = player_.get();
-			else if (auto it = idPlayerMap_.find(targetId); it != idPlayerMap_.end())
-				target = it->second.get();
-			else if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end())
-				target = it->second;
-
-			if (target)
-				skillVfxById_[vfxId]->play(target->pos());
-		}
-	}
+	// 피격 VFX(blood 등)는 클라 로컬 hit 검출(SkillSystem::processHitResults)이
+	// narrow phase 충돌점에 직접 재생한다. 여기서 target->pos()(발밑)에 재생하면
+	// 위치가 부정확하고 예측 경로와 중복되므로 재생하지 않는다.
 }
 
 void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
@@ -3819,6 +3880,15 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// Charge credits are matched to corpses in updateCorpses(); see below.
 	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
 
+	// DEBUG fallback: if no "PathPt" markers were authored, synthesize a winding sample
+	// path at the local player so the effect is visible online right away. Auto-disables
+	// as soon as a real path exists (build() from markers makes hasPaths() true).
+	if (!pathGuide_.hasPaths())
+		pathGuide_.buildSamplePath(player_->pos(), player_->forward());
+
+	// Path guidance: advance the ribbon window + guiding wisp (re-conforms to ground).
+	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
+
 	camera_.update(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
@@ -4052,6 +4122,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_) {
 		flameParticleSystem_.update(deltaTime);
 		smokeParticleSystem_.update(deltaTime);
+		bloodEffect_.update(deltaTime);
 		swordSlash1Effect_.update(deltaTime);
 		swordSlash7Effect_.update(deltaTime);
 		swordSlashComboEffect_.update(deltaTime);
@@ -4194,6 +4265,7 @@ void Game::renderInGame() {
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
+	bloodEffect_.render(gfx_);
 	swordSlash1Effect_.render(gfx_);
 	swordSlash7Effect_.render(gfx_);
 	swordSlashComboEffect_.render(gfx_);
@@ -4218,6 +4290,9 @@ void Game::renderInGame() {
 	tornadoHitEffect_.render(gfx_);
 	dustParticleSystem_.render(gfx_);
 	orbSystem_.submitDrawEvents(gfx_);
+
+	// Path guidance: HDR ribbon (pre-bloom trail) + guiding wisp (free orb).
+	pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_);
 	debugBVView_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{
@@ -5335,15 +5410,18 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		// (구버전은 전체 3D 속도를 kPlayerMaxSpeed로 클램프해, 이동 중 낙하 시
 		//  물리가 적분한 y속도까지 매 프레임 재스케일 → 물리 damping과 이중으로 감속됐다.
 		//  standalone Game::processInput과 동일하게 y를 보존한다.)
+		// [임시 디버그] F8 부스트 시 가속률과 속도 상한을 함께 배율로 키운다(평상시 배율=1).
+		const float dbgMaxSpeed = kPlayerMaxSpeed * debugSpeedMultiplier_;
+
 		const auto fullVel = player_->velocity();
-		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * debugSpeedMultiplier_ * Seconds(deltaTime).count());
 		float newX = fullVel.x() + accel.x();
 		float newZ = fullVel.z() + accel.z();
 
 		// x/z 속도만 클램프 (y는 건드리지 않음).
 		const float hSpd2 = newX * newX + newZ * newZ;
-		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+		if (hSpd2 > dbgMaxSpeed * dbgMaxSpeed) {
+			const float scale = dbgMaxSpeed / std::sqrt(hSpd2);
 			newX *= scale;
 			newZ *= scale;
 		}
@@ -5374,6 +5452,12 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Grandbaum" );
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
 		debugTeleportToArena( "Arena_Isys" );
+
+	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
+	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
+		debugSpeedMultiplier_ = (debugSpeedMultiplier_ > 1.f) ? 1.f : 5.f;
+		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
+	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project-W Dialogue Preview</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="editor">
+    <header>
+      <p class="eyebrow">PROJECT-W UI AUTHORING</p>
+      <h1>대화/독백 창 미리보기</h1>
+      <p class="description">게임과 같은 1024×768 기준 수치로 조정합니다.</p>
+    </header>
+
+    <label>이벤트
+      <select id="dialogueSelect"></select>
+    </label>
+
+    <div class="grid four">
+      <label>X <input id="x" type="number" step="1"></label>
+      <label>Y <input id="y" type="number" step="1"></label>
+      <label>폭 <input id="width" type="number" min="1" step="1"></label>
+      <label>높이 <input id="height" type="number" min="1" step="1"></label>
+    </div>
+
+    <div class="grid two">
+      <label>배경색 <input id="backgroundColor" type="color"></label>
+      <label>투명도 <input id="backgroundAlpha" type="range" min="0" max="1" step="0.01"></label>
+      <label>글자색 <input id="textColor" type="color"></label>
+      <label>글자 투명도 <input id="textAlpha" type="range" min="0" max="1" step="0.01"></label>
+    </div>
+
+    <div class="grid two">
+      <label>안쪽 여백 <input id="padding" type="number" min="0" step="1"></label>
+      <label>페이드(초) <input id="fadeOutSeconds" type="number" min="0.01" step="0.05"></label>
+      <label>폰트 <input id="fontFamily" type="text"></label>
+      <label>폰트 크기 <input id="fontSize" type="number" min="1" step="1"></label>
+    </div>
+
+    <label>페이지 텍스트
+      <textarea id="pages" rows="9" spellcheck="false"></textarea>
+      <small>페이지 사이는 단독 줄 <code>---</code>로 구분합니다.</small>
+    </label>
+
+    <div class="actions">
+      <button id="restartButton" type="button">처음부터 재생</button>
+      <button id="downloadButton" class="primary" type="button">JSON 저장</button>
+      <label class="file-button">JSON 불러오기<input id="fileInput" type="file" accept=".json,application/json"></label>
+    </div>
+
+    <p id="status" class="status" role="status"></p>
+  </aside>
+
+  <main class="preview">
+    <div class="preview-toolbar">
+      <span>게임 기준 화면</span>
+      <strong id="pageIndicator">1 / 1</strong>
+    </div>
+    <div id="stageFrame" class="stage-frame">
+      <div id="stage" class="stage" tabindex="0" aria-label="대화창 미리보기">
+        <div class="scene-grid"></div>
+        <div id="dialogueWindow" class="dialogue-window">
+          <div id="dialogueText" class="dialogue-text"></div>
+        </div>
+        <div class="hint">Enter 또는 마우스 왼쪽 클릭</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

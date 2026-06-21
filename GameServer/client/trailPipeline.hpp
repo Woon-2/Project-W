@@ -48,6 +48,8 @@ struct DrawEvent {
     u32t          inheritParticleColor = 1u;     // reserved
     float         trailLifetime      = 1.f;
     float         currentSystemTime  = 0.f;
+    float         flowSpeed          = 0.f;      // Tile-mode UV scroll along the trail; 0 = static
+    u32t          alignMode          = 0u;       // 0 = camera-facing (default), 1 = ground-aligned
 
     // Material / sort
     const Texture* pMainTex          = nullptr;

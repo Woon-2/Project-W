@@ -163,6 +163,10 @@ public:
 	// setModel/setScale/setOrient applied. Used by Stronghold to place/revive monsters.
 	mu::Vec3 MU_CALLCONV randomSpawnInDiscAvoidingProps(
 		mu::Vec3 center, float radius, const Object& footprintSource) const;
+	// Ground-snapped candidate가 scatter/arena wall/Static 구조물과 겹치지 않는지 검사.
+	// Isys 전술 대형 슬롯 보정용이며 동적 NPC/플레이어는 검사하지 않는다.
+	bool MU_CALLCONV isTacticalFormationPositionOpen(
+		mu::Vec3 candidate, const Object& footprintSource) const;
 
 	// Bind terrain height/normal callbacks onto a skill dispatch context so
 	// AttachType::Ground hitboxes snap to the same surface the client uses.
@@ -193,20 +197,6 @@ public:
 	// 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환/해제(콜리전 마스크 토글).
 	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
 	void clearShieldWallBlockers();
-
-	// Grandbaum 뱀 증원 웨이브: 전투 중 전술 NPC/분대 동적 소환·디스폰.
-	// tacticalNpcs_는 unique_ptr 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
-	// (분대/NPC 순회 이전) 즉시 호출해도 안전하다.
-	TacticalNpc* MU_CALLCONV spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId);
-	TacticalSquad* addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad);
-	void removeTacticalNpcById(uint32_t id);
-	void removeTacticalSquadById(int32 squadId);
-	void broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds);
-	// 죽은 전술 NPC 부활: 상태 복구(reviveAt) + 사망 시 제거됐던 물리 바디 재등록 + 클라 통지(S_NpcRespawn).
-	void MU_CALLCONV reviveTacticalNpc(uint32_t id, mu::Vec3 pos);
-	// 전술 NPC를 서버 상태상 사망(hp 0 + 물리 제거, 객체는 시체로 유지)으로 전환해 '퇴장'시킨다.
-	// 클라 통지는 호출부에서 묶어 S_NpcHide로 보낸다(시체 없이 숨김). 복귀는 reviveTacticalNpc.
-	void despawnTacticalNpcHidden(uint32_t id);
 
 private:
 	int32 id_;

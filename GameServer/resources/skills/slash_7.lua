@@ -13,6 +13,7 @@ skill.cooldownMs       = 700
 skill.totalDurationMs  = 350
 skill.interruptible    = true
 
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(4, "effects/slash_7.json")
 
 skill:addEvent(0, "PlayAnimation", {
@@ -30,7 +31,7 @@ skill:addEvent(100, "PlaySound", { sound = "sword_slash_7" })
 
 local onHitBase = OnHit({
     damage          = 2,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)
 })

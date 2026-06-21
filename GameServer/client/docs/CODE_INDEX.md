@@ -547,6 +547,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
 | `energyOrbPipeline.hpp` / `.cpp` + `energyOrb.hlsl` | **몬스터 사망 에너지 오브 렌더 파이프라인**. MeshParticle 복제 + GS quad. 죽은 서브메시 정점을 사망 포즈로 스키닝(boneData t2) → 해시 구체로 모핑(`morphT`) → 카메라향 quad point-sprite, **SceneColorHDR에 가산(bloom 이전)**. PS: 서브메시 albedo→HDR 색 `lerp(_, _, morphT)` × radial falloff. `DrawEvent{world,pMesh,pSubMesh,pAlbedo,boneXforms,sphereCenter,sphereRadius,colorHDR,morphT,pointSize,vertexCount}` |
 | `energyOrbSystem.hpp` / `.cpp` | **에너지 오브 라이프사이클**(모드 비종속). `Orb` 상태머신 Forming→Tracking→Absorbing→Dead. `spawnFromMonster(model,finalXforms,objWorld,totalCharge,slot,corpseId)`=서브메시당 1오브(첫 정점 LBS 스키닝을 구체 중심으로), 플레이어 추적+가속, 근접 시 `onAbsorb`. **응축 스케일**(`renderScale`: 접근 시 월드크기 축소로 원근 팽창/bloom 블롭 억제). `hasActiveOrbs(corpseId)`/`update(dt,playerPos)`/`submitDrawEvents`. 노브: kForming 0.85s, kMaxSpeed 13, kSphereRadius 0.32, kPointSize 0.04, HDR 강도 2.0~3.8, kCondenseMinScale 0.5 |
+| `pathGuideSystem.hpp` / `.cpp` | **경로 안내 연출**(클라 전용, 게임 스레드 단독). `build(markers)`=`PathPt` 마커(`name="<pathId>_<index>"`) 그룹화·정렬·등호장 리샘플. `update(dt,playerPos,terrain)`=가장 가까운 path 선택→플레이어 폴리라인 투영→**가시 윈도우만 매 프레임 `heightAtWorld` Y conform**→위습 전진(ease)+bob. `submitDrawEvents(gfx,ribbonTex,orbProxy)`=리본을 ≤31정점+1오버랩 세그먼트로 `addHDRTrailDrawEvent`(흐름+지면정렬), 위습 1개 `addDrawEvent(EnergyOrb)`(free-orb morphT=1). 노브=`Config`. 상세: `docs/pathGuidance.md` |
+| `mesh.cpp` `buildOrbProxyMesh(device,cmdList,fence,pointCount=128)` | free-orb(위습)용 N-포인트 프록시 메시. EnergyOrbPipeline 4-VB 슬롯(Position/BoneIndices/BoneWeights/UV, 모두 더미)+인덱스[0..N-1]+1 SubMesh. `morphT=1`에서 정점 개수만 의미(시작 pos/본 무관). `onlineGame`이 `recordTerrainResourceLoad`로 1회 생성→`orbProxyMesh_` |
+| `onlineGame.cpp` 경로 안내 훅 | `pathGuide_`(멤버)+`orbProxyMesh_`. build: `setupStageVisual`의 zone 빌드 직후 `pathGuide_.build(chunkManager_.markers())`+프록시 메시 생성. update: `orbSystem_.update` 직후 `pathGuide_.update(dt,player_->pos(),chunkManager_)`. submit: `orbSystem_.submitDrawEvents` 직후 `pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_)` |
 | `object.cpp/.hpp` `Object::addBodyRipple`/`BodyRipple`/`bodyRipples_` | 흡수 물결 앵커(M5). 오브 흡수 시 `onlineGame` onAbsorb가 호출 → 본체 위치 기준 오프셋으로 저장(매 프레임 live pos에 재앵커→몸 추적), `update`에서 노화(`kBodyRippleLife=1.0s`, HLSL `RIPPLE_LIFE`와 일치), deferred-skinned DrawEvent의 `ripplePosAge/rippleColorIntensity/rippleCount`로 주입 |
 | `onlineGame.cpp` 시체/풀 (`migrateToCorpse`/`updateCorpses`/`reinitFromPool`/`returnMonsterToPool`) | 사망 연출 게임 레벨 라이프사이클(client-authored Corpse). Live→Corpse 이관(맵/컨테이너/`barrierObjects_` 제거, body `snapToCurrent`, `kDetachedCorpseId` 고정 id, `corpseId=renderObjectId`), 래그돌 2.5s→오브 전환, 흡수 완료 시 per-kind 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`/`bomberPool_`/`birdyPool_`/`slimePool_`/`treantPool_`) 반환·재사용. **신규 몬스터(Bomber/Birdy/Slime/Treant)**: goblins_/snakes_/mushrooms_처럼 타입별 벡터(`bombers_`/`birdys_`/`slimes_`/`treants_`)+타입별 HP바 맵으로 처리 — `justDied`/render/cull/HiZ/HP바 모두 타입별 개별 루프, migrate/return/reinit switch도 타입별 case. 공용 셋업은 `configureNetMonster`(HP바 맵 인자), 각 createX가 타입 벡터에 push. Grandbaum→treants_(Treant kind), Isys→birdys_(Birdy kind). 오브 연출은 kind-무관 자동. **renderObjectId 객체당 1회 발급·평생 유지**(범람 방지, `setMaxRenderObjectId(10000)`). **중복 스폰 ghost 가드**: `create{Goblin,Hobgoblin,Snake,Mushroom,Bomber,Birdy,Slime,Treant}`이 `idMonsterMap_`에 이미 있으면 스킵(S_Enter/S_NpcSpawnBatch 중복 대응). 상세: `gameArchitecture.md` "에너지 오브 사망 연출" |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
@@ -659,7 +662,9 @@ Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된
 |------|------|
 | `trailPipeline.hpp` | DrawEvent (`std::vector<TrailVertexCPU>` + per-trail constants), Resources (system-wide perInstanceData pool + per-drawcall PDD), Dispatcher (alpha/additive 2 PSO) |
 | `trailPipeline.cpp` | updateGPUDataSingleThreaded: 모든 trail vertex를 한 StructuredBuffer에 패킹 + trailStartOffsets 기록. drawSingleThreaded: VB/IB 없이 `DrawInstanced((N-1)*6, 1, 0, 0)` |
-| `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime) |
+| `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime). **하위호환 확장**: `PerDrawcallData.flowSpeed`(Tile V 시간 스크롤 `−currentSystemTime*flowSpeed`) + `alignMode`(0=카메라-페이싱[기존], 1=지면정렬 `cross(tangent, worldUp)`). 둘 다 기본 0 → 기존 파티클 트레일 불변 (구 `pad0` 재사용) |
+
+**TrailPipeline (HDR / 프리블룸 채널):** 경로 안내 리본 발광용. 기존 트레일은 톤매핑 resolve 이후 LDR 백버퍼에 그려져 블룸이 안 먹으므로, 별도 채널을 **에너지 오브 직후(SceneColorHDR, 블룸 전)** 에 draw. `gfx.hpp/cpp`: `drawEventsTrailPipelineHDR_` + `resourcesTrailPipelineHDR_`(별도 리소스셋 — StructuredBuffer 클로버 방지, per-backbuffer) + `addHDRTrailDrawEvent`. PSO: `createTrailShaderHDR`(`shader.cpp`, RTV=`R16G16B16A16_FLOAT`, additive). 카메라/프레임 데이터는 기존 `cameraDataTrailPipeline_` 재사용.
 
 **WindRingPipeline:**
 
@@ -726,7 +731,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 - `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
   - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
   - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
-- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate). Billboard와 동일하게 `TextureSheetAnimationModule` 프레임 UV(`uvOffset/uvScale`)를 적용 — `PerInstanceData.uvScaleOffset`로 per-particle 전달, `meshParticle.hlsl`에서 `uv = uv*scale+offset`. 기본 (1,1,0,0)=전체 텍스처. bloodEffect(3x3 시트)가 이 경로 사용
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 - `Mesh` + `MatWindRing` — `WindRingPipeline::DrawEvent` 제출 (NORMAL 입력 + Fresnel edge fade)
 - `Mesh` + `MatPiercing` — `PiercingMeshPipeline::DrawEvent` 제출 (Custom1.xy→uv2.z/.w dissolve, 3중 노이즈 + distortion)
@@ -1116,7 +1121,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **이펙트↔스킬 1:1 기반:** 기존 이펙트 드롭다운 18종 ParticleEffect와 1:1로 짝지은 기본 스킬 lua를
 `resources/skills/`에 추가(`SkillCompiler::compileAll`이 디렉터리 스캔→자동 등록). VFX는 경로가
 아니라 lua `PlayVFX{vfxId}`→`StandAlone::Game::skillVfxById_[vfxId]`(`ParticleEffect*` 배열) 인덱스
-바인딩(`standalone/game.cpp`, 0=hit/blood 예약 nullptr, 1~18=각 Effect). 스킬명은
+바인딩(`standalone/game.cpp` + `online/onlineGame.cpp`, 0=`bloodEffect_`(칼/창/완드 피격 혈흔, `blood_hit.json`+Plane 곡면 메시+3x3 시트), 1~18=각 Effect). 칼=sword_slash·창=piercing·완드=spikes lua의 `onHit{vfxId=0}`이 피격 시 재생(활/arrow 제외). 스킬명은
 `kCharacterSkillMap` Player에 등록. vfxId↔Effect↔skill/lua 매핑표는 `docs/skillEditor.md`.
 
 | 항목 | 위치 | 설명 |
@@ -1223,3 +1228,16 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 - `docs/physicsArchitecture.md` — PhysicSystem::step 단계, BVH 변환 체인
 - `docs/gameArchitecture.md` — 게임 루프, 이벤트 시스템, CombatSystem 구조
 - `CLAUDE.md` — 파일 인코딩, 빌드 방법, 아키텍처 문서 링크
+
+---
+
+## Dialogue / Monologue UI
+
+| Item | Location | Description |
+|------|----------|-------------|
+| `UI::DialogueSystem` | `ui/dialogue/DialogueSystem.hpp/.cpp` | Loads event-to-window definitions, advances pages, and fades completed windows |
+| `DialogueSystem::show` | `ui/dialogue/DialogueSystem.cpp` | Opens a dialogue by JSON `eventId` |
+| Dialogue JSON | `../resources/UI/dialogues/dialogues.json` | Shared 1024x768 authoring data used by HTML preview and game |
+| HTML authoring preview | `docs/dialogue_preview/index.html` | Live position, size, color, opacity, font, pages, and fade editor |
+| Preview launcher | `docs/dialogue_preview/preview.ps1` | Serves the repository locally and opens the preview |
+| Standalone integration | `standalone/game.cpp` | Input priority, per-frame fade update, and F8 sample trigger |

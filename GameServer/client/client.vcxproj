@@ -179,6 +179,7 @@
     <ClCompile Include="meshParticlePipeline.cpp" />
     <ClCompile Include="energyOrbPipeline.cpp" />
     <ClCompile Include="energyOrbSystem.cpp" />
+    <ClCompile Include="pathGuideSystem.cpp" />
     <ClCompile Include="windRingPipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -281,6 +282,7 @@
     <ClCompile Include="uiPipeline.cpp" />
     <ClCompile Include="ui\UIElement.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
+    <ClCompile Include="ui\dialogue\DialogueSystem.cpp" />
     <ClCompile Include="ui\widgets\Panel.cpp" />
     <ClCompile Include="ui\widgets\Image.cpp" />
     <ClCompile Include="ui\widgets\Label.cpp" />
@@ -359,6 +361,7 @@
     <ClInclude Include="meshParticlePipeline.hpp" />
     <ClInclude Include="energyOrbPipeline.hpp" />
     <ClInclude Include="energyOrbSystem.hpp" />
+    <ClInclude Include="pathGuideSystem.hpp" />
     <ClInclude Include="physicsTestObject.hpp" />
     <ClInclude Include="windRingPipeline.hpp" />
     <ClInclude Include="smokeBlendCGPipeline.hpp" />
@@ -423,6 +426,7 @@
     <ClInclude Include="ui\UITypes.hpp" />
     <ClInclude Include="ui\UIElement.hpp" />
     <ClInclude Include="ui\UIManager.hpp" />
+    <ClInclude Include="ui\dialogue\DialogueSystem.hpp" />
     <ClInclude Include="ui\widgets\Panel.hpp" />
     <ClInclude Include="ui\widgets\Image.hpp" />
     <ClInclude Include="ui\widgets\Label.hpp" />

@@ -52,6 +52,9 @@ ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12R
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
+// Additive trail PSO targeting SceneColorHDR (R16G16B16A16_FLOAT) — rendered BEFORE
+// bloom so path-guidance ribbons glow. Same VS/PS/depth as the additive variant.
+ComPtr<ID3D12PipelineState> createTrailShaderHDR(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -369,11 +372,12 @@ struct PerFrameData {
 // MeshParticleShader
 namespace MeshParticleShader {
 
-// 80B, 16B-aligned
+// 96B, 16B-aligned
 // world: row-major — CPU에서 mu::transpose().getXmf() 후 전달
 struct PerInstanceData {
-	XMFLOAT4X4 world;  // 64B
-	XMFLOAT4   tint;   // 16B
+	XMFLOAT4X4 world;         // 64B
+	XMFLOAT4   tint;          // 16B
+	XMFLOAT4   uvScaleOffset; // 16B — xy=스프라이트 시트 프레임 스케일, zw=프레임 오프셋
 };
 
 // 32B
@@ -1244,7 +1248,8 @@ struct PerDrawcallData {           // 144B
 
     float         trailLifetime;       // 4B
     float         currentSystemTime;   // 4B
-    XMFLOAT2      pad0;                // 8B
+    float         flowSpeed;           // 4B   Tile-mode UV scroll; 0 = static (default)
+    u32t          alignMode;           // 4B   0 = camera-facing, 1 = ground-aligned
 };
 
 // b1 — per-frame.

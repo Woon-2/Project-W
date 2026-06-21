@@ -254,6 +254,9 @@ public:
 	void addFrameData( const TwoSidesPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
+	// Submits a trail drawn into SceneColorHDR BEFORE bloom (glowing path-guidance
+	// ribbon). Shares TrailPipeline's camera/frame data with the regular trail pass.
+	void addHDRTrailDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
 	// 카메라 데이터를 입력한다.
 	void addCameraData( const TrailPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
@@ -429,6 +432,8 @@ public:
 	const Texture* solidColorTex() const { return &solidColorImage_.texture; }
 	// Creates a new Tahoma FontHandle with the specified point size.
 	FontHandle createFont(float fontSize);
+	// Creates a font using a system font family.
+	FontHandle createFont(const WCHAR* fontFamilyName, float fontSize);
 	// Measures text extents without rendering to a bitmap.
 	void measureText(FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH);
 
@@ -587,6 +592,10 @@ private:
 	TrailPipeline::Resources                 resourcesTrailPipeline_{};
 	TrailPipeline::CameraData                cameraDataTrailPipeline_{};
 	TrailPipeline::FrameData                 frameDataTrailPipeline_{};
+	// Trail Pipeline (HDR / pre-bloom) — independent resources so the two trail
+	// dispatchers do not clobber the same StructuredBuffer in a frame.
+	std::vector<TrailPipeline::DrawEvent>    drawEventsTrailPipelineHDR_{};
+	TrailPipeline::Resources                 resourcesTrailPipelineHDR_{};
 	// UI Pipeline
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};
