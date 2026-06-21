@@ -1262,6 +1262,9 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
 		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		const int32 newHp = std::max(prevHp - dmg, 0);
+		std::cout << "[DIAG applydmg] attacker=" << hit->attackerId << " target=" << hit->targetId
+		          << " hitDmg=" << hit->damage << " mult=" << tgt->damageTakenMultiplier()
+		          << " prevHp=" << prevHp << " newHp=" << newHp << "\n";
 		tgt->setHp(newHp);
 		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
