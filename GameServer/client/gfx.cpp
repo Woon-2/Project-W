@@ -313,6 +313,7 @@ void GFX::init() {
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShader",          createTrailShader(         device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderAdditive",  createTrailShaderAdditive( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("TrailShaderHDR",       createTrailShaderHDR(      device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -369,6 +370,7 @@ void GFX::init() {
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
 	drawEventsTrailPipeline_.reserve(TrailPipeline::kMaxDrawEvents);
+	drawEventsTrailPipelineHDR_.reserve(128u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
 	drawEventsTerrainDeferredPipeline_.reserve(4u);
@@ -661,6 +663,20 @@ void GFX::createSwapChain() {
 	);
 	resourcesTrailPipeline_.perFrameData.init(
 		device_.Get(), sizeof( TrailShader::PerFrameData ), backBuffers_.size(), "Trail_PerFrameData"
+	);
+	// Trail Pipeline (HDR / pre-bloom) ----
+	// Smaller pool: only path-guidance ribbons use this channel (a few windowed
+	// segments per frame). The dispatcher caps draw events at perDrawcallData.size().
+	constexpr u32t kHdrTrailMaxDrawcalls = 128u;
+	constexpr u32t kHdrTrailMaxVertices  = kHdrTrailMaxDrawcalls * static_cast<u32t>( TrailPipeline::kMaxVerticesPerTrail );
+	resourcesTrailPipelineHDR_.perInstanceData.init(
+		device_.Get(), sizeof( TrailShader::PerInstanceData ) * kHdrTrailMaxVertices, backBuffers_.size(), "TrailHDR_PerInstanceData"
+	);
+	resourcesTrailPipelineHDR_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( TrailShader::PerDrawcallData ), kHdrTrailMaxDrawcalls, backBuffers_.size(), "TrailHDR_PerDrawcallData"
+	);
+	resourcesTrailPipelineHDR_.perFrameData.init(
+		device_.Get(), sizeof( TrailShader::PerFrameData ), backBuffers_.size(), "TrailHDR_PerFrameData"
 	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
@@ -1144,6 +1160,10 @@ void GFX::addFrameData( const TwoSidesPipeline::FrameData& frameData ) {
 
 void GFX::addDrawEvent( TrailPipeline::DrawEvent&& drawEvent ) {
 	drawEventsTrailPipeline_.push_back( std::move( drawEvent ) );
+}
+
+void GFX::addHDRTrailDrawEvent( TrailPipeline::DrawEvent&& drawEvent ) {
+	drawEventsTrailPipelineHDR_.push_back( std::move( drawEvent ) );
 }
 
 void GFX::addCameraData( const TrailPipeline::CameraData& cameraData ) {
@@ -2029,6 +2049,24 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Path-guidance ribbons: additive trail into SceneColorHDR (before bloom, so it
+	// glows). Independent resources from the post-resolve trail pass. Always additive,
+	// so the HDR PSO is bound for both PSO slots.
+	auto trailHDRDispatcher = TrailPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ),
+		shaders_.at( "TrailShaderHDR" ),
+		shaders_.at( "TrailShaderHDR" ),
+		cmdQ_, viewport, clRect,
+		energyOrbRtv, depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesTrailPipelineHDR_, threadPool_,
+		&cmdListPool_, std::move( drawEventsTrailPipelineHDR_ ),
+		cameraDataTrailPipeline_, frameDataTrailPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto windRingDispatcher = WindRingPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -2589,6 +2627,9 @@ void GFX::render() {
 		if (!SharedResources::SceneColor::sceneColorData.empty() && gBufferDebugMode_ == 0u) {
 			energyOrbDispatcher.updateGPUDataSingleThreaded();
 			energyOrbDispatcher.drawSingleThreaded();
+			// Path-guidance ribbons glow: additive HDR trail into SceneColorHDR, before bloom.
+			trailHDRDispatcher.updateGPUDataSingleThreaded();
+			trailHDRDispatcher.drawSingleThreaded();
 		}
 
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).
@@ -2977,6 +3018,14 @@ bool GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHei
 FontHandle GFX::createFont( float fontSize )
 {
 	return font_.CreateFontObject( L"Tahoma", fontSize );
+}
+
+FontHandle GFX::createFont( const WCHAR* fontFamilyName, float fontSize )
+{
+	return font_.CreateFontObject(
+		(fontFamilyName && fontFamilyName[0] != L'\0') ? fontFamilyName : L"Tahoma",
+		fontSize
+	);
 }
 
 void GFX::measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH )

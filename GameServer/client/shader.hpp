@@ -51,6 +51,9 @@ ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12R
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
+// Additive trail PSO targeting SceneColorHDR (R16G16B16A16_FLOAT) — rendered BEFORE
+// bloom so path-guidance ribbons glow. Same VS/PS/depth as the additive variant.
+ComPtr<ID3D12PipelineState> createTrailShaderHDR(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -1208,7 +1211,8 @@ struct PerDrawcallData {           // 144B
 
     float         trailLifetime;       // 4B
     float         currentSystemTime;   // 4B
-    XMFLOAT2      pad0;                // 8B
+    float         flowSpeed;           // 4B   Tile-mode UV scroll; 0 = static (default)
+    u32t          alignMode;           // 4B   0 = camera-facing, 1 = ground-aligned
 };
 
 // b1 — per-frame.

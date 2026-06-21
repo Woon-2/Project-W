@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 1024,
+    "height": 768
+  },
+  "dialogues": [
+    {
+      "eventId": "sample_intro",
+      "rect": {
+        "x": 128,
+        "y": 504,
+        "width": 768,
+        "height": 176
+      },
+      "background": [0.03, 0.05, 0.08, 0.82],
+      "textColor": [0.96, 0.98, 1.0, 1.0],
+      "padding": 24,
+      "fontFamily": "Malgun Gothic",
+      "fontSize": 24,
+      "fadeOutSeconds": 0.45,
+      "pages": [
+        "숲은 너무 조용했다. 바람조차 무언가를 기다리는 듯했다.",
+        "멀리서 금속이 부딪히는 소리가 들렸다.\n이제 돌아갈 수는 없다.",
+        "Enter 키나 마우스 왼쪽 버튼으로 마지막 페이지를 닫습니다."
+      ]
+    },
+    {
+      "eventId": "sample_whisper",
+      "rect": {
+        "x": 590,
+        "y": 92,
+        "width": 350,
+        "height": 132
+      },
+      "background": [0.12, 0.04, 0.16, 0.68],
+      "textColor": [0.94, 0.86, 1.0, 1.0],
+      "padding": 18,
+      "fontFamily": "Malgun Gothic",
+      "fontSize": 19,
+      "fadeOutSeconds": 0.8,
+      "pages": [
+        "…누군가 이쪽을 보고 있어.",
+        "고개를 들지 마."
+      ]
+    }
+  ]
+}

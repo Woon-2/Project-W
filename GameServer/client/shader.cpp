@@ -4269,7 +4269,8 @@ ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D
 // SV_VertexID. CullMode = NONE so trails are visible from either side.
 // `additive == true` uses additive blending (One/One); otherwise standard alpha.
 static ComPtr<ID3D12PipelineState> createTrailShaderImpl(
-	ID3D12Device* device, ID3D12RootSignature* rootSig, bool additive
+	ID3D12Device* device, ID3D12RootSignature* rootSig, bool additive,
+	DXGI_FORMAT rtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM
 ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
@@ -4339,7 +4340,7 @@ static ComPtr<ID3D12PipelineState> createTrailShaderImpl(
 	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.RTVFormats[0] = rtvFormat;
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -4358,4 +4359,8 @@ ComPtr<ID3D12PipelineState> createTrailShader( ID3D12Device* device, ID3D12RootS
 
 ComPtr<ID3D12PipelineState> createTrailShaderAdditive( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	return createTrailShaderImpl( device, rootSig, /*additive=*/true );
+}
+
+ComPtr<ID3D12PipelineState> createTrailShaderHDR( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createTrailShaderImpl( device, rootSig, /*additive=*/true, DXGI_FORMAT_R16G16B16A16_FLOAT );
 }

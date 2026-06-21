@@ -770,6 +770,7 @@ void Game::setupStage() {
 		static_cast<float>(gClientRect.bottom - gClientRect.top)
 	);
 	uiManager_.requestDebugResources(gfx_);
+	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 	// 기존 standalone HUD(도움말 라벨/플레이어 HP바/HiZ 라벨)는 에디터 UI와 겹쳐 제거했다.
 	// 조작법·상태·편집 패널은 EditorController가 별도로 구성한다.
 
@@ -2757,6 +2758,7 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	uiManager_.layout();
+	dialogueSystem_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
@@ -2999,6 +3001,10 @@ void Game::render() {
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+		return 0;
+	}
+
 	switch (msg) {
 	// WM_INPUT 메시지
 	// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
@@ -3093,15 +3099,18 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 모든 게임플레이/카메라 입력은 EditorController에 위임한다
-	// (캐스터 이동, 카메라 follow/free, 히트박스 피킹, 필드 넛지, 스킬 재생 등).
-	editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
-		mouseDeltaX_, mouseDeltaY_, deltaTime);
+	// Dialogue input has priority over gameplay/editor controls.
+	if (!dialogueSystem_.active()) {
+		editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
+			mouseDeltaX_, mouseDeltaY_, deltaTime);
+	}
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
 	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
+	if ( !dialogueSystem_.active()
+		&& (keyboardStateCurr_[VK_RETURN] & 0x80)
+		&& !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
 		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
 		if (cursorCaptureEnabled_) {
 			captureCursor();
@@ -3109,6 +3118,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			releaseCursor();
 		}
+	}
+
+	// F8: replay the sample dialogue event authored in dialogues.json.
+	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
+		dialogueSystem_.show("sample_intro");
 	}
 
 	// H key: toggle Hi-Z occlusion culling

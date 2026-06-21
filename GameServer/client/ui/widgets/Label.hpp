@@ -14,6 +14,7 @@ public:
     const std::wstring& text() const { return text_; }
 
     void setFont(FontHandle* font) { fontHandle_ = font; dirty_ = true; }
+    void setFontFamily(std::wstring family);
 
     // 0 = 기본 폰트(16pt Tahoma) 사용. autoSize가 활성화되면 무시됨.
     void setFontSize(float size);
@@ -45,6 +46,7 @@ private:
     bool needsCopy_ = false;
 
     FontHandle ownedFont_{};
+    std::wstring fontFamily_ = L"Tahoma";
     float      fontSize_     = 0.f;
     float      prevFontSize_ = -1.f;
     bool       autoSize_     = false;

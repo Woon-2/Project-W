@@ -223,6 +223,18 @@ void Game::setupStageVisual() {
 	bindZoneHandlers();
 	rebuildBarrierMagicCircleQuads();
 
+	// Path guidance (cosmetic, client-only): build polylines from "PathPt" markers
+	// and create the shared free-orb proxy mesh used to render the guiding wisp.
+	pathGuide_.build(chunkManager_.markers());
+	if (orbProxyMesh_.subMeshes.empty()) {
+		gfx_.recordTerrainResourceLoad(
+			[this](ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, DescriptorPool&, Fence& fence) {
+				orbProxyMesh_ = buildOrbProxyMesh(device, cmdList, fence, 128u);
+			},
+			/*wait=*/ true
+		);
+	}
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -3843,6 +3855,15 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// Charge credits are matched to corpses in updateCorpses(); see below.
 	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
 
+	// DEBUG fallback: if no "PathPt" markers were authored, synthesize a winding sample
+	// path at the local player so the effect is visible online right away. Auto-disables
+	// as soon as a real path exists (build() from markers makes hasPaths() true).
+	if (!pathGuide_.hasPaths())
+		pathGuide_.buildSamplePath(player_->pos(), player_->forward());
+
+	// Path guidance: advance the ribbon window + guiding wisp (re-conforms to ground).
+	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
+
 	camera_.update(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
@@ -4242,6 +4263,9 @@ void Game::renderInGame() {
 	tornadoHitEffect_.render(gfx_);
 	dustParticleSystem_.render(gfx_);
 	orbSystem_.submitDrawEvents(gfx_);
+
+	// Path guidance: HDR ribbon (pre-bloom trail) + guiding wisp (free orb).
+	pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_);
 	debugBVView_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{

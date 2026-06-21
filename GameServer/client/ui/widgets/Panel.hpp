@@ -8,6 +8,7 @@ namespace UI {
 class Panel : public UIElement {
 public:
     const Texture* backgroundTex = nullptr;
+    bool drawSolidBackground = false;
 
     void onRender(const RenderContext& rc) override;
 };

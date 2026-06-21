@@ -35,6 +35,8 @@
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
 #include "../energyOrbSystem.hpp"
+#include "../pathGuideSystem.hpp"
+#include "../mesh.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../debugBVView.hpp"
@@ -375,6 +377,12 @@ private:
 	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
 	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
+
+	// Path guidance (cosmetic, client-only): flowing HDR ribbon + guiding wisp.
+	// orbProxyMesh_ is the shared free-orb proxy used to render the wisp.
+	PathGuideSystem pathGuide_{};
+	Mesh            orbProxyMesh_{};
+
 	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
 
 	// HP bar tracking entry for non-goblin monsters (declared here so configureNetMonster's

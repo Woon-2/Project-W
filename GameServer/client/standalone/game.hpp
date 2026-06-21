@@ -29,6 +29,7 @@
 #include "../ui/widgets/Dropdown.hpp"
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Image.hpp"
+#include "../ui/dialogue/DialogueSystem.hpp"
 
 #include "../editor/editorController.hpp"
 
@@ -147,6 +148,7 @@ private:
 	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, ArrowVolley, ArrowRain, EnergyExplosionArrow, TornadoShot, Piercing, PiercingSlash, PiercingCircleSlash, PiercingMulti };
 
 	UI::UIManager    uiManager_{};
+	UI::DialogueSystem dialogueSystem_{};
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_

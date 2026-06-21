@@ -119,7 +119,8 @@ void Dispatcher::updateGPUDataSingleThreaded() {
             .tileLength           = e.tileLength,
             .trailLifetime        = e.trailLifetime,
             .currentSystemTime    = e.currentSystemTime,
-            .pad0                 = {},
+            .flowSpeed            = e.flowSpeed,
+            .alignMode            = e.alignMode,
         };
         pResources_->perDrawcallData.cbuffers[i].stage(roomIdx_, &pdd, 1u);
     }
