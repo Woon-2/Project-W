@@ -46,6 +46,7 @@ struct AttachTarget {
 struct OnHitDef {
     i32t     damage          = 0;
     u8t      hitVfxId        = 0xFF;  // 0xFF = no VFX
+    float    hitVfxScale     = 1.f;   // 피격 VFX 크기 배율(피니셔 등 hit별 연출)
     float    impulseStrength = 0.f;
     mu::Vec3 impulseDirLocal = { 0.f, 0.f, 1.f };  // attacker-local space
 };

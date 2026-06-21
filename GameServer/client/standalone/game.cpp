@@ -805,6 +805,7 @@ void Game::setupStage() {
 		// vfxId 1..18 bind 1:1 to each built ParticleEffect, mirroring the skill
 		// foundation .lua files (each PlayVFX vfxId indexes this array directly).
 		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
 		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
@@ -987,6 +988,27 @@ void Game::setParticle()
 		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
 		return cfg;
 	};
+
+	// ── Blood hit effect (칼/창/완드 공통 피격 혈흔, vfxId 0) ──────────────────
+	// Alpha Blend(MatUnlit) + Plane 곡면 메시 + 3x3 스프라이트 시트 플립북.
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/blood_hit.json",
+			"Particle System (4)"
+		);
+		cfg.renderer.pMesh = assetManager_.meshBloodPlane();
+		cfg.renderer.pSubMesh = assetManager_.meshBloodPlane()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshBloodPlane()->subMeshes[0];
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.bloodTex(),
+			.blend   = ps::BlendMode::Alpha,
+		};
+		// 피격 위치에 고정되도록 World 시뮬레이션으로 강제(Unity 원본은 Local).
+		cfg.main.simulationSpace = ps::MainModule::SimulationSpace::World;
+		cfg.renderer.renderOrder = 2;
+		bloodEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
 
 	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
 	{
@@ -2857,6 +2879,7 @@ void Game::update(Milliseconds deltaTime) {
 	dustParticleSystem_.update( deltaTime );
 	// 스킬 VFX 이펙트는 시뮬레이션 계열이므로 simDt(에디터 timeScale 적용)로 구동한다.
 	// 일시정지 시 함께 멈춰야 VFXParticleAttach 히트박스가 파티클을 따라 계속 움직이지 않는다.
+	bloodEffect_.update( simDt );
 	swordSlash1Effect_.update( simDt );
 	swordSlash7Effect_.update( simDt );
 	swordSlashComboEffect_.update( simDt );
@@ -2930,6 +2953,7 @@ void Game::render() {
 
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
+	bloodEffect_.render( gfx_ );
 	swordSlash1Effect_.render( gfx_ );
 	swordSlash7Effect_.render( gfx_ );
 	swordSlashComboEffect_.render( gfx_ );

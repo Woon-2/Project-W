@@ -363,8 +363,9 @@ private:
     std::vector<int>                           instanceScratch_;  // snapshot of activeList for safe iteration
 
     struct HitResult {
-        int  hitboxIdx;
-        i32t targetObjectId;
+        int      hitboxIdx;
+        i32t     targetObjectId;
+        mu::Vec3 contactPoint;   // narrow phase 충돌점 (피격 VFX 위치)
     };
     std::vector<HitResult> pendingHits_;
 

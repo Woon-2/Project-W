@@ -140,6 +140,7 @@ OnHitDef SkillCompiler::tableToOnHitDef(const sol::table& tbl) {
     OnHitDef oh{};
     oh.damage          = tbl.get_or("damage",          0);
     oh.hitVfxId        = static_cast<u8t>(tbl.get_or("vfxId",    (int)0xFF));
+    oh.hitVfxScale     = tbl.get_or("vfxScale",        1.f);
     oh.impulseStrength = tbl.get_or("impulseStrength", 0.f);
 
     sol::optional<sol::table> dir = tbl["impulseDir"];

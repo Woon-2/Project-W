@@ -48,10 +48,11 @@ public:
     int systemCount() const { return static_cast<int>(systems_.size()); }
 
     // Sets shape.position on all sub-systems and triggers each per its PlayMode.
-    void play(const mu::Vec3& pos);
+    // sizeScale: 이 재생의 Emit 파티클 크기 배율(피격 VFX hit별 연출). 기본 1.0.
+    void play(const mu::Vec3& pos, float sizeScale = 1.f);
     void play(const mu::Vec3& pos, mu::NQuat orient);
     void play(const mu::Vec3& pos, mu::Mat4x4 orientXform);
-    void play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward);
+    void play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward, float sizeScale = 1.f);
 
     // Updates emission origin for all sub-systems without restarting emission.
     // Call each frame while a continuous effect is in flight.

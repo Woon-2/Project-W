@@ -367,11 +367,12 @@ struct PerFrameData {
 // MeshParticleShader
 namespace MeshParticleShader {
 
-// 80B, 16B-aligned
+// 96B, 16B-aligned
 // world: row-major — CPU에서 mu::transpose().getXmf() 후 전달
 struct PerInstanceData {
-	XMFLOAT4X4 world;  // 64B
-	XMFLOAT4   tint;   // 16B
+	XMFLOAT4X4 world;         // 64B
+	XMFLOAT4   tint;          // 16B
+	XMFLOAT4   uvScaleOffset; // 16B — xy=스프라이트 시트 프레임 스케일, zw=프레임 오프셋
 };
 
 // 32B

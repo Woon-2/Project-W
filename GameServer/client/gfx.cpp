@@ -150,7 +150,12 @@ void GFX::init() {
 	setD3DName(cmdQ_.Get(), "CommandQueue");
 
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
-	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 96u);
+	// RenderingSlave 용량 = 한 프레임에 동시에 빌려가는 command list 총수의 상한
+	// (파이프라인 dispatch마다 1개 + UI/PBR 멀티스레드 dispatch는 jobCnt개 + GFX 내부
+	//  barrier/HiZ/light/copy 등). fence 신호(프레임 끝) 전까지 풀에서 빠져있으므로
+	//  파이프라인 종류가 늘면 함께 늘려야 한다. 64는 mesh 파티클 효과(bloodEffect 등)가
+	//  활성화되면 초과되어 뒤쪽 dispatch(UI)가 할당 실패했다 → 128로 마진 확보.
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 128u);
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성

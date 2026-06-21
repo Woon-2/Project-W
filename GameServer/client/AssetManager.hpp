@@ -41,6 +41,8 @@ public:
 	const Texture* skillIconByAssetName(std::string_view assetName) const;
 	const Texture* flameTex() const { return &flameTex_; }
 	const Texture* smokeTex() const { return &smokeTex_; }
+	const Texture* bloodTex() const { return &bloodTex_; }
+	const Mesh*    meshBloodPlane()        const { return &meshBloodPlane_; }
 	const Mesh*    meshSlash3()            const { return &meshSlash3_; }
 	const Mesh*    meshHalfTrail()         const { return &meshHalfTrail_; }
 	const Mesh*    meshSlashWave()         const { return &meshSlashWave_; }
@@ -167,6 +169,8 @@ private:
 	Texture skillIconPiercingMulti_{};
 	Texture flameTex_{};
 	Texture smokeTex_{};
+	Texture bloodTex_{};
+	Mesh    meshBloodPlane_{};
 	Mesh    meshSlash3_{};
 	Mesh    meshHalfTrail_{};
 	Mesh    meshSlashWave_{};

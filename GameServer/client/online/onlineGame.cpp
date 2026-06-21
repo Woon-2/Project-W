@@ -758,6 +758,28 @@ void Game::setParticle()
 		return cfg;
 	};
 
+	// ── Blood hit effect (칼/창/완드 공통 피격 혈흔, vfxId 0) ──────────────────
+	// Alpha Blend(MatUnlit) + Plane 곡면 메시 + 3x3 스프라이트 시트 플립북.
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/blood_hit.json",
+			"Particle System (4)"
+		);
+		cfg.renderer.pMesh = assetManager_.meshBloodPlane();
+		cfg.renderer.pSubMesh = assetManager_.meshBloodPlane()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshBloodPlane()->subMeshes[0];
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.bloodTex(),
+			.blend   = ps::BlendMode::Alpha,
+		};
+		// 피격 위치에 고정되도록 World 시뮬레이션으로 강제(Unity 원본은 Local).
+		// 공유 인스턴스를 연속 타격에 재사용해도 기존 혈흔이 끌려오지 않게 한다.
+		cfg.main.simulationSpace = ps::MainModule::SimulationSpace::World;
+		cfg.renderer.renderOrder = 2;
+		bloodEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
 	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
 	{
 		auto cfg = loadUnityParticleConfig(
@@ -2035,6 +2057,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
 		// same skill .lua PlayVFX events resolve identically in online mode.
 		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
 		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
@@ -3436,25 +3459,9 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 	}
 	applyHit(targetId, newHp, attackerId);
 
-	// Spawn impact VFX at the target's position.
-	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
-	if (asset && !asset->hitboxDefs.empty()) {
-		const u8t vfxId = asset->hitboxDefs[0].onHit.hitVfxId;
-		if (vfxId != 0xFF && vfxId < static_cast<u8t>(skillVfxById_.size())
-		    && skillVfxById_[vfxId])
-		{
-			Object* target = nullptr;
-			if (player_ && static_cast<uint16>(player_->getId()) == targetId)
-				target = player_.get();
-			else if (auto it = idPlayerMap_.find(targetId); it != idPlayerMap_.end())
-				target = it->second.get();
-			else if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end())
-				target = it->second;
-
-			if (target)
-				skillVfxById_[vfxId]->play(target->pos());
-		}
-	}
+	// 피격 VFX(blood 등)는 클라 로컬 hit 검출(SkillSystem::processHitResults)이
+	// narrow phase 충돌점에 직접 재생한다. 여기서 target->pos()(발밑)에 재생하면
+	// 위치가 부정확하고 예측 경로와 중복되므로 재생하지 않는다.
 }
 
 void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
@@ -4028,6 +4035,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_) {
 		flameParticleSystem_.update(deltaTime);
 		smokeParticleSystem_.update(deltaTime);
+		bloodEffect_.update(deltaTime);
 		swordSlash1Effect_.update(deltaTime);
 		swordSlash7Effect_.update(deltaTime);
 		swordSlashComboEffect_.update(deltaTime);
@@ -4169,6 +4177,7 @@ void Game::renderInGame() {
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
+	bloodEffect_.render(gfx_);
 	swordSlash1Effect_.render(gfx_);
 	swordSlash7Effect_.render(gfx_);
 	swordSlashComboEffect_.render(gfx_);

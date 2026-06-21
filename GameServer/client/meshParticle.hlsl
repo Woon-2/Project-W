@@ -1,8 +1,9 @@
 #include "bindless.hlsli"
 
 struct PerInstanceData {
-    float4x4 world;  // row-major (transposed before upload from CPU)
-    float4   tint;   // RGBA multiplier
+    float4x4 world;         // row-major (transposed before upload from CPU)
+    float4   tint;          // RGBA multiplier
+    float4   uvScaleOffset; // xy = sprite-sheet frame scale, zw = frame offset (1,1,0,0 = full texture)
 };
 
 // b0: 32B
@@ -39,7 +40,8 @@ PSInput VSMain(VSInput input) {
     // row-vector * row-major matrix
     float4 worldPos = mul(float4(input.position, 1.0f), inst.world);
     ret.pos  = mul(worldPos, matViewProj);
-    ret.uv   = input.uv;
+    // Remap the mesh UV into the current sprite-sheet frame (flipbook).
+    ret.uv   = input.uv * inst.uvScaleOffset.xy + inst.uvScaleOffset.zw;
     ret.tint = inst.tint;
     return ret;
 }

@@ -645,9 +645,10 @@ void ParticleSystem::init(const ps::ParticleSystemConfig& config, int maxParticl
     burstNextCycle_.assign(config_.emission.bursts.size(), 0);
 }
 
-void ParticleSystem::emit(int count) {
+void ParticleSystem::emit(int count, float sizeScale) {
     const int savedIndex = shapeEmitIndex_;
     const int savedCount = shapeEmitCount_;
+    emitSizeScale_ = sizeScale;
     shapeEmitCount_ = std::max(1, count);
     for (int i = 0; i < count; ++i) {
         shapeEmitIndex_ = i;
@@ -663,6 +664,7 @@ void ParticleSystem::emit(int count) {
     detSpawnPending_ = false;
     shapeEmitIndex_ = savedIndex;
     shapeEmitCount_ = savedCount;
+    emitSizeScale_  = 1.f;   // 1회성 배율이므로 emit 종료 후 복원
 }
 
 void ParticleSystem::startContinuous() {
@@ -1018,6 +1020,16 @@ void ParticleSystem::spawnParticle() {
         p.sizeBegin3D *= inheritedSize_;
         p.sizeEnd3D   *= inheritedSize_;
         p.sizeStart3D *= inheritedSize_;
+    }
+
+    // emit(count, sizeScale)로 지정된 1회성 크기 배율(피격 VFX hit별 연출).
+    if (emitSizeScale_ != 1.f) {
+        p.sizeBegin   *= emitSizeScale_;
+        p.sizeEnd     *= emitSizeScale_;
+        p.sizeStart   *= emitSizeScale_;
+        p.sizeBegin3D *= emitSizeScale_;
+        p.sizeEnd3D   *= emitSizeScale_;
+        p.sizeStart3D *= emitSizeScale_;
     }
 
     // Trail initialization

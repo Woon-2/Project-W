@@ -58,9 +58,9 @@ void ParticleEffect::setGroundBehavior(ps::ParticleCollisionModule::Mode collisi
     }
 }
 
-void ParticleEffect::play(const mu::Vec3& pos)
+void ParticleEffect::play(const mu::Vec3& pos, float sizeScale)
 {
-    play(pos, mu::NQuat{});
+    play(pos, mu::Mat4x4(mu::NQuat{}), mu::Vec3(0.f, 0.f, 1.f), sizeScale);
 }
 
 void ParticleEffect::play(const mu::Vec3& pos, mu::NQuat orient)
@@ -76,7 +76,7 @@ void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform)
     play(pos, orientXform, advanceForward);
 }
 
-void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward)
+void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward, float sizeScale)
 {
     advanceForward_ = normalizedOr(advanceForward, { 0.f, 0.f, 1.f });
     for (auto& e : systems_) {
@@ -89,7 +89,7 @@ void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 
         e.ps.config().main.startRotation3D = e.meshBaseRotation * orientXform;
         if (e.isSubEmitter) continue;
         if (e.mode == PlayMode::Emit)
-            e.ps.emit(1);
+            e.ps.emit(1, sizeScale);
         else
             e.ps.startContinuous();
     }
