@@ -10,10 +10,10 @@ This is a **Visual Studio 2022** solution (C++20, Windows only). Open `GameServe
 - `ServerEngine` — Static library shared by all servers
 - `LobbyServer` — Matchmaking server executable
 - `RoomServer` — Game room server executable
-- `DummyClient` — Server test client executable
+- `HeadlessClient` — Headless load/stress-test bot executable (no rendering)
 - `client` — DirectX 12 game client executable
 
-There are no automated tests — `DummyClient` is used for manual server validation.
+There are no automated tests. `HeadlessClient` spawns many fake bots to load/stress-test the RoomServer; manual gameplay validation uses the real `client`.
 
 ## Architecture Overview
 
@@ -30,6 +30,9 @@ Refer to: `RoomServer/CLAUDE.md`- Claude reads this on-demand
 
 ### Client
 Refer to: `client/CLAUDE.md`- Claude reads this on-demand
+
+### HeadlessClient
+Refer to: `HeadlessClient/CLAUDE.md`- Claude reads this on-demand
 
 ### common/
 Shared utilities not tied to any single project:
