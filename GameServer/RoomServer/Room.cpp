@@ -1290,9 +1290,22 @@ void Room::updateSkillSystem(Milliseconds dt) {
 
 void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
-	if (sessionIt == idSessionMap_.end()) return;
+	if (sessionIt == idSessionMap_.end()) {
+		std::cout << "[DIAG skillStart] sid=" << sessionId << " FIND_FAIL (not in idSessionMap_)\n";
+		return;
+	}
 
 	auto* player = sessionIt->second->player();
+	{
+		const uint32 pid = player->getId();
+		const bool ownerSlotOk = (pid < objectById_.size()) && (objectById_[pid] == player);
+		std::cout << "[DIAG skillStart] sid=" << sessionId
+		          << " pid=" << pid
+		          << " faction=" << static_cast<int>(player->faction())
+		          << " hp=" << player->hp()
+		          << " objSize=" << objectById_.size()
+		          << " ownerSlotOk=" << ownerSlotOk << "\n";
+	}
 	if (player->hp() <= 0) return;
 
 	// Stack-charge gate: selectable skills need >=1 stack and an elapsed cooldown.

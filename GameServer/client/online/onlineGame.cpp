@@ -5184,6 +5184,8 @@ void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 			std::chrono::high_resolution_clock::now().time_since_epoch()
 		).count()));
 	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+	std::cout << "[DIAG C_SkillStart SEND] asset=" << skillAssetId
+	          << " myPid=" << (player_ ? static_cast<uint16>(player_->getId()) : 0) << "\n";
 }
 
 void Game::castSkillByName(std::string_view name) {

@@ -331,6 +331,10 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         const int slot = def.slot;
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        std::cout << "[DIAG hitbox] ownerObjId=" << inst.ownerObjectId
+                  << " ownerFound=" << (owner != nullptr)
+                  << " ownerFaction=" << (owner ? static_cast<int>(owner->faction()) : -1)
+                  << " targetMask=" << (owner ? hostileMask(owner->faction()) : 0u) << "\n";
 
         if (def.attach.type == AttachType::Bone) {
             int oldH = inst.getBoneHandle(slot);
