@@ -152,6 +152,11 @@ void ParticleEffect::update(Seconds dt)
         for (const auto& evt : parentPs.pendingSubEmitterEvents()) {
             if (evt.configIndex != binding.subEmitterCfgIdx) continue;
 
+            // Cosmetic spawn hook: fire once per parent event (before the per-burst
+            // expansion below) so a multi-burst child triggers the hook exactly once.
+            if (onChildSpawn_)
+                onChildSpawn_(binding.childIdx, evt.pos);
+
             mu::Vec3 sourceVel = evt.vel;
             if (binding.flattenSourceVelocityY) {
                 const float sourceSpeed = std::sqrt(mu::dot(sourceVel, sourceVel));

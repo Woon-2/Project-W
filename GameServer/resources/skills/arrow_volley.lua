@@ -40,6 +40,9 @@ skill:addEvent(120, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Bow release SFX, on the volley shot.
+skill:addEvent(120, "PlaySound", { sound = "arrow_default" })
+
 local onHit = OnHit({
     damage          = 28,
     vfxId           = 255,
@@ -58,6 +61,7 @@ for i = 0, count - 1 do
         attach              = VFXParticleAttach(11, i),
         applyAttachRotation = true,
         useParticleSize     = false,
+        penetrate           = false,   -- non-penetrating: each arrow particle dies on its first hit
         hitGroup            = i,
         hitGroupCooldownMs  = 550,
         onHit               = onHit

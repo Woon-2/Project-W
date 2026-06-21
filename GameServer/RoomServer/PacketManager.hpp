@@ -12,6 +12,7 @@ public:
 	static void handlePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCEnterPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMovePacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCDebugTeleportPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCAttackPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCSkillStartPacket(GameSession* session, byte* buffer, int32 len);
@@ -40,6 +41,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSSkillChargePacket(uint16 playerId, uint8 slot, float charge);
 	static std::shared_ptr<SendBuffer> makeSSkillUseRejectPacket(uint8 slot);
 	static std::shared_ptr<SendBuffer> makeSComboStatePacket(uint16 playerId, uint16 comboCount, float windowMs);
+	static std::shared_ptr<SendBuffer> makeSPlayerHpPacket(uint16 playerId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 };
 

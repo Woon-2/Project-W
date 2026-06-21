@@ -70,6 +70,34 @@ static constexpr int     kLagScaleDownFrames  = 100;
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
 
+static const mu::Vec4 kBarrierMagicBlockedColor{ 1.0f, 0.12f, 0.08f, 0.82f };
+static const mu::Vec4 kBarrierMagicPassableColor{ 0.10f, 0.48f, 1.0f, 0.72f };
+static constexpr float    kBarrierMagicMinDiameter = 8.f;
+static constexpr float    kBarrierMagicMaxDiameter = 24.f;
+static constexpr int      kBarrierMagicRenderOrder = 4;
+static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
+static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
+
+static float barrierMagicDiameter(const MarkerDef& m) {
+	const float wallHeight = std::fabs(m.scale.y());
+	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
+}
+
+static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
+	if (m.name == "WallHobgoblin_0") {
+		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
+	}
+	return mu::Vec3{};
+}
+
+// "Arena_X" zone 태그 -> "WallX" 마커 prefix. 아레나 후방 Wall 일방향 벽(arenaWalls_)과 장식용
+// 마법진(rebuildBarrierMagicCircleQuads) 둘 다 같은 규칙으로 마커를 묶는다.
+static std::string arenaWallPrefix(const ZoneDef& z) {
+	constexpr char kArenaTag[] = "Arena_";
+	if (z.tag.rfind(kArenaTag, 0) != 0) return {};
+	return "Wall" + z.tag.substr(sizeof(kArenaTag) - 1);
+}
+
 static constexpr float   kArrowRainRadius          = 4.75f;
 static constexpr int     kArrowVolleyCount          = 9;
 static constexpr float   kPiercingMultiRadius       = 2.0f;
@@ -158,13 +186,14 @@ void Game::setupStageVisual() {
 	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
 	clientZoneSystem_.build(chunkManager_.zones());
 	bindZoneHandlers();
+	rebuildBarrierMagicCircleQuads();
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
-	dirLight_.intensity = 6.6f;
+	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
@@ -179,8 +208,9 @@ void Game::setupStageVisual() {
 		stageFocus_ = chunkManager_.worldCenter();
 	}
 
-	// 전시 캐릭터(스킨드)의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다.
-	gfx_.setMaxRenderObjectId(1000u);
+	// 스킨드 객체의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다. renderObjectId는
+	// 객체당 1회만 발급되고(풀 재사용 시에도 유지) 범람하지 않으므로, 동시 객체 수 + 여유분으로 잡는다.
+	gfx_.setMaxRenderObjectId(10000u);
 
 	// release: 워커가 이 신호를 보고 Phase 2 로드를 시작한다(GFX 로딩 직렬화).
 	stageVisualReady_.store(true, std::memory_order_release);
@@ -1806,6 +1836,14 @@ void Game::setParticle()
 		energyExplosionArrowEffect_.bindSubEmitter( 0, 0, 1 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 0, 2 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 1, 3 );
+
+		// Positional SFX on the real spawn: arrow launch (child 1) and explosion
+		// (child 2). Fires at the actual impact/max-range point and time, so the
+		// explosion sound stays in sync whether the arrow hits or flies its range.
+		energyExplosionArrowEffect_.setChildSpawnCallback([](int child, const mu::Vec3& pos) {
+			if (child == 1)      INet::ClientApp::sound().playSfx3D("charge_shoot", pos);
+			else if (child == 2) INet::ClientApp::sound().playSfx3D("charge_explosion", pos);
+		});
 	}
 
 	// TornadoShot: same visual as Tornado Continuous, moved forward each frame via setOrigin().
@@ -2022,6 +2060,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillCtx_.vfxByIdSize         = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera              = &camera_;
 		skillCtx_.clientPredictionOnly = true;
+		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos, float maxMs, float fadeMs, float vol) {
+			INet::ClientApp::sound().playSfx3D(name, pos, vol, maxMs, fadeMs);
+		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,
 		// AttachType::Ground hitboxes, particle ground-conform/collision).
@@ -2143,6 +2185,14 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 }
 
 void Game::createGoblin(const ObjectInfo& goblinInfo) {
+	// Idempotent against duplicate spawn packets. S_Enter and S_NpcSpawnBatch can both list
+	// the same npc (e.g. the player streams in/out of an area whose monsters already exist).
+	// Re-creating would orphan the previous object in goblins_ (still rendered) while
+	// idMonsterMap_ points to the new one — a "ghost" that gets neither moves nor hits, so it
+	// freezes/sinks and ignores damage. Skip if this id is already live (corpses are absent
+	// from idMonsterMap_, so a genuine respawn of a dead npc still creates a fresh object).
+	if (idMonsterMap_.count(goblinInfo.objectId)) return;
+
 	auto goblin = std::make_shared<Goblin>();
 
 	goblin->setId(goblinInfo.objectId);
@@ -2153,10 +2203,11 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setAnimBlender(animSystem_, assetManager_);
 
 	if (goblin->model() && goblin->model()->ragdollDef) {
-		goblin->ragdoll().build(
+		goblin->ragdoll()->build(
 			goblin->model()->skeleton,
 			*goblin->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin->body().scale()
 		);
 	}
 
@@ -2200,9 +2251,74 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId]    = goblin;
 	idMonsterMap_[goblinInfo.objectId]   = goblin.get();
+	respawnKind_[goblinInfo.objectId]      = MonsterKind::Goblin;
+	monsterSpawnInfo_[goblinInfo.objectId] = goblinInfo;
+}
+
+// 전술 전투 중간보스 전용. Goblin과 동일한 셋업이나 모델만 modelHobgoblin()을 쓴다
+// (같은 리그를 공유하므로 goblinAnimations()/goblinHpBars_/idGoblinMap_ 등은 그대로 재사용).
+void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
+	if (idMonsterMap_.count(hobgoblinInfo.objectId)) return;   // skip duplicate spawn (see createGoblin)
+	auto hobgoblin = std::make_shared<Hobgoblin>();
+
+	hobgoblin->setId(hobgoblinInfo.objectId);
+	hobgoblin->setPos(DirectX::XMLoadFloat3(&hobgoblinInfo.pos));
+	hobgoblin->setOrient(DirectX::XMLoadFloat4(&hobgoblinInfo.orient));
+	hobgoblin->setScale(DirectX::XMLoadFloat3(&hobgoblinInfo.scale));
+	hobgoblin->setModel(assetManager_.modelHobgoblin());
+	hobgoblin->setAnimBlender(animSystem_, assetManager_);
+
+	if (hobgoblin->model() && hobgoblin->model()->ragdollDef) {
+		hobgoblin->ragdoll()->build(
+			hobgoblin->model()->skeleton,
+			*hobgoblin->model()->ragdollDef,
+			physicsWorld_,
+			hobgoblin->body().scale()
+		);
+	}
+
+	hobgoblin->setHp(hobgoblinInfo.hp);
+	hobgoblin->setMaxHp(hobgoblinInfo.maxHp);
+	hobgoblin->setFaction(Faction::Monsters);
+	hobgoblin->enableBVRendering();
+
+	hobgoblin->body().setMotionType(MotionType::Kinematic);
+	hobgoblin->body().setMass(40.f);
+	hobgoblin->body().setLinearDamping(0.f);
+	hobgoblin->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
+	}
+
+	hobgoblin->setRenderObjectId(nextRenderObjId_++);
+
+	// Register hobgoblin in skill system's object lookup table.
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = hobgoblin.get();
+	}
+
+	goblins_.push_back(hobgoblin);
+	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
+	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
+	respawnKind_[hobgoblinInfo.objectId]      = MonsterKind::Goblin;
+	monsterSpawnInfo_[hobgoblinInfo.objectId] = hobgoblinInfo;
 }
 
 void Game::createSnake(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
 	auto snake = std::make_shared<Snake>();
 
 	snake->setId(info.objectId);
@@ -2213,10 +2329,11 @@ void Game::createSnake(const ObjectInfo& info) {
 	snake->setAnimBlender(animSystem_, assetManager_);
 
 	if (snake->model() && snake->model()->ragdollDef) {
-		snake->ragdoll().build(
+		snake->ragdoll()->build(
 			snake->model()->skeleton,
 			*snake->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			snake->body().scale()
 		);
 	}
 
@@ -2255,9 +2372,12 @@ void Game::createSnake(const ObjectInfo& info) {
 	snakes_.push_back(snake);
 	idSnakeMap_[info.objectId]    = snake;
 	idMonsterMap_[info.objectId]  = snake.get();
+	respawnKind_[info.objectId]      = MonsterKind::Snake;
+	monsterSpawnInfo_[info.objectId] = info;
 }
 
 void Game::createMushroom(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
 	auto mushroom = std::make_shared<Mushroom>();
 
 	mushroom->setId(info.objectId);
@@ -2268,10 +2388,11 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushroom->setAnimBlender(animSystem_, assetManager_);
 
 	if (mushroom->model() && mushroom->model()->ragdollDef) {
-		mushroom->ragdoll().build(
+		mushroom->ragdoll()->build(
 			mushroom->model()->skeleton,
 			*mushroom->model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			mushroom->body().scale()
 		);
 	}
 
@@ -2310,6 +2431,380 @@ void Game::createMushroom(const ObjectInfo& info) {
 	mushrooms_.push_back(mushroom);
 	idMushroomMap_[info.objectId]   = mushroom;
 	idMonsterMap_[info.objectId]    = mushroom.get();
+	respawnKind_[info.objectId]      = MonsterKind::Mushroom;
+	monsterSpawnInfo_[info.objectId] = info;
+}
+
+// Shared spawn wiring for the newer monster types (Bomber/Birdy/Slime/Treant). Fills the
+// common state (model/blender/ragdoll/body/HP bar + id maps) and inserts the HP bar into the
+// caller's per-type map; the caller pushes the typed shared_ptr into its own vector. Mirrors
+// the body of createSnake without the type-specific container/id-map lines.
+void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
+                               const Model* model, MonsterKind kind, float mass,
+                               std::unordered_map<uint16, MonsterHpEntry>& hpBars) {
+	obj->setId(info.objectId);
+	obj->setPos(DirectX::XMLoadFloat3(&info.pos));
+	obj->setOrient(DirectX::XMLoadFloat4(&info.orient));
+	obj->setScale(DirectX::XMLoadFloat3(&info.scale));
+	obj->setModel(model);
+	obj->setAnimBlender(animSystem_, assetManager_);   // virtual -> concrete monster blender
+
+	if (obj->model() && obj->model()->ragdollDef) {
+		obj->ragdoll()->build(
+			obj->model()->skeleton,
+			*obj->model()->ragdollDef,
+			physicsWorld_,
+			obj->body().scale()
+		);
+	}
+
+	obj->setHp(info.hp);
+	obj->setMaxHp(info.maxHp);
+	obj->setFaction(Faction::Monsters);
+	obj->enableBVRendering();
+
+	obj->body().setMotionType(MotionType::Kinematic);
+	obj->body().setMass(mass);
+	obj->body().setLinearDamping(0.f);
+	obj->body().setAngularDamping(100.f);
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		hpBars[info.objectId] = { obj.get(), bar, 2.5f };
+	}
+
+	obj->setRenderObjectId(nextRenderObjId_++);
+
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(info.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = obj.get();
+	}
+
+	idMonsterMap_[info.objectId]     = obj.get();
+	respawnKind_[info.objectId]      = kind;
+	monsterSpawnInfo_[info.objectId] = info;
+	// (caller pushes obj into its own typed vector)
+}
+
+void Game::createBomber(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;   // skip duplicate spawn (see createGoblin)
+	auto bomber = std::make_shared<Bomber>();
+	configureNetMonster(bomber, info, assetManager_.modelBomber(), MonsterKind::Bomber, 70.f, bomberHpBars_);
+	bombers_.push_back(bomber);
+}
+
+void Game::createBirdy(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto birdy = std::make_shared<Birdy>();
+	configureNetMonster(birdy, info, assetManager_.modelBirdy(), MonsterKind::Birdy, 40.f, birdyHpBars_);
+	birdys_.push_back(birdy);
+}
+
+void Game::createSlime(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto slime = std::make_shared<Slime>();
+	configureNetMonster(slime, info, assetManager_.modelSlime(), MonsterKind::Slime, 90.f, slimeHpBars_);
+	slimes_.push_back(slime);
+}
+
+void Game::createTreant(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto treant = std::make_shared<Treant>();
+	configureNetMonster(treant, info, assetManager_.modelTreant(), MonsterKind::Treant, 120.f, treantHpBars_);
+	treants_.push_back(treant);
+}
+
+// Grandbaum/Isys 미드보스: 전용 모델로 스폰하되 corpse/래그돌/에너지오브 정합을 위해 변종 베이스의
+// MonsterKind(Treant/Birdy)로 라우팅한다. 컨테이너도 변종 베이스(treants_/birdys_)에 저장한다.
+void Game::createGrandbaum(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto grandbaum = std::make_shared<Grandbaum>();
+	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
+	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
+}
+
+void Game::createIsys(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto isys = std::make_shared<Isys>();
+	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
+	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
+}
+
+// === Client-authored corpse pipeline =======================================
+// A dead monster is detached from server-synced containers into corpses_ (with a
+// fresh RenderObjectId, carrying its HP bar). The corpse holds its ragdoll for a
+// few seconds, then dissolves into energy orbs, and is removed only after every
+// orb is absorbed. Respawns borrow a fresh object from a per-kind pool so the
+// corpse animation is never cut short by a respawn packet.
+
+u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId) {
+	// Keep the object's renderObjectId (it is stable per object and the monotonic counter
+	// already guarantees no two live objects share one — no need to burn a fresh id here,
+	// which would let the counter overflow over many death/respawn cycles).
+	// Reassign the network/game id to the fixed detached-corpse sentinel so the corpse can
+	// never collide with a server-synced id (incl. a respawn that reuses npcId). Corpses are
+	// not looked up by id, so a shared sentinel is safe and needs no per-corpse allocation.
+	obj->setId(kDetachedCorpseId);
+	detachedNpcIds_.insert(npcId);
+
+	// Freeze the detached body. It no longer receives server moves (advanceState), so the
+	// stale prev != curr left by the death-frame move (e.g. knockback launching curr up
+	// while prev is on the ground) makes interpolatePos = lerp(prev, curr, t) oscillate
+	// renderState_.world every frame as t cycles 0->1 — the corpse's BV/cull bounds (and
+	// orb spawn anchor) sink and pop back up repeatedly. snapToCurrent() pins prev = curr.
+	obj->body().setLinearVel(mu::Vec3{});
+	obj->body().snapToCurrent();
+
+	Corpse c;
+	c.obj      = obj;
+	c.kind     = kind;
+	c.origId   = npcId;
+	// Reuse the (stable, unique-per-object) renderObjectId as the orb-association id: a
+	// corpse is exactly one object, so it is unique among concurrently-active corpses, and
+	// it is freed for reuse only after all orbs are absorbed. No separate counter to overflow.
+	c.corpseId = obj->renderObjectId();
+	c.phase    = Corpse::Phase::Ragdoll;
+	c.age      = 0.f;
+
+	auto grabBar = [&](auto& barMap) {
+		if (auto it = barMap.find(npcId); it != barMap.end()) {
+			c.hpBar = it->second.hpBar;
+			if (c.hpBar) c.hpBar->visible = false;
+			barMap.erase(it);
+		}
+	};
+
+	switch (kind) {
+	case MonsterKind::Goblin:
+		grabBar(goblinHpBars_);
+		idGoblinMap_.erase(npcId);
+		std::erase(goblins_, std::static_pointer_cast<Goblin>(obj));
+		break;
+	case MonsterKind::Snake:
+		grabBar(snakeHpBars_);
+		idSnakeMap_.erase(npcId);
+		std::erase(snakes_, std::static_pointer_cast<Snake>(obj));
+		break;
+	case MonsterKind::Mushroom:
+		grabBar(mushroomHpBars_);
+		idMushroomMap_.erase(npcId);
+		std::erase(mushrooms_, std::static_pointer_cast<Mushroom>(obj));
+		break;
+	case MonsterKind::Bomber:
+		grabBar(bomberHpBars_);
+		std::erase(bombers_, std::static_pointer_cast<Bomber>(obj));
+		break;
+	case MonsterKind::Birdy:
+		grabBar(birdyHpBars_);
+		std::erase(birdys_, std::static_pointer_cast<Birdy>(obj));
+		break;
+	case MonsterKind::Slime:
+		grabBar(slimeHpBars_);
+		std::erase(slimes_, std::static_pointer_cast<Slime>(obj));
+		break;
+	case MonsterKind::Treant:
+		grabBar(treantHpBars_);
+		std::erase(treants_, std::static_pointer_cast<Treant>(obj));
+		break;
+	}
+	idMonsterMap_.erase(npcId);
+	if (static_cast<size_t>(npcId) < skillObjectById_.size())
+		skillObjectById_[npcId] = nullptr;
+
+	// A corpse is not a barrier: drop any stale barrier registration so the raw pointer in
+	// barrierObjects_ can't outlive this object's current role (and so a pooled reuse does
+	// not inherit barrierActive_). setNpcBarrier re-adds it if the server re-enables one.
+	if (obj->isBarrierActive()) {
+		obj->setBarrierActive(false);
+		barrierObjects_.erase(
+			std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj.get()),
+			barrierObjects_.end());
+	}
+
+	const u32t cid = c.corpseId;
+	corpses_.push_back(std::move(c));
+	return cid;
+}
+
+void Game::returnMonsterToPool(Corpse& corpse) {
+	PooledMonster pm{ corpse.obj, corpse.hpBar };
+	switch (corpse.kind) {
+	case MonsterKind::Goblin:   goblinPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Snake:    snakePool_.push_back(std::move(pm));    break;
+	case MonsterKind::Mushroom: mushroomPool_.push_back(std::move(pm)); break;
+	case MonsterKind::Bomber:   bomberPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Birdy:    birdyPool_.push_back(std::move(pm));    break;
+	case MonsterKind::Slime:    slimePool_.push_back(std::move(pm));    break;
+	case MonsterKind::Treant:   treantPool_.push_back(std::move(pm));   break;
+	}
+}
+
+bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, int32 hp) {
+	// [EXPERIMENT] Force fresh-spawn for Bomber: never reuse a pooled bomber so respawns go
+	// through createBomber instead of reinitFromPool. If the "vanish on death" bug disappears,
+	// the cause is pooled-bomber reactivation. REVERT after the test.
+	if (kind == MonsterKind::Bomber) return false;
+
+	std::vector<PooledMonster>* pool = nullptr;
+	switch (kind) {
+	case MonsterKind::Goblin:   pool = &goblinPool_;   break;
+	case MonsterKind::Snake:    pool = &snakePool_;    break;
+	case MonsterKind::Mushroom: pool = &mushroomPool_; break;
+	case MonsterKind::Bomber:   pool = &bomberPool_;   break;
+	case MonsterKind::Birdy:    pool = &birdyPool_;    break;
+	case MonsterKind::Slime:    pool = &slimePool_;    break;
+	case MonsterKind::Treant:   pool = &treantPool_;   break;
+	}
+	if (!pool || pool->empty()) return false;
+
+	PooledMonster pm = std::move(pool->back());
+	pool->pop_back();
+	const std::shared_ptr<Object> obj = pm.obj;
+
+	obj->setId(npcId);
+	obj->setPos(pos);                       // snaps prev = curr (stable interpolation base)
+	obj->setHp(hp);
+	obj->setMaxHp(hp);
+	obj->setHidden(false);
+	obj->setHiddenByOrb(false);
+	obj->setDead(false);                    // reused corpse: clear death state up front
+	obj->body().setLinearVel(mu::Vec3{});   // drop any stale death-frame velocity
+	obj->netInterpAcc_ = 0s;                // start network interpolation fresh
+	// Keep the pooled object's renderObjectId (stable per object) — do NOT allocate a fresh
+	// one, or the counter would climb every respawn and eventually exceed maxRenderObjectId.
+	if (obj->ragdoll() && obj->ragdoll()->isActive())
+		obj->ragdoll()->deactivate(physicsWorld_);
+	obj->body().setMotionType(MotionType::Kinematic);
+
+	UI::ProgressBar* bar = pm.hpBar;
+	if (bar) bar->visible = false;
+
+	switch (kind) {
+	case MonsterKind::Goblin: {
+		auto g = std::static_pointer_cast<Goblin>(obj);
+		goblins_.push_back(g);
+		idGoblinMap_[npcId] = g;
+		if (bar) goblinHpBars_[npcId] = { g.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Snake: {
+		auto s = std::static_pointer_cast<Snake>(obj);
+		snakes_.push_back(s);
+		idSnakeMap_[npcId] = s;
+		if (bar) snakeHpBars_[npcId] = { s.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Mushroom: {
+		auto m = std::static_pointer_cast<Mushroom>(obj);
+		mushrooms_.push_back(m);
+		idMushroomMap_[npcId] = m;
+		if (bar) mushroomHpBars_[npcId] = { m.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Bomber: {
+		auto b = std::static_pointer_cast<Bomber>(obj);
+		bombers_.push_back(b);
+		if (bar) bomberHpBars_[npcId] = { b.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Birdy: {
+		auto b = std::static_pointer_cast<Birdy>(obj);
+		birdys_.push_back(b);
+		if (bar) birdyHpBars_[npcId] = { b.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Slime: {
+		auto s = std::static_pointer_cast<Slime>(obj);
+		slimes_.push_back(s);
+		if (bar) slimeHpBars_[npcId] = { s.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Treant: {
+		auto t = std::static_pointer_cast<Treant>(obj);
+		treants_.push_back(t);
+		if (bar) treantHpBars_[npcId] = { t.get(), bar, 2.5f };
+		break;
+	}
+	}
+	idMonsterMap_[npcId] = obj.get();
+	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
+		skillObjectById_.resize(npcId + 1u, nullptr);
+	skillObjectById_[npcId] = obj.get();
+	respawnKind_[npcId] = kind;
+	holdEvent(eventList_, EvRespawn(npcId));
+	return true;
+}
+
+void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
+	const float dtSec = std::chrono::duration<float>(deltaTime).count();
+	constexpr float kRagdollSeconds = 1.5f;   // hold the ragdoll before dissolving
+	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
+
+	// Credit queued charges to the most-recent uncharged ragdoll corpse.
+	for (auto cit = pendingOrbCharges_.begin(); cit != pendingOrbCharges_.end(); ) {
+		cit->age += dtSec;
+		Corpse* best = nullptr;
+		for (auto& c : corpses_) {
+			if (c.phase != Corpse::Phase::Ragdoll || c.orbsSpawned || c.totalCharge > 0.f) continue;
+			if (!best || c.age < best->age) best = &c;
+		}
+		if (best) {
+			best->totalCharge += cit->delta;
+			best->slot = cit->slot;
+			cit = pendingOrbCharges_.erase(cit);
+		} else if (cit->age > kChargeWindow) {
+			skillDial_.syncDisplayToTarget(cit->slot);  // no corpse arrived: fill HUD immediately
+			cit = pendingOrbCharges_.erase(cit);
+		} else {
+			++cit;
+		}
+	}
+
+	for (auto it = corpses_.begin(); it != corpses_.end(); ) {
+		Corpse& c = *it;
+		c.age += dtSec;
+		Object& o = *c.obj;
+		if (c.phase == Corpse::Phase::Ragdoll) {
+			// Drive finalXforms from the ragdoll bodies BEFORE Object::update, so that
+			// Object::update rebuilds renderState_.worldBVs (the debug BV boxes) from the
+			// ragdoll pose — not the stale animation pose left by animSystem_.update().
+			// (Otherwise the BV tracks the death animation while the mesh/physics flop.)
+			if (o.ragdoll() && o.ragdoll()->isActive() && o.animBlender() && o.model())
+				o.ragdoll()->syncToFinalXforms(
+					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world);
+			o.update(deltaTime, tPhysicInterp);
+			if (o.ragdoll() && o.ragdoll()->isActive())
+				o.rebuildBodyBVH();
+			if (c.age >= kRagdollSeconds && !c.orbsSpawned && o.animBlender() && o.model()) {
+				const auto& fx = o.animBlender()->finalXformData();
+				orbSystem_.spawnFromMonster(*o.model(),
+					std::span<const mu::Mat4x4>(fx.data(), fx.size()),
+					o.renderState().world, c.totalCharge, c.slot, c.corpseId);
+				c.orbsSpawned = true;
+				c.phase = Corpse::Phase::Orb;
+				if (o.ragdoll() && o.ragdoll()->isActive())
+					o.ragdoll()->deactivate(physicsWorld_);
+			}
+			++it;
+		} else {  // Orb phase: keep the corpse alive until all its orbs are absorbed.
+			if (!orbSystem_.hasActiveOrbs(c.corpseId)) {
+				returnMonsterToPool(c);
+				it = corpses_.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
 }
 
 void Game::createStronghold(const ObjectInfo& info) {
@@ -2319,12 +2814,13 @@ void Game::createStronghold(const ObjectInfo& info) {
 	sh->setPos(DirectX::XMLoadFloat3(&info.pos));
 	sh->setOrient(DirectX::XMLoadFloat4(&info.orient));
 	sh->setScale(DirectX::XMLoadFloat3(&info.scale));
-	sh->setModel(assetManager_.modelCube());
+	sh->setModel(assetManager_.modelStronghold());
 	sh->setFaction(Faction::Monsters);
 	// HP/maxHp arrive in the enter packet (server-authoritative).
 	sh->setHp(info.hp);
 	sh->setMaxHp(info.maxHp);
 	sh->setRenderObjectId(nextRenderObjId_++);
+	sh->enableBVRendering();
 
 	// Static collidable obstacle: register to the client physics world so the
 	// locally-predicted player collides with it (server pos/scale already place
@@ -2377,38 +2873,122 @@ void Game::bindZoneHandlers() {
 	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
 }
 
-// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
-// "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
-// 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
+// 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
+// 가능/미진입, 빨간색=해당 아레나 활성). 한 아레나에 진입해도 다른 아레나의 마법진 색은 영향받지 않는다.
+void Game::rebuildBarrierMagicCircleQuads() {
+	barrierMagicCircleQuads_.clear();
+
+	for (const auto& z : chunkManager_.zones()) {
+		const std::string prefix = arenaWallPrefix(z);
+		if (prefix.empty()) continue;
+
+		uint8 state = 0;   // 미진입 zone은 기본 통과 가능(파란색)
+		if (auto it = zoneStates_.find(static_cast<uint16>(z.id)); it != zoneStates_.end())
+			state = it->second;
+		const bool blocked = (state == 1);
+
+		for (const auto& m : chunkManager_.markers()) {
+			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
+
+			const float diameter = barrierMagicDiameter(m);
+			const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+			BarrierMagicCircleQuad quad{};
+			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
+			           * mu::translate(circlePos);
+			quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
+			quad.sortPos = circlePos;
+			barrierMagicCircleQuads_.push_back(quad);
+		}
+	}
+}
+
+void Game::renderBarrierMagicCircleQuads() {
+	const Texture* tex = assetManager_.magicCircleTex();
+	if (!tex) return;
+
+	for (const auto& quad : barrierMagicCircleQuads_) {
+		gfx_.addDrawEvent(BillboardPipeline::DrawEvent{
+			.world = quad.world,
+			.pTex = tex,
+			.tint = quad.tint,
+			.blend = ps::BlendMode::Alpha,
+			.rotation3D = quad.rotation,
+			.alignment = ps::RendererModule::Alignment::Local,
+			.renderOrder = kBarrierMagicRenderOrder,
+			.sortMode = ps::RendererModule::SortMode::Distance,
+			.sortingFudge = -0.1f,
+			.sortPos = quad.sortPos,
+		});
+	}
+}
+
+// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해 양끝 후방 Wall
+// 일방향 슬랩을 빌드한다(zone tag로 Wall prefix 도출, 두 벽 중점이 interior 기준점). state==0이면
+// 해제. 물리 벽은 만들지 않는다 — 후퇴 차단은 resolveArenaWallLeash의 위치 클램프가 담당한다.
 void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
+	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
+
+	arenaWalls_.clear();
 	if ( state == 1 ) {
-		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
-		for ( const auto& m : chunkManager_.markers() ) {
-			if ( m.type != "Wall" ) continue;
-			if ( m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1" ) continue;
-
-			auto bar = std::make_shared<Cube>();
-			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
-			bar->setFaction( Faction::Neutral );
-			bar->setPos( m.pos );
-			bar->setOrient( m.orient );
-			bar->setScale( m.scale );
-			bar->body().setMotionType( MotionType::Static );
-			bar->body().snapToCurrent();
-			physicsWorld_.registerBody( &bar->body(), [p = bar.get()]() { p->rebuildBodyBVH(); } );
-			barriers_.push_back( std::move( bar ) );
-
-			std::cout << "[Zone] local wall built: '" << m.name << "' at ("
-			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+		// zone id로 tag를 찾아 Wall prefix("Wall"+<Arena_ 뒷부분>)를 도출 → 해당 Wall 마커들로
+		// 양끝 일방향 슬랩을 빌드. interior 기준점 = 그 마커들의 중점(두 벽 사이).
+		std::string prefix;
+		for ( const auto& z : chunkManager_.zones() ) {
+			if ( z.id != static_cast<int>( zoneId ) ) continue;
+			prefix = arenaWallPrefix( z );   // "Arena_Hobgoblin" -> "WallHobgoblin"
+			break;
 		}
+		if ( !prefix.empty() ) {
+			std::vector<const MarkerDef*> wallMarkers;
+			mu::Vec3 wallSum{};
+			for ( const auto& m : chunkManager_.markers() ) {
+				if ( m.type != "Wall" || m.name.rfind( prefix, 0 ) != 0 ) continue;
+				wallMarkers.push_back( &m );
+				wallSum += m.pos;
+			}
+			if ( !wallMarkers.empty() ) {
+				const mu::Vec3 mid = wallSum / static_cast<float>( wallMarkers.size() );
+				for ( const MarkerDef* wm : wallMarkers ) {
+					OneWayWall w = makeOneWayWall( *wm, mid );
+					arenaWalls_.push_back( w );
+					std::cout << "[Zone] local one-way wall '" << wm->name << "' outward=("
+					          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+				}
+			}
+		}
+		arenaLeashActive_ = !arenaWalls_.empty();
+		if ( player_ ) arenaPrevPlayerPos_ = player_->pos();
+		if ( !arenaLeashActive_ )
+			std::cout << "[Zone] WARN: zone " << zoneId << " produced no arena walls\n";
 	}
 	else {
-		for ( auto& b : barriers_ ) physicsWorld_.unregisterBody( &b->body() );
-		barriers_.clear();
+		arenaLeashActive_ = false;
 	}
+}
+
+// 아레나 후방 Wall 일방향 벽: 직전 프레임 위치 대비, 양끝 Wall을 바깥으로 통과하려는 로컬
+// 플레이어만 평면으로 되돌린다(XZ만, Y 보존). 안쪽 입장·측면 이동은 통과 → 후발 파티원이 벽에
+// 막히지 않는다. setCurrPos만 보정 → 임펄스 튕김 없음, 결과는 C_Move로 전파. 프레임당 1회.
+void Game::resolveArenaWallLeash() {
+	if ( !arenaLeashActive_ || !player_ || playerDead_ ) {
+		if ( player_ ) arenaPrevPlayerPos_ = player_->pos();   // 비활성 중에도 prev는 추적해 둔다
+		return;
+	}
+
+	const mu::Vec3 cur = player_->pos();
+	mu::Vec3 np = cur;
+	for ( const OneWayWall& w : arenaWalls_ )
+		np = clampOneWayWall( arenaPrevPlayerPos_, np, w, kPlayerSeparationRadius );
+
+	if ( np.x() != cur.x() || np.z() != cur.z() ) {
+		player_->setCurrPos( np );   // XZ만 보정(clampOneWayWall이 Y 보존)
+		moveChange_ = true;
+	}
+	arenaPrevPlayerPos_ = player_->pos();
 }
 
 void Game::removePlayer( i32t playerId ) {
@@ -2526,10 +3106,12 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
 void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 	for (uint16 id : npcIds) {
-		auto it = idGoblinMap_.find(id);
-		if (it == idGoblinMap_.end() || !it->second) continue;
+		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
+		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
+		auto it = idMonsterMap_.find(id);
+		if (it == idMonsterMap_.end() || !it->second) continue;
 
-		Object* obj = it->second.get();
+		Object* obj = it->second;
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);
@@ -2550,8 +3132,8 @@ void Game::hideNpcs(const std::vector<uint16>& npcIds) {
 
 		auto& goblin = it->second;
 		goblin->setHidden(true);
-		if (goblin->ragdoll().isActive())
-			goblin->ragdoll().deactivate(physicsWorld_);
+		if (goblin->ragdoll()->isActive())
+			goblin->ragdoll()->deactivate(physicsWorld_);
 	}
 }
 
@@ -2720,10 +3302,13 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto it = idMonsterMap_.find(npcId);
 	if (it == idMonsterMap_.end()) {
+		// Detached as a corpse (dead, awaiting respawn): in-flight server moves for it are
+		// expected — ignore silently. Pre-corpse this was a dead monster left in the map.
+		if (detachedNpcIds_.count(npcId)) return;
 		DISPLAY_ERROR_STR(false, "[Game Error] Game::moveGoblin: NPC not found.\n", false);
 		return;
 	}
-	Monster* monster = it->second;
+	Object* monster = it->second;
 
 	if (monster->isDead()) return;
 
@@ -2731,14 +3316,18 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	monster->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	monster->setOrient(DirectX::XMLoadFloat4(&orient));
 	monster->setVelocity(DirectX::XMLoadFloat3(&velocity));
+	// Restart network interpolation for this move (mirrors movePlayer). Without this the
+	// monster would interpolate on the physics clock and oscillate between prev/curr.
+	monster->netInterpAcc_ = 0s;
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
-	DISPLAY_ERROR_STR( idMonsterMap_.count(npcId) > 0,
-		"[Game Error] Game::onNpcAttack: NPC not found.\n",
-		false
-	);
-	if (idMonsterMap_.count(npcId) == 0) return;
+	if (idMonsterMap_.count(npcId) == 0) {
+		// Detached as a corpse (dead, awaiting respawn): ignore stray attack packets silently.
+		if (detachedNpcIds_.count(npcId)) return;
+		DISPLAY_ERROR_STR(false, "[Game Error] Game::onNpcAttack: NPC not found.\n", false);
+		return;
+	}
 	holdEvent( eventList_, EvAttack( npcId ) );
 }
 
@@ -2754,6 +3343,14 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto barIt = mushroomHpBars_.find( targetId ); barIt != mushroomHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = bomberHpBars_.find( targetId ); barIt != bomberHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = birdyHpBars_.find( targetId ); barIt != birdyHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = slimeHpBars_.find( targetId ); barIt != slimeHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+	if ( auto barIt = treantHpBars_.find( targetId ); barIt != treantHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
 	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() )
 		it->second.hpBarVisibleSeconds = 5.f;
 
@@ -2767,21 +3364,55 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
-	auto it = idMonsterMap_.find(npcId);
-	DISPLAY_ERROR_STR( it != idMonsterMap_.end(),
-		"[Game Error] Game::onNpcRespawn: NPC not found.\n",
-		false
-	);
-	if (it == idMonsterMap_.end()) return;
+	// This npc id is live again — clear any "detached as corpse" mark (covers all three
+	// respawn sub-paths below: revive-in-place / pool reuse / fresh create).
+	detachedNpcIds_.erase(npcId);
 
-	Monster* npc = it->second;
-	npc->setHp( newHp );
-	npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
-	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
+	// Still active (e.g. temporarily hidden via S_NpcHide, never killed): revive in place.
+	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
+		Object* npc = it->second;
+		npc->setHp( newHp );
+		npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
+		npc->setHiddenByOrb( false );
+		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
+		holdEvent( eventList_, EvRespawn( npcId ) );
+		// Clear a pending death-ragdoll: if a lethal hit arrived this frame (EvDeath set
+		// ragdollPendingActivation) and the respawn revives the npc in place before the
+		// justDied loop runs, the loop would otherwise still activate the ragdoll and
+		// migrate this now-alive monster into a corpse — removing it from idMonsterMap_ so
+		// it receives neither moves nor hits. Clearing the pending flag prevents that.
+		npc->setRagdollPendingActivation( false );
+		if (npc->ragdoll() && npc->ragdoll()->isActive())
+			npc->ragdoll()->deactivate(physicsWorld_);
+		npc->body().setLinearVel( mu::Vec3{} );   // drop any stale death-frame velocity
+		npc->netInterpAcc_ = 0s;                   // restart network interpolation cleanly
+		npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
+		return;
+	}
+
+	// Detached into a client-authored corpse on death: spawn a fresh instance so the
+	// corpse animation keeps running. Reuse a pooled object if available, else create.
+	const MonsterKind kind = respawnKind_.count(npcId) ? respawnKind_.at(npcId) : MonsterKind::Goblin;
+	const mu::Vec3    pos  = DirectX::XMLoadFloat3( &spawnPos );
+	if (reinitFromPool(kind, npcId, pos, newHp)) return;
+
+	// Pool empty (corpse still animating): create a new monster from stored spawn info.
+	ObjectInfo info{};
+	if (auto si = monsterSpawnInfo_.find(npcId); si != monsterSpawnInfo_.end()) info = si->second;
+	info.objectId = npcId;
+	info.pos      = spawnPos;
+	info.hp       = newHp;
+	info.maxHp    = (info.maxHp > newHp) ? info.maxHp : newHp;
+	switch (kind) {
+	case MonsterKind::Goblin:   createGoblin(info);   break;
+	case MonsterKind::Snake:    createSnake(info);    break;
+	case MonsterKind::Mushroom: createMushroom(info); break;
+	case MonsterKind::Bomber:   createBomber(info);   break;
+	case MonsterKind::Birdy:    createBirdy(info);    break;
+	case MonsterKind::Slime:    createSlime(info);    break;
+	case MonsterKind::Treant:   createTreant(info);   break;
+	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
-	if (npc->ragdoll().isActive())
-		npc->ragdoll().deactivate(physicsWorld_);
-	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
 void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
@@ -2932,10 +3563,27 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
 
+	// Death-ragdoll corpses need far more PGS iterations to converge than the default
+	// budget (tuned for shallow/branching constraint sets like player-terrain contacts).
+	// A long unbranched joint chain (e.g. Snake: 16 bodies, 15 joints deep, vs ~3-6 hops
+	// for every other ragdoll) cannot converge within the default 4 velocity passes --
+	// the residual position error compounds every step until the chain destabilizes and
+	// flies apart within about a second. Mirrors the debug ragdoll-test-object iteration
+	// boost in standalone/game.cpp (spawnTestObject), which documents the same mechanism
+	// for deep ConeTwist chains; this wires it into the real corpse path. Cheap: contacts
+	// are unaffected, only joints get the extra passes (setJointSolverExtraIterations).
+	const bool anyRagdollActive = std::any_of(corpses_.begin(), corpses_.end(),
+		[](const Corpse& c) { return c.phase == Corpse::Phase::Ragdoll; });
+	physicsWorld_.setJointSolverExtraIterations(anyRagdollActive ? 48 : 0);
+
 	int physicsStepsDone = 0;
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 접지 중력 게이팅: 이번 step의 terrain 접촉을 보고 로컬 플레이어 접지 판정 +
+		// 중력 게이트 설정(다음 step에 반영) + ground-snap. 물리 step 루프 안에서
+		// (렌더 프레임이 아니라) 호출해야 고정 timestep 의미가 유지된다.
+		if (player_) player_->updateGroundedGravityGate(physicsWorld_, effectiveInterval);
 		// 물리 적분 직후, 로컬 플레이어를 다른 플레이어와 reciprocal soft separation.
 		// (setCurrPos로 curr만 갱신 → 렌더 보간의 prev는 보존된다)
 		resolvePlayerSeparation(effectiveInterval);
@@ -2944,6 +3592,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
+
+	// 아레나 후방 Wall 일방향 벽: 직전 프레임 대비 양끝 Wall을 바깥으로 통과하려는 로컬 플레이어를
+	// 평면으로 되돌린다(정적 벽이라 sub-step 불필요, 프레임당 1회). 입장·전진·측면은 통과.
+	resolveArenaWallLeash();
 
 	if (physicsStepsDone >= kMaxPhysicsStepsPerFrame) {
 		++consecutiveLagFrames_;
@@ -2971,6 +3623,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& g : goblins_)   g->rebuildBodyBVH();
 	for (auto& s : snakes_)    s->rebuildBodyBVH();
 	for (auto& m : mushrooms_) m->rebuildBodyBVH();
+	for (auto& b : bombers_)   b->rebuildBodyBVH();
+	for (auto& b : birdys_)    b->rebuildBodyBVH();
+	for (auto& s : slimes_)    s->rebuildBodyBVH();
+	for (auto& t : treants_)   t->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3038,14 +3694,6 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				}
 			}
 
-			// 전투 효과음(3D, 대상의 월드 위치에서 재생). 카탈로그에 파일이 없으면 1회 경고만.
-			switch (pEv->type) {
-			case EventType::Hit:    INet::ClientApp::sound().playSfx3D("hit",    obj->renderState().pos); break;
-			case EventType::Death:  INet::ClientApp::sound().playSfx3D("death",  obj->renderState().pos); break;
-			case EventType::Attack: INet::ClientApp::sound().playSfx3D("attack", obj->renderState().pos); break;
-			default: break;
-			}
-
 			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
 
 			// 로컬 플레이어 사망 시 게임 레벨 플래그를 세운다. (standalone game.cpp의 playerDead_ 처리와 대응)
@@ -3091,9 +3739,27 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		obj->update( deltaTime, tNet );
 	}
 
-	for (auto& goblin   : goblins_)   goblin->update(deltaTime, tPhysicInterpolation);
-	for (auto& snake    : snakes_)    snake->update(deltaTime, tPhysicInterpolation);
-	for (auto& mushroom : mushrooms_) mushroom->update(deltaTime, tPhysicInterpolation);
+	// Monsters are server-position-driven (S_Move) just like remote players, so they use
+	// the same NETWORK interpolation, not the physics-step clock. tNet ramps 0->1 over one
+	// move interval and clamps at 1, holding at curr when moves stop — this is what prevents
+	// the prev<->curr oscillation (sink/reappear) the physics clock caused for idle/sparse
+	// monsters. (Same shape as the remote-player loop above.)
+	auto updateMonstersNet = [&](auto& container) {
+		for (auto& m : container) {
+			m->netInterpAcc_ += deltaTime;
+			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
+			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
+				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
+			m->update(deltaTime, tNet);
+		}
+	};
+	updateMonstersNet(goblins_);
+	updateMonstersNet(snakes_);
+	updateMonstersNet(mushrooms_);
+	updateMonstersNet(bombers_);
+	updateMonstersNet(birdys_);
+	updateMonstersNet(slimes_);
+	updateMonstersNet(treants_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3110,6 +3776,28 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 연출 존 판정 (로컬 예측 플레이어 위치 기준, 패킷 없음).
 	clientZoneSystem_.update(player_->pos());
 
+	// Bind the absorb -> HUD-charge callback once.
+	if (!orbSystem_.onAbsorb) {
+		orbSystem_.onAbsorb = [this](const EnergyOrbSystem::Orb& orb) {
+			skillDial_.addDisplayCharge(orb.slot, orb.chargePerOrb);
+			// M5: emissive ripple across the local player's body at the contact point.
+			// The orb color is HDR (bright); GB2 is UNORM so it would clamp to a vivid,
+			// busy full-saturation ring. Soften it: normalize the hue to peak 1, mix
+			// toward white (pastel), and feed a modest intensity -> a subtle wash.
+			if (player_) {
+				const auto cf   = orb.colorHDR.getXmf();
+				const float peak = std::max({ cf.x, cf.y, cf.z, 1e-4f });
+				mu::Vec3 soft = orb.colorHDR * (1.f / peak);                  // hue, peak = 1
+				soft = mu::lerp(soft, mu::Vec3{ 1.f, 1.f, 1.f }, 0.3f);       // desaturate
+				player_->addBodyRipple(orb.contactPoint, soft, 0.25f);        // gentle intensity
+			}
+		};
+	}
+
+	// Energy orb death FX: advance orbs (tracking + absorption) toward the live player.
+	// Charge credits are matched to corpses in updateCorpses(); see below.
+	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
+
 	camera_.update(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
@@ -3122,36 +3810,32 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 애니메이션 업데이트
 	animSystem_.update(0.01s);
 
-	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
+	// Death migration: activate the ragdoll for monsters that died this frame, then
+	// detach them into client-authored corpses so a server respawn can't cut the death
+	// animation short. Collected first to avoid mutating the active vectors mid-iteration.
+	// (finalXformData is valid here, right after animSystem_.update().)
 	{
-		auto activateRagdollIfPending = [&](Monster& g) {
+		std::vector<std::pair<std::shared_ptr<Object>, MonsterKind>> justDied;
+		auto activateAndCollect = [&](const std::shared_ptr<Object>& objPtr, MonsterKind kind) {
+			Object& g = *objPtr;
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
-				g.animBlender()->finalXformData(),
-				g.model()->skeleton,
-				g.renderState().world
-			);
+				g.animBlender()->finalXformData(), g.model()->skeleton, g.renderState().world);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
 
 			// Apply death velocity so the ragdoll flies in the knockback direction.
 			const mu::Vec3 initVel = g.ragdollInitVelocity();
 			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) {
-					if (rb.body) rb.body->setLinearVel(initVel);
-				}
+				for (auto& rb : rd.bones()) if (rb.body) rb.body->setLinearVel(initVel);
 				g.setRagdollInitVelocity(mu::Vec3{});
 			}
-
 			// Per-bone random noise impulse, biased toward the death velocity direction.
-			// velDir * kNoiseBias + randomUnit * (1-kNoiseBias) gives a cosine-like
-			// distribution: closer to velDir is more probable, but still varied.
 			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f)
-			    ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
+			const mu::Vec3 velDir = (initVel.len2() > 0.01f) ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
 			for (const auto& rb : rd.bones()) {
 				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
 				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
@@ -3160,23 +3844,23 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
 				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
 			}
+			justDied.emplace_back(objPtr, kind);
 		};
 
-		auto syncRagdollToAnim = [&](Monster& g) {
-			Ragdoll& rd = g.ragdoll();
-			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
-			rd.syncToFinalXforms(
-				g.animBlender()->finalXformData(),
-				g.model()->skeleton,
-				g.renderState().world
-			);
-			g.rebuildBodyBVH();
-		};
+		for (auto& goblin   : goblins_)   activateAndCollect(goblin,   MonsterKind::Goblin);
+		for (auto& snake    : snakes_)    activateAndCollect(snake,    MonsterKind::Snake);
+		for (auto& mushroom : mushrooms_) activateAndCollect(mushroom, MonsterKind::Mushroom);
+		for (auto& bomber   : bombers_)   activateAndCollect(bomber,   MonsterKind::Bomber);
+		for (auto& birdy    : birdys_)    activateAndCollect(birdy,    MonsterKind::Birdy);
+		for (auto& slime    : slimes_)    activateAndCollect(slime,    MonsterKind::Slime);
+		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
 
-		for (auto& goblin   : goblins_)   { activateRagdollIfPending(*goblin);   syncRagdollToAnim(*goblin); }
-		for (auto& snake    : snakes_)    { activateRagdollIfPending(*snake);    syncRagdollToAnim(*snake); }
-		for (auto& mushroom : mushrooms_) { activateRagdollIfPending(*mushroom); syncRagdollToAnim(*mushroom); }
+		for (auto& [objPtr, kind] : justDied)
+			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
 	}
+
+	// Advance client-authored corpses: ragdoll hold -> orb dissolve -> pool return.
+	updateCorpses(deltaTime, tPhysicInterpolation);
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -3291,6 +3975,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		};
 		updateMonsterHpBar(snakeHpBars_);
 		updateMonsterHpBar(mushroomHpBars_);
+		updateMonsterHpBar(bomberHpBars_);
+		updateMonsterHpBar(birdyHpBars_);
+		updateMonsterHpBar(slimeHpBars_);
+		updateMonsterHpBar(treantHpBars_);
 
 		for (auto& [id, entry] : strongholdHpBars_) {
 			if (!entry.obj || entry.obj->isDead() || entry.obj->maxHp() <= 0) {
@@ -3462,6 +4150,15 @@ void Game::renderInGame() {
 	for (auto& goblin   : goblins_)   goblin->render(gfx_);
 	for (auto& snake    : snakes_)    snake->render(gfx_);
 	for (auto& mushroom : mushrooms_) mushroom->render(gfx_);
+	for (auto& bomber   : bombers_)   bomber->render(gfx_);
+	for (auto& birdy    : birdys_)    birdy->render(gfx_);
+	for (auto& slime    : slimes_)    slime->render(gfx_);
+	for (auto& treant   : treants_)   treant->render(gfx_);
+
+	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
+	// (orb phase is drawn by orbSystem_.submitDrawEvents).
+	for (auto& c : corpses_)
+		if (c.phase == Corpse::Phase::Ragdoll && c.obj) c.obj->render(gfx_);
 
 	for (auto& sh : strongholds_) {
 		if (sh->isDead()) continue;   // hide destroyed structure (isDead set by EvDeath)
@@ -3470,6 +4167,7 @@ void Game::renderInGame() {
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	renderBarrierMagicCircleQuads();
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
@@ -3496,6 +4194,7 @@ void Game::renderInGame() {
 	tornadoMuzzleEffect_.render(gfx_);
 	tornadoHitEffect_.render(gfx_);
 	dustParticleSystem_.render(gfx_);
+	orbSystem_.submitDrawEvents(gfx_);
 	debugBVView_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{
@@ -3517,7 +4216,7 @@ void Game::renderInGame() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -3561,7 +4260,7 @@ void Game::renderInGame() {
 	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // ===========================================================================
@@ -3768,7 +4467,12 @@ void Game::refreshLobbyUI() {
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
 	for (const auto& p : lobbyPlayers_) {
-		vs.players.push_back(LobbyUI::PlayerSlot{ p.name, p.sessionId == hostId_ });
+		vs.players.push_back(LobbyUI::PlayerSlot{
+			p.name,
+			p.sessionId == hostId_,
+			p.sessionId == myId_,
+			p.weaponType
+		});
 	}
 	lobbyUI_.refresh(vs);
 
@@ -3785,6 +4489,7 @@ LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	cb.onCopyCode     = [this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; };
 	cb.onOpenSettings = [this]() { settingsPanel_.open(); };
 	cb.onQuit         = []() { PostQuitMessage(0); };
+	cb.onSelectWeapon = [this](int direction) { lobbySelectWeapon(direction); };
 	return cb;
 }
 
@@ -3868,7 +4573,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		pendingHandoff_ = false;
 		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
-		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_));
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_, selectedLobbyWeapon_));
 		INet::ClientApp::send();
 		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
 		return;
@@ -3978,7 +4683,7 @@ void Game::renderWaitingRoom() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -3996,7 +4701,7 @@ void Game::renderWaitingRoom() {
 	// 배경 카메라와 무관하게 각 캐릭터를 슬롯 전용 카메라로 RT 셀에 그린다(투명 배경).
 	const int filled = static_cast<int>(lobbyPlayers_.size());
 	gfx_.setLobbyPortraitActive(true);
-	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f), .iblIntensity = 0.0f });
+	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f), .iblIntensity = 0.92f });
 	// 정면-상단 키 라이트(고정 방향, 배경광과 무관하게 캐릭터를 일관되게 비춤). shadow는 GFX에서 off.
 	{
 		const mu::NVec3 keyDir(-0.25f, -0.5f, -0.83f);
@@ -4113,6 +4818,7 @@ void Game::lobbyLeaveRoom() {
 	isHost_ = false;
 	hostId_ = 0;
 	myId_   = 0;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
@@ -4146,6 +4852,27 @@ void Game::lobbyStartGame() {
 	gSharedLog << "[Lobby] 게임 시작 요청 전송\n";
 }
 
+void Game::lobbySelectWeapon(int direction) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+		return;
+	}
+
+	const int cur = std::clamp(static_cast<int>(selectedLobbyWeapon_), 0, 3);
+	const int next = (cur + (direction >= 0 ? 1 : 3)) % 4;
+	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == myId_) {
+			p.weaponType = selectedLobbyWeapon_;
+			break;
+		}
+	}
+
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSelectWeaponPacket(selectedLobbyWeapon_));
+	INet::ClientApp::send();
+	refreshLobbyUI();
+}
+
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
@@ -4153,15 +4880,16 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	myId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId), selectedLobbyWeapon_ });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
 	applyCursorPolicy();
 	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
 }
 
-void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds) {
+void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos) {
 	if (!success) {
 		lobbyUI_.setMainMenuMessage(L"방을 찾을 수 없습니다");
 		gSharedLog << "[Lobby] 방 참가 실패\n";
@@ -4172,10 +4900,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
+	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 
 	lobbyPlayers_.clear();
-	for (uint16 id : playerIds) {
-		lobbyPlayers_.push_back({ id, lobbyDisplayName(id) });
+	for (const LobbyPlayerInfo& info : playerInfos) {
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		if (info.sessionId == myId_) {
+			selectedLobbyWeapon_ = info.weaponType;
+		}
 	}
 
 	lobbyState_ = LobbyState::WaitingRoom;
@@ -4184,14 +4916,14 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
-void Game::onLobbyPlayerJoined(uint16 sessionId) {
+void Game::onLobbyPlayerJoined(const LobbyPlayerInfo& info) {
 	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
-		[sessionId](const LobbyPlayer& p) { return p.sessionId == sessionId; });
+		[&info](const LobbyPlayer& p) { return p.sessionId == info.sessionId; });
 	if (!exists) {
-		lobbyPlayers_.push_back({ sessionId, lobbyDisplayName(sessionId) });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
 	}
 	refreshLobbyUI();
-	gSharedLog << "[Lobby] 플레이어 입장: " << sessionId << "\n";
+	gSharedLog << "[Lobby] 플레이어 입장: " << info.sessionId << "\n";
 }
 
 void Game::onLobbyPlayerLeft(uint16 sessionId) {
@@ -4205,6 +4937,24 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 
 	refreshLobbyUI();
 	gSharedLog << "[Lobby] 플레이어 퇴장: " << sessionId << "\n";
+}
+
+void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) {
+	const auto ordinal = static_cast<uint8>(weaponType);
+	if (ordinal > static_cast<uint8>(PlayerWeaponType::HeavyArrow)) {
+		return;
+	}
+
+	for (auto& p : lobbyPlayers_) {
+		if (p.sessionId == sessionId) {
+			p.weaponType = weaponType;
+			break;
+		}
+	}
+	if (sessionId == myId_) {
+		selectedLobbyWeapon_ = weaponType;
+	}
+	refreshLobbyUI();
 }
 
 void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
@@ -4311,6 +5061,31 @@ void Game::sendMovePacket() {
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
+bool Game::findZoneCenter(const std::string& tag, mu::Vec3& out) const {
+	for (const auto& z : chunkManager_.zones()) {
+		if (z.tag != tag || z.volumes.empty()) continue;
+		out = z.volumes[0].center;
+		return true;
+	}
+	return false;
+}
+
+void Game::debugTeleportToArena(const std::string& tag) {
+	if (!player_) return;
+	mu::Vec3 center{};
+	if (!findZoneCenter(tag, center)) {
+		std::cout << "[DebugTeleport] zone '" << tag << "' not found\n";
+		return;
+	}
+	// Local prediction: snap the player to the zone center (prev == curr via setPos), drop velocity.
+	player_->setPos(center);
+	player_->setVelocity(mu::Vec3{});
+	moveChange_ = true;
+	// Authoritative jump: the server applies this without the 7m/packet clamp, so its zone Enter fires.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCDebugTeleportPacket(center.getXmf()));
+	std::cout << "[DebugTeleport] -> '" << tag << "' (" << center.x() << ", " << center.y() << ", " << center.z() << ")\n";
+}
+
 void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
@@ -4377,10 +5152,15 @@ void Game::setupSkillDial(PlayerWeaponType weaponType) {
 void Game::onSkillCharge(uint16 playerId, uint8 slot, float charge) {
 	if (!player_) return;
 	if (playerId == static_cast<uint16>(player_->getId())) {
-		// setCharge reports the 0 -> 1 transition; the icon also pops + flips to its
-		// lit "ready" shader mode. Fire the audio cue on the transition.
-		if (skillDial_.setCharge(slot, charge))
-			INet::ClientApp::sound().playSfx("skill_ready", 1.f);
+		// Server-authoritative target; the displayed bar fills as energy orbs are
+		// absorbed (matchPendingOrbSpawns + onAbsorb). delta < 0 (spend) reflects now.
+		skillDial_.setChargeTarget(slot, charge);
+		const float delta = charge - prevServerCharge_[slot];
+		prevServerCharge_[slot] = charge;
+		if (delta > 0.f)
+			pendingOrbCharges_.push_back(PendingOrbCharge{ static_cast<int>(slot), delta, 0.f });
+		else
+			skillDial_.syncDisplayToTarget(slot);
 	} else if (slot < SkillDialHUD::kSlots) {
 		teammateCharge_[playerId][slot] = charge;
 	}
@@ -4402,6 +5182,14 @@ void Game::onComboState(uint16 playerId, uint16 comboCount, float windowMs) {
 	comboCount_    = comboCount;
 	comboWindowMs_ = windowMs;
 	comboSecLeft_  = windowMs / 1000.f;
+}
+
+void Game::onPlayerHp(uint16 playerId, int32 newHp) {
+	// Authoritative regen HP: set it straight on the player object (covers the local
+	// player and remotes, both registered in idPlayerMap_). No EvHit/EvDeath is posted,
+	// so no hit animation or blood plays; the per-frame HP UI read reflects it directly.
+	if (auto it = idPlayerMap_.find(playerId); it != idPlayerMap_.end())
+		it->second->setHp(newHp);
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -4520,6 +5308,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		gfx_.cycleGBufferDebugMode();
 	}
 
+	// F5/F6/F7: debug teleport to each arena to test the mid-boss encounters.
+	if ( (keyboardStateCurr_[VK_F5] & 0x80) && !(keyboardStatePrev_[VK_F5] & 0x80) )
+		debugTeleportToArena( "Arena_Hobgoblin" );
+	if ( (keyboardStateCurr_[VK_F6] & 0x80) && !(keyboardStatePrev_[VK_F6] & 0x80) )
+		debugTeleportToArena( "Arena_Grandbaum" );
+	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
+		debugTeleportToArena( "Arena_Isys" );
+
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
@@ -4562,6 +5358,36 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	skillDial_.update(deltaTime.count() / 1000.f);
 	comboSecLeft_ = std::max(0.f, comboSecLeft_ - deltaTime.count() / 1000.f);   // local combo countdown
 
+	// DEV: arrow keys nudge the skill dial's resolution-relative pivot margin so a
+	// good position can be found live, without recompiling. Logs the settled
+	// fraction/pixel values on key release so repeated nudges are easy to read back.
+	if (skillDial_.visible() && !uiManager_.needsCursor()) {
+		const float dtSec = deltaTime.count() / 1000.f;
+		const bool  shift = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		const float speed = (shift ? 600.f : 120.f) * dtSec;   // px/sec, at current resolution
+
+		const float dx = (keyboardStateCurr_[VK_RIGHT] & 0x80) ? speed
+		                : (keyboardStateCurr_[VK_LEFT]  & 0x80) ? -speed : 0.f;
+		const float dy = (keyboardStateCurr_[VK_DOWN]   & 0x80) ? -speed
+		                : (keyboardStateCurr_[VK_UP]     & 0x80) ?  speed : 0.f;
+
+		const float w = static_cast<float>(gClientRect.right - gClientRect.left);
+		const float h = static_cast<float>(gClientRect.bottom - gClientRect.top);
+		if (dx != 0.f || dy != 0.f) skillDial_.nudgeMarginPx(dx, dy, w, h);
+
+		const bool anyDown     = ((keyboardStateCurr_[VK_LEFT] | keyboardStateCurr_[VK_RIGHT] |
+		                            keyboardStateCurr_[VK_UP]  | keyboardStateCurr_[VK_DOWN]) & 0x80) != 0;
+		const bool anyDownPrev = ((keyboardStatePrev_[VK_LEFT] | keyboardStatePrev_[VK_RIGHT] |
+		                            keyboardStatePrev_[VK_UP]  | keyboardStatePrev_[VK_DOWN]) & 0x80) != 0;
+		if (anyDownPrev && !anyDown) {
+			gSharedLog << "[SkillDial Tune] marginXFrac=" << skillDial_.marginXFrac()
+			           << " marginYFrac=" << skillDial_.marginYFrac()
+			           << " (px@" << w << "x" << h << ": "
+			           << w * skillDial_.marginXFrac() << ", " << h * skillDial_.marginYFrac() << ")\n";
+			dumpLog();
+		}
+	}
+
 	const float nowSec = std::chrono::duration<float>(
 		std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -4603,11 +5429,16 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
-	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size());
+	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
+	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
 	std::ranges::copy(mushrooms_,    std::back_inserter(entities));
+	std::ranges::copy(bombers_,      std::back_inserter(entities));
+	std::ranges::copy(birdys_,       std::back_inserter(entities));
+	std::ranges::copy(slimes_,       std::back_inserter(entities));
+	std::ranges::copy(treants_,      std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -4670,20 +5501,31 @@ void Game::cullObjects() {
 	}
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+// 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
+// 못한 채 방치(T-pose 등)될 수 있기 때문이다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
 			if (auto* blender = p->animBlender())
-				blender->setCulled(p->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && p->isFrustumCulled());
 		}
-		auto resetHiZ = [&](const std::shared_ptr<Monster>& m) {
+		auto resetHiZ = [&](const std::shared_ptr<Object>& m) {
 			m->setHiZCulled(false);
-			if (auto* blender = m->animBlender()) blender->setCulled(m->isFrustumCulled());
+			if (auto* blender = m->animBlender())
+				blender->setCulled(blender->hasEverUpdated() && m->isFrustumCulled());
 		};
 		for (auto& g : goblins_)   resetHiZ(g);
 		for (auto& s : snakes_)    resetHiZ(s);
 		for (auto& m : mushrooms_) resetHiZ(m);
+		for (auto& b : bombers_)   resetHiZ(b);
+		for (auto& b : birdys_)    resetHiZ(b);
+		for (auto& s : slimes_)    resetHiZ(s);
+		for (auto& t : treants_)   resetHiZ(t);
 		return;
 	}
 
@@ -4691,11 +5533,15 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);
 	for (auto& m : mushrooms_) applyToEntity(m);
+	for (auto& b : bombers_)   applyToEntity(b);
+	for (auto& b : birdys_)    applyToEntity(b);
+	for (auto& s : slimes_)    applyToEntity(s);
+	for (auto& t : treants_)   applyToEntity(t);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 

@@ -16,7 +16,9 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     float d2 = srcTex.Load(int3(base + uint2(0, 1),    srcMip));
     float d3 = srcTex.Load(int3(base + uint2(1, 1),    srcMip));
 
-    float maxDepth = max(max(d0, d1), max(d2, d3));
+    // Reversed-Z: 가까움=1.0, 멀어짐=0.0. 2x2 셀 중 가장 먼(가장 작은) occluder depth를
+    // 보존해야 conservative occlusion test가 유지된다.
+    float minDepth = min(min(d0, d1), min(d2, d3));
 
-    dstTex[id.xy] = maxDepth;
+    dstTex[id.xy] = minDepth;
 }

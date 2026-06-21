@@ -101,3 +101,14 @@ repeat S:
 ### 10.4 동시성/엣지케이스
 - **이중 EvDeath**: 막타 `S_SkillHit(≤0)`→`EvDeath`와 `S_StrongholdState(state=1)`→`EvDeath`. 핸들러 `if(!isDead_)` 가드로 멱등. TCP 순서상 hit 먼저 → 데미지 넘버는 첫 EvDeath(applyHit)에서만(prevHp 보존), 둘째는 hp=0/isDead라 dmg≤0·가드로 무시. §10.3대로 onStrongholdState가 setHp(0)을 안 하므로 prevHp 안전.
 - **포인터 안정성**: `strongholds_`는 shared_ptr 벡터, `StrongholdHpEntry.obj`/resolveObject 반환은 raw지만 shared_ptr가 수명 보장.
+
+## 11. 몬스터 스폰 시 prop 겹침 회피 (결정론적 bounded retry, 2026-06)
+
+기존 `randomSpawnInDisc`/`Stronghold::randomSpawnPos`는 디스크 균등 샘플 후 Y만 지면에 스냅할 뿐, scatter prop(나무/바위 등)과의 겹침을 전혀 검사하지 않아 몬스터가 prop 메시 속에 박힌 채 스폰될 수 있었다. 물리 스텝마다 `ScatterCollider`(§ [[project_scatter_system]])가 사후에 밀어내긴 하지만(`staticDepenetration`), 스폰 순간의 겹침 자체는 막지 못했다.
+
+- **신규 질의 API**: `WorldCollider::overlapsBVH(const BVH&)`(기본 false, `collision.hpp`) — body 없이 "이 world-BVH가 닿는가"만 묻는 경량 질의. `ScatterCollider::overlapsBVH`가 기존 `forEachCandidate` grid + `collides(BVH,BVH)`를 재사용해 구현(`collision.cpp`). `PhysicsWorld::overlapsAnyScatterProp(pos, BVH)`가 등록된 모든 `worldColliders_`를 `footprintReject`로 먼저 거르고 질의(`physicsWorld.hpp/.cpp`).
+- **Bounded retry 스폰**: `Room::randomSpawnInDiscAvoidingProps(center, radius, const Object& footprintSource)`(`Room.hpp/.cpp`, public)가 `randomSpawnInDisc`를 **최대 8회(kMaxSpawnAttempts, 고정 상수)** 재시도하며, 매 시도마다 `footprintSource`의 `model()`/`body().orient()`/`body().scale()`로 후보 위치의 가상 world-BVH를 `makeWorldBVH`(기존 scatter 베이킹 함수 재사용)로 만들어 `overlapsAnyScatterProp`로 검사. 겹치지 않는 첫 후보를 즉시 채택, 8회 모두 실패하면(드묾) 마지막 후보로 fallback — 잔류 겹침은 기존 `staticDepenetration`이 다음 몇 스텝 내 자동 해소하므로 영구 박힘은 없다.
+- **결정론적 시간**: 매 시도 비용(RNG 샘플 O(1) + 높이 조회 O(1) + `makeWorldBVH`<로컬 BVH 노드 수> + `overlapsAnyScatterProp`<grid-bounded 후보만>)이 prop 밀도/씬 규모와 무관한 상수이므로, 전체 비용은 항상 "8 × 상수"로 상한 고정. "겹치지 않을 때까지 무한 재시도" 방식이 아니다.
+- **호출부**: `Room::init`의 `spawnMonster`(초기 스폰)와 `Stronghold::updatePopulation`의 `tryRevive`(리바이브) 양쪽 모두 `randomSpawnInDiscAvoidingProps`를 사용. 초기 스폰에서도 검사가 동작하도록 `registerScatterColliders` 호출을 `Room::init` 앞부분(거점 스폰 루프 이전)으로 이동(기존엔 terrain chunk 등록 이후라 초기 스폰 시점엔 콜라이더가 비어있었음).
+- **단순화**: `Stronghold::randomSpawnPos`(자체 `s_strongholdRng`로 동일 디스크 샘플링을 중복 구현하던 private 메서드)를 삭제하고 `room.randomSpawnInDiscAvoidingProps`를 직접 호출하도록 통합.
+- **범위**: scatter prop만 검사 대상(몬스터-몬스터/몬스터-플레이어 겹침은 의도적으로 허용, 검사 경로 자체에 없음). 거점 구조물 자체(Static body, `WorldCollider` 경로 아님)와의 겹침은 이번 범위 밖.

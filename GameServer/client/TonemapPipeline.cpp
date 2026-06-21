@@ -24,30 +24,36 @@ Dispatcher::Dispatcher(
 	float exposure,
 	float bloomIntensity,
 	u32t debugMode,
-	const BindlessIndex& idxBloom
+	const BindlessIndex& idxBloom,
+	DescriptorPool* pTexPool3D,
+	const BindlessIndex& idxColorGradingLUT
 ) : descriptorHeaps_(descriptorHeaps),
 	pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
+	pTexPool3D_(pTexPool3D),
 	rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
 	viewport_(viewport), scissorRect_(scissorRect), backBufferRtv_(backBufferRtv),
 	pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
 	idxSceneColor_(idxSceneColor), roomIdx_(roomIdx),
 	exposure_(exposure), bloomIntensity_(bloomIntensity), debugMode_(debugMode), idxBloom_(idxBloom),
+	idxColorGradingLUT_(idxColorGradingLUT),
 	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
 	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
 	rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
 	rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
 	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
-	rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")) {}
+	rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")),
+	rootParamIdxTexPool3D_(rootSig->paramIdx("Texture3DPool")) {}
 
 void Dispatcher::updateGPUDataSingleThreaded() {
 	auto pdd = TonemapResolveShader::PerDrawcallData{
-		.idxSceneColor  = idxSceneColor_,
-		.idxBloom       = idxBloom_,
-		.exposure       = exposure_,
-		.bloomIntensity = bloomIntensity_,
-		.debugMode      = debugMode_,
-		._pad           = 0.0f
+		.idxSceneColor       = idxSceneColor_,
+		.idxBloom            = idxBloom_,
+		.exposure            = exposure_,
+		.bloomIntensity      = bloomIntensity_,
+		.debugMode           = debugMode_,
+		._pad                = 0.0f,
+		.idxColorGradingLUT  = idxColorGradingLUT_
 	};
 	pResources_->perDrawcallData.cbuffers[0].stage(roomIdx_, &pdd, 1u);
 }
@@ -97,6 +103,7 @@ void Dispatcher::drawSingleThreaded() {
 	pTexCubePool_->bind(cmdList, rootParamIdxTexCubePool_);
 	pSamPool_->bind(cmdList, rootParamIdxSamPool_);
 	pCmpSamPool_->bind(cmdList, rootParamIdxCmpSamPool_);
+	pTexPool3D_->bind(cmdList, rootParamIdxTexPool3D_);
 
 	// PerDrawcallData (b0): scene-color bindless index.
 	pResources_->perDrawcallData.cbuffers[0].bind(cmdList, rootParamIdxPDD_, roomIdx_);

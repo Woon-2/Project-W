@@ -10,11 +10,21 @@
 #include "collision.hpp"
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
+#include "TacticalSlime.hpp"
+#include "TacticalSnake.hpp"
+#include "TacticalBirdy.hpp"
+#include "TacticalBomber.hpp"
+#include "TacticalTreant.hpp"
 #include "GoblinMidBossTactic.hpp"
 #include "GrandbaumMidBossTactic.hpp"
 #include "IsysMidBossTactic.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
+#include "bomber.hpp"
+#include "birdy.hpp"
+#include "slime.hpp"
+#include "treant.hpp"
+#include <span>
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -52,15 +62,59 @@ mu::Vec3 MU_CALLCONV Room::randomSpawnInDisc(mu::Vec3 center, float radius) cons
 	return mu::Vec3(x, groundHeightAtWorld(x, z), z);
 }
 
+mu::Vec3 MU_CALLCONV Room::randomSpawnInDiscAvoidingProps(
+	mu::Vec3 center, float radius, const Object& footprintSource) const
+{
+	constexpr int kMaxSpawnAttempts = 8;   // fixed budget -> deterministic time per spawn
+
+	const Model* model = footprintSource.model();
+	mu::Vec3 candidate{};
+	for (int attempt = 0; attempt < kMaxSpawnAttempts; ++attempt) {
+		candidate = randomSpawnInDisc(center, radius);
+		if (!model || model->bvh.empty()) return candidate;   // no collision shape to test
+
+		const BVH worldBVH = makeWorldBVH(model->bvh, candidate,
+		                                  footprintSource.body().orient(),
+		                                  footprintSource.body().scale());
+		if (!physicsWorld_.overlapsAnyScatterProp(candidate, worldBVH))
+			return candidate;
+	}
+	return candidate;   // all attempts collided (rare) -> fall back to the last
+	                    // sample; staticDepenetration resolves residual overlap.
+}
+
+bool MU_CALLCONV Room::isTacticalFormationPositionOpen(
+	mu::Vec3 candidate, const Object& footprintSource) const
+{
+	const Model* model = footprintSource.model();
+	if (!model || model->bvh.empty()) return true;
+
+	const BVH worldBVH = makeWorldBVH(model->bvh, candidate,
+		footprintSource.body().orient(), footprintSource.body().scale());
+	return !physicsWorld_.overlapsAnyStaticObstacle(candidate, worldBVH);
+}
+
 void Room::setupGoblin(Goblin& g, const Level& level) {
 	const auto& anims = level.assetManager->goblinAnimations();
 	g.setModel(level.assetManager->modelGoblin());
 	g.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
 	g.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-	g.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+	// 다중공격: 공격 클립을 전부 등록한다(클립 수 = 서로 다른 공격 수, characterSkillMap.hpp 참고).
+	// 클라가 레거시 공격 → 스킬 시스템 기반 공격으로 전환 중이며, 완료되면 서버도 attackIndex로
+	// 클립을 선택하도록 transitionTo의 switchClip("Attack")를 교체할 예정.
+	// TODO(스킬전환): 현재는 임시로 항상 첫 공격 클립(Goblin_Attack1)만 재생한다.
+	g.animController().registerClip("Attack1", findServerAnimClip(anims, "Goblin_Attack1"));
+	g.animController().registerClip("Attack2", findServerAnimClip(anims, "Goblin_Attack2"));
+	g.animController().registerClip("Attack3", findServerAnimClip(anims, "Goblin_Attack3"));
+	g.animController().registerClip("Attack",  findServerAnimClip(anims, "Goblin_Attack1")); // 임시 재생용
 	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
+	// Skill-based attacks: (skill asset id, server anim clip key). attackIndex in the
+	// lua matches the clip order; AI picks one at random per swing.
+	g.addAttack(skillIdByName("Goblin_Attack1"), "Attack1");
+	g.addAttack(skillIdByName("Goblin_Attack2"), "Attack2");
+	g.addAttack(skillIdByName("Goblin_Attack3"), "Attack3");
 	g.setCanReceiveDamage(true);
 	g.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Goblin));
 	g.body().setMotionType(MotionType::Dynamic);
@@ -77,10 +131,13 @@ void Room::setupSnake(Snake& s, const Level& level) {
 	s.setModel(level.assetManager->modelSnake());
 	s.animController().registerClip("Idle",   findServerAnimClip(anims, "Snake_Idle"));
 	s.animController().registerClip("Walk",   findServerAnimClip(anims, "Snake_Walk"));
-	s.animController().registerClip("Attack", findServerAnimClip(anims, "Snake_Attack"));
+	// 다중공격: 클립 전부 등록(현재 Snake는 Attack1 하나). 임시로 첫 클립만 재생. (setupGoblin 주석 참고)
+	s.animController().registerClip("Attack1", findServerAnimClip(anims, "Snake_Attack1"));
+	s.animController().registerClip("Attack",  findServerAnimClip(anims, "Snake_Attack1")); // 임시 재생용
 	s.animController().registerClip("Die",    findServerAnimClip(anims, "Snake_Death"));
 	s.animController().switchClip("Idle");
 	s.applySnakeConfig();
+	s.addAttack(skillIdByName("Snake_Attack1"), "Attack1");
 	s.setCanReceiveDamage(true);
 	s.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Snake));
 	s.body().setMotionType(MotionType::Dynamic);
@@ -97,10 +154,15 @@ void Room::setupMushroom(Mushroom& m, const Level& level) {
 	m.setModel(level.assetManager->modelMushroom());
 	m.animController().registerClip("Idle",   findServerAnimClip(anims, "Mushroom_Idle"));
 	m.animController().registerClip("Walk",   findServerAnimClip(anims, "Mushroom_Walk"));
-	m.animController().registerClip("Attack", findServerAnimClip(anims, "Mushroom_Attack"));
+	// 다중공격: 클립 전부 등록(Mushroom_Attack1/2). 임시로 첫 클립만 재생. (setupGoblin 주석 참고)
+	m.animController().registerClip("Attack1", findServerAnimClip(anims, "Mushroom_Attack1"));
+	m.animController().registerClip("Attack2", findServerAnimClip(anims, "Mushroom_Attack2"));
+	m.animController().registerClip("Attack",  findServerAnimClip(anims, "Mushroom_Attack1")); // 임시 재생용
 	m.animController().registerClip("Die",    findServerAnimClip(anims, "Mushroom_Death"));
 	m.animController().switchClip("Idle");
 	m.applyMushroomConfig();
+	m.addAttack(skillIdByName("Mushroom_Attack1"), "Attack1");
+	m.addAttack(skillIdByName("Mushroom_Attack2"), "Attack2");
 	m.setCanReceiveDamage(true);
 	m.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Mushroom));
 	m.body().setMotionType(MotionType::Dynamic);
@@ -112,17 +174,106 @@ void Room::setupMushroom(Mushroom& m, const Level& level) {
 	m.body().enableMotor(true);
 }
 
-void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
-	// Placeholder visual: a tall vertical bar (the real stronghold model is TBD).
-	// The authored sd.scale is ignored for the placeholder.
-	const mu::Vec3 kPlaceholderScale{ 1.5f, 5.f, 1.5f };
+void Room::setupBomber(Bomber& b, const Level& level) {
+	const auto& anims = level.assetManager->bomberAnimations();
+	b.setModel(level.assetManager->modelBomber());
+	b.animController().registerClip("Idle",   findServerAnimClip(anims, "Bomber_Idle"));
+	b.animController().registerClip("Walk",   findServerAnimClip(anims, "Bomber_Walk"));
+	b.animController().registerClip("Attack1", findServerAnimClip(anims, "Bomber_Attack1"));
+	b.animController().registerClip("Attack",  findServerAnimClip(anims, "Bomber_Attack1")); // legacy default
+	b.animController().registerClip("Die",    findServerAnimClip(anims, "Bomber_Death"));
+	b.animController().switchClip("Idle");
+	b.applyBomberConfig();
+	b.addAttack(skillIdByName("Bomber_Attack1"), "Attack1");
+	b.setCanReceiveDamage(true);
+	b.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Bomber));
+	b.body().setMotionType(MotionType::Dynamic);
+	b.body().setMass(70.f);
+	b.body().setLinearDamping(0.1f);
+	b.body().setAngularDamping(25.f);
+	b.body().setRestitution(0.0f);
+	b.body().setUprightStiffness(4000.f);
+	b.body().enableMotor(true);
+}
 
-	sh.setModel(level.assetManager->modelCube());   // placeholder mesh (cube) -> BVH hit target
+void Room::setupBirdy(Birdy& b, const Level& level) {
+	const auto& anims = level.assetManager->birdyAnimations();
+	b.setModel(level.assetManager->modelBirdy());
+	b.animController().registerClip("Idle",   findServerAnimClip(anims, "Birdy_Idle"));
+	b.animController().registerClip("Walk",   findServerAnimClip(anims, "Birdy_Walk"));
+	b.animController().registerClip("Attack1", findServerAnimClip(anims, "Birdy_Attack1"));
+	b.animController().registerClip("Attack2", findServerAnimClip(anims, "Birdy_Attack2"));
+	b.animController().registerClip("Attack",  findServerAnimClip(anims, "Birdy_Attack1")); // legacy default
+	b.animController().registerClip("Die",    findServerAnimClip(anims, "Birdy_Death"));
+	b.animController().switchClip("Idle");
+	b.applyBirdyConfig();
+	b.addAttack(skillIdByName("Birdy_Attack1"), "Attack1");
+	b.addAttack(skillIdByName("Birdy_Attack2"), "Attack2");
+	b.setCanReceiveDamage(true);
+	b.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Birdy));
+	b.body().setMotionType(MotionType::Dynamic);
+	b.body().setMass(40.f);
+	b.body().setLinearDamping(0.1f);
+	b.body().setAngularDamping(25.f);
+	b.body().setRestitution(0.0f);
+	b.body().setUprightStiffness(4000.f);
+	b.body().enableMotor(true);
+}
+
+void Room::setupSlime(Slime& s, const Level& level) {
+	const auto& anims = level.assetManager->slimeAnimations();
+	s.setModel(level.assetManager->modelSlime());
+	s.animController().registerClip("Idle",   findServerAnimClip(anims, "Slime_Idle"));
+	s.animController().registerClip("Walk",   findServerAnimClip(anims, "Slime_Walk"));
+	s.animController().registerClip("Attack1", findServerAnimClip(anims, "Slime_Attack1"));
+	s.animController().registerClip("Attack",  findServerAnimClip(anims, "Slime_Attack1")); // legacy default
+	s.animController().registerClip("Die",    findServerAnimClip(anims, "Slime_Death"));
+	s.animController().switchClip("Idle");
+	s.applySlimeConfig();
+	s.addAttack(skillIdByName("Slime_Attack1"), "Attack1");
+	s.setCanReceiveDamage(true);
+	s.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Slime));
+	s.body().setMotionType(MotionType::Dynamic);
+	s.body().setMass(90.f);
+	s.body().setLinearDamping(0.1f);
+	s.body().setAngularDamping(25.f);
+	s.body().setRestitution(0.0f);
+	s.body().setUprightStiffness(4000.f);
+	s.body().enableMotor(true);
+}
+
+void Room::setupTreant(Treant& t, const Level& level) {
+	const auto& anims = level.assetManager->treantAnimations();
+	t.setModel(level.assetManager->modelTreant());
+	t.animController().registerClip("Idle",      findServerAnimClip(anims, "Treant_Idle"));
+	t.animController().registerClip("Walk",      findServerAnimClip(anims, "Treant_Walk"));
+	t.animController().registerClip("SpinKick",  findServerAnimClip(anims, "Treant_SpinKick"));
+	t.animController().registerClip("Clap",      findServerAnimClip(anims, "Treant_Clap"));
+	t.animController().registerClip("Punch",     findServerAnimClip(anims, "Treant_Punch"));
+	t.animController().registerClip("Attack",    findServerAnimClip(anims, "Treant_SpinKick")); // legacy default
+	t.animController().registerClip("Die",       findServerAnimClip(anims, "Treant_Death"));
+	t.animController().switchClip("Idle");
+	t.applyTreantConfig();
+	t.addAttack(skillIdByName("Treant_SpinKick"), "SpinKick");
+	t.addAttack(skillIdByName("Treant_Clap"),     "Clap");
+	t.addAttack(skillIdByName("Treant_Punch"),    "Punch");
+	t.setCanReceiveDamage(true);
+	t.setKillChargeReward(level.assetManager->chargeConfig().monsterCharge(ObjectType::Treant));
+	t.body().setMotionType(MotionType::Dynamic);
+	t.body().setMass(120.f);
+	t.body().setLinearDamping(0.1f);
+	t.body().setAngularDamping(25.f);
+	t.body().setRestitution(0.0f);
+	t.body().setUprightStiffness(4000.f);
+	t.body().enableMotor(true);
+}
+
+void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
+	sh.setModel(level.assetManager->modelStronghold());   // placeholder mesh (cube) -> BVH hit target
 	sh.setFaction(Faction::Monsters);     // player skills (hostile to Monsters) can damage it
 	sh.setCanReceiveDamage(true);
 	sh.setHp(sd.maxHp);
 	sh.setOrient(sd.orient);
-	sh.setScale(kPlaceholderScale);
 
 	// The cube model's pivot is at its center, so place it on the ground by
 	// lifting it half its world-space height (AABB.size is full extent). The
@@ -135,7 +286,7 @@ void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level&
 	const BVH& bvh = sh.body().worldBVH();
 	const float halfH = bvh.empty() ? 0.f : bvh.nodes[0].bounds.size.y() * 0.5f;
 	const float kGroundBury = 0.5f;   // bury the bottom face below the terrain surface
-	sh.setPos(mu::Vec3(sd.center.x(), groundY + std::max(0.f, halfH - kGroundBury), sd.center.z()));
+	sh.setPos(mu::Vec3(sd.center.x(), groundY + std::max(0.f, -kGroundBury), sd.center.z()));
 
 	sh.body().setMotionType(MotionType::Static);
 }
@@ -145,6 +296,12 @@ void Room::init(const Level* levelData) {
 	playerStarts_ = levelData->playerStarts;
 	worldTerrain_ = &levelData->terrainChunks;   // shared, read-only (height + stronghold defs)
 	assetManager_ = levelData->assetManager;     // backref: cube model for runtime barriers
+
+	// Static prop (tree/rock) colliders for monster-vs-prop authority. Baked from
+	// the shared prop BVHs + per-chunk instance data; no room-local bodies needed.
+	// Registered before the stronghold spawn loop below so initial spawn positions
+	// can already query overlapsAnyScatterProp() (see randomSpawnInDiscAvoidingProps).
+	worldTerrain_->registerScatterColliders(physicsWorld_);
 
 	for (auto& c : cubes_) {
 		c.body().setMotionType(MotionType::Static);
@@ -159,16 +316,35 @@ void Room::init(const Level* levelData) {
 	const auto& sdefs = worldTerrain_->strongholds();
 
 	int totalGoblins = 0, totalSnakes = 0, totalMushrooms = 0;
+	int totalBombers = 0, totalBirdys = 0, totalSlimes = 0, totalTreants = 0;
 	for (const auto& sd : sdefs) {
 		for (const auto& pop : sd.populations) {
-			if (pop.type == ObjectType::Goblin)   totalGoblins   += pop.targetCount;
-			if (pop.type == ObjectType::Snake)     totalSnakes    += pop.targetCount;
-			if (pop.type == ObjectType::Mushroom)  totalMushrooms += pop.targetCount;
+			switch (pop.type) {
+			case ObjectType::Goblin:   totalGoblins   += pop.targetCount; break;
+			case ObjectType::Snake:    totalSnakes    += pop.targetCount; break;
+			case ObjectType::Mushroom: totalMushrooms += pop.targetCount; break;
+			case ObjectType::Bomber:   totalBombers   += pop.targetCount; break;
+			case ObjectType::Birdy:    totalBirdys    += pop.targetCount; break;
+			case ObjectType::Slime:    totalSlimes    += pop.targetCount; break;
+			case ObjectType::Treant:   totalTreants   += pop.targetCount; break;
+			default:
+				// chunks_index.bin "MonsterType" int -> ObjectType (terrain.cpp). Named
+				// bosses (Hobgoblin/Grandbaum/Isys) and out-of-range values are not
+				// stronghold-spawnable; warn so an extraction mistake isn't silently dropped.
+				std::cout << "[Room::init] WARNING: stronghold population has unsupported "
+				             "MonsterType=" << static_cast<int>(pop.type)
+				          << " -> ignored (not a stronghold-spawnable monster)\n";
+				break;
+			}
 		}
 	}
 	goblins_.reserve(static_cast<size_t>(totalGoblins));
 	snakes_.reserve(static_cast<size_t>(totalSnakes));
 	mushrooms_.reserve(static_cast<size_t>(totalMushrooms));
+	bombers_.reserve(static_cast<size_t>(totalBombers));
+	birdys_.reserve(static_cast<size_t>(totalBirdys));
+	slimes_.reserve(static_cast<size_t>(totalSlimes));
+	treants_.reserve(static_cast<size_t>(totalTreants));
 	strongholds_.reserve(sdefs.size());
 
 	for (const auto& sd : sdefs) {
@@ -177,20 +353,29 @@ void Room::init(const Level* levelData) {
 			std::make_unique<NpcGroup>(groupId, sd.center, sd.activityRadius));
 
 		int goblinCount = 0, snakeCount = 0, mushroomCount = 0;
+		int bomberCount = 0, birdyCount = 0, slimeCount = 0, treantCount = 0;
 		for (const auto& pop : sd.populations) {
 			if (pop.type == ObjectType::Goblin)   goblinCount   += pop.targetCount;
 			if (pop.type == ObjectType::Snake)     snakeCount    += pop.targetCount;
 			if (pop.type == ObjectType::Mushroom)  mushroomCount += pop.targetCount;
+			if (pop.type == ObjectType::Bomber)    bomberCount   += pop.targetCount;
+			if (pop.type == ObjectType::Birdy)     birdyCount    += pop.targetCount;
+			if (pop.type == ObjectType::Slime)     slimeCount    += pop.targetCount;
+			if (pop.type == ObjectType::Treant)    treantCount   += pop.targetCount;
 		}
 
 		const int goblinStart   = static_cast<int>(goblins_.size());
 		const int snakeStart    = static_cast<int>(snakes_.size());
 		const int mushroomStart = static_cast<int>(mushrooms_.size());
+		const int bomberStart   = static_cast<int>(bombers_.size());
+		const int birdyStart    = static_cast<int>(birdys_.size());
+		const int slimeStart    = static_cast<int>(slimes_.size());
+		const int treantStart   = static_cast<int>(treants_.size());
 
 		auto spawnMonster = [&](auto& pool, auto setupFn) {
 			auto& m = pool.emplace_back();
 			setupFn(m, *levelData);
-			const mu::Vec3 pos = randomSpawnInDisc(sd.center, sd.spawnRadius);
+			const mu::Vec3 pos = randomSpawnInDiscAvoidingProps(sd.center, sd.spawnRadius, m);
 			m.setId(IdPool::pop());
 			m.setFaction(Faction::Monsters);
 			m.setPos(pos);
@@ -202,6 +387,10 @@ void Room::init(const Level* levelData) {
 		for (int i = 0; i < goblinCount;   ++i) spawnMonster(goblins_,   [this](Goblin&   g, const Level& l) { setupGoblin(g, l);   });
 		for (int i = 0; i < snakeCount;    ++i) spawnMonster(snakes_,    [this](Snake&    s, const Level& l) { setupSnake(s, l);    });
 		for (int i = 0; i < mushroomCount; ++i) spawnMonster(mushrooms_, [this](Mushroom& m, const Level& l) { setupMushroom(m, l); });
+		for (int i = 0; i < bomberCount;   ++i) spawnMonster(bombers_,   [this](Bomber&   b, const Level& l) { setupBomber(b, l);   });
+		for (int i = 0; i < birdyCount;    ++i) spawnMonster(birdys_,    [this](Birdy&    b, const Level& l) { setupBirdy(b, l);    });
+		for (int i = 0; i < slimeCount;    ++i) spawnMonster(slimes_,    [this](Slime&    s, const Level& l) { setupSlime(s, l);    });
+		for (int i = 0; i < treantCount;   ++i) spawnMonster(treants_,   [this](Treant&   t, const Level& l) { setupTreant(t, l);   });
 
 		Stronghold sh{};
 		sh.setId(IdPool::pop());
@@ -209,7 +398,11 @@ void Room::init(const Level* levelData) {
 		sh.configure(sd, groupId,
 		             goblinStart,   goblinCount,
 		             snakeStart,    snakeCount,
-		             mushroomStart, mushroomCount);
+		             mushroomStart, mushroomCount,
+		             bomberStart,   bomberCount,
+		             birdyStart,    birdyCount,
+		             slimeStart,    slimeCount,
+		             treantStart,   treantCount);
 		strongholds_.push_back(std::move(sh));
 	}
 
@@ -224,6 +417,10 @@ void Room::init(const Level* levelData) {
 	for (auto& g : goblins_)   registerMonster(g);
 	for (auto& s : snakes_)    registerMonster(s);
 	for (auto& m : mushrooms_) registerMonster(m);
+	for (auto& b : bombers_)   registerMonster(b);
+	for (auto& b : birdys_)    registerMonster(b);
+	for (auto& s : slimes_)    registerMonster(s);
+	for (auto& t : treants_)   registerMonster(t);
 
 	// Strongholds are damageable static structures (collidable obstacles).
 	for (auto& sh : strongholds_) {
@@ -247,10 +444,6 @@ void Room::init(const Level* levelData) {
 			t.setHeightField(hf);             // shared, read-only
 			physicsWorld_.registerTerrain(&t.body(), hf);
 		});
-
-	// Static prop (tree/rock) colliders for monster-vs-prop authority. Baked from
-	// the shared prop BVHs + per-chunk instance data; no room-local bodies needed.
-	terrainChunks.registerScatterColliders(physicsWorld_);
 
 	// 스킬 레지스트리는 부팅 시 AssetManager가 1회 컴파일하여 전 룸이 공유한다.
 	// (사양이 방마다 달라지지 않으므로 참조만 바인딩; 컴파일/복사 없음.)
@@ -293,18 +486,36 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// Rear walls: build a Static collider from each named "Wall" marker.
-	// 동시에 Wall 위치를 누적해 스포너 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
+
+	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
+	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	// Mid-boss encounter: dynamically spawn the boss + squads, then notify clients
@@ -331,33 +542,16 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 		}
 
 		if (haveSpawnPos) {
-			// Boss reuses the regular goblin model: spawnCenter == bossPos.
+			// 보스는 Hobgoblin 모델로 스폰(troopers는 일반 goblin): spawnCenter == bossPos.
 			spawnTacticalGoblinEncounter(spawnPos, spawnPos, /*numSquads*/3, /*troopersPerSquad*/20);
-
-			std::vector<ObjectInfo> spawnInfos;
-			spawnInfos.reserve(tacticalNpcs_.size() + 1);
-			auto appendInfo = [&](const TacticalNpc& o) {
-				spawnInfos.push_back(ObjectInfo{
-					.type           = ObjectType::Goblin,
-					.objectId       = static_cast<uint16>(o.getId()),
-					.materialSetIdx = 0,
-					.hp             = o.hp(),
-					.maxHp          = o.maxHp(),
-					.pos            = o.pos().getXmf(),
-					.orient         = o.orient().getXmf(),
-					.scale          = o.scale().getXmf(),
-				});
-			};
-			for (const auto& npc : tacticalNpcs_)
-				if (npc) appendInfo(*npc);
-			if (platoonLeader_) appendInfo(*platoonLeader_);
-
-			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+			broadcastEncounterSpawn();   // NPC별 objType()으로 모델 통지
 		}
 	}
 
 	// Clients build the same walls locally so the predicted player collides.
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -369,18 +563,36 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽: 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
+
+	// Wall 마커: 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallGrandbaum_0" && m.name != "WallGrandbaum_1"
 		    && m.name != "WallGrandbaum_2") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
@@ -402,30 +614,13 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 		}
 		if (haveSpawnPos) {
 			spawnGrandbaumEncounter(spawnPos, spawnPos);
-
-			std::vector<ObjectInfo> spawnInfos;
-			spawnInfos.reserve(tacticalNpcs_.size() + 1);
-			auto appendInfo = [&](const TacticalNpc& o) {
-				spawnInfos.push_back(ObjectInfo{
-					.type           = ObjectType::Goblin,
-					.objectId       = static_cast<uint16>(o.getId()),
-					.materialSetIdx = 0,
-					.hp             = o.hp(),
-					.maxHp          = o.maxHp(),
-					.pos            = o.pos().getXmf(),
-					.orient         = o.orient().getXmf(),
-					.scale          = o.scale().getXmf(),
-				});
-			};
-			for (const auto& npc : tacticalNpcs_)
-				if (npc) appendInfo(*npc);
-			if (platoonLeader_) appendInfo(*platoonLeader_);
-
-			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+			broadcastEncounterSpawn();   // NPC별 objType()으로 모델 통지(슬라임/뱀 + Grandbaum 보스)
 		}
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -438,18 +633,36 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 
 	if (!worldTerrain_) return;
 
-	// 후방 벽(있으면): 명명된 "Wall" 마커로 Static collider 구성 + 스포너 마커 없을 때 fallback 중점 누적.
+	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
+	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
+	// 반환으로 zone을 armed 상태로 유지해, 현재 인카운터가 정리된 뒤 재입장 시 정상 트리거되게 한다.
+	if (tacticalEncounterActive()) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - another tactical encounter is active\n";
+		return;
+	}
+
+	// Wall 마커(있으면): 물리 벽 미생성(후퇴 차단은 양끝 Wall 일방향 슬랩) + 중점은 interior 기준점·스폰 fallback.
+	std::vector<const MarkerDef*> wallMarkers;
 	mu::Vec3 wallSum{};
 	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallIsys_0" && m.name != "WallIsys_1"
 		    && m.name != "WallIsys_2") continue;
-		spawnBarrierFromMarker(m);
+		wallMarkers.push_back(&m);
 		wallSum += m.pos;
 		++wallCount;
-		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
 	}
 
 	if (tacticalNpcs_.empty() && !platoonLeader_) {
@@ -471,30 +684,13 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 		}
 		if (haveSpawnPos) {
 			spawnIsysEncounter(spawnPos, spawnPos);
-
-			std::vector<ObjectInfo> spawnInfos;
-			spawnInfos.reserve(tacticalNpcs_.size() + 1);
-			auto appendInfo = [&](const TacticalNpc& o) {
-				spawnInfos.push_back(ObjectInfo{
-					.type           = ObjectType::Goblin,
-					.objectId       = static_cast<uint16>(o.getId()),
-					.materialSetIdx = 0,
-					.hp             = o.hp(),
-					.maxHp          = o.maxHp(),
-					.pos            = o.pos().getXmf(),
-					.orient         = o.orient().getXmf(),
-					.scale          = o.scale().getXmf(),
-				});
-			};
-			for (const auto& npc : tacticalNpcs_)
-				if (npc) appendInfo(*npc);
-			if (platoonLeader_) appendInfo(*platoonLeader_);
-
-			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+			broadcastEncounterSpawn();   // NPC별 objType()으로 모델 통지(버디/바머 + Isys 보스)
 		}
 	}
 
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -531,6 +727,7 @@ void Room::update() {
 
 	updatePlayerAnimations(dt);
 	updateSkillSystem(dt);
+	updatePlayerRegen(dt);
 
 	doTimer(dt, [this]() {
 		update();
@@ -560,9 +757,14 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
 	for (auto& s : snakes_)    s.body().setOmega(mu::Vec3{});
 	for (auto& m : mushrooms_) m.body().setOmega(mu::Vec3{});
+	for (auto& b : bombers_)   b.body().setOmega(mu::Vec3{});
+	for (auto& b : birdys_)    b.body().setOmega(mu::Vec3{});
+	for (auto& s : slimes_)    s.body().setOmega(mu::Vec3{});
+	for (auto& t : treants_)   t.body().setOmega(mu::Vec3{});
 
 	std::vector<SNpcMoveInfo> moveInfos;
-	moveInfos.reserve(goblins_.size() + snakes_.size() + mushrooms_.size());
+	moveInfos.reserve(goblins_.size() + snakes_.size() + mushrooms_.size()
+	                  + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
 
 	auto tickPool = [&](auto& pool) {
 		for (auto& npc : pool) {
@@ -586,6 +788,10 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	tickPool(goblins_);
 	tickPool(snakes_);
 	tickPool(mushrooms_);
+	tickPool(bombers_);
+	tickPool(birdys_);
+	tickPool(slimes_);
+	tickPool(treants_);
 
 	// ── Strongholds: structure destruction/rebuild + population maintenance ──
 	const Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
@@ -597,7 +803,8 @@ void Room::updateMonsterAI(Milliseconds dt) {
 				sh.hp(),
 				sh.isDestroyed() ? uint8(1) : uint8(0)));
 		}
-		sh.updatePopulation(dtSec, goblins_, snakes_, mushrooms_, *this, revivedIds);
+		sh.updatePopulation(dtSec, goblins_, snakes_, mushrooms_,
+		                    bombers_, birdys_, slimes_, treants_, *this, revivedIds);
 	}
 	for (uint32 id : revivedIds) {
 		Object* o = (id < objectById_.size()) ? objectById_[id] : nullptr;
@@ -644,6 +851,10 @@ void Room::rebuildAggroCount() {
 	countPool(goblins_);
 	countPool(snakes_);
 	countPool(mushrooms_);
+	countPool(bombers_);
+	countPool(birdys_);
+	countPool(slimes_);
+	countPool(treants_);
 }
 
 bool MU_CALLCONV Room::isNearAnyPlayer(mu::Vec3 p) const {
@@ -667,6 +878,10 @@ void Room::rebuildNpcNeighbors() {
 	for (auto& g : goblins_)      consider(&g);
 	for (auto& s : snakes_)       consider(&s);
 	for (auto& m : mushrooms_)    consider(&m);
+	for (auto& b : bombers_)      consider(&b);
+	for (auto& b : birdys_)       consider(&b);
+	for (auto& s : slimes_)       consider(&s);
+	for (auto& t : treants_)      consider(&t);
 	for (auto& n : tacticalNpcs_) consider(n.get());
 	if (platoonLeader_)           consider(platoonLeader_.get());
 
@@ -725,6 +940,11 @@ void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
 	player->setFaction(Faction::Players);
+	// Must be a valid skill target: checkHitboxCollisions() skips objects with
+	// canReceiveDamage()==false, so monster (Faction::Monsters) skill hitboxes would
+	// otherwise miss the player entirely (only the legacy contact push remains, no
+	// damage). See strongholdSystem.md "canReceiveDamage 함정".
+	player->setCanReceiveDamage(true);
 	player->setModel(RoomManager::playerModelData());
 	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// 새로 들어오는 플레이어는 playerStarts_에서 순서대로 위치를 받는다.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
@@ -733,7 +953,7 @@ void Room::enter(GameSession* session) {
 	player->body().setCollisionCategory(CollisionLayer::Player);   // 전술 NPC가 통과하도록 식별
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
-	player->setWeaponType(PlayerWeaponType::Katana);
+	player->resetSkillState();
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -812,6 +1032,24 @@ void Room::enter(GameSession* session) {
 			.scale = m.scale().getXmf(),
 		});
 	}
+	auto pushMonsterInfo = [&](const auto& pool, ObjectType type) {
+		for (const auto& m : pool) {
+			objInfos.push_back(ObjectInfo{
+				.type = type,
+				.objectId = static_cast<uint16>(m.getId()),
+				.materialSetIdx = 0,
+				.hp = m.hp(),
+				.maxHp = m.maxHp(),
+				.pos = m.pos().getXmf(),
+				.orient = m.orient().getXmf(),
+				.scale = m.scale().getXmf(),
+			});
+		}
+	};
+	pushMonsterInfo(bombers_, ObjectType::Bomber);
+	pushMonsterInfo(birdys_,  ObjectType::Birdy);
+	pushMonsterInfo(slimes_,  ObjectType::Slime);
+	pushMonsterInfo(treants_, ObjectType::Treant);
 
 	for (const auto& sh : strongholds_) {
 		objInfos.push_back(ObjectInfo{
@@ -827,7 +1065,7 @@ void Room::enter(GameSession* session) {
 	}
 
 	// 이미 전술 전투가 시작된 뒤 접속한 플레이어도 무리를 보도록 스냅샷에 포함.
-	// 보스도 일반 고블린 모델(ObjectType::Goblin)로 전송.
+	// 보스는 platoonLeaderObjType_(전술별로 Hobgoblin/Goblin)로 전송.
 	for (const auto& npc : tacticalNpcs_) {
 		if (!npc) continue;
 		objInfos.push_back(ObjectInfo{
@@ -843,7 +1081,7 @@ void Room::enter(GameSession* session) {
 	}
 	if (platoonLeader_) {
 		objInfos.push_back(ObjectInfo{
-			.type = ObjectType::Goblin,
+			.type = platoonLeaderObjType_,
 			.objectId = static_cast<uint16>(platoonLeader_->getId()),
 			.materialSetIdx = 0,
 			.hp = platoonLeader_->hp(),
@@ -929,6 +1167,16 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 		          << ", dist: " << horizDist << "m) → 허용치로 클램프\n";
 	}
 
+	// ── 아레나 후방 Wall 일방향 클램프(권위 미러) ────────────────────────
+	// 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는 플레이어만 평면으로 되돌린다. 안쪽으로
+	// 들어오기·측면 이동은 통과(입장 자유). felt collision은 클라 예측(resolveArenaWallLeash)이
+	// 담당하고, 여기선 치트 방지용 권위. 넉백 중(isMoveClampExempt)은 면제.
+	if (arenaWallsActive_ && !session->isMoveClampExempt()) {
+		constexpr float kArenaWallMargin = 0.5f;   // footprint 여유(플레이어 반경 근사)
+		for (const OneWayWall& w : arenaWalls_)
+			newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+	}
+
 	player->setPos(newPos);
 	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 	player->setPosUpdateMs(elapsedMs_);
@@ -941,6 +1189,29 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	broadcastExcept(session, sMvPkt);
 
 	ObjectPool<CMovePacket>::push(cMvPkt);
+}
+
+// 디버그 전용 텔레포트. move()의 7m/패킷 클램프를 우회해 권위 위치를 즉시 옮긴다 → 다음 zoneSystem_.update에서
+// 해당 아레나 Enter가 발동(미드보스 전투 테스트). 위치는 S_Move로 다른 클라에 전파한다.
+void Room::debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos) {
+	auto session = idSessionMap_[sessionId];
+	if (session == nullptr) {
+		std::cout << "[ debugTeleport() ] 존재하지 않는 session. sessionId: " << sessionId << '\n';
+		return;
+	}
+
+	auto player = session->player();
+	const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
+	player->setPos(newPos);
+	player->setLinearVel(mu::Vec3{});
+	player->setPosUpdateMs(elapsedMs_);
+
+	std::cout << "[debugTeleport] sessionId: " << sessionId << " -> ("
+	          << newPos.x() << ", " << newPos.y() << ", " << newPos.z() << ")\n";
+
+	DirectX::XMFLOAT3 zeroVel{ 0.f, 0.f, 0.f };
+	auto sMvPkt = PacketManager::makeSMovePacket(static_cast<uint16>(sessionId), player->pos().getXmf(), zeroVel);
+	broadcastExcept(session, sMvPkt);
 }
 
 void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
@@ -988,13 +1259,9 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		if (!tgt) continue;
 
 		const int32 prevHp = tgt->hp();
-		int32 newHp = std::max(prevHp - hit->damage, 0);
-		
-		// 이 로직으로 교체해야 함.
-		// 받는 피해 배율 적용(기본 1.0; Grandbaum ShieldWall 중 보스/슬라임은 0.1 → 90% 경감).
-		//int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
-		//int32 newHp = std::max(tgt->hp() - dmg, 0);
-		
+		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
+		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
+		const int32 newHp = std::max(prevHp - dmg, 0);
 		tgt->setHp(newHp);
 		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
 		broadcast(PacketManager::makeSSkillHitPacket(
@@ -1085,6 +1352,41 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 	);
 }
 
+uint32 Room::skillIdByName(std::string_view name) const {
+	if (!assetManager_) return 0u;
+	for (const SkillAsset& a : assetManager_->skillAssets())
+		if (a.name == name) return a.id;
+	return 0u;
+}
+
+bool Room::npcSkillActive(int32 ownerObjectId) const {
+	return skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId));
+}
+
+void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale) {
+	if (skillAssetId == 0) return;
+	Object* owner = (ownerObjectId >= 0 && ownerObjectId < static_cast<int32>(objectById_.size()))
+		? objectById_[ownerObjectId] : nullptr;
+	if (!owner || owner->hp() <= 0) return;
+	if (skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId))) return;  // don't stack casts
+
+	// Authoritative skill instance (elapsedMs = 0: server casts in real time, no lag comp).
+	SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
+	bindGroundQueries(ctx);
+	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerObjectId),
+	                                      ctx, Milliseconds{ 0.f }, skillSeed, damageScale);
+	clearEvents(skillEvList_);
+	if (instIdx < 0) return;
+
+	// Broadcast to ALL clients (NPC has no session to exclude) so they play the
+	// matching VFX + drive the NPC's AnimBlender via the skill's PlayAnimation.
+	broadcast(PacketManager::makeSSkillStartPacket(
+		skillAssetId,
+		static_cast<uint16>(ownerObjectId),
+		uint16(0),
+		skillSeed));
+}
+
 void Room::attack(int32 sessionId, uint64 clientMs) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 
@@ -1112,6 +1414,8 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
 	uint64 targetMs = clientMs;
 
+	// Legacy player melee (lag-comp rewind). New monster pools are damageable via the
+	// skill system (objectById_), so they are not added to this vestigial path.
 	for (auto& goblin : goblins_) {
 		if (goblin.hp() <= 0) {
 			continue;
@@ -1136,7 +1440,9 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
 			const int32 prevHp = o->hp();
-			int32 newHp = std::max(prevHp - kDamage, 0);
+			// 받는 피해 배율 적용(스킬 히트와 동일; Grandbaum 평상시 슬라임/ShieldWall 중 보스 0.1).
+			const int32 dmg    = static_cast<int32>(kDamage * o->damageTakenMultiplier());
+			const int32 newHp  = std::max(prevHp - dmg, 0);
 			o->setHp(newHp);
 			noteAndMaybeReward(static_cast<int32>(player->getId()), o, prevHp, newHp);
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(player->getId()), static_cast<uint16>(o->getId()), newHp));
@@ -1194,12 +1500,13 @@ void Room::distributeKillCharge(Object* monster) {
 		p->setComboCount(combo);
 		p->setLastCreditMs(now);
 
-		// Credit the selected slot, scaled by combo accelerator and soft cap.
+		// Credit the selected slot, scaled by the soft cap only. The combo no longer
+		// accelerates charge gain — it now drives the player's HP regen (updatePlayerRegen).
 		const int      slot      = p->selectedSlot();
 		const unsigned w         = static_cast<unsigned>(p->weaponType());
 		const float    cost      = loadout.cost(w, slot);
 		const int      curStacks = (cost > 0.f) ? static_cast<int>(p->skillCharge(slot) / cost) : 0;
-		const float    gain      = reward * cfg.comboMult(combo) * cfg.softCapFactor(curStacks);
+		const float    gain      = reward * cfg.softCapFactor(curStacks);
 		p->addSkillCharge(slot, gain);
 
 		broadcast(PacketManager::makeSSkillChargePacket(
@@ -1222,6 +1529,41 @@ void Room::updateComboExpiry() {
 			s->send(PacketManager::makeSComboStatePacket(
 				static_cast<uint16>(p->getId()), 0, window.count()));
 		}
+	}
+}
+
+void Room::updatePlayerRegen(Milliseconds dt) {
+	if (!assetManager_) return;
+	const ChargeConfig& cfg   = assetManager_->chargeConfig();
+	const float         dtSec = std::chrono::duration<float>(dt).count();
+
+	// Integrate combo-driven regen every tick; the accumulator carries fractional HP.
+	for (GameSession* s : livingPlayersCache_) {
+		Player* p = s->player();
+		if (!p) continue;
+		const int32 hp = p->hp();
+		if (hp <= 0 || hp >= kPlayerMaxHp) { p->setHpRegenAccum(0.f); continue; }
+
+		float accum = p->hpRegenAccum() + cfg.hpRegenPerSec(p->comboCount()) * dtSec;
+		const int32 add = static_cast<int32>(accum);   // floor (accum is non-negative)
+		if (add > 0) {
+			accum -= static_cast<float>(add);
+			p->setHp(std::min(hp + add, kPlayerMaxHp));
+		}
+		p->setHpRegenAccum(accum);
+	}
+
+	// Throttle the HP push to ~10 Hz, and only for players whose HP actually changed.
+	regenSyncAccum_ += dt;
+	if (regenSyncAccum_ < Milliseconds{ 100.f }) return;
+	regenSyncAccum_ = Milliseconds{ 0.f };
+	for (GameSession* s : livingPlayersCache_) {
+		Player* p = s->player();
+		if (!p) continue;
+		const int32 hp = p->hp();
+		if (hp == p->lastSyncedHp()) continue;
+		p->setLastSyncedHp(hp);
+		broadcast(PacketManager::makeSPlayerHpPacket(static_cast<uint16>(p->getId()), hp));
 	}
 }
 
@@ -1311,6 +1653,66 @@ void Room::updateTacticalAI(Milliseconds dt) {
 
 	if (!moveInfos.empty())
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
+
+	// 전 NPC(보스 + 전 부대원) 처치 시 아레나 가상 벽을 1회 해제 → 플레이어 후퇴 허용.
+	if (arenaWallsActive_ && allTacticalCombatantsDead()) {
+		teardownArenaWalls();
+		cleanupTacticalEncounter();   // 다음 아레나가 스폰 가드를 통과하도록 컨테이너 정리
+	}
+}
+
+// 보스(platoonLeader_)가 사망했고 모든 부대원(tacticalNpcs_)도 사망했는지. 보스가 먼저
+// 죽어도 Confused로 살아남은 부대원이 1명이라도 있으면 false(전 NPC 처치 후에만 벽 해제).
+bool Room::allTacticalCombatantsDead() const {
+	if (!platoonLeader_ || platoonLeader_->hp() > 0) return false;
+	for (const auto& npc : tacticalNpcs_)
+		if (npc && npc->hp() > 0) return false;
+	return true;
+}
+
+// 아레나 가상 벽 해제: 서버 배리어 바디를 물리에서 제거(~Room()과 동일 패턴)하고, 클라엔
+// S_ZoneState(.,0)을 broadcast한다(클라 onZoneState가 로컬 벽 제거). 1회성(arenaWallsActive_ off).
+void Room::teardownArenaWalls() {
+	arenaWalls_.clear();
+	for (const auto& b : barriers_)
+		if (b) physicsWorld_.unregisterBody(&b->body());
+	barriers_.clear();
+	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
+	arenaWallsActive_ = false;
+	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
+}
+
+// 클리어된 인카운터의 tactical 컨테이너를 전부 비운다. 참조 방향(PlatoonLeader → TacticalSquad
+// (raw ptr) → TacticalNpc(raw ptr))을 따라 상위부터 정리해 dangling 참조 가능성을 없앤다.
+// physicsWorld_/npcBodyOwner_ 해제는 justDied 시점에 이미 끝났을 것이나, 두 호출 모두
+// find-then-erase로 idempotent이므로 방어적으로 다시 호출해도 안전하다.
+// nextWedgeChargeId_(단조 증가 ID)/platoonLeaderObjType_/activeArenaZoneId_는 다음 스폰 시 덮어쓰므로
+// 건드리지 않는다.
+void Room::cleanupTacticalEncounter() {
+	if (platoonLeader_) {
+		physicsWorld_.unregisterBody(&platoonLeader_->body());
+		npcBodyOwner_.erase(&platoonLeader_->body());
+		unregisterObject(platoonLeader_.get());
+		IdPool::push(platoonLeader_->getId());
+		platoonLeader_.reset();
+	}
+
+	tacticalSquads_.clear();
+
+	for (auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		physicsWorld_.unregisterBody(&npc->body());
+		npcBodyOwner_.erase(&npc->body());
+		unregisterObject(npc.get());
+		IdPool::push(npc->getId());
+	}
+	tacticalNpcs_.clear();
+
+	clearShieldWallBlockers();
+	tacticalAttackSlots_.clear();
+	wedgeHitRecord_.clear();
+
+	std::cout << "[Zone] tactical encounter cleaned up - containers cleared\n";
 }
 
 TacticalNpc* Room::findTacticalNpcById(uint32_t id) const {
@@ -1507,36 +1909,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		base.setPos(pos);
 		return base;
 	};
-	// 일반 goblin(setupGoblin)과 동일한 모델/물리 셋업: 충돌 BVH·중력·플레이어 충돌·
-	// motor 이동(setDesiredVel)에 필요. tactical NPC/보스 모두 동일하게 적용.
-	const auto& anims = assetManager_->goblinAnimations();
-	auto registerBody = [&](Object& obj) {
-		obj.setId(IdPool::pop());
-		obj.setFaction(Faction::Monsters);   // 플레이어 공격의 적대 대상이 되도록(미설정 시 Neutral → 스킬 필터 제외)
-
-		obj.setModel(assetManager_->modelGoblin());
-		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
-		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
-		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
-		obj.animController().switchClip("Idle");
-		obj.setCanReceiveDamage(true);
-
-		obj.body().setMotionType(MotionType::Dynamic);
-		obj.body().setMass(70.f);
-		obj.body().setLinearDamping(0.1f);
-		obj.body().setAngularDamping(25.f);
-		obj.body().setRestitution(0.0f);
-		obj.body().setUprightStiffness(4000.f);
-		obj.body().enableMotor(true);
-		obj.body().snapToCurrent();
-
-		Object* raw = &obj;
-		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
-		registerObject(raw);                // objectById_ 등록 → 스킬 히트 판정 타깃 후보에 포함
-		npcBodyOwner_[&obj.body()] = raw;   // SAP 쌍(RigidBody*) → NPC 역참조
-	};
-
+	// 바디/모델/물리 셋업은 registerTacticalNpcBody(type)이 담당. trooper는 Goblin, 보스는 Hobgoblin
+	// (둘은 같은 리그를 공유하므로 Goblin_* 클립 재사용).
 	TacticalNpcConfig trooperCfg = TacticalGoblin::trooperConfig();
 	TacticalNpcConfig bossCfg    = TacticalGoblin::bossConfig();
 
@@ -1551,7 +1925,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 			mu::Vec3 trooperPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 
 			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
-			registerBody(*npc);
+			registerTacticalNpcBody(*npc, ObjectType::Goblin);
+			npc->setObjType(ObjectType::Goblin);
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). 나머지 충돌은 유지.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
 			npc->setSquadId(s);
@@ -1567,9 +1942,11 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
 		makeBase(bossPos), bossCfg, std::make_unique<GoblinMidBossTactic>());
-	registerBody(*platoonLeader_);
+	registerTacticalNpcBody(*platoonLeader_, ObjectType::Hobgoblin);   // 보스는 Hobgoblin 모델
+	platoonLeader_->setObjType(ObjectType::Hobgoblin);
 	// 보스는 Boss 카테고리로 식별 → trooper가 보스를 통과(박스 대형 경로 차단 방지). 플레이어와는 충돌 유지.
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Hobgoblin;   // 클라에 Hobgoblin 모델로 통지(ObjectInfo.type)
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
@@ -1587,73 +1964,43 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		base.setPos(pos);
 		return base;
 	};
-	const auto& anims = assetManager_->goblinAnimations();
-	auto registerBody = [&](Object& obj) {
-		obj.setId(IdPool::pop());
-		obj.setFaction(Faction::Monsters);
 
-		obj.setModel(assetManager_->modelGoblin());
-		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
-		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
-		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
-		obj.animController().switchClip("Idle");
-		obj.setCanReceiveDamage(true);
-
-		obj.body().setMotionType(MotionType::Dynamic);
-		obj.body().setMass(70.f);
-		obj.body().setLinearDamping(0.1f);
-		obj.body().setAngularDamping(25.f);
-		obj.body().setRestitution(0.0f);
-		obj.body().setUprightStiffness(4000.f);
-		obj.body().enableMotor(true);
-		obj.body().snapToCurrent();
-
-		Object* raw = &obj;
-		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
-		registerObject(raw);
-		npcBodyOwner_[&obj.body()] = raw;
-	};
-
-	// 인게임 스케일 config (시뮬값 기반, M3 튜닝 대상)
-	TacticalNpcConfig slimeCfg{
-		.maxHp = 60.f, .moveSpeed = 2.5f, .attackRange = 2.6f, .attackDamage = 8.f,
-		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
-		.separationRadius = 3.f, .separationWeight = 1.0f
-	};
-	TacticalNpcConfig snakeCfg{
-		.maxHp = 45.f, .moveSpeed = 8.f, .attackRange = 2.6f, .attackDamage = 12.f,
-		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
-		.separationRadius = 3.f, .separationWeight = 0.9f
-	};
+	// 부대별 config는 몬스터별 Tactical 클래스에서(단일 출처). 보스 config는 인카운터 고유.
+	const TacticalNpcConfig slimeCfg = TacticalSlime::trooperConfig();
 	TacticalNpcConfig bossCfg{
 		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
-		.separationRadius = 4.f, .separationWeight = 0.3f
+		.separationRadius = 4.f, .separationWeight = 0.3f,
+		.attackDamageScale = 5.0f   // 보스 공격력 레버(Treant 스킬 × scale, 주 위협). attackDamage는 레거시 폴백(미사용). 튜닝값.
 	};
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
-	// 부대 구성: 0,1,2 = 슬라임, 3 = 뱀. 인원은 시뮬(A12/B12/C48/D10) 기반(난이도 튜닝 가능).
-	struct GrandbaumSquadDef { const TacticalNpcConfig* cfg; int count; };
+	// 부대 구성: 0~3 모두 슬라임(DR 토글 재설계 — 뱀 부대 제거). 인원 12/12/48/10.
+	struct GrandbaumSquadDef { const TacticalNpcConfig* cfg; ObjectType type; int count; };
 	const GrandbaumSquadDef squadDefs[] = {
-		{ &slimeCfg, 12 },
-		{ &slimeCfg, 12 },
-		{ &slimeCfg, 48 },
-		{ &snakeCfg, 10 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
+		{ &slimeCfg, ObjectType::Slime, 20 },
 	};
 
 	for (int s = 0; s < 4; ++s) {
 		const TacticalNpcConfig& cfg = *squadDefs[s].cfg;
+		const ObjectType type = squadDefs[s].type;
 		auto squad = std::make_unique<TacticalSquad>(s, cfg.attackRange, cfg.separationRadius);
 
 		for (int t = 0; t < squadDefs[s].count; ++t) {
 			mu::Vec3 npcPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 			auto npc = std::make_unique<TacticalNpc>(makeBase(npcPos), cfg);
-			registerBody(*npc);
+			registerTacticalNpcBody(*npc, type);
+			npc->setObjType(type);
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
 			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			// 평상시 슬라임은 받는 피해 90% 경감(단단) → 플레이어가 보스를 공격하도록 유도.
+			// ShieldWall 중에는 GrandbaumMidBossTactic이 1.0으로 풀어 취약하게, 종료 시 0.1로 복귀.
+			npc->setDamageTakenMultiplier(0.1f);
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -1666,8 +2013,10 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
 		makeBase(bossPos), bossCfg, std::make_unique<GrandbaumMidBossTactic>());
-	registerBody(*platoonLeader_);
+	registerTacticalNpcBody(*platoonLeader_, ObjectType::Grandbaum);   // 전용 Grandbaum 모델
+	platoonLeader_->setObjType(ObjectType::Grandbaum);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Grandbaum;
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
@@ -1685,70 +2034,38 @@ void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 		base.setPos(pos);
 		return base;
 	};
-	const auto& anims = assetManager_->goblinAnimations();
-	auto registerBody = [&](Object& obj) {
-		obj.setId(IdPool::pop());
-		obj.setFaction(Faction::Monsters);
 
-		obj.setModel(assetManager_->modelGoblin());
-		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
-		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
-		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
-		obj.animController().switchClip("Idle");
-		obj.setCanReceiveDamage(true);
-
-		obj.body().setMotionType(MotionType::Dynamic);
-		obj.body().setMass(70.f);
-		obj.body().setLinearDamping(0.1f);
-		obj.body().setAngularDamping(25.f);
-		obj.body().setRestitution(0.0f);
-		obj.body().setUprightStiffness(4000.f);
-		obj.body().enableMotor(true);
-		obj.body().snapToCurrent();
-
-		Object* raw = &obj;
-		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
-		registerObject(raw);
-		npcBodyOwner_[&obj.body()] = raw;
-	};
-
-	// 인게임 스케일 config (시뮬값 기반, M3 튜닝 대상).
-	TacticalNpcConfig buddyCfg{
-		.maxHp = 80.f, .moveSpeed = 4.f, .attackRange = 2.6f, .attackDamage = 10.f,
-		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
-		.separationRadius = 3.f, .separationWeight = 1.0f
-	};
-	TacticalNpcConfig bomberCfg{
-		.maxHp = 45.f, .moveSpeed = 5.f, .attackRange = 2.6f, .attackDamage = 8.f,
-		.attackWindupTime = 0.35s, .attackRecoverTime = 0.8s,
-		.separationRadius = 3.f, .separationWeight = 0.9f
-	};
+	// Buddy 부대는 Birdy로 렌더(Isys=Birdy 변종). 부대별 config는 몬스터별 Tactical 클래스에서.
+	const TacticalNpcConfig buddyCfg  = TacticalBirdy::trooperConfig();
+	const TacticalNpcConfig bomberCfg = TacticalBomber::trooperConfig();
 	TacticalNpcConfig bossCfg{
 		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
-		.separationRadius = 4.f, .separationWeight = 0.3f
+		.separationRadius = 4.f, .separationWeight = 0.3f,
+		.attackDamageScale = 3.0f   // boss reuses the Birdy skill roster but hits ~3x harder
 	};
 
 	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;
 
-	// 부대 구성: 0,1 = Buddy, 2,3 = Bomber. 생성 순서가 IsysMidBossTactic의 squad 인덱스 계약을 보장.
-	struct IsysSquadDef { const TacticalNpcConfig* cfg; int count; };
+	// 부대 구성: 0,1 = Buddy(Birdy), 2,3 = Bomber. 생성 순서가 IsysMidBossTactic의 squad 인덱스 계약을 보장.
+	struct IsysSquadDef { const TacticalNpcConfig* cfg; ObjectType type; int count; };
 	const IsysSquadDef squadDefs[] = {
-		{ &buddyCfg,  12 },
-		{ &buddyCfg,  12 },
-		{ &bomberCfg, 40 },
-		{ &bomberCfg, 40 },
+		{ &buddyCfg,  ObjectType::Birdy,  12 },
+		{ &buddyCfg,  ObjectType::Birdy,  12 },
+		{ &bomberCfg, ObjectType::Bomber, 40 },
+		{ &bomberCfg, ObjectType::Bomber, 40 },
 	};
 
 	for (int s = 0; s < 4; ++s) {
 		const TacticalNpcConfig& cfg = *squadDefs[s].cfg;
+		const ObjectType type = squadDefs[s].type;
 		auto squad = std::make_unique<TacticalSquad>(s, cfg.attackRange, cfg.separationRadius);
 
 		for (int t = 0; t < squadDefs[s].count; ++t) {
 			mu::Vec3 npcPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 			auto npc = std::make_unique<TacticalNpc>(makeBase(npcPos), cfg);
-			registerBody(*npc);
+			registerTacticalNpcBody(*npc, type);
+			npc->setObjType(type);
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지).
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
 			npc->setSquadId(s);
@@ -1763,8 +2080,10 @@ void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(
 		makeBase(bossPos), bossCfg, std::make_unique<IsysMidBossTactic>());
-	registerBody(*platoonLeader_);
+	registerTacticalNpcBody(*platoonLeader_, ObjectType::Isys);   // 전용 Isys 모델
+	platoonLeader_->setObjType(ObjectType::Isys);
 	platoonLeader_->body().setCollisionCategory(CollisionLayer::Boss);
+	platoonLeaderObjType_ = ObjectType::Isys;
 
 	for (auto& sq : tacticalSquads_)
 		platoonLeader_->addSquad(sq.get());
@@ -1802,29 +2121,37 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 	}
 }
 
-// ShieldWall 중 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환한다. 평소 trooper는 Player를
-// 통과(~(Player|Boss))하지만, 여기서 Player 충돌을 다시 켜(~Boss) 링이 벽처럼 막히게 한다.
+// ShieldWall 중 슬라임을 "차단벽"으로 클라에 통지한다. 플레이어 차단은 클라 권위
+// (resolveBarrierSeparation)가 전담하고, 서버에서는 형성 중 바깥 링이 안쪽 링의 진입을 막지 않도록
+// 방패벽 슬라임끼리만 물리 충돌을 끈다. Player/Boss 통과와 지형 충돌은 기존 설정을 유지한다.
 void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
-	// 이전 ids 충돌설정 원복(broadcast 없이) — 매 틱 살아있는 슬라임 ids 갱신 대응.
+	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
+	constexpr uint32_t SHIELD_WALL_SLIME_MASK =
+		~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime);
+
+	// 살아있는 blocker가 갱신 목록에서 빠진 경우 ShieldWall 설정을 즉시 원복한다.
+	// 죽은 NPC는 이미 물리 월드에서 빠졌지만 같은 처리는 무해하다.
 	for (uint32_t id : shieldWallBlockerIds_) {
+		if (std::find(blockerIds.begin(), blockerIds.end(), id) != blockerIds.end())
+			continue;
+
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
-			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
 		}
 	}
-	// 블로커: Slime 카테고리 부여 + Player 충돌 재활성(~Boss). 추가로 증원 뱀(Snake)을 mask에서
-	// 제외해 뱀이 링을 통과해도 진형이 물리적으로 밀리지 않게 한다.
+
+	// 모든 방패벽 슬라임을 동일한 Slime 카테고리로 묶고 그 카테고리를 mask에서 제외한다.
+	// 상호 필터가 실패하므로 동료 링을 통과할 수 있지만 다른 물리 레이어와의 충돌은 유지된다.
 	for (uint32_t id : blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(CollisionLayer::Slime);
-			npc->body().setCollisionMask(~(CollisionLayer::Boss | CollisionLayer::Snake));
+			npc->body().setCollisionMask(SHIELD_WALL_SLIME_MASK);
 		}
 	}
-	shieldWallBlockerIds_ = blockerIds;
 
-	// 클라에 블로커 활성 통지(Goblin divide와 동일 S_NpcBarrier 경로 재사용). 플레이어 이동은 클라
-	// 권한이라 서버 마스크만으론 못 막는다 → 클라가 슬라임을 barrier로 등록해 로컬 물리로 밀어내게 한다.
-	// setShieldWallBlockers는 매 틱 호출되므로 on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
+	shieldWallBlockerIds_ = blockerIds;
+	// on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
 	if (!shieldWallBarrierOn_) {
 		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
 		shieldWallBarrierOn_ = true;
@@ -1832,12 +2159,14 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 }
 
 void Room::clearShieldWallBlockers() {
+	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
 	for (uint32_t id : shieldWallBlockerIds_) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
-			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
+			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
 		}
 	}
+
 	if (shieldWallBarrierOn_) {
 		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
 		shieldWallBarrierOn_ = false;
@@ -1847,18 +2176,95 @@ void Room::clearShieldWallBlockers() {
 
 // ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
 
-// 일반 goblin과 동일한 모델/물리(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록.
-// 전술 웨이브 NPC 공용(spawnTacticalGoblinEncounter/spawnGrandbaumEncounter의 registerBody와 동일 셋업).
-void Room::registerTacticalNpcBody(Object& obj) {
-	const auto& anims = assetManager_->goblinAnimations();
+namespace {
+// One skill attack option: which skill asset to cast, which anim clip drives it, and
+// the registered clip key. Shared data so tactical NPCs cast the same varied attacks
+// as their field (Npc) counterparts (skill/clip names match setupGoblin/etc.).
+struct AttackDef { const char* skillName; const char* clipSrc; const char* clipKey; };
+
+// Boss variants reuse a base monster's rig + skills (Hobgoblin→Goblin, Grandbaum→Treant,
+// Isys→Birdy). Map the render objType to the base whose roster it draws from.
+ObjectType attackBaseType(ObjectType t) {
+	switch (t) {
+	case ObjectType::Hobgoblin: return ObjectType::Goblin;
+	case ObjectType::Grandbaum: return ObjectType::Treant;
+	case ObjectType::Isys:      return ObjectType::Birdy;
+	default:                    return t;
+	}
+}
+
+std::span<const AttackDef> attackRosterFor(ObjectType baseType) {
+	static const AttackDef goblin[]   = { {"Goblin_Attack1","Goblin_Attack1","Attack1"},
+	                                      {"Goblin_Attack2","Goblin_Attack2","Attack2"},
+	                                      {"Goblin_Attack3","Goblin_Attack3","Attack3"} };
+	static const AttackDef snake[]    = { {"Snake_Attack1","Snake_Attack1","Attack1"} };
+	static const AttackDef mushroom[] = { {"Mushroom_Attack1","Mushroom_Attack1","Attack1"},
+	                                      {"Mushroom_Attack2","Mushroom_Attack2","Attack2"} };
+	static const AttackDef bomber[]   = { {"Bomber_Attack1","Bomber_Attack1","Attack1"} };
+	static const AttackDef birdy[]    = { {"Birdy_Attack1","Birdy_Attack1","Attack1"},
+	                                      {"Birdy_Attack2","Birdy_Attack2","Attack2"} };
+	static const AttackDef slime[]    = { {"Slime_Attack1","Slime_Attack1","Attack1"} };
+	static const AttackDef treant[]   = { {"Treant_SpinKick","Treant_SpinKick","SpinKick"},
+	                                      {"Treant_Clap","Treant_Clap","Clap"},
+	                                      {"Treant_Punch","Treant_Punch","Punch"} };
+	switch (baseType) {
+	case ObjectType::Snake:    return snake;
+	case ObjectType::Mushroom: return mushroom;
+	case ObjectType::Bomber:   return bomber;
+	case ObjectType::Birdy:    return birdy;
+	case ObjectType::Slime:    return slime;
+	case ObjectType::Treant:   return treant;
+	case ObjectType::Goblin:
+	default:                   return goblin;
+	}
+}
+} // namespace
+
+// 전술 NPC 바디(충돌 BVH·중력·motor) 셋업 후 물리/objectById_에 등록. type으로 모델·애니셋·클립이름을
+// 선택해 부대별로 다른 몬스터(슬라임/뱀/버디/바머 등)를 외형 그대로 스폰한다. 보스 변종은 같은 리그를
+// 공유한다: Hobgoblin→Goblin 애니, Grandbaum→Treant 애니, Isys→Birdy 애니.
+void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
+	const Model* model = nullptr;
+	const std::vector<ServerAnimClip>* anims = nullptr;
+	const char* prefix = "Goblin";   // 클립 이름 접두어(= 애니셋의 몬스터 이름)
+	switch (type) {
+	case ObjectType::Snake:     model = assetManager_->modelSnake();     anims = &assetManager_->snakeAnimations();    prefix = "Snake";   break;
+	case ObjectType::Slime:     model = assetManager_->modelSlime();     anims = &assetManager_->slimeAnimations();    prefix = "Slime";   break;
+	case ObjectType::Bomber:    model = assetManager_->modelBomber();    anims = &assetManager_->bomberAnimations();   prefix = "Bomber";  break;
+	case ObjectType::Birdy:     model = assetManager_->modelBirdy();     anims = &assetManager_->birdyAnimations();    prefix = "Birdy";   break;
+	case ObjectType::Treant:    model = assetManager_->modelTreant();    anims = &assetManager_->treantAnimations();   prefix = "Treant";  break;
+	case ObjectType::Hobgoblin: model = assetManager_->modelHobgoblin(); anims = &assetManager_->goblinAnimations();   prefix = "Goblin";  break;
+	case ObjectType::Grandbaum: model = assetManager_->modelGrandbaum(); anims = &assetManager_->treantAnimations();   prefix = "Treant";  break;
+	case ObjectType::Isys:      model = assetManager_->modelIsys();      anims = &assetManager_->birdyAnimations();    prefix = "Birdy";   break;
+	case ObjectType::Goblin:
+	default:                    model = assetManager_->modelGoblin();    anims = &assetManager_->goblinAnimations();   prefix = "Goblin";  break;
+	}
+
 	obj.setId(IdPool::pop());
 	obj.setFaction(Faction::Monsters);
+	obj.setModel(model);
 
-	obj.setModel(assetManager_->modelGoblin());
-	obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
-	obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
-	obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
-	obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+	// 라이브 클립은 "Idle"로 고정된다(전술 NPC는 switchClip을 호출하지 않고, 클라가 속도로 모션을 추론).
+	// 그래도 Idle/Walk/Die/Attack 슬롯을 모두 정확한 이름으로 등록해 본-부착 피격 BVH가 null 클립으로
+	// 동결되는 것을 막는다(project_server_npc_sink_clipnull). Treant는 명명된 공격 클립을 쓴다.
+	const std::string p = prefix;
+	obj.animController().registerClip("Idle", findServerAnimClip(*anims, p + "_Idle"));
+	obj.animController().registerClip("Walk", findServerAnimClip(*anims, p + "_Walk"));
+	obj.animController().registerClip("Die",  findServerAnimClip(*anims, p + "_Death"));
+	// Full per-type attack clip roster + skill attacks so a tactical NPC casts the same
+	// varied skills as its field counterpart (skill hitboxes are authoritative; the AI
+	// picks one at random per swing via TacticalNpc::pickAttack). Boss variants reuse the
+	// base monster's roster (Hobgoblin→Goblin, etc.).
+	for (const AttackDef& a : attackRosterFor(attackBaseType(type))) {
+		obj.animController().registerClip(a.clipKey, findServerAnimClip(*anims, a.clipSrc));
+		obj.addAttack(skillIdByName(a.skillName), a.clipKey);
+	}
+	// Legacy generic "Attack" alias kept for the direct-damage fallback / any path that
+	// switches to a non-keyed attack clip.
+	if (type == ObjectType::Treant || type == ObjectType::Grandbaum)
+		obj.animController().registerClip("Attack", findServerAnimClip(*anims, "Treant_SpinKick"));
+	else
+		obj.animController().registerClip("Attack", findServerAnimClip(*anims, p + "_Attack1"));
 	obj.animController().switchClip("Idle");
 	obj.setCanReceiveDamage(true);
 
@@ -1877,98 +2283,30 @@ void Room::registerTacticalNpcBody(Object& obj) {
 	npcBodyOwner_[&obj.body()] = raw;
 }
 
-TacticalNpc* Room::spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId) {
-	if (!assetManager_) return nullptr;
-
-	Object base;
-	base.setPos(mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z()));
-	auto npc = std::make_unique<TacticalNpc>(std::move(base), cfg);
-	registerTacticalNpcBody(*npc);
-	// 그랜드밤 뱀 웨이브 전용 스포너. Snake 카테고리 부여 후 플레이어/보스 통과(경로 차단 방지)에
-	// 더해 방패벽 슬라임(Slime)도 mask에서 제외 → 링을 통과해도 진형을 물리적으로 밀지 않는다.
-	// (추후 다른 종류 웨이브에 재사용한다면 호출부에서 충돌 설정을 분기할 것.)
-	npc->body().setCollisionCategory(CollisionLayer::Snake);
-	npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime));
-	npc->setSquadId(squadId);
-
-	TacticalNpc* raw = npc.get();
-	tacticalNpcs_.push_back(std::move(npc));
-	return raw;
-}
-
-TacticalSquad* Room::addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad) {
-	TacticalSquad* raw = squad.get();
-	tacticalSquads_.push_back(std::move(squad));
-	return raw;
-}
-
-void Room::removeTacticalNpcById(uint32_t id) {
-	for (auto it = tacticalNpcs_.begin(); it != tacticalNpcs_.end(); ++it) {
-		if (*it && (*it)->getId() == id) {
-			Object* raw = it->get();
-			physicsWorld_.unregisterBody(&raw->body());
-			npcBodyOwner_.erase(&raw->body());
-			unregisterObject(raw);          // objectById_ 슬롯 정리(스킬 히트 후보에서 제외)
-			IdPool::push(id);
-			tacticalNpcs_.erase(it);
-			return;
-		}
-	}
-}
-
-void Room::removeTacticalSquadById(int32 squadId) {
-	for (auto it = tacticalSquads_.begin(); it != tacticalSquads_.end(); ++it) {
-		if (*it && (*it)->getSquadId() == squadId) {
-			tacticalSquads_.erase(it);
-			return;
-		}
-	}
-}
-
-void Room::broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds) {
+// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. 각 NPC의 objType()이
+// 클라 렌더 모델을 결정하므로 부대별로 다른 몬스터(슬라임/뱀/버디/바머)와 전용 보스가 그대로 표시된다.
+void Room::broadcastEncounterSpawn() {
 	std::vector<ObjectInfo> spawnInfos;
-	spawnInfos.reserve(npcIds.size());
-	for (uint32_t id : npcIds) {
-		TacticalNpc* o = findTacticalNpcById(id);
-		if (!o) continue;
+	spawnInfos.reserve(tacticalNpcs_.size() + 1);
+	auto appendInfo = [&](const TacticalNpc& o) {
 		spawnInfos.push_back(ObjectInfo{
-			.type           = ObjectType::Goblin,
-			.objectId       = static_cast<uint16>(o->getId()),
+			.type           = o.objType(),
+			.objectId       = static_cast<uint16>(o.getId()),
 			.materialSetIdx = 0,
-			.hp             = o->hp(),
-			.maxHp          = o->maxHp(),
-			.pos            = o->pos().getXmf(),
-			.orient         = o->orient().getXmf(),
-			.scale          = o->scale().getXmf(),
+			.hp             = o.hp(),
+			.maxHp          = o.maxHp(),
+			.pos            = o.pos().getXmf(),
+			.orient         = o.orient().getXmf(),
+			.scale          = o.scale().getXmf(),
 		});
-	}
-	if (!spawnInfos.empty()) {
-		broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
-	}
+	};
+	for (const auto& npc : tacticalNpcs_)
+		if (npc) appendInfo(*npc);
+	if (platoonLeader_) appendInfo(*platoonLeader_);
+
+	broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
 }
 
-void Room::reviveTacticalNpc(uint32_t id, mu::Vec3 pos) {
-	TacticalNpc* npc = findTacticalNpcById(id);
-	if (!npc) return;
-
-	pos = mu::Vec3(pos.x(), groundHeightAtWorld(pos.x(), pos.z()), pos.z());
-	npc->reviveAt(pos);
-	// 사망 시 물리 바디가 제거됐으므로 재등록한다(reviveAt은 객체 상태만 복구).
-	physicsWorld_.registerBody(&npc->body(), [npc]() { npc->rebuildBodyBVH(); });
-	npcBodyOwner_[&npc->body()] = npc;
-	npc->body().snapToCurrent();
-
-	broadcast(PacketManager::makeSNpcRespawnPacket(static_cast<uint16>(id), npc->hp(), pos.getXmf()));
-}
-
-void Room::despawnTacticalNpcHidden(uint32_t id) {
-	TacticalNpc* npc = findTacticalNpcById(id);
-	if (!npc || npc->hp() <= 0) return;   // 이미 죽은 뱀은 그대로(reviveOriginalSnakeSquad가 부활 처리)
-
-	// 정상 사망과 동일 상태로 전환: hp 0 + 물리 바디 제거(객체는 시체로 유지 → roster 기반 부활 가능).
-	// setHp(0)만 하면 justDied가 안 켜져 물리가 남고 부활 시 이중 등록되므로, 여기서 명시적으로 제거한다.
-	npc->setHp(0);
-	physicsWorld_.unregisterBody(&npc->body());
-	npcBodyOwner_.erase(&npc->body());
-	// 클라 숨김 통지(S_NpcHide)는 호출부에서 살아있던 id들을 묶어 한 번에 broadcast한다.
-}
+// (Grandbaum 뱀 증원 웨이브용 런타임 NPC/분대 소환·디스폰 인프라는 DR 토글 재설계로 제거됨.
+//  spawnTacticalWaveNpc / addDynamicTacticalSquad / removeTacticalNpcById / removeTacticalSquadById /
+//  broadcastTacticalNpcSpawn / reviveTacticalNpc / despawnTacticalNpcHidden — 전부 미사용이라 삭제.)

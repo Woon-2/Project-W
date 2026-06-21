@@ -17,8 +17,10 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 class Object;
 
@@ -51,6 +53,13 @@ struct AttachedHitbox {
     float            hitGroupCooldownMs   = 0.f;
     bool             active               = false;
     bool             applyAttachRotation  = true;
+    bool             penetrate            = true;  // VFXParticle: false = consume source particle on hit
+    // VFXParticle: the source particle's stable spawn key + world pos this frame
+    // (set by updateParticleHitboxSources). Used by processHitResults to mark the
+    // particle consumed and to anchor a death-child effect (e.g. explosion) at impact.
+    std::uint32_t    particleStream       = 0;
+    std::uint32_t    particleId           = 0;
+    mu::Vec3         particlePos          {};
 };
 
 // ---------------------------------------------------------------------------
@@ -73,7 +82,22 @@ struct ParticleHitboxSource {
     bool             active                = false;
     bool             useParticleSize       = false;
     bool             applyRotation         = true;
+    bool             penetrate             = true;  // false = destroy source particle on first hit
     std::vector<int> hitboxHandles;
+
+    // Non-penetrating: stable spawn keys ((stream<<32)|id) of particles consumed
+    // by an authoritative hit. Their hitboxes are skipped from then on, so a
+    // consumed projectile stops hitting (server is authoritative for damage).
+    std::unordered_set<std::uint64_t> consumedKeys;
+
+    // Set when a parent projectile is consumed (this source is its death-child,
+    // e.g. an explosion): re-anchor the child as a root burst at the impact point
+    // and time instead of the analytic chain (which would land at max range).
+    struct ConsumeAnchor {
+        mu::Vec3     pos {};
+        Milliseconds time { 0.f };
+        bool         valid = false;
+    } consumeAnchor;
 
     // Deterministic sampler binding (set at SpawnHitbox dispatch).
     // gameplayCfg/vdef point into the shared asset registry (boot-built,
@@ -100,6 +124,11 @@ struct SkillInstance {
 
     // Per-cast deterministic seed received via C_SkillStart (mirrors client).
     u32t              seed          = 0;
+
+    // Per-caster damage multiplier applied on top of oh.damage * damageCoeff.
+    // Lets a strong caster (e.g. a tactical boss) reuse a baseline monster skill
+    // while still hitting for its own (higher) damage. 1.0 = unchanged.
+    float             damageScale   = 1.0f;
 
     // World anchor captured at skill start (caster position + yaw). Used by
     // AttachType::Ground hitboxes to place planted, terrain-snapped OBBs.
@@ -266,7 +295,7 @@ public:
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
                    u32t seed = 0);
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                   Milliseconds initialElapsed, u32t seed = 0);
+                   Milliseconds initialElapsed, u32t seed = 0, float damageScale = 1.0f);
 
     void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);
     void update(Milliseconds dt, SkillDispatchContext& ctx);

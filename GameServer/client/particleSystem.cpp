@@ -554,22 +554,32 @@ void ParticleSystem::update(Seconds dt) {
         }
 
         if (p.lifetime <= 0.f) {
-            if (config_.subEmitters.enabled) {
-                for (int j = 0; j < (int)config_.subEmitters.subEmitters.size(); ++j) {
-                    const auto& sub = config_.subEmitters.subEmitters[j];
-                    if (sub.event == ps::SubEmittersModule::Event::Death
-                        && randomFloat(0.f, 1.f) <= sub.emitProbability) {
-                        pendingSubEmitterEvents_.push_back({ j, p.pos, p.vel, p.startColor, p.sizeStart });
-                    }
-                }
-            }
-            if (i != activeCount_ - 1)
-                pool_[i] = std::move(pool_[activeCount_ - 1]);
-            --activeCount_;
+            killParticleAt(i);   // fire Death sub-emitters + swap-remove
         } else {
             ++i;
         }
     }
+}
+
+void ParticleSystem::killParticleAt(int i) {
+    Particle& p = pool_[i];
+    if (config_.subEmitters.enabled) {
+        for (int j = 0; j < (int)config_.subEmitters.subEmitters.size(); ++j) {
+            const auto& sub = config_.subEmitters.subEmitters[j];
+            if (sub.event == ps::SubEmittersModule::Event::Death
+                && randomFloat(0.f, 1.f) <= sub.emitProbability) {
+                pendingSubEmitterEvents_.push_back({ j, p.pos, p.vel, p.startColor, p.sizeStart });
+            }
+        }
+    }
+    if (i != activeCount_ - 1)
+        pool_[i] = std::move(pool_[activeCount_ - 1]);
+    --activeCount_;
+}
+
+void ParticleSystem::killParticle(int index) {
+    if (index < 0 || index >= activeCount_) return;
+    killParticleAt(index);
 }
 
 void ParticleSystem::render(GFX& gfx) const {

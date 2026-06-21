@@ -278,6 +278,7 @@ void Dispatcher::shadowUpdate() {
             light.cascadeViews[ci] * light.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = light.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 }
@@ -352,7 +353,7 @@ void Dispatcher::shadowDraw() {
         pResources_->shadowPass.perFrameData.cbuffers[ci].bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
         for (const auto& ev : drawEvents_) {
-            if (!ev.terrain) continue;
+            if (!ev.terrain || ev.shadowCulled) continue;
             const auto& mesh = ev.terrain->mesh;
             if (mesh.subMeshes.empty()) continue;
 

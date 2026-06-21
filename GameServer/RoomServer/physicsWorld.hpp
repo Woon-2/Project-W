@@ -65,6 +65,15 @@ public:
     // Remove a previously registered scatter collider. Safe with an invalid handle.
     void unregisterScatter(ScatterHandle handle);
 
+    // Returns true if queryWorldBVH (already baked at the candidate position)
+    // overlaps any registered scatter-prop collider. Body-less query used for
+    // spawn-position validation only, not the per-step contact pipeline.
+    bool overlapsAnyScatterProp(mu::Vec3 queryPos, const BVH& queryWorldBVH) const;
+
+    // Body-less tactical formation query. Includes scatter props plus registered
+    // Static BVH bodies (arena barriers/structures); terrain is handled by height snap.
+    bool overlapsAnyStaticObstacle(mu::Vec3 queryPos, const BVH& queryWorldBVH) const;
+
     // Set the gravitational acceleration applied to Dynamic bodies each step.
     void MU_CALLCONV setGravity(mu::Vec3 g) { gravity_ = g; }
 

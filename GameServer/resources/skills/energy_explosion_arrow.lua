@@ -47,6 +47,12 @@ skill:addEvent(120, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Charge build-up SFX, starts with the charge VFX (1.6s root emit).
+-- Shoot ("charge_shoot", on Arrow spawn) and explosion ("charge_explosion", on
+-- Hit spawn) are fired event-driven from the particle spawn hook (game.cpp /
+-- onlineGame.cpp setChildSpawnCallback) so they land on the real launch/impact.
+skill:addEvent(120, "PlaySound", { sound = "arrow_charge" })
+
 local onHitBase = OnHit({
     damage          = 60,
     vfxId           = 255,
@@ -92,5 +98,29 @@ for i = 1, count do
     })
     skill:addEvent(destroyMs, "DestroyHitbox", { slot = i })
 end
+
+-- Arrow trigger (System 1): non-penetrating, zero-damage. On contact the arrow
+-- particle is destroyed; its Death sub-emitter chain (Arrow -Death-> Hit) spawns
+-- the explosion (System 2) at the impact point, and the System-2 hitboxes above
+-- deal the blast damage. If the arrow never hits, it dies at its 0.6s lifetime and
+-- explodes at max range (unchanged fallback). slot/hitGroup are distinct from the
+-- explosion's (0..8 / group 2) so the trigger consumes independently.
+local onHitTrigger = OnHit({
+    damage          = 0,
+    vfxId           = 255,
+    impulseStrength = 0.0,
+})
+
+skill:addEvent(spawnMs, "SpawnHitbox", {
+    slot                = 9,
+    localOBBs           = { OBB(0.0, 0.0, 0.0, 0.4, 0.4, 0.8, 0, 0, 0) },
+    attach              = VFXParticleAttach(13, 1),
+    applyAttachRotation = true,
+    useParticleSize     = false,
+    penetrate           = false,
+    hitGroup            = 3,
+    onHit               = onHitTrigger
+})
+skill:addEvent(destroyMs, "DestroyHitbox", { slot = 9 })
 
 return skill

@@ -8,8 +8,13 @@
 #include "goblin.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
+#include "bomber.hpp"
+#include "birdy.hpp"
+#include "slime.hpp"
+#include "treant.hpp"
 #include "stronghold.hpp"
 #include "zone.hpp"
+#include "../common/arenaWall.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "broadPhase.hpp"
@@ -46,6 +51,10 @@ public:
 		for (const auto& m : mushrooms_) {
 			IdPool::push(m.getId());
 		}
+		for (const auto& b : bombers_)  { IdPool::push(b.getId()); }
+		for (const auto& b : birdys_)   { IdPool::push(b.getId()); }
+		for (const auto& s : slimes_)   { IdPool::push(s.getId()); }
+		for (const auto& t : treants_)  { IdPool::push(t.getId()); }
 
 		// Unregister tactical NPC bodies before unique_ptrs are destroyed
 		if (platoonLeader_) {
@@ -75,10 +84,21 @@ public:
 	void enter(GameSession* session);
 	void leave(GameSession* session);
 	void move(int32 sessionId, CMovePacket* cMvPkt);
+	// 디버그 전용: 안티치트 클램프를 우회해 플레이어를 pos로 즉시 이동(아레나 zone 트리거 테스트).
+	void debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 clientMs);
 	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
+
+	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
+	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
+	// (ownerId = NPC id, elapsedMs = 0) so clients play the matching VFX/animation.
+	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale = 1.0f);
+	// True while ownerObjectId has a live skill instance (NPC AI holds its attack).
+	bool npcSkillActive(int32 ownerObjectId) const;
+	// Resolve a skill asset id by name from the shared registry (0 if absent).
+	uint32 skillIdByName(std::string_view name) const;
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
@@ -110,6 +130,10 @@ public:
 	std::vector<Goblin>&   goblins()   { return goblins_; }
 	std::vector<Snake>&    snakes()    { return snakes_; }
 	std::vector<Mushroom>& mushrooms() { return mushrooms_; }
+	std::vector<Bomber>&   bombers()   { return bombers_; }
+	std::vector<Birdy>&    birdys()    { return birdys_; }
+	std::vector<Slime>&    slimes()    { return slimes_; }
+	std::vector<Treant>&   treants()   { return treants_; }
 	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
 	// 전술 NPC 대형 이동 시 회피할 "큰 장애물"(플레이어 + 생존 중인 보스) 위치를 radius 내에서 append.
@@ -122,6 +146,20 @@ public:
 	// World-routed terrain height (shared chunk height fields). Used by
 	// strongholds to snap monster spawn positions onto the ground.
 	float MU_CALLCONV groundHeightAtWorld( float x, float z ) const;
+
+	// Bounded rejection-sampling variant of randomSpawnInDisc: retries a fixed
+	// number of times to find a candidate whose footprint (footprintSource's
+	// model/orient/scale, placed at the candidate position) does not overlap any
+	// registered scatter prop. Falls back to the last sampled position if every
+	// attempt collides; the existing static depenetration resolves any residual
+	// overlap over the next few physics steps. footprintSource must already have
+	// setModel/setScale/setOrient applied. Used by Stronghold to place/revive monsters.
+	mu::Vec3 MU_CALLCONV randomSpawnInDiscAvoidingProps(
+		mu::Vec3 center, float radius, const Object& footprintSource) const;
+	// Ground-snapped candidate가 scatter/arena wall/Static 구조물과 겹치지 않는지 검사.
+	// Isys 전술 대형 슬롯 보정용이며 동적 NPC/플레이어는 검사하지 않는다.
+	bool MU_CALLCONV isTacticalFormationPositionOpen(
+		mu::Vec3 candidate, const Object& footprintSource) const;
 
 	// Bind terrain height/normal callbacks onto a skill dispatch context so
 	// AttachType::Ground hitboxes snap to the same surface the client uses.
@@ -153,20 +191,6 @@ public:
 	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
 	void clearShieldWallBlockers();
 
-	// Grandbaum 뱀 증원 웨이브: 전투 중 전술 NPC/분대 동적 소환·디스폰.
-	// tacticalNpcs_는 unique_ptr 벡터라 재할당돼도 객체 주소(raw 포인터)는 불변 → tactic 실행 중
-	// (분대/NPC 순회 이전) 즉시 호출해도 안전하다.
-	TacticalNpc* MU_CALLCONV spawnTacticalWaveNpc(mu::Vec3 pos, const TacticalNpcConfig& cfg, int32 squadId);
-	TacticalSquad* addDynamicTacticalSquad(std::unique_ptr<TacticalSquad> squad);
-	void removeTacticalNpcById(uint32_t id);
-	void removeTacticalSquadById(int32 squadId);
-	void broadcastTacticalNpcSpawn(const std::vector<uint32_t>& npcIds);
-	// 죽은 전술 NPC 부활: 상태 복구(reviveAt) + 사망 시 제거됐던 물리 바디 재등록 + 클라 통지(S_NpcRespawn).
-	void MU_CALLCONV reviveTacticalNpc(uint32_t id, mu::Vec3 pos);
-	// 전술 NPC를 서버 상태상 사망(hp 0 + 물리 제거, 객체는 시체로 유지)으로 전환해 '퇴장'시킨다.
-	// 클라 통지는 호출부에서 묶어 S_NpcHide로 보낸다(시체 없이 숨김). 복귀는 reviveTacticalNpc.
-	void despawnTacticalNpcHidden(uint32_t id);
-
 private:
 	int32 id_;
 	std::string code_;   // 이 방을 만든 로비 코드(lobbyCode). RoomManager::codeRoomMap_ 키와 동일.
@@ -180,13 +204,27 @@ private:
 	void setupGoblin   (Goblin&    g, const Level& level);
 	void setupSnake    (Snake&     s, const Level& level);
 	void setupMushroom (Mushroom&  m, const Level& level);
+	void setupBomber   (Bomber&    b, const Level& level);
+	void setupBirdy    (Birdy&     b, const Level& level);
+	void setupSlime    (Slime&     s, const Level& level);
+	void setupTreant   (Treant&    t, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
-	void registerTacticalNpcBody(Object& obj);   // goblin 모델/물리로 전술 NPC 바디 셋업 + 물리/objectById_ 등록
+	// 전술 NPC 바디 셋업(type별 모델/애니/클립 선택) + 물리/objectById_ 등록. type이 클라 렌더 모델을 결정.
+	void registerTacticalNpcBody(TacticalNpc& obj, ObjectType type);
+	// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. NPC별 objType()으로 모델 라우팅.
+	void broadcastEncounterSpawn();
 	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
+	void teardownArenaWalls();                 // 전 NPC 처치 시 아레나 가상 벽 해제(barriers_ 파괴 + S_ZoneState(.,0))
+	bool allTacticalCombatantsDead() const;    // 보스 사망 AND 전 부대원 사망이면 true
+	// 클리어된 인카운터의 tactical 컨테이너(tacticalNpcs_/tacticalSquads_/platoonLeader_ 등)를
+	// 전부 비워 다음 아레나가 스폰 가드를 통과할 수 있게 한다. teardownArenaWalls() 직후 호출.
+	void cleanupTacticalEncounter();
+	// 현재 다른 아레나 인카운터가 진행 중인지(스폰 가드/동시 진입 차단 가드에서 공용으로 사용).
+	bool tacticalEncounterActive() const { return !tacticalNpcs_.empty() || platoonLeader_ != nullptr; }
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateMonsterAI(Milliseconds dt);
@@ -201,6 +239,7 @@ private:
 	void noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp);
 	void distributeKillCharge(Object* monster);
 	void updateComboExpiry();   // resets stale combos (combo window elapsed) each tick
+	void updatePlayerRegen(Milliseconds dt);   // server-authoritative combo-driven HP regen
 
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
@@ -215,6 +254,10 @@ private:
 	std::vector<Goblin>   goblins_;
 	std::vector<Snake>    snakes_;
 	std::vector<Mushroom> mushrooms_;
+	std::vector<Bomber>   bombers_;
+	std::vector<Birdy>    birdys_;
+	std::vector<Slime>    slimes_;
+	std::vector<Treant>   treants_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;
@@ -222,6 +265,9 @@ private:
 	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
 	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
 	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
+	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
+	bool                       arenaWallsActive_{ false };  // 일방향 벽이 올라가 있고 아직 해제 안 됨(1회성 가드)
+	std::vector<OneWayWall>    arenaWalls_;                 // 양끝 후방 Wall 일방향 슬랩(move() 권위 클램프 대상)
 	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
@@ -229,6 +275,7 @@ private:
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };
+	Milliseconds regenSyncAccum_{ 0ms };   // throttles S_PlayerHp regen broadcasts (~10 Hz)
 	std::vector<std::unique_ptr<NpcGroup>> npcGroups_;
 	std::vector<GameSession*> livingPlayersCache_;
 	std::unordered_map<int32/* player id */, int32/* count */> aggroCount_;
@@ -249,7 +296,10 @@ private:
 	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
 	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
 	std::unique_ptr<PlatoonLeader>              platoonLeader_;
-	std::vector<uint32_t>                       shieldWallBlockerIds_;   // Grandbaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
+	// platoonLeader_가 클라에 어떤 모델로 보일지(ObjectInfo.type). Goblin 전술은 Hobgoblin,
+	// GrandBaum/Isis는 전용 모델 추가 전까지 Goblin placeholder.
+	ObjectType                                  platoonLeaderObjType_{ ObjectType::Goblin };
+	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
 	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;

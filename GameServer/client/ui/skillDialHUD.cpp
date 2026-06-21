@@ -12,13 +12,17 @@ namespace {
     constexpr float kTopDeg   = 90.f;    // selected slot sits at the top of the wheel
     constexpr float kStepDeg  = 120.f;   // 3 slots evenly spaced -> symmetric, no teleport
     constexpr float kRadius   = 62.f;    // slot ring radius (icons sit on the donut band)
-    constexpr float kMarginX  = 96.f;    // wheel pivot offset from the right edge
-    constexpr float kMarginY  = 96.f;    // wheel pivot offset from the bottom edge
     constexpr float kSelSize  = 60.f;
     constexpr float kSideSize = 44.f;
 
     constexpr float kRingPad  = 30.f;    // donut outer edge extends this far past kRadius
     constexpr float kRingHole = 0.42f;   // donut inner radius fraction (see ui.hlsl mode 3)
+
+    // Reference resolution all the size constants above are tuned at (matches
+    // UI::UIManager's base layout size). Render scales them by screen size relative
+    // to this so the dial keeps its on-screen proportions across resolutions.
+    constexpr float kBaseWidth  = 1024.f;
+    constexpr float kBaseHeight = 768.f;
 
     inline mu::Mat4x4 quadWorld(float cx, float cy, float size) {
         const float h = size * 0.5f;
@@ -39,6 +43,7 @@ void SkillDialHUD::configure(unsigned weaponOrdinal,
         slotCost_[i]       = slotCost[i];
         slotCooldownMs_[i] = slotCooldownMs[i];
         charge_[i]         = 0.f;
+        targetCharge_[i]   = 0.f;
         cooldownEndSec_[i] = 0.f;
     }
     selected_  = 0;
@@ -54,6 +59,22 @@ bool SkillDialHUD::setCharge(int slot, float charge) {
     const bool becameReady = (prevStacks < 1 && newStacks >= 1);
     if (becameReady) readyPulse_[slot] = 0.45f;   // trigger the scale pop
     return becameReady;
+}
+
+void SkillDialHUD::setChargeTarget(int slot, float target) {
+    if (slot < 0 || slot >= kSlots) return;
+    targetCharge_[slot] = target;
+}
+
+bool SkillDialHUD::addDisplayCharge(int slot, float amount) {
+    if (slot < 0 || slot >= kSlots) return false;
+    const float capped = std::min(charge_[slot] + amount, targetCharge_[slot]);
+    return setCharge(slot, capped);   // reuse the 0 -> 1 ready-pulse logic
+}
+
+bool SkillDialHUD::syncDisplayToTarget(int slot) {
+    if (slot < 0 || slot >= kSlots) return false;
+    return setCharge(slot, targetCharge_[slot]);
 }
 
 void SkillDialHUD::selectNext() { selected_ = (selected_ + 1) % kSlots;         rotTarget_ -= kStepDeg; }
@@ -88,18 +109,31 @@ void SkillDialHUD::update(float dtSec) {
         readyPulse_[i] = std::max(0.f, readyPulse_[i] - dtSec);
 }
 
+void SkillDialHUD::nudgeMarginPx(float dxPx, float dyPx, float screenW, float screenH) {
+    if (screenW > 0.f) marginXFrac_ = std::clamp(marginXFrac_ + dxPx / screenW, 0.f, 0.45f);
+    if (screenH > 0.f) marginYFrac_ = std::clamp(marginYFrac_ + dyPx / screenH, 0.f, 0.45f);
+}
+
 void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
     if (!visible_) return;
 
-    const float pivotX = screenW - kMarginX;
-    const float pivotY = kMarginY;   // bottom-origin pixel space (matches UI shader)
+    const float pivotX = screenW * (1.f - marginXFrac_);
+    const float pivotY = screenH * marginYFrac_;   // bottom-origin pixel space (matches UI shader)
+
+    const float scaleX = (kBaseWidth  > 0.f) ? screenW / kBaseWidth  : 1.f;
+    const float scaleY = (kBaseHeight > 0.f) ? screenH / kBaseHeight : 1.f;
+    const float uiScale  = std::max(0.01f, std::min(scaleX, scaleY));
+    const float radius   = kRadius   * uiScale;
+    const float selSize  = kSelSize  * uiScale;
+    const float sideSize = kSideSize * uiScale;
+    const float ringPad  = kRingPad  * uiScale;
 
     // Semi-transparent gray donut the icons sit on. Procedural (ui.hlsl mode 3):
     // no texture is sampled, so any valid texture pointer satisfies the pipeline.
     const Texture* anyTex = digitAtlas_ ? digitAtlas_ : basicIcon_;
     for (int i = 0; !anyTex && i < kSlots; ++i) anyTex = slotIcon_[i];
     if (anyTex) {
-        const float ringSize = (kRadius + kRingPad) * 2.f;
+        const float ringSize = (radius + ringPad) * 2.f;
         gfx.addDrawEvent(UIPipeline::DrawEvent{
             .world      = quadWorld(pivotX, pivotY, ringSize),
             .pTex       = anyTex,
@@ -116,9 +150,9 @@ void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
         const float a     = (kTopDeg + i * kStepDeg + rot_) * (kPi / 180.f);
         const bool  sel   = (i == selected_);
         const float pulse = readyPulse_[i] / 0.45f;                 // 0..1, eased by linear decay
-        const float size  = (sel ? kSelSize : kSideSize) * (1.f + pulse * 0.22f);
-        const float cx   = pivotX + kRadius * std::cos(a);
-        const float cy   = pivotY + kRadius * std::sin(a);
+        const float size  = (sel ? selSize : sideSize) * (1.f + pulse * 0.22f);
+        const float cx   = pivotX + radius * std::cos(a);
+        const float cy   = pivotY + radius * std::sin(a);
 
         const int   stacks = slotStacks(i);
         const float cost   = slotCost_[i];
@@ -161,7 +195,7 @@ void SkillDialHUD::render(GFX& gfx, float screenW, float screenH) const {
     // dial center.
     if (basicIcon_) {
         gfx.addDrawEvent(UIPipeline::DrawEvent{
-            .world    = quadWorld(pivotX, pivotY, kSideSize * 0.95f),
+            .world    = quadWorld(pivotX, pivotY, sideSize * 0.95f),
             .pTex     = basicIcon_,
             .colorMul = XMFLOAT4{ 0.95f, 0.95f, 0.95f, 0.97f },
         });

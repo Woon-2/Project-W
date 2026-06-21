@@ -21,8 +21,11 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 0.8, 1.0)
 })
 
+-- Swing SFX, on the slash.
+skill:addEvent(100, "PlaySound", { sound = "sword_slash_1" })
+
 local onHitDefBase = OnHit({
-    damage          = 25,
+    damage          = 2000,
     vfxId           = 0,
     impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
@@ -43,7 +46,7 @@ local hitboxBase = {
     attach             = BoneAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup           = 0,
-    hitGroupCooldownMs = 600,
+    hitGroupCooldownMs = 350,
     onHit              = onHitDefBase
 }
 

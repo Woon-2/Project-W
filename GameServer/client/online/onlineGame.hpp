@@ -4,6 +4,7 @@
 #include <atomic>
 #include <array>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "../IGame.hpp"
 
@@ -16,6 +17,7 @@
 #include "../physicsWorld.hpp"
 #include "../terrainChunkManager.hpp"
 #include "../zone.hpp"
+#include "../../common/arenaWall.hpp"
 #include "../animation.hpp"
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
@@ -32,6 +34,7 @@
 #include "../particleSystem.hpp"
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
+#include "../energyOrbSystem.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../debugBVView.hpp"
@@ -73,8 +76,18 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+	void createHobgoblin(const ObjectInfo& hobgoblinInfo);
 	void createSnake(const ObjectInfo& info);
 	void createMushroom(const ObjectInfo& info);
+	// Newer monster types each have their own typed vector + per-type loops (like goblins_).
+	// configureNetMonster fills the shared state; each create pushes into its own vector.
+	void createBomber(const ObjectInfo& info);
+	void createBirdy(const ObjectInfo& info);
+	void createSlime(const ObjectInfo& info);
+	void createTreant(const ObjectInfo& info);
+	// Mid-boss bosses: dedicated models, routed through the Treant/Birdy corpse kind so death FX work.
+	void createGrandbaum(const ObjectInfo& info);
+	void createIsys(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -105,6 +118,8 @@ public:
 	void onSkillSelect( uint16 playerId, uint8 slot );
 	void onSkillUseReject( uint8 slot );
 	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
+	// Server-authoritative HP push (regen): apply newHp directly, no hit event/animation.
+	void onPlayerHp( uint16 playerId, int32 newHp );
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
@@ -128,6 +143,11 @@ private:
 
 	void sendMovePacket();
 	void sendMouseMovePacket();
+	// Debug teleport (F5/F6/F7): jump the player to an arena zone center to test mid-boss triggers.
+	// Looks up the zone center by tag, sets the local predicted pos, and sends C_DebugTeleport so the
+	// server moves its authoritative pos (bypassing the anti-cheat clamp) and the zone Enter fires.
+	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
+	void debugTeleportToArena(const std::string& tag);
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
@@ -189,13 +209,15 @@ private:
 	void lobbyJoinRoom(const std::string& code);
 	void lobbyLeaveRoom();
 	void lobbyStartGame();
+	void lobbySelectWeapon(int direction);
 
 public:
 	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
 	void onLobbyCreated(const std::string& code, uint16 myId);
-	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds);
-	void onLobbyPlayerJoined(uint16 sessionId);
+	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos);
+	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
 	void onLobbyPlayerLeft(uint16 sessionId);
+	void onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType);
 	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
 
 private:
@@ -203,7 +225,10 @@ private:
 	std::wstring lobbyDisplayName(uint16 sessionId) const;
 
 	void cullObjects();
-	void applyHiZCulling();
+	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
+	// (이전 이름: applyHiZCulling — 컬링 자체를 수행하는 게 아니라 readback 결과를
+	//  애니메이션 시스템으로 피드백하는 역할이라 이름을 바꿈)
+	void feedbackCullResultToAnim();
 
 	// 플레이어 간 reciprocal soft separation (클라 예측).
 	// 로컬 플레이어를 다른 플레이어와의 수평 침투량의 "절반"만큼만 밀어낸다.
@@ -216,6 +241,11 @@ private:
 	// 받음). 위치(setCurrPos)만 보정하므로 임펄스 튕김이 없다. step() 직후 resolvePlayerSeparation
 	// 다음에 호출된다.
 	void resolveBarrierSeparation(Seconds dt);
+
+	// 아레나 후방 Wall 일방향 벽 (클라 예측). 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는
+	// 로컬 플레이어만 평면으로 되돌린다. 안쪽 입장·측면 이동은 통과 → 후발 파티원도 합류 가능.
+	// 직전 프레임 위치(arenaPrevPlayerPos_) 대비 횡단 방향으로 일방향 판정. 물리 step 루프 뒤 1회 호출.
+	void resolveArenaWallLeash();
 
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
@@ -268,11 +298,20 @@ private:
 	std::vector<std::shared_ptr<Goblin>>   goblins_{};
 	std::vector<std::shared_ptr<Snake>>    snakes_{};
 	std::vector<std::shared_ptr<Mushroom>> mushrooms_{};
+	// Newer monster types each get their own typed vector + per-type loops, mirroring
+	// goblins_/snakes_/mushrooms_. (Grandbaum is stored here as a Treant, Isys as a Birdy —
+	// the boss variants route through the Treant/Birdy MonsterKind for corpse/respawn.)
+	std::vector<std::shared_ptr<Bomber>>   bombers_{};
+	std::vector<std::shared_ptr<Birdy>>    birdys_{};
+	std::vector<std::shared_ptr<Slime>>    slimes_{};
+	std::vector<std::shared_ptr<Treant>>   treants_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
 	// Non-owning unified monster lookup (all monster types).
-	std::unordered_map<uint16, Monster*> idMonsterMap_{};
+	// Object* 로 두어 고블린/뱀/버섯 등 종류와 무관하게 통합 순회한다.
+	// ragdoll 등 몬스터 공통 동작은 Object의 가상 접근자로 접근.
+	std::unordered_map<uint16, Object*> idMonsterMap_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -288,10 +327,25 @@ private:
 	ZoneSystem clientZoneSystem_{};
 	std::unordered_map<uint16, uint8> zoneStates_{};
 	void bindZoneHandlers();
+	void rebuildBarrierMagicCircleQuads();
+	void renderBarrierMagicCircleQuads();
+
+	// 아레나 후방 Wall 일방향 벽 상태(S_ZoneState로 토글). 물리 벽 대신 위치 클램프로
+	// "들어오기 자유 / 나가기 차단"을 구현한다(서버 Room::move()가 권위로 미러).
+	bool arenaLeashActive_{ false };
+	std::vector<OneWayWall> arenaWalls_{};   // 활성 아레나의 양끝 일방향 슬랩
+	mu::Vec3 arenaPrevPlayerPos_{};          // 직전 프레임 로컬 플레이어 위치(횡단 판정용)
 
 	// Virtual walls built locally on S_ZoneState (collision-only, not rendered) so
 	// the predicted local player cannot pass. Geometry comes from "Wall" markers.
 	std::vector<std::shared_ptr<Cube>> barriers_{};
+	struct BarrierMagicCircleQuad {
+		mu::Mat4x4 world{};
+		mu::Mat4x4 rotation{};
+		mu::Vec4   tint{ 1.f, 1.f, 1.f, 1.f };
+		mu::Vec3   sortPos{};
+	};
+	std::vector<BarrierMagicCircleQuad> barrierMagicCircleQuads_{};
 
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };
@@ -309,6 +363,81 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
+
+	// --- Energy orb death FX: client-authored corpse pipeline ---
+	// On death a monster is DETACHED from server sync into a corpse (gets a fresh
+	// RenderObjectId). The corpse stays a ragdoll for kCorpseRagdollSeconds, then
+	// dissolves into energy orbs, and is only removed once all its orbs are absorbed.
+	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
+	// is never cut short by a respawn packet.
+	EnergyOrbSystem orbSystem_{};
+	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
+
+	// HP bar tracking entry for non-goblin monsters (declared here so configureNetMonster's
+	// signature can reference it). Per-type maps below reuse this shape.
+	struct MonsterHpEntry {
+		Object*          monster;              // non-owning; lifetime owned by typed shared_ptr vectors
+		UI::ProgressBar* hpBar;                // owned by uiManager_
+		float            worldYOffset;
+		float            hpBarVisibleSeconds = 0.f;
+	};
+
+	// Shared spawn wiring for the newer monster types (model/blender/body/HP bar + id maps).
+	// The caller creates the typed shared_ptr and pushes it into its own vector after this
+	// returns; this fills the common state (incl. the HP bar into the passed-in per-type map).
+	// Declared after MonsterKind so its signature can reference the enum.
+	void configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
+	                         const Model* model, MonsterKind kind, float mass,
+	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars);
+	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
+	struct Corpse {
+		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
+		UI::ProgressBar* hpBar = nullptr;   // hidden during death; returns to the pool with obj
+		MonsterKind kind   = MonsterKind::Goblin;
+		uint16 origId      = 0;             // server npc id this corpse came from
+		u32t   corpseId    = 0;             // unique id for orb <-> corpse association
+		float  age         = 0.f;           // seconds since death
+		enum class Phase { Ragdoll, Orb } phase = Phase::Ragdoll;
+		bool   orbsSpawned = false;
+		float  totalCharge = 0.f;           // credited charge (0 if not a contributor)
+		int    slot        = 0;
+	};
+	std::vector<Corpse> corpses_;
+	std::vector<PooledMonster> goblinPool_;
+	std::vector<PooledMonster> snakePool_;
+	std::vector<PooledMonster> mushroomPool_;
+	std::vector<PooledMonster> bomberPool_;
+	std::vector<PooledMonster> birdyPool_;
+	std::vector<PooledMonster> slimePool_;
+	std::vector<PooledMonster> treantPool_;
+	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
+	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
+
+	// Network id for a detached corpse. A corpse is client-authored and absent from every
+	// id map (idMonsterMap_/idPlayerMap_/skillObjectById_), so it is never looked up by id —
+	// every corpse can share ONE fixed sentinel in a range disjoint from server npc ids
+	// (small uint16). No per-corpse id allocation -> no counter overflow. The corpse keeps
+	// its renderObjectId (stable per object) and reuses it as the orb-association corpseId.
+	// On respawn reinitFromPool restores the real server npc id. origId preserves the npc id.
+	static constexpr i32t kDetachedCorpseId = 0x40000000;
+	// npc ids whose live entity is currently detached as a corpse (no active mapping).
+	// Server packets (move/attack) for these arrive during the death->respawn window
+	// and are silently ignored instead of logged as "NPC not found". Erased on respawn.
+	std::unordered_set<uint16> detachedNpcIds_;
+
+	// Detach a dead monster into corpses_ with a fresh RenderObjectId; removes it from
+	// the active server-synced containers (carrying its HP bar). Returns the corpse id.
+	u32t migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind, uint16 npcId);
+	// Advances corpses (ragdoll hold -> orb dissolve -> pool return) each frame.
+	void updateCorpses(Milliseconds deltaTime, float tPhysicInterp);
+	// Reuse a pooled object for a respawn (true), or report the pool empty (false).
+	bool reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, int32 hp);
+	// Return a finished corpse's object + HP bar to the per-kind pool for reuse.
+	void returnMonsterToPool(Corpse& corpse);
+	// Charge credits awaiting their corpse (S_SkillCharge may arrive before migration).
+	struct PendingOrbCharge { int slot = 0; float delta = 0.f; float age = 0.f; };
+	std::vector<PendingOrbCharge> pendingOrbCharges_;
+	float prevServerCharge_[3] = { 0.f, 0.f, 0.f };  // last S_SkillCharge per slot (delta calc)
 
 	// --- Stack-charge skill HUD ---
 	SkillDialHUD skillDial_{};
@@ -404,14 +533,13 @@ private:
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
-	struct MonsterHpEntry {
-		Monster*         monster;              // non-owning; lifetime owned by typed shared_ptr vectors
-		UI::ProgressBar* hpBar;                // owned by uiManager_
-		float            worldYOffset;
-		float            hpBarVisibleSeconds = 0.f;
-	};
+	// MonsterHpEntry is declared above (near MonsterKind) so configureNetMonster can use it.
 	std::unordered_map<uint16, MonsterHpEntry> snakeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> mushroomHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> bomberHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> birdyHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> slimeHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_
@@ -471,11 +599,13 @@ private:
 	struct LobbyPlayer {
 		uint16       sessionId;
 		std::wstring name;
+		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
 	};
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
 	uint16                   hostId_ = 0;
 	uint16                   myId_   = 0;
+	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 
 	// Grandbaum 넉백/이동잠금(로컬 플레이어). 서버 S_PlayerKnockback로 트리거. 이동 권한은 클라에

@@ -41,6 +41,7 @@ ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, 
 ComPtr<ID3D12PipelineState> createBillboardShaderMultiply(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShaderPremultiplied(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createEnergyOrbShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createWindRingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -280,7 +281,7 @@ struct Material {
 	float cRoughness;
 	float cMetallic;
 	float cAOStrength;
-	float padding0;
+	float cAlphaCutoff;   // foliage alpha-test threshold (0 = opaque, no discard)
 	XMFLOAT3 cEmmisive;
 	float padding1;
 };
@@ -387,6 +388,42 @@ struct PerFrameData {
 };
 
 }	// namespace MeshParticleShader
+
+// EnergyOrbShader
+namespace EnergyOrbShader {
+
+// 112B, 16B-aligned
+// world: row-major — CPU transposes (mu::transpose().getXmf()) before upload
+struct PerInstanceData {
+	XMFLOAT4X4 world;              // 64B  death-time object world
+	XMFLOAT4   colorAndSize;       // 16B  rgb = HDR emissive color, a = point size
+	XMFLOAT4   sphereCenterRadius; // 16B  xyz = orb center (world), w = sphere radius
+	u32t       rootBoneOffset;     // 4B   index into the bone palette
+	float      morphT;             // 4B   0 = mesh pose, 1 = collapsed sphere
+	u32t       vertexCount;        // 4B   submesh vertex count (hash normalization)
+	float      pad;                // 4B
+};
+
+// 32B
+struct PerDrawcallData {
+	BindlessIndex idxAlbedo;           // 16B  submesh albedo (idxRange < 0 = none)
+	u32t          firstInstanceOffset; // 4B
+	XMUINT3       pad0;                // 12B
+};
+
+// 80B, 16B-aligned
+struct PerFrameData {
+	XMFLOAT4X4 vp;         // 64B  row-major
+	XMFLOAT3   cameraPosW; // 12B
+	float      padding0;   // 4B
+};
+
+// 64B — one skinning matrix per bone (death-pose snapshot), row-major.
+struct BoneData {
+	XMFLOAT4X4 transform;
+};
+
+}	// namespace EnergyOrbShader
 
 // WindRingShader
 namespace WindRingShader {
@@ -623,9 +660,11 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
 	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
+	XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+	float      _pfd1;
 };
 }	// namespace ShadowMapCSMShader
 
@@ -684,9 +723,11 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
 	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
+	XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+	float      _pfd1;
 };
 }	// namespace ShadowMapSkinnedCSMShader
 
@@ -782,9 +823,11 @@ struct PerDrawcallData {
     XMFLOAT4X4 world;
 };
 struct PerFrameData {
-    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (camera-relative: maps posW - camPos)
     u32t       cascadeIdx;
     XMUINT3    _pfd0;
+    XMFLOAT3   camPos;     // 카메라 월드 위치 (camera-relative shadow rebase)
+    float      _pfd1;
 };
 }  // namespace TerrainShadowMapCSMShader
 
@@ -907,6 +950,10 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
+	// Unused by the GBuffer geometry pass, but mirrors pbrDeferred.hlsl's camPos so the
+	// shared pbrLighting.hlsli (camera-relative shadow space) compiles. Keep byte-aligned.
+	XMFLOAT3   camPos;
+	float      _padCam;
 };
 }	// namespace PBRDeferredGBufferShader
 
@@ -943,7 +990,7 @@ struct Material {
 	float cRoughness;
 	float cMetallic;
 	float cAOStrength;
-	float padding0;
+	float cAlphaCutoff;
 	XMFLOAT3 cEmmisive;
 	float padding1;
 };
@@ -962,6 +1009,14 @@ struct PerInstanceData {
 	i32t bakedClipId;
 	i32t bakedClipFrame;
 	i32t padding;
+	// Energy-orb absorption ripples (body-surface emissive wave). Local effect:
+	// only the absorbing player has rippleCount>0; all others default to 0.
+	// Layout must match pbrDeferredSkinned.hlsl PerInstanceData (tight-packed
+	// StructuredBuffer; float4 arrays avoid alignment ambiguity).
+	XMFLOAT4 ripplePosAge[4];          // xyz = contact world pos, w = age (sec)
+	XMFLOAT4 rippleColorIntensity[4];  // rgb = HDR color, w = intensity
+	u32t     rippleCount;
+	XMUINT3  ripplePad;
 };
 
 struct PerDrawcallData {
@@ -978,6 +1033,10 @@ struct PerFrameData {
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;
+	// Unused by the GBuffer geometry pass, but mirrors pbrDeferredSkinned.hlsl's camPos so
+	// the shared pbrLighting.hlsli (camera-relative shadow space) compiles. Keep byte-aligned.
+	XMFLOAT3   camPos;
+	float      _padCam;
 };
 }	// namespace PBRDeferredSkinnedGBufferShader
 
@@ -1005,6 +1064,7 @@ struct PerFrameData {
 	BindlessIndex idxGB2;
 	BindlessIndex idxGB3;
 	BindlessIndex idxDepth;
+	BindlessIndex idxGB4;   // linear view-space Z (posV.z), R32_FLOAT
 	// Debug
 	u32t       debugMode;
 	XMUINT3    _pad0;
@@ -1032,15 +1092,15 @@ struct PerFrameData {
 namespace TonemapResolveShader {
 
 // Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
-// 48 bytes. Layout finalized up-front (exposure/debug/bloom) so the cbuffer is
-// not re-packed as later Phase 2 features land.
+// 64 bytes.
 struct PerDrawcallData {
-	BindlessIndex idxSceneColor;   // HDR scene-color SRV
-	BindlessIndex idxBloom;        // bloom mip0 SRV (invalid => additive bloom is a no-op)
-	float         exposure;        // linear exposure multiplier applied before tonemapping
-	float         bloomIntensity;  // additive bloom strength (0 => off)
-	u32t          debugMode;       // GBuffer debug mode; !=0 => passthrough (skip tonemap)
+	BindlessIndex idxSceneColor;        // HDR scene-color SRV
+	BindlessIndex idxBloom;             // bloom mip0 SRV (invalid => additive bloom is a no-op)
+	float         exposure;             // linear exposure multiplier applied before tonemapping
+	float         bloomIntensity;       // additive bloom strength (0 => off)
+	u32t          debugMode;            // GBuffer debug mode; !=0 => passthrough (skip tonemap)
 	float         _pad;
+	BindlessIndex idxColorGradingLUT;   // 3D LUT SRV (idxRange<0 => grading is a no-op)
 };
 
 }	// namespace TonemapResolveShader

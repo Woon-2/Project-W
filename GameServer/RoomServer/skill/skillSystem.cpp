@@ -218,7 +218,7 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                            Milliseconds initialElapsed, u32t seed) {
+                            Milliseconds initialElapsed, u32t seed, float damageScale) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
@@ -226,8 +226,9 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     if (idx < 0) return -1;
 
     SkillInstance& inst = instancePool_.instances[idx];
-    inst.elapsed = initialElapsed;
-    inst.seed    = seed;
+    inst.elapsed     = initialElapsed;
+    inst.seed        = seed;
+    inst.damageScale = damageScale;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
@@ -454,6 +455,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             src.hitGroupCooldownMs = def.hitGroupCooldownMs;
             src.useParticleSize    = def.useParticleSize;
             src.applyRotation      = def.applyAttachRotation;
+            src.penetrate          = def.penetrate;
+            src.consumedKeys.clear();
+            src.consumeAnchor      = {};
             src.hitboxHandles.clear();
 
             // Bind the deterministic sampler. Per-system seed mirrors the
@@ -661,15 +665,19 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
             continue;
         }
 
-        const float tReal = (inst.elapsed - anchor->startTime).count() * 0.001f;
-        const pg::EmitterFrame frame{ anchor->pos, anchor->orient };
         const pg::GroundQuery  ground{ ctx.groundHeight, ctx.groundNormal };
 
         // Resolver over the effect composition: lets the sampler follow
-        // sub-emitter chains (chainParent) to root systems recursively.
+        // sub-emitter chains (chainParent) to root systems recursively. When this
+        // source has been re-anchored (its parent projectile was consumed on a
+        // non-penetrating hit), force the target system to a root play()-burst so
+        // the death-child effect (e.g. explosion) spawns at the recorded impact
+        // point instead of the analytic chain's max-range death.
         const SkillAsset::VfxDef* vdef = src.vdef;
         const std::uint32_t effectSeed = src.effectSeed;
-        auto resolver = [vdef, effectSeed](int idx) -> pg::SystemRef {
+        const int            anchorSys  = src.systemIdx;
+        const bool           reAnchored = src.consumeAnchor.valid;
+        auto resolver = [vdef, effectSeed, anchorSys, reAnchored](int idx) -> pg::SystemRef {
             pg::SystemRef r;
             if (idx < 0 || idx >= static_cast<int>(vdef->systems.size()))
                 return r;
@@ -681,11 +689,37 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
                                                : pg::PlayMode::Emit;
             r.chainParent  = s.chainParent;
             r.chainOnBirth = s.chainOnBirth;
+            if (reAnchored && idx == anchorSys) {
+                r.chainParent  = -1;                  // detach from the consumed parent
+                r.chainOnBirth = false;
+                r.mode         = pg::PlayMode::Emit;   // single play()-style burst at the anchor
+            }
             return r;
+        };
+
+        const float tReal = reAnchored
+            ? (inst.elapsed - src.consumeAnchor.time).count() * 0.001f
+            : (inst.elapsed - anchor->startTime).count() * 0.001f;
+        const pg::EmitterFrame frame{
+            reAnchored ? src.consumeAnchor.pos : anchor->pos,
+            anchor->orient
         };
         pg::evaluateSystemParticles(resolver, src.systemIdx, frame, tReal,
                                     ground, anchor->conformOverride,
                                     kMaxGameplayParticles, particleScratch_);
+
+        // Non-penetrating: drop particles already consumed by an authoritative hit
+        // so their hitboxes disappear (the projectile stops after impact).
+        if (!src.consumedKeys.empty()) {
+            particleScratch_.erase(
+                std::remove_if(particleScratch_.begin(), particleScratch_.end(),
+                    [&src](const pg::ParticleState& p) {
+                        const std::uint64_t k =
+                            (static_cast<std::uint64_t>(p.stream) << 32) | p.id;
+                        return src.consumedKeys.count(k) != 0;
+                    }),
+                particleScratch_.end());
+        }
 
         // Reuse existing per-particle hitbox handles; only grow/shrink the count.
         const int needed = static_cast<int>(particleScratch_.size());
@@ -708,6 +742,7 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
             hb.hitGroup               = src.hitGroup;
             hb.hitGroupCooldownMs     = src.hitGroupCooldownMs;
             hb.applyAttachRotation    = src.applyRotation;
+            hb.penetrate              = src.penetrate;
             hb.particleSourceIdx      = si;
             hb.resolvedAttach.type    = AttachType::VFXParticle;
             hb.worldOBBs.resize(src.templateOBBs.size());
@@ -719,6 +754,12 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
         for (int pi = 0; pi < static_cast<int>(src.hitboxHandles.size()); ++pi) {
             AttachedHitbox& hb = hitboxPool_[src.hitboxHandles[pi]];
             const pg::ParticleState& p = particleScratch_[pi];
+
+            // Record the stable spawn key + world pos so a non-penetrating hit can
+            // mark this exact particle consumed and anchor its death-child at impact.
+            hb.particleStream = p.stream;
+            hb.particleId     = p.id;
+            hb.particlePos    = p.pos;
 
             const float sz = src.useParticleSize ? p.sizeNow : 1.f;
 
@@ -845,13 +886,19 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
             }
         }
 
-        // BVH hit check — capture damageCoeff from the hit leaf node
+        // BVH hit check — capture damageCoeff from the hit leaf node.
+        // Per-region damageCoeff is authored for player->monster hits (head =2.0,
+        // weak points, etc.). Monster->player hits use FLAT damage: the player BVH
+        // carries no meaningful per-region coeffs and some regions are 0, which would
+        // null the damage while the knockback impulse still lands — exactly the
+        // "looks like a hit but no damage" symptom for certain monsters/parts.
+        const bool flatDamage = (target->faction() == Faction::Players);
         const BVH& bvh   = target->body().worldBVH();
         float      coeff = 1.0f;
         bool       hit   = false;
         for (const OBB& obb : hb.worldOBBs) {
             BVHHitResult r = collides(bvh, obb);
-            if (r.hit) { coeff = r.damageCoeff; hit = true; break; }
+            if (r.hit) { coeff = flatDamage ? 1.0f : r.damageCoeff; hit = true; break; }
         }
         if (hit) {
             pendingHits_.push_back({ c.hitboxIdx, targetId, coeff });
@@ -877,10 +924,13 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
             instPtr = &instancePool_.instances[hb.instanceIdx];
         }
 
-        if (!ctx.clientPredictionOnly && instPtr) {
+        // A zero-damage hitbox (e.g. a non-penetrating projectile trigger whose
+        // payload is the spawned burst) carries no damage event -- only its consume
+        // side effect below.
+        if (!ctx.clientPredictionOnly && instPtr && oh.damage != 0) {
             holdEvent((*ctx.evList), EvSkillHit{
                 hr.targetObjectId,
-                static_cast<int32>(oh.damage * hr.damageCoeff),
+                static_cast<int32>(oh.damage * hr.damageCoeff * instPtr->damageScale),
                 instPtr->ownerObjectId,
                 instPtr->asset ? instPtr->asset->id : 0u
             });
@@ -897,6 +947,28 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
                                     * oh.impulseStrength;
                 tgt->body().applyImpulse(impulseJ, tgt->pos());
                 tgt->onHitImpulse();
+            }
+        }
+
+        // Non-penetrating: mark this source particle consumed (its hitbox stops
+        // appearing, so the projectile no longer hits) and re-anchor any direct
+        // death-child source (e.g. the explosion) at the impact point + time so the
+        // authoritative blast matches the casting client's Death-chain explosion.
+        if (!hb.penetrate && hb.particleSourceIdx >= 0
+            && hb.particleSourceIdx < static_cast<int>(particleSources_.size())) {
+            ParticleHitboxSource& src = particleSources_[hb.particleSourceIdx];
+            src.consumedKeys.insert(
+                (static_cast<std::uint64_t>(hb.particleStream) << 32) | hb.particleId);
+
+            const Milliseconds now = instPtr ? instPtr->elapsed : Milliseconds{ 0.f };
+            for (ParticleHitboxSource& other : particleSources_) {
+                if (!other.active || other.instanceIdx != src.instanceIdx) continue;
+                if (other.vfxId != src.vfxId || !other.vdef) continue;
+                if (other.systemIdx >= other.vdef->systems.size()) continue;
+                if (other.vdef->systems[other.systemIdx].chainParent == src.systemIdx
+                    && !other.consumeAnchor.valid) {
+                    other.consumeAnchor = { hb.particlePos, now, true };
+                }
             }
         }
     }

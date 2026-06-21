@@ -12,9 +12,11 @@ cbuffer PerDrawcallData : register(b0) {
 };
 
 cbuffer PerFrameData : register(b1) {
-    float4x4 lightVP;
+    float4x4 lightVP;       // maps CAMERA-RELATIVE world positions (posW - camPos) to light NDC
     uint     cascadeIdx;
     uint3    _pfd0;
+    float3   camPos;        // camera world position for the camera-relative shadow rebase
+    float    _pfd1;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -89,7 +91,8 @@ float4 VSMain(
         );
     }
     float4 animatedPos = mul(float4(position, 1.0f), anim);
-    float4 posW = mul(animatedPos, gInstances[idx].world);
-    return mul(posW, lightVP);
+    float3 posW = mul(animatedPos, gInstances[idx].world).xyz;
+    // Camera-relative shadow space: rebase by camPos to match the receiver side.
+    return mul(float4(posW - camPos, 1.0f), lightVP);
 }
 // No PSMain: depth-only pass, NumRenderTargets = 0

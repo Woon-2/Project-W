@@ -3,7 +3,7 @@
 
 - 코어: `gfx.hpp`, `gfxUtil.hpp`, `mesh.hpp`, `shader.hpp`, `font.hpp`, `collision.hpp`
 - 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `pbrDeferredPipeline.hpp`, `pbrDeferredSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `terrainDeferredPipeline.hpp`, `sharedResources.hpp`
-- 후처리/IBL: `TonemapPipeline.hpp`(ACES+exposure resolve), `BloomPipeline.hpp`(HDR bloom), `iblPrecomputePipeline.hpp`(IBL 맵 프리컴퓨트) — 상세는 아래 "HDR + IBL + Bloom 파이프라인"
+- 후처리/IBL: `TonemapPipeline.hpp`(ACES+exposure resolve + 3D LUT color grading), `BloomPipeline.hpp`(HDR bloom), `iblPrecomputePipeline.hpp`(IBL 맵 프리컴퓨트) — 상세는 아래 "HDR + IBL + Bloom 파이프라인"
 
 #### 장치 초기화
 - `GFX::setupDXGI`
@@ -54,24 +54,64 @@
 5. mainPass(UI)
 
 **Deferred Path (인게임 기본; 로비는 Forward):**
-1. GBuffer + **SceneColorHDR** clear (GB0~GB3 RTV + GBuffer DSV + SceneColorHDR RTV)
+1. GBuffer + **SceneColorHDR** clear (GB0~GB4 RTV + GBuffer DSV + SceneColorHDR RTV)
 1b. **(Hi-Z ON)** Occluder pass: `occluderPass(TerrainDeferred)` → `occluderPass(PBRDeferred)` — 지형 + 근거리 BVH prop을 position-only depth로 Hi-Z source depth에 기록 → Hi-Z mip pyramid build → `hiZPass(PBRDeferredSkinned)` + **`hiZPass(PBRDeferred)`** (cull/compact/command)
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
-3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동)
+3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동). 스킨드 GBuffer PS는 추가로 **흡수 물결(per-instance ripple)** emissive를 GB2에 가산(로컬 플레이어만; 아래 "몬스터 사망 에너지 오브 연출" 참조)
    - PBRDeferredSkinned/PBRDeferred 모두 Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw 실행. compute 셰이더 5종 + `cmdSig_`는 공유
    - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. visibility feedback ring/CPU readback **없음**(정적이라 anim/물리 스킵 불필요; cull u3 출력은 scratch로 폐기). 비-occludee는 `gBufferPass` direct
    - PBRDeferredSkinned Hi-Z: Cull→visibleFlags + visibility feedback 2-slot ring → CPU readback(1-frame delay, anim/물리 스킵용)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
+6b. **Energy orb 패스(EnergyOrbPipeline)** — `gBufferDebugMode_==0`일 때만. SceneColorHDR가 **아직 RENDER_TARGET 상태**일 때, 복사된 backbuffer scene depth(reversed-Z)로 depth-test하며 **가산(additive) HDR**로 렌더 → bloom 이전이라 발광/bloom이 산다. 몬스터 사망 시 서브메시별 에너지 오브(정점→구체 모핑, GS quad). 단일 스레드(`updateGPUDataSingleThreaded`/`drawSingleThreaded`)
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
-9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **backbuffer(LDR)**
+9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**
 10. Forward-always 오버레이(backbuffer, resolve 이후): Skybox(raw) → BV → Billboard → 파티클류
 11. mainPass(UI)
 
 Skybox / Billboard / UI / 파티클은 renderPath에 관계없이 항상 backbuffer에 직접 그린다(SceneColorHDR·GBuffer 미사용). Forward path(로비)는 HDR/Bloom/resolve를 거치지 않고 셰이더 내 inline tonemap으로 backbuffer에 직접 출력한다.
 Terrain은 Deferred path에서 gBufferPass로 GBuffer에 기록, Forward path에서만 mainPass로 실행한다.
+
+#### Reversed-Z 깊이 버퍼
+
+메인 카메라(퍼스펙티브)가 쓰는 depth buffer는 reversed-Z(near→NDC z=1.0, far→NDC z=0.0)다.
+
+**Why:** `DXGI_FORMAT_D32_FLOAT`라도 퍼스펙티브의 쌍곡선 z 매핑 때문에 far 영역 depth가 1.0
+근처(float가 표현값이 희소한 구간)에 뭉쳐 정밀도가 이중으로 손실된다. near=1.0/far=0.0으로
+뒤집어 far를 float가 밀집한 0.0 근처로 보내 개선한다.
+
+**적용 범위:**
+- **O** — 메인 scene depth(forward/deferred 백버퍼), GBuffer depth, Hi-Z occluder depth+mip
+  chain, Portrait depth. 전부 `Camera::setPerspective()` → `mu::perspReversedZ()`
+  (`mathUtil.hpp`, client/common 사본 동일 유지)를 거치는 퍼스펙티브 카메라가 공급한다.
+- **X** — CSM 그림자맵(직교투영)은 그대로 표준-Z. ortho는 z 매핑이 선형이라 reversed-Z의
+  핵심 이득(쌍곡선 압축 보정)이 적용되지 않기 때문. 그림자 비교 샘플러(`LESS_EQUAL`),
+  `mu::ortho()`, cascade split 계산은 변경하지 않았다.
+
+**투영행렬:** depth(z) = A + B/z 형태에서 depth(nearZ)=1, depth(farZ)=0이 되도록 풀면
+`A = nearZ/(nearZ-farZ)`, `B = nearZ*farZ/(farZ-nearZ)`. `XMMatrixPerspectiveFovLH`는
+표준 매핑만 지원하므로 z/w 항을 직접 구성(`mu::perspReversedZ`).
+
+**Depth clear / DepthFunc:** far=0.0이므로 클리어 값 1.0f→0.0f(메인/GBuffer/Hi-Z/Portrait).
+`shader.cpp`의 그림자맵 PSO 7개(`createShadowMap*`, `createTerrainShadowMap*`)를 제외한
+나머지 전부 `DepthFunc`를 `LESS`→`GREATER` / `LESS_EQUAL`→`GREATER_EQUAL`로 반전.
+`HiZMap::clearDepth`(distance culling용 epsilon)도 `0.9999f`→`0.0001f`로 대칭 변환.
+
+**Hi-Z 비교 방향 반전:** `hiZMap.hlsl` 다운샘플 `max`→`min`(2x2 셀 중 가장 먼 occluder
+depth 보존), `hiZCull.hlsl`의 `ProjectAABBToScreen`(`min`→`max`, AABB 8코너 중 카메라에
+가장 가까운 코너)·`OcclusionTest`(`max`→`min` 집계, `depth <= maxDepth` → `depth >= minDepth`).
+
+**기타 반영 지점:**
+- soft particle depth linearization(`blendCGMesh.hlsl`/`smokeBlendCG.hlsl`):
+  `linearZ = (nearZ*farZ)/(nearZ + depth01*(farZ-nearZ))`
+- 스카이박스 far-plane trick(`skybox.hlsl`): `clipPos.xyww`(NDC z=1=far, 표준-Z) →
+  `float4(clipPos.xy, 0.f, clipPos.w)`(NDC z=0=far, reversed-Z)
+- `pbrDeferredLighting.hlsl`의 위치 재구성은 raw NDC depth가 아니라 GB4의 선형 view-Z
+  (`posV.z`)를 쓰므로 무관(`rawDepth` 디버그 뷰만 반전되어 보임 — 정상)
+- 뷰포트 `MinDepth`/`MaxDepth`(0~1)는 변경 없음 — NDC→뷰포트 depth 범위 매핑이라
+  reversed-Z(투영행렬이 NDC z를 만드는 방식)와는 별개
 
 #### CSM (Cascaded Shadow Mapping)
 
@@ -85,6 +125,46 @@ C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(
 ```
 - 기본 파라미터: nearZ=0.1, farZ=500, lambda=0.75
 - texel snapping으로 shadow swimming 제거 (cascade별 독립 해상도 사용)
+
+**Camera-relative 정밀도 — shadow shimmering 해결 (2026-06):** follow camera에서만 나타나던 그림자 떨림의
+근본 원인은 청크 원점(~월드 5500,5500)의 큰 좌표가 CSM 행렬 연산을 거치며 float 정밀도를 잃은 것이었다
+(CSM 맵 생성 버그 아님 — cascade 디버그 뷰에서 cascade map 자체가 흔들리는 것으로 확정). 카메라-상대 공간이 실제 해결책이며, 다음 표준 기법으로 해결:
+- **카메라-상대 그림자 공간:** `updateCSMCascades`가 frustum corner를 카메라 eye 원점 기준(camera-relative)으로
+  구성 → cascade ortho bounds·`lightVP`가 `posW - camPos`를 light NDC로 매핑. caster(depth 패스)·receiver(셰이딩)
+  양쪽이 셰이더에서 `camPos`를 먼저 빼고 `lightVP`를 적용해 ~5500 대형 좌표가 light-space 연산에 진입하지 않음
+  (**caster·receiver를 반드시 함께 rebase** — 한쪽만 하면 그림자 깨짐). `Light::cascadeCameraPos()`로 기준 eye 노출.
+- **frustum corner 직접 생성:** `inverse(camView*camProj)` 제거. 카메라 basis(camView 상위 3x3 열 = 직교 transpose,
+  exact)·fov(camProj `m11`,`m00`)·per-cascade near/far로 corner를 카메라-상대 공간에서 직접 계산(역행렬 정밀도 손실 제거).
+  첫 cascade의 near 경계(`prevFarV` 초기값)는 `camProj`의 A/B 항(`NDC_z = A + B/viewZ`)에서 역산하는데, 이 공식은
+  카메라 투영의 Z 매핑 방향에 종속적이다 — **Reversed-Z 도입(2026-06) 시 한 번 깨졌던 지점**: 표준-Z는 `NDC_z=0`이
+  near라 `viewZ=-B/A`였지만, reversed-Z는 `NDC_z=1`이 near이므로 `viewZ=B/(1-A)`로 풀어야 한다. 누락 시 첫 cascade의
+  near가 farZ로 잘못 계산되어 cascade 0의 바운딩 구가 거대해지고(거의 전체 depth range를 덮음) 가까운 오브젝트가
+  저해상도 그림자를 받는 증상이 나타난다(`light.cpp::updateCSMCascades`). 카메라 투영 행렬의 Z 매핑을 바꿀 때마다
+  이 추출 공식도 같이 점검해야 한다.
+- **texel center snap 유지:** sphere center XY를 `worldUnitsPerTexel(=2·radius/res)` 격자에 스냅(radius가
+  rotation-invariant라 프레임 간 안정). per-cascade **radius 양자화는 시도 후 제거** — 이산 radius 스텝이 이동 중
+  오히려 떨림을 유발했고, 카메라-상대 공간만으로 shimmer가 해소됨(2026-06 사용자 검증).
+- 보조: deferred lighting은 GBuffer `gb4`(linear view-Z, R32F)로 posV를 정확 복원(NDC 깊이 양자화 제거) — 단독으론 소폭 개선.
+- **주의:** cascade `lightVP`가 카메라-상대 공간이므로, 절대 월드 BVH로 cull/test하는 코드는 `cascadeCameraPos()`로
+  rebase 필요 — 이 rebase는 이제 `Light::shadowVisible`(아래) 내부에서 일괄 처리된다.
+- **ortho z-pad = `2·radius` (유지):** `mu::ortho(...,minZ - 2·radius, maxZ)`. near 평면을 frustum slice보다 충분히
+  뒤로 빼서, 빛과 slice 사이에 있는 캐스터(slice 바로 밖 나무/풀 등)도 깊이를 기록한다. `radius`로 줄이면 일부
+  foliage가 near 평면 뒤로 사라져, 2x 패딩을 의도적으로 유지(2026-06-17 사용자 검증). chunk의 `shadowVisible(expand=3)`은
+  z축소와 무관하게 보수적 컬링으로 유지.
+
+**Shadow(light) frustum culling — 단일 진입점 (2026-06-17):**
+그림자 캐스터 컬링은 **메인 카메라가 아니라 광원 cascade 기준**으로 수행해야 한다(메인 frustum으로 컬링하면
+화면 밖 캐스터의 그림자가 사라지는 popping 발생). 모든 light-frustum 컬링은 `Light::shadowVisible(...)` 하나로 통일:
+- `updateCSMCascades`가 cascade마다 `cascadeFrusta_[i] = extractFrustum(view·proj)`를 캐시(ortho 투영이라 6평면=OBB).
+- `Light::shadowVisible(AABB/OBB/variant, expand=1)` — bounds를 `cascadeCameraPos_`로 rebase + `expand`로 half-extent
+  확장 후 `intersects(Frustum, ·)`(`frustumCull.hpp`, AABB·OBB 오버로드)로 테스트, 어느 cascade에라도 보이면 visible.
+  cascade 0개면 항상 true(미컬, 안전 폴백).
+- 호출 위치 3곳: ① 엔티티 `game.cpp::cullObjectsForShadow`(인라인 SAT ~60줄 → 한 줄로 축약) ② 지형 chunk
+  `TerrainChunkManager::submitDrawEvents`(`expand=3`, 대형 캐스터 보존) ③ scatter BVH prop `submitScatterDrawEvents`(`expand=1`).
+- **메인 vs 그림자 가시성 분리:** scatter prop은 메인카메라 `frustum_` VFC와 `shadowVisible`를 독립 평가해 DrawEvent의
+  `viewFrustumCulled`/`shadowCulled`를 따로 설정 → 화면 밖이지만 그림자 frustum 안인 나무는 shadow 패스에만 제출(gbuffer/Hi-Z 제외).
+  지형 chunk DrawEvent에도 `shadowCulled` 필드 추가, terrain `shadowDraw` 루프에서 skip(gbuffer는 무영향).
+- Hi-Z occlusion은 메인 패스 개념 → occludee/occluder 선정은 `mainVisible`일 때만(그림자에는 Hi-Z 미적용).
 
 **Normal Offset Shadow Bias:** (`pbrLighting.hlsli::sampleCascadePCF`)
 - world-space normal 방향으로 `offset * sinTheta` 만큼 샘플 위치를 오프셋
@@ -141,9 +221,12 @@ Light::updateCSMCascades()
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space), 클리어값 (0.5, 0.5) → (0,0,1) |
 | GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (ambient/IBL는 lighting 패스로 이동) + Roughness.a |
 | GB3 | R8_UNORM | Metallic |
+| GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원이 NDC 깊이 양자화 대신 사용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 > **주의:** GB2.rgb는 emissive 전용이다. `pbrDeferred.hlsl`·`pbrDeferredSkinned.hlsl`·`terrainDeferred.hlsl` 모두 `lightAccum = emissive`(지형/스킨드 모두)로 기록해야 한다. 과거 스킨드 셰이더만 `globalAmbient*albedo`를 굽던 버그가 있었고(이중 ambient: GB2 상수 ambient + lighting 패스 IBL), 셋 다 emissive-only로 통일했다.
+>
+> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. 단, **GB2는 UNORM이라 emissive가 [0,1]로 클램프**된다 — HDR 물결이 불가능하므로 트리거 측(`onlineGame` onAbsorb)에서 색을 정규화·탈채도·강도 하향해 부드러운 워시로 보정한다(아래 절 참조).
 
 **Normal Oct Encoding (`pbrLighting.hlsli`):**
 - `octEncode(float3 n)` — view-space unit normal → float2 [0,1]
@@ -216,11 +299,20 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   메인 forward/deferred는 1.0.
 
 **4) Tonemap resolve (`tonemapResolve.hlsl`, `TonemapPipeline`)** — 단일 톤매핑 지점
-- fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → backbuffer.
-- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode. (debugMode≠0 → 패스스루)
+- fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → **3D LUT color grading** → backbuffer.
+- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode, idxColorGradingLUT. (debugMode≠0 → 패스스루, idxColorGradingLUT.x<0 → grading 미적용)
 - 노브: `GFX::tonemapExposure_`(기본 1.0).
 
-**5) Bloom (`bloom.hlsl`, `BloomPipeline`, `SharedResources::Bloom`)** — 픽셀 기반 HDR 밉체인
+**5) Color grading LUT (`SharedResources::ColorGrading`, `bindless.hlsli::sampleBindless3D`)** — gamma 보정 직후 적용되는 고정 단일 3D LUT
+- 로드 타임 1회(`GFX::initSharedResources` → `addColorGradingLUT`), `resources/LUT/warm-natural_6.C0008.cube`(33³, DaVinci Resolve 표준 `.cube` 텍스트 포맷)를 파싱해
+  `R8G8B8A8_UNORM` `Texture3D`로 업로드. 씬 전역·정적이라 런타임 전환 없음(LUT를 바꾸려면 파일 교체 + 경로 갱신 후 재빌드).
+- **bindless Texture3D 풀**: 기존 Tex2D/Tex2DArray/TexCube 3종에 4번째로 추가(`bindless.hlsli`의 `gTex3Ds[] : register(t10, space4)`,
+  `DefaultRootSig`의 `Texture3DPool` 파라미터, `GFX::srvTex3DPool_` — SRVHeap `[2100,2116)`).
+- **half-texel 보정**: LUT 텍셀 i는 값 `i/(N-1)`을 나타내지만, 하드웨어 샘플링은 UV=v를 텍셀 연속좌표 `v*N-0.5`로 매핑한다.
+  보정 없이 샘플링하면 그리드 인덱스가 어긋나 그레이딩 커브가 과장되고 identity LUT조차 완전한 passthrough가 되지 않는다.
+  `sampleBindless3D`에서 `uvw = color * (N-1)/N + 0.5/N`로 보정하며, N은 `BindlessIndex.idxInArray`(Tex3D는 array slice가 없어 비는 슬롯)에 실어 전달한다.
+
+**6) Bloom (`bloom.hlsl`, `BloomPipeline`, `SharedResources::Bloom`)** — 픽셀 기반 HDR 밉체인
 - per-room RGBA16F 밉체인(half-res base, 최대 6밉, `ALLOW_RENDER_TARGET`). **밉별 RTV + 밉별 단일밉 SRV**.
 - 패스(단일 cmdlist): prefilter(soft-threshold + 13-tap 다운샘플; scene→mip0) → downsample 체인(mip i-1→i)
   → **additive upsample** 체인(3×3 tent, mip i+1→i). 총 2N-1 패스.
@@ -238,12 +330,57 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
 - **디스크립터 풀 사이징:** bloom은 per-room×밉수(최대 6) RTV를 소비한다. `rtvPool_`/`rtvHeap_`는 64
   (백버퍼+GBuffer4+SceneColor+Portrait+Bloom6 = room당 13 × 최대 3 room ≈ 39 + 여유). per-room×N 형태의
   RT 리소스를 추가할 때 풀 용량 갱신 필수(고갈 시 `DescriptorPool::alloc`이 빈 컨테이너 front()=UB→크래시).
-  bloom SRV는 `srvTexPool_`(1800)에서 충당.
+  bloom SRV는 `srvTexPool_`(1800)에서 충당. color grading LUT SRV는 별도 `srvTex3DPool_`(16, SRVHeap `[2100,2116)`)에서 충당.
 - **MT/동시성:** lighting write → SceneColor transitionToRead → bloom → resolve는 모두 RenderingSlave cmdlist를
   `cmdQ_` 제출 순서로 직렬화(동일 큐 → 별도 fence 불필요). bloom/SceneColor 리소스는 per-room이라 프레임 레이스 없음.
 - **resize:** SceneColor·Bloom은 eraseX→addX로 재생성(IBL 맵은 해상도 무관·정적 유지).
 - 지형 청색기 등 "차가운 룩"은 IBL/fog/톤매퍼가 아니라 **조명 리그(중립 태양 + 파란 하늘 ambient)** 의
   아트디렉션 이슈다. 보정은 `dirLight_.color`를 warm하게(예: (1.0,0.95,0.86)) — Phase 2 노브로는 해결 안 됨.
+
+#### 몬스터 사망 에너지 오브 연출 (EnergyOrbPipeline + 흡수 물결)
+
+몬스터 처치 보상 연출. 시체가 서브메시별 **자체 발광 에너지 오브**로 변해 로컬 플레이어에게
+흡수되고, 흡수 타이밍에 스킬 charge HUD가 채워지며 플레이어 몸에 색 물결이 퍼진다. 게임 레벨
+라이프사이클(시체 이관/풀링/charge 매칭)은 `gameArchitecture.md`의 동명 절을 참조; 여기서는 **렌더링**만 다룬다.
+
+**파일:** `energyOrbPipeline.hpp/cpp` + `energyOrb.hlsl`(오브 렌더), `pbrDeferredSkinned.hlsl`(흡수 물결).
+
+**오브 렌더(EnergyOrbPipeline):** MeshParticlePipeline 복제 + GS quad.
+- VS: 죽은 서브메시 정점을 **사망 포즈 본 팔레트(boneData t2, 파이프라인 전용 StructuredBuffer)** 로
+  스키닝 → `hash(SV_VertexID)`로 구한 단위 구체 내부 점을 목표로 `morphT`(0→1) 보간. 즉 정점이
+  서브메시 표면에서 한 구체로 모여든다. 구체 중심은 서브메시 첫 정점의 LBS 스키닝 결과(서브메시마다
+  독립된 조각).
+- GS: point → 카메라향 quad(billboard `GSMain` 패턴, POINTLIST 토폴로지).
+- PS: `lerp(서브메시 albedo, 랜덤 HDR 색, morphT)` × 원형 radial falloff → **SceneColorHDR에 가산**.
+  즉 색도 시체색→발광색으로 모핑된다.
+- PSO: additive blend, CullNone, reversed-Z(`DepthFunc=GREATER_EQUAL`, depth write off). **렌더 위치는
+  deferred lighting 직후 ~ SceneColorHDR→SRV 전환/bloom 직전**(render 순서 6b) — 그래야 bloom이 걸린다.
+- 과대 발광 억제: 가까워질수록(추적 후반) 오브 월드 크기를 축소하는 **응축 스케일**(EnergyOrbSystem
+  `renderScale`)로 원근 팽창 + 가산 코어 bloom 블롭을 막는다. HDR 강도/포인트 크기도 보수적으로.
+
+**흡수 물결(pbrDeferredSkinned.hlsl):** 오브가 흡수되면 충돌점에서 색 물결이 몸 표면으로 퍼진다.
+- 데이터 위치 = **per-instance**(`PerInstanceData`의 `ripplePosAge[4]`/`rippleColorIntensity[4]`/
+  `rippleCount`). per-drawcall(Material CB)이 아닌 이유: **같은 모델의 여러 플레이어가 한 드로우콜의
+  인스턴스로 묶이므로** per-drawcall로는 "내 플레이어만"을 구분할 수 없다. 비-플레이어/원격 플레이어는
+  `rippleCount=0` → 셰이더 비용 0.
+- VS가 `instIdx`(nointerpolation)를 PS로 전달 → PS가 `gInstances[instIdx]`의 ripple을 읽어 **가우시안
+  확장 링**(`band = exp(-d*d)`)을 GB2 emissive에 가산. `exp(-d*d)`로 제곱을 직접 계산하는 이유는
+  `pow(음수, 2)`가 `exp(2·log(neg))=NaN`이 되어 bloom 검은 사각형을 유발하기 때문(아래 GGX NaN 절과 동일 함정).
+- 앵커는 월드 고정점이 아니라 **본체 위치 기준 오프셋**으로 저장(Object `BodyRipple`)해 매 프레임 live
+  pos에 재앵커 → 플레이어가 이동/달려도 링이 몸을 따라간다. 수명 `kBodyRippleLife`(1.0s) == HLSL `RIPPLE_LIFE`.
+- **GB2 UNORM 클램프** 때문에 HDR 물결이 불가하므로, 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색
+  혼합(탈채도)+강도 하향(0.5)해 산만하지 않은 부드러운 워시로 보정한다. 진짜 HDR 물결을 원하면 오브처럼
+  별도 가산 HDR 패스로 분리해야 한다(미구현).
+
+**커맨드 리스트 풀:** EnergyOrb 디스패처가 RenderingSlave cmdlist를 추가 소비하므로 `cmdListPool_`
+RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI 디스패처가 alloc 실패해 해당 패스가
+통째로 누락되는 버그가 있었음).
+
+**드로우콜 용량 상한:** 오브 1개 = 서브메시 1개 = 드로우콜 1개이고, per-instance/per-drawcall 버퍼는
+고정 크기다(`EnergyOrbPipeline::kMaxOrbDrawcalls`=512, `gfx.cpp`의 버퍼 sizing과 공유). 동시 다수
+사망으로 오브가 이 수를 넘으면 `perDrawcallData.cbuffers[idx]` 가 vector 범위를 벗어나 **액세스 위반**이
+났다. 해결: Dispatcher 생성자에서 초과분을 truncate(로그) + draw 루프에 방어 가드. 초과 오브는 그 프레임
+드롭(graceful degrade).
 
 #### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)
 
@@ -318,8 +455,37 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 **새 오브젝트를 Hi-Z culling에 참여시킬 때 필수 체크리스트:**
 1. `setupStage()`에서 `obj->setRenderObjectId(nextRenderObjId++)` 할당
 2. `gfx_.setMaxRenderObjectId(nextRenderObjId - 1u)` 호출
-3. `applyHiZCulling()` 내에 `applyToEntity(obj)` 추가
+3. `feedbackCullResultToAnim()`(이전 이름: `applyHiZCulling()`) 내에 `applyToEntity(obj)` 추가
 4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
+
+**최초 1회 애니메이션 갱신 보장:**
+서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
+visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 받을 수 있다.
+이 상태로 방치되면 AnimBlender가 한 번도 갱신되지 못한다(T-pose 등).
+`AnimBlender::hasEverUpdated()`(최초 `onCalcLocal` 호출 시 true로 전환)가 false인 동안은
+`feedbackCullResultToAnim()`에서 컬링 판정과 무관하게 `setCulled(false)`를 강제해
+최소 1회는 애니메이션 갱신이 이루어지도록 한다.
+
+**Baked 스키닝 stale clipId 가드 (생성 직후 stretch 방지):**
+스킨드 deferred 경로(`pbrDeferredSkinned.hlsl`)는 `Mode::Baked`일 때 본 행렬을 업로드하지 않고
+GPU가 `bakedClipId`로 bindless 텍스처를 직접 샘플한다(`loadBakedMatrix(clipIdx, ...)`).
+이때 `clipId`는 **전역 bindless descriptor 인덱스**다(`AssetManager::setupBakedAnimationIds()`에서
+`clip->id = bakedSamples.idxSrv.idxResource`).
+
+문제 흐름:
+1. `AnimSystem::updatePriorities()`는 time-slice 없이 전체 blender를 돌며 거리 기반으로 `mode_`를
+   결정 → 먼 오브젝트는 즉시 `Mode::Baked`로 전환.
+2. 그러나 `finalBakedClipId_`/`finalBakedClipFrame_`은 `onCalcLocal()`의 **Baked 분기에서만** 세팅.
+3. `AnimSystem::update(0.01s)`는 time-slice 내 priority 순으로 일부 blender만 처리 → 첫 프레임엔
+   다수가 미처리 → `finalBakedClipId_`가 기본값 **0**.
+4. `clipId=0`은 애니메이션이 아닌 descriptor 0번 텍스처를 가리키고, 이를 4×4 본 행렬로 읽으면
+   garbage 스키닝 → 캐릭터가 길게 늘어나는 **stretch**(특히 온라인 InGameScene 진입 직후).
+   몬스터 종류가 많을수록 ① time-slice 누락 blender 증가 ② Baked 전환 객체 증가로 더 자주 발생.
+
+**가드(`Object::render`):** `bakedReady = (mode==Baked && hasEverUpdated() && finalBakedClipId() > 0)`
+가 false면 `bakedClipId/Frame = -1`을 넘겨 `boneXforms`(미갱신 시 identity = T-pose) 경로로 폴백한다.
+유효한 baked clip이 준비되면 자동으로 baked 경로로 복귀. (비-deferred `PBRSkinnedPipeline`은 baked
+필드가 없어 항상 boneXforms 경로 → 무관.)
 
 #### TerrainPipeline 특성
 
@@ -337,3 +503,46 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 - Normal map 포맷: **Unity DXT5nm** — X는 Alpha 채널, Y는 Green 채널, R은 더미(1.0) → `nmSample.ag * 2 - 1`로 읽어야 함
 - Normal mapping: `hasAnyNormal` 플래그(cbuffer b0)로 조건부 처리, `float3x3(tangentV, bitangentV, normalV)` 패턴 (pbr.hlsl과 동일)
 - `terrain.hlsl`에서 `pbrLighting.hlsli` include 시 `#define TERRAIN_SHADER` 필수 — `illuminate()` 스킵 가드
+
+#### 모델 scale 런타임 적용 (setModel + body_.scale 합성)
+
+Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin)의 scale은 **추출 시점에 베이크하지 않고**, 메시·본·BV·래그돌을 모두 **unscaled로 추출**한 뒤 런타임에 오브젝트 단위 scale(`body_.scale()`)로 한 번만 적용한다.
+
+- **베이크 폐기 이유:** 이전에는 정점/본 `toDress`/BV에 `Scale(rootScale)`을 베이크했는데, 스킨드 모델에서 애니메이션 본 변환(`finalXformData`, rigid)에는 scale 채널이 없어 애니메이션 재생 시 골격이 unscaled로 되돌아가 스키닝이 어긋났다. scale을 world 변환 한 곳에서 균일 적용하면 애니메이션과 독립적으로 정합한다.
+- **추출 (unscaled, `ModelExtractor.cs`/`ModelExtractorForServer.cs`/`ExtractUtil.cs`):** Geometry 헤더(서버는 `ModelName` 직후)에 `ModelScale`(Vec3, = Unity root localScale) 필드를 기록한다. dress 변환은 `D = root.worldToLocal·node.localToWorld`(scale 제거)로 정점/노멀/탄젠트/bounds를 베이크하고, 본 `Dress`/`ToLocal`, BV `center`/`size`, 래그돌 `halfExtents`/`center`도 모두 unscaled. 노드 `LocalMatrix`/`DressMatrix`는 identity 유지(`meshXform` no-op).
+- **런타임 주입 (`Object::setModel`):** `modelBaseScale_ = pModel->baseScale`을 흡수하고, `body_.scale() = modelBaseScale_ ⊙ instanceScale_`(component-wise)로 합성한다. `instanceScale_`은 per-instance 게임플레이 scale(`setScale`, 기본 1). 둘 중 하나가 바뀌면 `applyCompositeScale()`이 재합성 + `rebuildBodyBVH()`. setModel/setScale 호출 순서와 무관하게 합성식이 동일.
+- **정합 (BV-mesh):** 렌더(`renderState_.world = scale(scale)·orient·pos`)와 BV(`rebuildBodyBVH`의 `transformShapeRigid` / 본-부착 `halfExtents*scale`)가 **동일한 `body_.scale()` 단일 경로**로 mesh와 BV를 같이 키워 정합한다. 본-부착 BV의 center는 `objWorld`(scale 포함)로 변환되어 mesh 스키닝(`vertex·anim·world`)과 일치하고, **회전은 scale을 뺀 rigid 행렬에서 추출**한다 — scale 섞인 행렬에 `quatRotMat`/`XMQuaternionRotationMatrix`를 먹이면 쿼터니언이 왜곡되므로, 클라 `rebuildBodyBVH`는 `objRigid`(scale 없는 object world)를 별도로 만들어 `boneToWorldRigid`로 회전을 뽑고(디버그 `update`의 `worldBVs`도 동일), 서버 `transformOBBByMatrix`는 회전 추출 직전 basis 행을 정규화한다.
+- **래그돌 (`Ragdoll::build(..., modelScale)`):** `halfExtents`·관성·`capsuleOffset`에 합성 scale을 곱하고 `Ragdoll::modelScale_`에 저장한다. 본 위치는 `objectWorldMat`(= `renderState().world`, scale 포함)이 처리한다. **활성 시 메시 크기 유지:** `syncToFinalXforms`는 `boneWorldMat = scale(modelScale_)·makeRigidMat(...)`로 scale을 주입해야 한다 — rigid 행렬만 쓰면 `finalXform·world`에서 `objectWorldMat`의 scale이 상쇄되어 메시가 unscaled로 돌아간다(크기 원복 버그). 회전 추출(`extractOrient`)은 basis를 정규화해 scale-safe하게 하고, `syncFromPoseDFS`는 seed와 동일하게 `boneOrigin + orient.rotate(capsuleOffset)`로 통일한다. joint anchor는 `activate`의 `resetAnchors`가 seed된 scaled body 위치에서 재계산하므로 자동 scaled.
+- **서버(RoomServer):** `ModelScale`을 읽어 `setModel`에서 동일하게 흡수(`Object`에 `modelBaseScale_`/`instanceScale_` 대칭 도입). `updateAnimBones`의 `entityWorld`에 `scale(body_.scale())`을 추가하고, 본-부착 BV의 `halfExtents`에 scale을 별도로 곱한다(`transformOBBByMatrix`는 center만 변환하고 회전은 정규화한 basis에서 추출). scale은 모델 고정값이라 네트워크 전송 불필요(클라/서버 동일 `.bin`).
+- **제약:** **균일(uniform) scale만 지원**(x=y=z) — shear 및 비균일 회전추출 이슈 회피. **포맷에 `ModelScale` 필드가 추가되어 모든 `.bin`(클라+서버) 재추출 필요.**
+
+#### 스킨드 메시 노드 변환 베이크 (skinned node dressXform → 정점)
+
+위 모델 scale은 **모델 루트(root) localScale**을 다루지만, **스킨드 메시 노드 자체(SkinnedMeshRenderer 트랜스폼)의 변환**은 별개 문제다. FBX 임포트 시 일부 에셋은 SMR 노드에 회전(예: snake — Z/Y-up 변환의 X축 90°)이나 단위 스케일(예: birdy/Isys — cm→m의 0.01)이 남는다.
+
+- **증상:** snake가 바닥에 누워야 하는데 90° 서 있고(스크린샷의 얇은 세로선), birdy 말단이 늘어남. **본 팔레트 수학·bind pose·애니메이션 정합은 정상**(frame-0 skin 행렬 특이값 전부 1.0)인데도 깨진다.
+- **원인 (정점이 팔레트와 다른 공간):** 본 팔레트(`finalXformData`=`toLocal·animDress`)는 **root 기준 dress 공간**에서 만들어지고(`toLocal = bone.worldToLocal·root.localToWorld`), 스킨 정점이 그 공간에 있어야 한다. 그런데 스킨드 정점은 **raw mesh-local**이라 노드에 회전/스케일이 있으면 어긋난다. 해법은 정점을 dress 공간으로 미리 굽고 노드 행렬을 항등으로 두는 것(`position·anim·I·objWorld`).
+- **베이크 변환 (핵심 — 정점별 LBS, 실제 bindpose 사용):** mesh-local→dress 변환은 **SMR 노드 변환이 아니라 `mesh.bindposes`에서** 와야 한다. Unity 는 스킨드 렌더링에서 SMR 노드 자체 변환을 **무시**하고 `bone.localToWorld·bindpose` 로만 정점을 배치하기 때문이다. 본 b 의 dress 스킨 행렬 `dressSkin[b] = root.worldToLocal·bones[b].localToWorld·bindposes[b]` 를 구하고, **정점 i 를 가중 합 `Σ w·dressSkin[boneIndex]` 로 굽는다**(정점별 LBS). 이는 본 팔레트가 rest 포즈에서 만드는 변형과 정확히 동일하다. 구현: `BuildSkinBakeMatrices`(정점별 `Matrix4x4[]`) → `ExtractMesh`가 position=`MultiplyPoint3x4`, normal/tangent=`MultiplyVector`(정규화, 런타임 셰이더가 normal 에 anim 을 그대로 곱하는 것과 일치). boneWeight 의 본 인덱스는 `boneIdxMap` 재매핑 '전'(smr.bones/bindposes 평행 배열) 기준.
+- **왜 정점별이어야 하나 (단일 행렬의 한계):** 임의의 본 하나로 `M = bone.l2w·bindpose` 단일 행렬을 쓰면, **씬의 rest 포즈가 FBX bind 와 다를 때** 본마다 `dressSkin` 이 달라 메시 전체가 그 본의 포즈 오차만큼 **강체로 기울어진다**(snake 재추출 1차 시도에서 모양은 살았으나 기울던 증상). 씬==bind 인 birdy 는 모든 `dressSkin` 이 동일해 정점별/단일이 같은 결과.
+- **과거 버그:** `bakeXform = root.worldToLocal·node.localToWorld`(SMR 노드 변환)로 구웠는데, 이는 `bindpose = bone.worldToLocal·SMR.localToWorld` 인 모델(birdy — 0.01 스케일이 bind 에 반영됨)에서만 우연히 맞았다. snake 처럼 SMR 노드에만 90° 회전이 남고 bindpose 는 root 기준인 모델에서는 **존재하지 않는 90° 를 정점에 굽어** 메시가 90° 서버렸다.
+- **모델 root scale과 무관:** `bakeXform`은 `root.worldToLocal`로 root 자신의 transform(스케일 포함)을 상쇄하므로 노드의 **상대** 변환만 굽는다. 모델 root scale은 여전히 `ModelScale`→`baseScale`→body scale 경로로 분리 적용된다.
+- **런타임/셰이더/서버 변경 0.** 서버 추출기(`ModelExtractorForServer.cs`)는 정점을 저장하지 않아 영향 없음(서버 `.bin` 재추출 불필요).
+- **재추출 필요(클라):** 추출기 수정 후 **반드시 `snake.bin` 재추출**(기존 `.bin` 에는 잘못 구워진 변형이 남아 있음). `.bin` 만으로는 정점이 옳게 구워졌는지 노드 항등 여부로 구분 불가 — 반드시 수정된 추출기로 다시 뽑아야 한다.
+- **다른 모델 재추출 사이드이펙트 없음 (검증):** 정점별 LBS 베이크는 모든 스킨드 메시에 적용되지만 다음과 같이 안전하다.
+  - **정적(non-skinned) 메시:** `skinBakeMats=null` 로 베이크 분기 미진입 → 완전 불변(정점 raw, 노드 변환은 meshXform 유지).
+  - **스킨드 + 노드 항등 + scene==bind:** 모든 `dressSkin[b]=I` 라 `Σ w·dressSkin=I` → 결과 동일(부동소수 오차 무시). 현재 정상 렌더되는 모델 전부 이 범주임을 확인 — `.bin` 메시 노드가 모두 항등: goblin/Hobgoblin/mushroom/slime/bomber/treant/Grandbaum(+player). 이들은 재추출해도 형상 불변(바이트만 미세 변동).
+  - **스킨드 + 노드 비항등 또는 scene≠bind:** snake/birdy/Isys 등. 정점별로 본 팔레트 rest 와 정확히 정렬 → 개선(회귀 아님). 구버전 단일 행렬 베이크가 scene≠bind 에서 일으키던 **강체 tilt 도 해소**.
+  - normal/tangent 는 런타임 셰이더와 동일한 `MultiplyVector`(정규화) 사용 → 균일 스케일에서 inverse-transpose 와 동일, 비균일에서도 런타임과 일치. 폴백(가중치 합 0 / bind·weight 정보 부족)은 유효 스킨드 메시에선 발동하지 않는다.
+
+#### Baked 애니메이션 행렬 bindpose (AnimationExtractor → baked 텍스처)
+
+위 "스킨드 메시 노드 변환 베이크"는 **`ModelExtractor` 의 정점 베이크**가 `mesh.bindposes` 를 써야 한다는 것이고, 같은 부류의 버그가 **`AnimationExtractor.cs` 의 baked 애니메이션 행렬**에도 있었다(Treant baked 모드 본 꼬임).
+
+- **증상:** Treant 가 **baked 모드로 전환되는 순간 모든 클립에서 본이 꼬여** 렌더된다. keyframe 모드(근거리)·BV(본 부착)는 정상이고 다른 몬스터도 정상. **재추출해도 (리임포트 전까지는) 동일**.
+- **두 경로가 같은 정점에 곱하는 행렬:** 스킨드 셰이더(`pbrDeferredSkinned.hlsl` VSMain)는 `position`(원본 메시 정점)에 `anim = Σ w·M[b]`(전체 스키닝 행렬, mesh-space→dress)를 곱한다.
+  - **Keyframe:** `gBoneData` 팔레트 = `toLocal`(모델 `.bin` 의 본 inverse-bind, scene-rest) · 애니 dress 변환. 즉 bindpose 가 **모델 파일**에서 와 메시와 항상 정합.
+  - **Baked:** `bakedSamplesOfBones` 텍스처에 전체 스키닝 행렬을 **추출 시점에 구워** 넣음(`AnimationExtractor.SampleMatrices` = `sampleTarget.W2L·bone.L2W(t)·bindpose[b]`).
+- **원인:** `bindpose[b]` 를 `ProcessBoneHierarchy` 에서 `bone.worldToLocal·skeleton.localToWorld`(**씬 rest 역바인드 = dress→bone-local**)로 잡았다. 올바른 값은 **`mesh.bindposes[b]`(mesh→bone-local)** — `ModelExtractor` 의 `dressSkin` 과 동일 규약. **씬 rest == FBX bind 인 모델(goblin 등)은 둘이 같아 우연히 동작**하지만, **Treant 는 씬 rest ≠ FBX bind** 라 baked 행렬이 모델의 dress-bake 메시와 어긋나 꼬인다.
+- **수정 (`AnimationExtractor.cs`):** `BuildBindposeMap()` 추가 — `Sample Target`(없으면 Target Skeleton) 아래 모든 `SkinnedMeshRenderer` 를 돌며 `bones[i] → sharedMesh.bindposes[i]`(평행 배열, first-wins) 매핑. `ProcessBoneHierarchy` 는 이 매핑을 우선 사용하고, 미스 시 기존 씬 rest 폴백(어떤 SMR 에도 안 묶인 헬퍼/루트 본은 정점 가중치가 없어 baked 행렬이 안 쓰이므로 무해).
+- **곁들인 수정 (sampleCnt):** `SampleMatrices` 의 `sampleCnt` 를 `clip.length·clip.frameRate` → `clip.length·fps`(=`bakedSampleRate`)로. 샘플 간격이 `1/fps` 인데 개수를 native `frameRate` 로 세면 클라가 인덱싱하는 프레임 수(`length·bakedSampleRate`)와 어긋나 — `frameRate < fps` 면 **애니가 중간에 멈추고** `>` 면 텍스처가 낭비된다.
+- **운영 제약 (중요):** 추출기는 Unity 에디터 C# 스크립트라 C++/런타임에서 검증 불가. 수정 후 **Unity 에서 Treant(및 씬 rest≠bind 인 모델) anim 을 재추출 + 반드시 리임포트** 해야 baked 샘플이 새 규약으로 다시 구워진다. (`Sample Target` 은 **메시(SMR)를 포함한 풀 모델**이어야 매핑이 채워진다 — 맨 스켈레톤 rig 면 전부 폴백으로 떨어져 fix 가 무효.) goblin 처럼 scene==bind 인 모델은 재추출해도 결과 동일(회귀 없음).

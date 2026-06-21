@@ -24,6 +24,7 @@ public:
     XMFLOAT4 texTint        = { 1.f,  1.f,  1.f,  1.f };
     XMFLOAT4 texTintHovered = { 1.12f, 1.12f, 1.12f, 1.f };
     XMFLOAT4 texTintPressed = { 0.82f, 0.82f, 0.82f, 1.f };
+    XMFLOAT4 uvScaleBias    = { 1.f, 1.f, 0.f, 0.f };
 
     // Solid-color fallback used when the corresponding texture is nullptr.
     // Alpha = 0 means transparent (no quad submitted).

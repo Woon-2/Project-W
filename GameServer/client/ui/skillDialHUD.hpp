@@ -31,6 +31,15 @@ public:
     // can fire the "ready" cue (sound).
     bool setCharge(int slot, float charge);
 
+    // Stepwise display fill (energy-orb absorption). setChargeTarget records the
+    // server-authoritative value WITHOUT moving the displayed bar; addDisplayCharge
+    // raises the displayed bar by one absorbed orb (clamped to the target);
+    // syncDisplayToTarget snaps the display to the target (no-FX fallback). All
+    // return true on a 0 -> 1 stack crossing so callers can fire the ready cue.
+    void setChargeTarget(int slot, float target);
+    bool addDisplayCharge(int slot, float amount);
+    bool syncDisplayToTarget(int slot);
+
     // Wheel selection (wheel down = next, wheel up = prev).
     void selectNext();
     void selectPrev();
@@ -49,9 +58,23 @@ public:
     void update(float dtSec);                       // animates wheel rotation
     void render(GFX& gfx, float screenW, float screenH) const;
 
+    // Resolution-relative pivot tuning. Position is stored as a fraction of
+    // screen width/height (not absolute pixels) so it keeps the same relative
+    // placement across resolutions. nudgeMarginPx lets debug input adjust it
+    // in familiar pixel units; the conversion to fraction happens here.
+    void nudgeMarginPx(float dxPx, float dyPx, float screenW, float screenH);
+    float marginXFrac() const { return marginXFrac_; }
+    float marginYFrac() const { return marginYFrac_; }
+
 private:
     bool     visible_       = false;
     unsigned weaponOrdinal_ = 0;
+
+    // Wheel pivot offset from the right/bottom screen edge, as a fraction of
+    // screen width/height. Defaults reproduce the original 96px margin at the
+    // client's default 1024x768 window.
+    float marginXFrac_ = 96.f / 1024.f;
+    float marginYFrac_ = 96.f / 768.f;
 
     const Texture* slotIcon_[kSlots] = { nullptr, nullptr, nullptr };
     const Texture* basicIcon_        = nullptr;
@@ -59,7 +82,8 @@ private:
 
     float slotCost_[kSlots]       = { 0.f, 0.f, 0.f };
     float slotCooldownMs_[kSlots] = { 0.f, 0.f, 0.f };
-    float charge_[kSlots]         = { 0.f, 0.f, 0.f };
+    float charge_[kSlots]         = { 0.f, 0.f, 0.f };  // displayed charge (fills as orbs absorb)
+    float targetCharge_[kSlots]   = { 0.f, 0.f, 0.f };  // server-authoritative target
     float cooldownEndSec_[kSlots] = { 0.f, 0.f, 0.f };
     float readyPulse_[kSlots]     = { 0.f, 0.f, 0.f };   // brief scale pop on 0->1 stack
 

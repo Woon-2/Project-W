@@ -4,7 +4,8 @@
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
-    char tmpBuffer[32]{'\0'};
+    // sz(unsigned char)가 표현 가능한 최댓값(255)을 항상 담을 수 있도록 버퍼를 잡는다.
+    char tmpBuffer[256]{'\0'};
     unsigned char sz{};
 
     const auto expected = "<"s + expectedSource + ":>"s;
@@ -25,7 +26,8 @@ void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
-    char tmpBuffer[32]{'\0'};
+    // sz(unsigned char)가 표현 가능한 최댓값(255)을 항상 담을 수 있도록 버퍼를 잡는다.
+    char tmpBuffer[256]{'\0'};
     unsigned char sz{};
 
     const auto expected = "</"s + expectedSource + ">"s;
@@ -52,7 +54,9 @@ bool isTailTag(const std::string& str, const std::string& expectedSource) {
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::string readString(std::ifstream& ifs) {
-    char tmpBuffer[64]{'\0'};
+    // sz(unsigned char)가 표현 가능한 최댓값(255)을 항상 담을 수 있도록 버퍼를 잡는다.
+    // (예전엔 64바이트뿐이라, 64바이트를 넘는 문자열이 들어오면 스택 버퍼 오버플로가 났다.)
+    char tmpBuffer[256]{'\0'};
     unsigned char sz{};
 
     ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));

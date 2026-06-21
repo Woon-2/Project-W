@@ -44,6 +44,11 @@ skill:addEvent(120, "PlayVFX", {
     particleCollision = "GroundKill"
 })
 
+-- Arrow-rain SFX, as the volley starts falling. The rain visually ends ~1.4s after
+-- this (1.2s emission + 0.34s lifetime), so fade the sound out to match the effect
+-- instead of letting the full clip play on.
+skill:addEvent(120, "PlaySound", { sound = "arrow_rain", durationMs = 1200, fadeMs = 200 })
+
 local onHit = OnHit({
     damage          = 4,
     vfxId           = 255,

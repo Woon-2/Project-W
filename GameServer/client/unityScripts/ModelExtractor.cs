@@ -115,6 +115,37 @@ public class ModelExtractorWindow : EditorWindow
         Debug.Log($"[TextureMapper] Found {textureMappings.Count} textures in {obj.name}");
     }
 
+    // 텍스처를 식별하는 키를 만든다.
+    // Texture.name만으로는 텍스처를 구분할 수 없는 경우가 있다 (예: InfinityPBR 계열 에셋팩은
+    // bat/gargoyle/goblin/Hobgoblin/bomber/snake 등 서로 다른 크리처의 albedo 텍스처가
+    // 전부 "InfinityPBR_StandardColorID"라는 동일한 이름을 갖는다).
+    // texHashMap(AssetManager 전역 텍스처 캐시)이 이 이름을 키로 사용하므로,
+    // 이름이 겹치면 먼저 로드된 크리처의 텍스처를 나중에 로드되는 다른 크리처가 그대로 재사용해버린다.
+    //
+    // 전체 AssetDatabase 경로를 키로 쓰면 바이너리 포맷의 문자열 길이 제한에 걸린다
+    // (길이 prefix가 1바이트라 최대 255바이트, C++ 측 읽기 버퍼도 그에 맞춰 256바이트로 고정되어 있음).
+    // 대신 textureMappings에 기록된 출력 경로(Path)의 파일명(확장자 제외)을 키로 쓴다.
+    // 이 프로젝트에서는 크리처마다 출력 파일명이 이미 고유하게 관리되고 있어
+    // (BatColorSet, SnakeColorSet, GargoyleColorSet ...) 충돌 없이 짧은 키를 얻을 수 있다.
+    string GetTextureKey(Texture tex)
+    {
+        if (tex == null) return null;
+
+        string path = (textureMappings != null && textureMappings.TryGetValue(tex, out var mapped))
+            ? mapped
+            : AssetDatabase.GetAssetPath(tex);
+
+        string key = string.IsNullOrEmpty(path) ? tex.name : Path.GetFileNameWithoutExtension(path);
+        if (string.IsNullOrEmpty(key)) key = tex.name;
+
+        if (System.Text.Encoding.UTF8.GetByteCount(key) > 255)
+        {
+            Debug.LogError($"[ModelExtractor] 텍스처 키가 바이너리 포맷 한계(255바이트)를 초과합니다: {key}");
+        }
+
+        return key;
+    }
+
     // 잘 알려진 albedo 프로퍼티 이름 후보.
     static readonly string[] kAlbedoPropCandidates =
         { "_MainTex", "_BaseMap", "_BaseColorMap", "_AlbedoMap", "_TextureSample0" };
@@ -171,6 +202,9 @@ public class ModelExtractorWindow : EditorWindow
         var w = itemDataWriter;
         ExtractUtil.WriteHeadTag(w, "RagdollConfig");
 
+        // 래그돌 박스 치수는 unscaled로 추출한다. 런타임 Ragdoll::build에서 모델 고유 scale을
+        // halfExtents·inertia에만 곱하고, center(capsuleOffset)는 boneWorldMat(objectWorldMat에
+        // scale 포함)으로 변환되므로 unscaled로 둔다.
         ExtractUtil.WriteInteger(w, "BodyCnt", ragdoll.bodies.Count);
         foreach (var body in ragdoll.bodies)
         {
@@ -250,7 +284,7 @@ public class ModelExtractorWindow : EditorWindow
         {
             ExtractUtil.WriteHeadTag(geometryWriter, "Item");
             Texture tex = kvp.Key;
-            ExtractUtil.WriteText(geometryWriter, "TextureName", tex.name);
+            ExtractUtil.WriteText(geometryWriter, "TextureName", GetTextureKey(tex));
             ExtractUtil.WriteText(geometryWriter, "WrapModeU", tex.wrapModeU.ToString());
             ExtractUtil.WriteText(geometryWriter, "WrapModeV", tex.wrapModeV.ToString());
             ExtractUtil.WriteText(geometryWriter, "WrapModeW", tex.wrapModeW.ToString());
@@ -270,16 +304,127 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "TextureMapping");
     }
 
-    void ExtractMesh(Mesh mesh)
+    // 정점별 dress 스킨 행렬(mesh-local→dress)을 만든다.
+    //   dressSkin[b] = root.worldToLocal * bones[b].localToWorld * mesh.bindposes[b]
+    //   vertex i    = Σ w * dressSkin[boneIndex]   (boneWeights 의 본 인덱스는 smr.bones/bindposes
+    //                 평행 배열 기준; boneIdxMap 으로 스켈레톤 순서로 재매핑되기 '전'의 인덱스다.)
+    // 본 팔레트가 rest 포즈에서 만드는 변형과 정확히 동일하므로, 씬 포즈가 FBX bind 와 달라도 정확.
+    Matrix4x4[] BuildSkinBakeMatrices(Transform root, Transform xform,
+        SkinnedMeshRenderer smr, Mesh mesh)
+    {
+        int vcnt = mesh != null ? mesh.vertexCount : 0;
+        Matrix4x4 rootW2L = root.worldToLocalMatrix;
+        Matrix4x4 nodeFallback = rootW2L * xform.localToWorldMatrix;
+
+        Transform[] smrBones = smr != null ? smr.bones : null;
+        Matrix4x4[] bindposes = mesh != null ? mesh.bindposes : null;
+        BoneWeight[] weights = mesh != null ? mesh.boneWeights : null;
+
+        // 폴백: bind/weight 정보가 부족하면 과거 동작(SMR 노드 변환)을 모든 정점에 동일 적용.
+        if (vcnt == 0 || smrBones == null || smrBones.Length == 0
+            || bindposes == null || bindposes.Length != smrBones.Length
+            || weights == null || weights.Length != vcnt)
+        {
+            if (vcnt == 0) return null;
+            Matrix4x4[] all = new Matrix4x4[vcnt];
+            for (int i = 0; i < vcnt; i++) all[i] = nodeFallback;
+            return all;
+        }
+
+        Matrix4x4[] dressSkin = new Matrix4x4[smrBones.Length];
+        for (int b = 0; b < smrBones.Length; b++)
+        {
+            Matrix4x4 boneL2W = smrBones[b] != null
+                ? smrBones[b].localToWorldMatrix : Matrix4x4.identity;
+            dressSkin[b] = rootW2L * boneL2W * bindposes[b];
+        }
+
+        Matrix4x4[] result = new Matrix4x4[vcnt];
+        for (int i = 0; i < vcnt; i++)
+        {
+            BoneWeight w = weights[i];
+            float wsum = w.weight0 + w.weight1 + w.weight2 + w.weight3;
+            if (wsum <= 1e-6f) { result[i] = nodeFallback; continue; }
+
+            Matrix4x4 m = new Matrix4x4();   // 구조체 기본값 = 전부 0
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex0], w.weight0);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex1], w.weight1);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex2], w.weight2);
+            AddScaledMatrix(ref m, dressSkin[w.boneIndex3], w.weight3);
+            result[i] = m;
+        }
+        return result;
+    }
+
+    static void AddScaledMatrix(ref Matrix4x4 acc, Matrix4x4 m, float s)
+    {
+        if (s == 0f) return;
+        for (int c = 0; c < 4; c++)
+            for (int r = 0; r < 4; r++)
+                acc[r, c] += m[r, c] * s;
+    }
+
+    // skinBakeMats != null(스킨드 메시)이면 정점별 dress 스킨 행렬로 정점/방향을 미리 굽는다.
+    // (position은 affine point, normal·tangent는 동일 행렬의 MultiplyVector 후 정규화 — 런타임
+    //  스킨드 셰이더가 normal 에도 anim 행렬을 그대로 곱하는 것과 일치시킨다.)
+    void ExtractMesh(Mesh mesh, Matrix4x4[] skinBakeMats = null)
     {
         ExtractUtil.WriteHeadTag(geometryWriter, "Mesh");
 
         mesh.RecalculateTangents();
 
+        // 정점/방향 데이터 준비 (스킨드면 dress 공간으로 베이크)
+        Vector3[] positions = mesh.vertices;
+        Vector3[] normalsArr = mesh.normals;
+        Vector4[] tangents4 = mesh.tangents;
+
+        bool baked = skinBakeMats != null && positions != null
+                  && skinBakeMats.Length == positions.Length;
+        if (baked)
+        {
+            Vector3[] bakedPos = new Vector3[positions.Length];
+            for (int i = 0; i < positions.Length; i++)
+                bakedPos[i] = skinBakeMats[i].MultiplyPoint3x4(positions[i]);
+            positions = bakedPos;
+
+            if (normalsArr != null && normalsArr.Length == skinBakeMats.Length)
+            {
+                Vector3[] bakedN = new Vector3[normalsArr.Length];
+                for (int i = 0; i < normalsArr.Length; i++)
+                    bakedN[i] = skinBakeMats[i].MultiplyVector(normalsArr[i]).normalized;
+                normalsArr = bakedN;
+            }
+            if (tangents4 != null && tangents4.Length == skinBakeMats.Length)
+            {
+                Vector4[] bakedT = new Vector4[tangents4.Length];
+                for (int i = 0; i < tangents4.Length; i++)
+                {
+                    Vector3 t = skinBakeMats[i].MultiplyVector(
+                        new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z)).normalized;
+                    bakedT[i] = new Vector4(t.x, t.y, t.z, tangents4[i].w);   // w(부호) 보존
+                }
+                tangents4 = bakedT;
+            }
+        }
+
         // =========================
-        // AABB 추출
+        // AABB 추출 (베이크된 정점 기준으로 재계산)
         // =========================
-        Bounds bounds = mesh.bounds;
+        Bounds bounds;
+        if (baked && positions != null && positions.Length > 0)
+        {
+            Vector3 mn = positions[0], mx = positions[0];
+            for (int i = 1; i < positions.Length; i++)
+            {
+                mn = Vector3.Min(mn, positions[i]);
+                mx = Vector3.Max(mx, positions[i]);
+            }
+            bounds = new Bounds((mn + mx) * 0.5f, mx - mn);
+        }
+        else
+        {
+            bounds = mesh.bounds;
+        }
 
         ExtractUtil.WriteHeadTag(geometryWriter, "Bounds");
         ExtractUtil.WriteVector(geometryWriter, "Center", bounds.center);
@@ -290,19 +435,19 @@ public class ModelExtractorWindow : EditorWindow
 
         // 버텍스 버퍼들 추출
         ExtractUtil.WriteHeadTag(geometryWriter, "VertexBuffers");
-        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", mesh.vertices);
+        if ((positions != null) && (positions.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", positions);
         if ((mesh.colors != null) && (mesh.colors.Length > 0)) ExtractUtil.WriteColors(geometryWriter, "Colors", mesh.colors);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", mesh.normals);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)
-            && (mesh.tangents != null) && (mesh.tangents.Length > 0)
+        if ((normalsArr != null) && (normalsArr.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", normalsArr);
+        if ((normalsArr != null) && (normalsArr.Length > 0)
+            && (tangents4 != null) && (tangents4.Length > 0)
         )
         {
-            Vector3[] tangents = new Vector3[mesh.tangents.Length];
-            Vector3[] bitangents = new Vector3[mesh.tangents.Length];
-            for (int i = 0; i < mesh.tangents.Length; i++)
+            Vector3[] tangents = new Vector3[tangents4.Length];
+            Vector3[] bitangents = new Vector3[tangents4.Length];
+            for (int i = 0; i < tangents4.Length; i++)
             {
-                tangents[i] = new Vector3(mesh.tangents[i].x, mesh.tangents[i].y, mesh.tangents[i].z);
-                bitangents[i] = Vector3.Normalize(Vector3.Cross(mesh.normals[i], tangents[i])) * mesh.tangents[i].w;
+                tangents[i] = new Vector3(tangents4[i].x, tangents4[i].y, tangents4[i].z);
+                bitangents[i] = Vector3.Normalize(Vector3.Cross(normalsArr[i], tangents[i])) * tangents4[i].w;
             }
             ExtractUtil.WriteVectors(geometryWriter, "Tangents", tangents);
             ExtractUtil.WriteVectors(geometryWriter, "Bitangents", bitangents);
@@ -406,6 +551,12 @@ public class ModelExtractorWindow : EditorWindow
             {
                 ExtractUtil.WriteFloat(geometryWriter, "cAOStrength", materials[i].GetFloat("_OcclusionStrength"));
             }
+            // cAlphaCutoff
+            if (materials[i].HasProperty("_IntensityCutoutMap"))
+            {
+                ExtractUtil.WriteFloat(geometryWriter, "cAlphaCutoff",
+                    Mathf.Clamp01(materials[i].GetFloat("_IntensityCutoutMap")));
+            }
 
             // 텍스처들 추출
             // AlbedoMap: 잘 알려진 프로퍼티 이름을 먼저 시도하고, 없으면 셰이더의
@@ -415,7 +566,7 @@ public class ModelExtractorWindow : EditorWindow
             Texture albedoTex = FindAlbedoTexture(materials[i]);
             if (albedoTex != null)
             {
-                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", albedoTex.name);
+                ExtractUtil.WriteText(geometryWriter, "AlbedoMap", GetTextureKey(albedoTex));
             }
             // NormalMap
             if (materials[i].HasProperty("_BumpMap"))
@@ -423,7 +574,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture bumpMap = materials[i].GetTexture("_BumpMap");
                 if (bumpMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "NormalMap", bumpMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "NormalMap", GetTextureKey(bumpMap));
                 }
             }
             // MetallicSmoothnessMap
@@ -432,7 +583,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture metallicGlossMap = materials[i].GetTexture("_MetallicGlossMap");
                 if (metallicGlossMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "MetallicSmoothnessMap", metallicGlossMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "MetallicSmoothnessMap", GetTextureKey(metallicGlossMap));
                 }
             }
             // EmmisiveMap
@@ -441,7 +592,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture emmisionMap = materials[i].GetTexture("_EmissionMap");
                 if (emmisionMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "EmmisiveMap", emmisionMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "EmmisiveMap", GetTextureKey(emmisionMap));
                 }
             }
             // AOMap
@@ -450,7 +601,7 @@ public class ModelExtractorWindow : EditorWindow
                 Texture aoMap = materials[i].GetTexture("_OcclusionMap");
                 if (aoMap != null)
                 {
-                    ExtractUtil.WriteText(geometryWriter, "AOMap", aoMap.name);
+                    ExtractUtil.WriteText(geometryWriter, "AOMap", GetTextureKey(aoMap));
                 }
             }
 
@@ -466,11 +617,8 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteHeadTag(geometryWriter, "Node");
         ExtractUtil.WriteString(geometryWriter, ExtractUtil.ReplaceWhiteSpace(xform.gameObject.name));
 
-        // 변환 추출
-        ExtractUtil.WriteLocalMatrix(geometryWriter, "LocalMatrix", xform);
-        ExtractUtil.WriteDressMatrix(geometryWriter, "DressMatrix", root, xform);
-
-        // 메시 추출
+        // 메시/렌더러 판별을 변환 행렬 기록보다 먼저 한다.
+        // 스킨드 메시는 노드 변환 처리 방식이 달라(아래 참조) 행렬을 쓰기 전에 알아야 한다.
         MeshRenderer meshRenderer = xform.gameObject.GetComponent<MeshRenderer>();
         MeshFilter meshFilter = xform.gameObject.GetComponent<MeshFilter>();
         SkinnedMeshRenderer skinnedMeshRenderer = xform.gameObject.GetComponent<SkinnedMeshRenderer>();
@@ -480,6 +628,7 @@ public class ModelExtractorWindow : EditorWindow
         bool skinnedMeshRendererUsable = IsRendererUsable(skinnedMeshRenderer);
 
         Mesh mesh = null;
+        bool isSkinnedMesh = false;
         if (meshRenderer && meshFilter && meshRendererUsable)
         {
             mesh = meshFilter.sharedMesh;
@@ -487,6 +636,7 @@ public class ModelExtractorWindow : EditorWindow
         else if (skinnedMeshRenderer && skinnedMeshRendererUsable)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
+            isSkinnedMesh = true;
             boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
             for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
             {
@@ -508,9 +658,40 @@ public class ModelExtractorWindow : EditorWindow
             }
         }
 
+        // 변환 추출
+        // 스킨드 메시는 본 팔레트(toDress/toLocal, root 기준 dress 공간)가 정점 변형을 책임진다.
+        // 그런데 런타임 스킨드 셰이더는 position·anim·meshXform 순서로 곱하므로(meshXform=노드
+        // DressMatrix), 노드 자체에 회전/스케일이 있으면 그 변환이 본 변형 '뒤'에 적용되어
+        // 정점(mesh-local) 공간과 본 팔레트(dress) 공간이 어긋난다 — snake가 90° 서거나 birdy
+        // 말단이 늘어나는 원인. 따라서 정점을 dress(root) 공간으로 미리 구워 옮기고, 노드 행렬은
+        // 항등으로 기록한다. 이러면 런타임이 position(dress)·anim·I 로 본 팔레트를 올바른 공간에서
+        // 적용한다. 정적 메시는 기존대로 노드 변환을 meshXform으로 유지한다(정점은 raw mesh-local).
+        //
+        // [중요] 정점을 dress 공간으로 옮기는 변환은 SMR 노드 변환이 아니라 '실제 bind pose'에서
+        // 유도해야 한다. Unity 는 스킨드 렌더링에서 SMR 노드 자체 변환을 무시하고 mesh.bindposes 로
+        // mesh-local→bone 결합을 정의한다. 본 b 의 dress 스킨 행렬은
+        //   dressSkin[b] = root.worldToLocal * bones[b].localToWorld * mesh.bindposes[b]
+        // 이고, 정점 i 의 베이크 변환은 가중 합 Σ w * dressSkin[b] (= 본 팔레트가 rest 포즈에서 만드는
+        // 변형과 정확히 동일) 이다. 씬의 rest 포즈가 FBX bind 와 다르면 본마다 dressSkin 이 달라지므로
+        // 단일 행렬(특정 본 하나)로 구우면 메시가 그 본의 포즈 오차만큼 강체로 기울어진다 — 정점별 LBS 로
+        // 구워야 정확하다. 노드 행렬은 항등으로 기록한다. (씬==bind 인 birdy 는 모든 dressSkin 이
+        // 동일해 단일 행렬과 같은 결과; snake 는 정점별로 올바르게 정렬.)
+        Matrix4x4[] skinBakeMats = null;
+        if (isSkinnedMesh)
+        {
+            skinBakeMats = BuildSkinBakeMatrices(root, xform, skinnedMeshRenderer, mesh);
+            ExtractUtil.WriteMatrix(geometryWriter, "LocalMatrix", Matrix4x4.identity);
+            ExtractUtil.WriteMatrix(geometryWriter, "DressMatrix", Matrix4x4.identity);
+        }
+        else
+        {
+            ExtractUtil.WriteLocalMatrix(geometryWriter, "LocalMatrix", xform);
+            ExtractUtil.WriteDressMatrix(geometryWriter, "DressMatrix", root, xform);
+        }
+
         if (mesh != null)
         {
-            ExtractMesh(mesh);
+            ExtractMesh(mesh, skinBakeMats);
         }
 
         // --- MaterialSetSelector 지원 ---
@@ -617,6 +798,11 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.AccNodeCnt(targetObject.transform, ref nodeCnt);
         ExtractUtil.WriteInteger(geometryWriter, "NodeCnt", nodeCnt);
 
+        // Model's own scale (Unity root localScale). The geometry/BV/bones are extracted
+        // unscaled; the runtime applies this via Object's body scale (setModel), so mesh and
+        // BV stay consistent through a single scale path.
+        ExtractUtil.WriteVector(geometryWriter, "ModelScale", targetObject.transform.localScale);
+
         ExtractTransform(targetObject.transform, targetObject.transform);
 
         ExtractUtil.WriteTailTag(geometryWriter, "Geometry");
@@ -658,7 +844,7 @@ public class ModelExtractorWindow : EditorWindow
                 string boneName = box.bone != null ? box.bone.name : "";
                 ExtractUtil.WriteText(geometryWriter, "Bone", boneName);
 
-                // 로컬 기준 값들
+                // BV는 unscaled로 추출(모델 고유 scale은 런타임 body scale로 적용).
                 ExtractUtil.WriteVector(geometryWriter, "Center", box.localCenter);
                 ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
                 ExtractUtil.WriteVector(geometryWriter, "Rotation", box.rotationEuler);

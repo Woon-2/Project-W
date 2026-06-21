@@ -113,21 +113,22 @@ extern std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowM
 
 }	// namespace SharedResources::ShadowMap
 
-// GBuffer 텍스처 1세트 (4 color RT + 1 depth RT)
+// GBuffer 텍스처 1세트 (5 color RT + 1 depth RT)
 struct GBufferData {
 	Texture gb0;    // R8G8B8A8_UNORM  — Albedo.rgb + AO.a
 	Texture gb1;    // R16G16_FLOAT    — NormalV oct-encoded
 	Texture gb2;    // R8G8B8A8_UNORM  — LightAccum.rgb + Roughness.a
 	Texture gb3;    // R8_UNORM        — Metallic
+	Texture gb4;    // R32_FLOAT       — Linear view-space Z (posV.z)
 	Texture depth;  // R32_TYPELESS resource; DSV=D32_FLOAT, SRV=R32_FLOAT
 	u32t width;
 	u32t height;
 	// OMSetRenderTargets / ClearRenderTargetView 용 RTV 핸들 (addGBuffer 시 캐싱)
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[4];
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[5];
 	// ClearDepthStencilView 용 DSV 핸들 (addGBuffer 시 캐싱)
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;
 	// 리소스 상태 추적 (전환 최적화용)
-	D3D12_RESOURCE_STATES curStateGB[4];
+	D3D12_RESOURCE_STATES curStateGB[5];
 	D3D12_RESOURCE_STATES curStateDepth;
 };
 
@@ -138,9 +139,9 @@ namespace GBuffer {
 extern std::vector<GBufferData> gBufferData;
 
 // roomCnt개 방 각각에 대해 GBuffer 텍스처 세트를 생성하여 gBufferData에 등록한다.
-// rtvPool: 색상 RT 4개 × roomCnt 슬롯이 필요하다 (호출자가 미리 크기 확보).
+// rtvPool: 색상 RT 5개 × roomCnt 슬롯이 필요하다 (호출자가 미리 크기 확보).
 // dsvPool: 깊이 버퍼 1개 × roomCnt 슬롯이 필요하다.
-// srvTexPool: bindless SRV 5개 × roomCnt 슬롯이 필요하다.
+// srvTexPool: bindless SRV 6개 × roomCnt 슬롯이 필요하다.
 void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 	std::size_t roomCnt, DescriptorPool& rtvPool,
 	DescriptorPool& dsvPool, DescriptorPool& srvTexPool
@@ -289,9 +290,9 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 namespace HiZMap {
 
-// clearDepth를 1.0f보다 작은 값으로 설정함으로써
-// distance culling의 효과를 동시에 볼 수 있다.
-inline constexpr auto clearDepth = 0.9999f;
+// Reversed-Z(near=1.0, far=0.0): clearDepth를 0.0f보다 큰 값으로 설정함으로써
+// distance culling의 효과를 동시에 볼 수 있다 (far plane 바로 안쪽을 미리 깎아낸다).
+inline constexpr auto clearDepth = 0.0001f;
 
 struct HiZMapData {
 	Texture srcTex;
@@ -373,6 +374,30 @@ void addIBL( ID3D12Device* device,
 void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, DescriptorPool& srvTexPool );
 
 }	// namespace SharedResources::IBL
+
+namespace ColorGrading {
+
+// 씬 전역, 고정된 단일 color grading LUT. tonemap resolve 패스가 gamma 보정 직후 항상 적용한다.
+// (idxRange == etoi(Texture::Type::Tex3D), srvTex3DPool에서 할당된 SRV)
+struct ColorGradingData {
+	Texture lut;
+	u32t    size = 0u;	// LUT_3D_SIZE (한 축의 해상도) — half-texel 보정용으로 idxInArray에도 동일 값이 들어있다.
+	bool    created = false;
+};
+
+extern ColorGradingData lutData;
+
+// lutPath의 .cube 파일을 파싱해 3D 텍스처 + bindless SRV로 등록한다.
+// cmdList에 업로드 명령을 기록하므로, 호출 후 cmdList를 Close/Execute하고 fenceToAssociate로
+// GPU 작업 완료를 대기한 뒤에야 업로드 버퍼가 안전하게 해제된다(loadDDS와 동일한 규약).
+void addColorGradingLUT( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, DescriptorPool& srvTex3DPool, const std::filesystem::path& lutPath
+);
+
+// LUT의 SRV 슬롯을 반납한다.
+void eraseColorGradingLUT( DescriptorPool& srvTex3DPool );
+
+}	// namespace SharedResources::ColorGrading
 
 }	// namespace SharedResources
 

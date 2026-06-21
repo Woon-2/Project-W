@@ -14,22 +14,35 @@ using Bus = SoundManager::Bus;
 // system picks them up. Missing files just warn at play time (no crash).
 constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	// --- Background music (streamed, looped) ---
-	{ "lobby",     "../resources/audio/bgm/lobby.mp3",   Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
-	{ "ingame",    "../resources/audio/bgm/ingame.wav",  Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
+	{ "lobby",     "../resources/audio/bgm/lobby.wav",   Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
+	{ "ingame",    "../resources/audio/bgm/Action 5 (Loop).wav",  Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
 
 	// --- UI ---
 	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 1.0f },
-	{ "ui_hover",  "../resources/audio/sfx/ui_hover.wav", Bus::Ui,  false, false, 0.7f },
 
-	// --- Combat SFX (positional) ---
-	{ "hit",       "../resources/audio/sfx/hit.wav",       Bus::Sfx, false, false, 1.0f },
-	{ "death",     "../resources/audio/sfx/death.wav",     Bus::Sfx, false, false, 1.0f },
-	{ "attack",    "../resources/audio/sfx/attack.wav",    Bus::Sfx, false, false, 0.9f },
-	{ "skill_hit", "../resources/audio/sfx/skill_hit.wav", Bus::Sfx, false, false, 1.0f },
+	// --- Skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "sword_slash_1",      "../resources/audio/sfx/sword/sword_slash_1.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "sword_slash_finish", "../resources/audio/sfx/sword/sword_slash_finish.mp3", Bus::Sfx, false, false, 1.0f },
+	{ "sword_slash_7",      "../resources/audio/sfx/sword/sword_slash_7.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "slash_wave",         "../resources/audio/sfx/sword/slash_wave.mp3",         Bus::Sfx, false, false, 1.0f },
 
-	// --- HUD ---
-	// Played when a skill slot reaches its first usable stack (0 -> 1).
-	{ "skill_ready", "../resources/audio/sfx/skill_ready.wav", Bus::Ui, false, false, 1.0f },
+	// --- Bow skill SFX (positional; timeline PlaySound + particle-spawn hooks) ---
+	{ "arrow_default",     "../resources/audio/sfx/bow/arrow_default.mp3",     Bus::Sfx, false, false, 1.0f },
+	{ "arrow_rain",        "../resources/audio/sfx/bow/arrow_rain.mp3",        Bus::Sfx, false, false, 1.0f },
+	{ "arrow_charge",      "../resources/audio/sfx/bow/arrow_charge.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "charge_shoot",      "../resources/audio/sfx/bow/charge_shoot.mp3",      Bus::Sfx, false, false, 1.0f },
+	{ "charge_explosion",  "../resources/audio/sfx/bow/charge_explosion.mp3",  Bus::Sfx, false, false, 1.0f },
+
+	// --- Wand skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "quake",             "../resources/audio/sfx/wand/quake.mp3",            Bus::Sfx, false, false, 1.0f },
+	{ "ice_crossfade",     "../resources/audio/sfx/wand/ice_crossfade.mp3",    Bus::Sfx, false, false, 1.0f },
+	{ "ice_front_attack",  "../resources/audio/sfx/wand/ice_front_attack.wav", Bus::Sfx, false, false, 1.0f },
+	{ "red_energy",        "../resources/audio/sfx/wand/red_energy.mp3",       Bus::Sfx, false, false, 2.0f },
+
+	// --- Spear skill SFX (positional, fired by PlaySound timeline events) ---
+	{ "spear1",            "../resources/audio/sfx/spear/spear1.mp3",          Bus::Sfx, false, false, 1.0f },
+	{ "spear2",            "../resources/audio/sfx/spear/spear2.mp3",          Bus::Sfx, false, false, 1.0f },
+	{ "spear3",            "../resources/audio/sfx/spear/spear3.mp3",          Bus::Sfx, false, false, 1.0f },
 });
 
 }	// namespace
@@ -41,6 +54,10 @@ const CatalogEntry* findSound(std::string_view name) {
 		}
 	}
 	return nullptr;
+}
+
+std::span<const CatalogEntry> allSounds() {
+	return { kCatalog.data(), kCatalog.size() };
 }
 
 }	// namespace snd

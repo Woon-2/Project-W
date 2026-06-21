@@ -73,6 +73,12 @@ void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) 
 	} );
 
 	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/stronghold/stronghold.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelStronghold_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/player/player.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
@@ -104,6 +110,11 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelGoblin_
 	} );
 	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/goblin/Hobgoblin.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelHobgoblin_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/snake/snake.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelSnake_
@@ -112,6 +123,45 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.modelPath = "../resources/models/mushroom/mushroom.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelMushroom_
+	} );
+
+	// Monster skill-caster model loads.
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bomber/bomber.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBomber_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/birdy/birdy.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBirdy_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/slime/slime.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelSlime_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/treant/treant.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelTreant_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/boss/boss.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBoss_
+	} );
+
+	// Mid-boss variant models (share Treant/Birdy rigs; rendered for Grandbaum/Isys bosses).
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/treant/Grandbaum.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelGrandbaum_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/birdy/Isys.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelIsys_
 	} );
 
 	//gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -189,6 +239,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.name            = "heavy-arrow",
 		.texturePath     = "../resources/UI/heavy-arrow.dds",
 		.pDest           = &heavyArrow_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "UiLeftButton",
+		.texturePath     = "../resources/UI/ui_left_button.dds",
+		.pDest           = &uiLeftButton_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp
@@ -373,6 +432,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.name            = "Circle",
 		.texturePath     = "../resources/Textures/Circle.dds",
 		.pDest           = &circleTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "MagicCircle",
+		.texturePath     = "../resources/Textures/magic_circle.dds",
+		.pDest           = &magicCircleTex_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp
@@ -655,11 +723,23 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	}
 
 	auto tmpGoblinAnims   = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
-	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/models/snake/snakeAnimations.anim", gfx);
-	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/models/mushroom/mushroomAnimations.anim", gfx);
+	auto tmpSnakeAnims    = loadAnimClipsFromFile("../resources/animations/snakeAnimations.anim", gfx);
+	auto tmpMushroomAnims = loadAnimClipsFromFile("../resources/animations/mushroomAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
 	snakeAnimations_.reserve(tmpSnakeAnims.size());
 	mushroomAnimations_.reserve(tmpMushroomAnims.size());
+
+	// Monster skill-caster animation loads (part 1/2: load + reserve; tmp* used in part 2).
+	auto tmpBomberAnims = loadAnimClipsFromFile("../resources/animations/bomberAnimations.anim", gfx);
+	bomberAnimations_.reserve(tmpBomberAnims.size());
+	auto tmpBirdyAnims = loadAnimClipsFromFile("../resources/animations/birdyAnimations.anim", gfx);
+	birdyAnimations_.reserve(tmpBirdyAnims.size());
+	auto tmpSlimeAnims = loadAnimClipsFromFile("../resources/animations/slimeAnimations.anim", gfx);
+	slimeAnimations_.reserve(tmpSlimeAnims.size());
+	auto tmpTreantAnims = loadAnimClipsFromFile("../resources/animations/treantAnimations.anim", gfx);
+	treantAnimations_.reserve(tmpTreantAnims.size());
+	auto tmpBossAnims = loadAnimClipsFromFile("../resources/boss/bossAnimations.anim", gfx);
+	bossAnimations_.reserve(tmpBossAnims.size());
 
 	// 공용 리소스(gfx.initSharedResources)는 호출부에서 미리 초기화되어 있어야 한다.
 	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
@@ -671,6 +751,18 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		snakeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	for (auto& clip : tmpMushroomAnims)
 		mushroomAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+
+	// Monster skill-caster animation loads (part 2/2: move into members).
+	for (auto& clip : tmpBomberAnims)
+		bomberAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpBirdyAnims)
+		birdyAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpSlimeAnims)
+		slimeAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpTreantAnims)
+		treantAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : tmpBossAnims)
+		bossAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 
 	// Re-runs player ids (harmless) and assigns goblin baked-anim ids.
 	setupBakedAnimationIds();
@@ -810,4 +902,10 @@ void AssetManager::setupBakedAnimationIds() {
 	for (auto& clip : mushroomAnimations_) {
 		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
+	// Monster skill-caster baked-anim ids.
+	for (auto& clip : bomberAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
+	for (auto& clip : birdyAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
+	for (auto& clip : slimeAnimations_)  clip->id = clip->bakedSamples.idxSrv.idxResource;
+	for (auto& clip : treantAnimations_) clip->id = clip->bakedSamples.idxSrv.idxResource;
+	for (auto& clip : bossAnimations_)   clip->id = clip->bakedSamples.idxSrv.idxResource;
 }

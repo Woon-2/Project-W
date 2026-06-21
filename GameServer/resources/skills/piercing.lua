@@ -21,6 +21,9 @@ skill:addEvent(100, "PlayVFX", {
     offset = Vec3(0.0, 1.0, 0.8)
 })
 
+-- Spear thrust SFX, on the stab.
+skill:addEvent(100, "PlaySound", { sound = "spear1" })
+
 local onHit = OnHit({
     damage          = 16,
     vfxId           = 255,

@@ -4,6 +4,7 @@
 #include "object.hpp"
 #include <vector>
 #include <cstdint>
+#include <string>
 
 class Room;
 class GameSession;
@@ -54,6 +55,7 @@ struct TacticalCommand {
     float               impactRadius     = 3.f;
     float               impactDamage     = 0.f;
     float               passDistance     = 6.f;
+    float               chargeAcceleration = 0.f;   // 0이면 기존 모터 가속 유지
     bool                useHoldFacing    = false;
     mu::Vec3            holdFacing       = {};
 };
@@ -71,6 +73,17 @@ struct TacticalNpcConfig {
     Seconds attackRecoverTime{ 0.8f };
     float separationRadius  = 3.f;
     float separationWeight  = 0.5f;
+    // Multiplier applied to skill-based attack damage (oh.damage * coeff * scale).
+    // Troopers stay at 1.0; bosses raise this so a baseline monster skill still hits hard.
+    float attackDamageScale = 1.f;
+};
+
+// A skill-based attack option for a tactical NPC: the skill asset to cast plus the
+// server anim clip key to play, so the hitbox bone transforms track the skill timeline.
+// Mirrors Npc::NpcAttack (kept separate per the explicit per-class pattern).
+struct TacticalNpcAttack {
+    uint32      skillId = 0;
+    std::string clipKey;
 };
 
 /*---------------------------------
@@ -116,10 +129,23 @@ public:
     float             getSeparationRadius()  const { return separationRadius_; }
     TacticalNpcConfig getConfig()            const;
     bool              isAtSlot()             const;
+    // HoldSlot에서 실제 안착 래치까지 걸린 상태인지 확인한다.
+    // 거리만 넓게 허용하는 isAtSlot()과 달리 밀집 대형의 정착 완료 판정에 사용한다.
+    bool              isSettledAtSlot()       const { return state_ == TacticalNpcState::HoldSlot && slotSettled_; }
     bool              isChargeComplete()     const { return chargeComplete_; }
 
     void setSquadId( int32 id ) { squadId_ = id; }
+    // Per-NPC client model identity. The encounter sets this so S_NpcSpawnBatch tells each
+    // client which monster model to render (e.g. a Grandbaum squad spawns as Slime/Snake, not Goblin).
+    ObjectType objType()                const { return objType_; }
+    void       setObjType( ObjectType t )     { objType_ = t; }
     void MU_CALLCONV reviveAt( mu::Vec3 pos );
+
+    // Skill-based attack roster (mirrors Npc). registerTacticalNpcBody populates this
+    // per objType so a tactical NPC casts the same varied attacks as its field counterpart.
+    void addAttack( uint32 skillId, std::string clipKey );   // skillId==0 -> skipped (keeps legacy fallback)
+    bool hasSkillAttacks() const { return !attacks_.empty(); }
+    void setAttackDamageScale( float s ) { attackDamageScale_ = s; }
 
 protected:
     void applyConfig( const TacticalNpcConfig& cfg );
@@ -154,10 +180,13 @@ protected:
     // 예약이 STALE_TIME 동안 진척 없이 끊길 때: 슬롯 반납 + 해당 타깃을 blocked로 표시.
     void        releaseStaleAttackReservation( Room& room, float currentDist );
     void        resetPressureWaitTarget();
+    void        restoreChargeMotorAcceleration();
     void        refreshPressureWaitScatterOffsets();
     mu::Vec3    computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 targetFacing ) const;
     void        moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing );
     void        recordHit( uint16 targetId, int32 newHp );
+    // Uniform-random pick over the registered skill attacks (caller must ensure non-empty).
+    const TacticalNpcAttack& pickAttack() const;
 
     TacticalNpcState state_{ TacticalNpcState::Idle };
     TacticalCommand  pendingCmd_{};
@@ -181,6 +210,7 @@ protected:
     int32            confusedWanderStep_{ 0 };
     mu::Vec3         spawnPos_{};
     int32            squadId_{ -1 };
+    ObjectType       objType_{ ObjectType::Goblin };   // client render model identity (default Goblin)
 
     float maxHp_{ 100.f };
     float moveSpeed_{ 4.f };
@@ -190,6 +220,10 @@ protected:
     Seconds attackRecoverTime_{ 0.8f };
     float separationRadius_{ 3.f };
     float separationWeight_{ 0.5f };
+
+    std::vector<TacticalNpcAttack> attacks_;          // skill-based attacks (empty => legacy melee)
+    bool                           attackCast_{ false };   // one skill cast per windup
+    float                          attackDamageScale_{ 1.f };
 
     float speedMult_{ 1.f };
     bool  slotSettled_{ false };   // 슬롯 안착 래치(히스테리시스): true면 모터 제동 유지(떨림 방지)
@@ -205,6 +239,8 @@ protected:
     uint32 pressureWaitScatterSeed_{ 0 };
     bool  pressureWaitDesiredValid_{ false };
     bool  pressureReentering_{ false };
+    bool  chargeMotorOverrideActive_{ false };
+    float savedChargeMotorAcceleration_{ 20.f };
     uint32 reservedAttackTargetId_{ 0 };
     Seconds reservedAttackStaleTimer_{};
     // 직전 틱까지의 타깃 접근 거리(진척 추적용). 일정량 접근하면 예약 리스를 갱신한다.
@@ -217,13 +253,12 @@ protected:
     std::vector<TacticalNpcUpdateResult::HitInfo> frameHits_;
 
     static constexpr float TACTICAL_SPEED_MULT                        = 3.0f;
-    // 슬롯(HoldSlot) 도착 감속: 이 반경 안에서 거리비례로 감속해 오버슈트 진동을 막고 안착시킨다.
-    // 안착 래치(아래)가 오버슈트를 흡수하므로 전속 구간을 넓히고 최저 속도를 올려 자리 찾기를 빠르게 한다.
+    // 슬롯(HoldSlot) 도착 감속: 이 반경 안에서 접근 가속을 걷어내고 속도를 0으로 수렴시킨다.
     static constexpr float TACTICAL_SLOT_ARRIVE_SLOW_RADIUS           = 1.5f;
-    static constexpr float TACTICAL_SLOT_ARRIVE_MIN_SCALE             = 0.35f;
-    // 슬롯 안착 래치(히스테리시스): inner 안으로 들어오면 안착(settled)→모터 제동 유지, outer 밖으로
+    // 슬롯 중심 0.5m 이내에서는 모터를 정지시킨다. 슬라임 separationRadius(1.5)의 1/3에 해당한다.
+    static constexpr float TACTICAL_SLOT_SETTLE_RADIUS                = 0.5f;
+    // 슬롯 안착 래치(히스테리시스): settle 반경 안으로 들어오면 안착(settled)→모터 제동 유지, outer 밖으로
     // 밀려나야 래치 해제→재접근. 밀집 Dynamic 대형의 솔버 평형 변위에 모터가 재당김하는 한계 진동 방지.
-    static constexpr float TACTICAL_SLOT_SETTLE_RADIUS_MULT           = 0.25f;
     static constexpr float TACTICAL_SLOT_UNSETTLE_RADIUS_MULT         = 0.7f;
     // 안착 중 잔여 XZ 속도 감쇠 계수(솔버가 주입한 미세 속도를 흡수, Y는 중력 보존).
     static constexpr float TACTICAL_SLOT_SETTLE_VEL_DAMP              = 0.3f;
@@ -263,11 +298,13 @@ protected:
     static constexpr float TACTICAL_PRESSURE_RADIUS_OFFSET_SPAN       = 3.0f;
     static constexpr float TACTICAL_RECOVER_SEPARATION_DRIFT_MULT     = 0.03f;
     static constexpr float CONFUSED_WANDER_RADIUS                     = 15.0f;
+    static constexpr float CONFUSED_TARGET_MIN_RADIUS_MULT            = 0.5f;
     static constexpr float CONFUSED_SEPARATION_RADIUS                 = 4.0f;
     static constexpr float CONFUSED_SEPARATION_WEIGHT                 = 0.55f;
-    static constexpr float CONFUSED_SPEED_MULT                        = 1.f;
-    static constexpr Seconds CONFUSED_RETARGET_MIN{ 0.35f };
-    static constexpr Seconds CONFUSED_RETARGET_SPAN{ 0.75f };
+    static constexpr float CONFUSED_SPEED_MULT                        = 2.f;
+    static constexpr float CONFUSED_MAX_SPEED                         = 8.f;
+    static constexpr Seconds CONFUSED_RETARGET_MIN{ 0.6f };
+    static constexpr Seconds CONFUSED_RETARGET_SPAN{ 0.8f };
 };
 
 #endif // tactical_npc_hpp

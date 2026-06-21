@@ -89,6 +89,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSComboStatePacket( buffer, len );
 		break;
 
+	case PacketType::S_PlayerHp:
+		handleSPlayerHpPacket( buffer, len );
+		break;
+
 	case PacketType::S_DebugHitbox:
 		handleSDebugHitboxPacket( buffer, len );
 		break;
@@ -119,6 +123,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 
 	case PacketType::S_LobbyRoomPlayerLeft:
 		handleSLobbyRoomPlayerLeftPacket( buffer, len );
+		break;
+
+	case PacketType::S_LobbyWeaponSelected:
+		handleSLobbyWeaponSelectedPacket( buffer, len );
 		break;
 
 	case PacketType::S_GameStart:
@@ -159,12 +167,40 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createGoblin(objInfo);
 			break;
 
+		case ObjectType::Hobgoblin:
+			game->createHobgoblin(objInfo);
+			break;
+
 		case ObjectType::Snake:
 			game->createSnake(objInfo);
 			break;
 
 		case ObjectType::Mushroom:
 			game->createMushroom(objInfo);
+			break;
+
+		case ObjectType::Bomber:
+			game->createBomber(objInfo);
+			break;
+
+		case ObjectType::Birdy:
+			game->createBirdy(objInfo);
+			break;
+
+		case ObjectType::Slime:
+			game->createSlime(objInfo);
+			break;
+
+		case ObjectType::Treant:
+			game->createTreant(objInfo);
+			break;
+
+		case ObjectType::Grandbaum:
+			game->createGrandbaum(objInfo);
+			break;
+
+		case ObjectType::Isys:
+			game->createIsys(objInfo);
 			break;
 
 		case ObjectType::Ground:
@@ -242,12 +278,40 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 			game->createGoblin(objInfo);
 			break;
 
+		case ObjectType::Hobgoblin:
+			game->createHobgoblin(objInfo);
+			break;
+
 		case ObjectType::Snake:
 			game->createSnake(objInfo);
 			break;
 
 		case ObjectType::Mushroom:
 			game->createMushroom(objInfo);
+			break;
+
+		case ObjectType::Bomber:
+			game->createBomber(objInfo);
+			break;
+
+		case ObjectType::Birdy:
+			game->createBirdy(objInfo);
+			break;
+
+		case ObjectType::Slime:
+			game->createSlime(objInfo);
+			break;
+
+		case ObjectType::Treant:
+			game->createTreant(objInfo);
+			break;
+
+		case ObjectType::Grandbaum:
+			game->createGrandbaum(objInfo);
+			break;
+
+		case ObjectType::Isys:
+			game->createIsys(objInfo);
 			break;
 
 		default:
@@ -333,6 +397,11 @@ void PacketManager::handleSComboStatePacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onComboState( pkt->playerId, pkt->comboCount, pkt->windowMs );
 }
 
+void PacketManager::handleSPlayerHpPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SPlayerHpPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onPlayerHp( pkt->playerId, pkt->newHp );
+}
+
 void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SDebugHitboxPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onDebugHitboxes( pkt );
@@ -363,24 +432,29 @@ void PacketManager::handleSJoinRoomPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SJoinRoomPacket*>(buffer);
 	std::string code( pkt->code, strnlen( pkt->code, sizeof( pkt->code ) ) );
 
-	std::vector<uint16> playerIds;
+	std::vector<LobbyPlayerInfo> playerInfos;
 	auto list = pkt->getPlayerList();
-	playerIds.reserve( list.count() );
+	playerInfos.reserve( list.count() );
 	for ( uint16 i = 0; i < list.count(); ++i ) {
-		playerIds.push_back( list[i].sessionId );
+		playerInfos.push_back( list[i] );
 	}
 
-	INet::ClientApp::onlineGame()->onLobbyJoined( pkt->success, pkt->hostId, pkt->myId, code, playerIds );
+	INet::ClientApp::onlineGame()->onLobbyJoined( pkt->success, pkt->hostId, pkt->myId, code, playerInfos );
 }
 
 void PacketManager::handleSLobbyRoomPlayerJoinedPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SLobbyRoomPlayerJoinedPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onLobbyPlayerJoined( pkt->info.sessionId );
+	INet::ClientApp::onlineGame()->onLobbyPlayerJoined( pkt->info );
 }
 
 void PacketManager::handleSLobbyRoomPlayerLeftPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SLobbyRoomPlayerLeftPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onLobbyPlayerLeft( pkt->sessionId );
+}
+
+void PacketManager::handleSLobbyWeaponSelectedPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SLobbyWeaponSelectedPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onLobbyWeaponSelected( pkt->sessionId, pkt->weaponType );
 }
 
 void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
@@ -449,6 +523,20 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeCDebugTeleportPacket(DirectX::XMFLOAT3 pos) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CDebugTeleportPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CDebugTeleportPacket>();
+	pkt->pos = pos;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_DebugTeleport;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -463,12 +551,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode) {
+std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CEnterPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<CEnterPacket>();
 	strncpy_s(pkt->lobbyCode, lobbyCode.data(), _TRUNCATE);
+	pkt->weaponType = weaponType;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_Enter;
@@ -510,6 +599,19 @@ std::shared_ptr<SendBuffer> PacketManager::makeCLeaveRoomPacket() {
 	auto pkt = bw.reserve<PacketHeader>();
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_LeaveRoom;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCSelectWeaponPacket(PlayerWeaponType weaponType) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CSelectWeaponPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CSelectWeaponPacket>();
+	pkt->weaponType = weaponType;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_SelectWeapon;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

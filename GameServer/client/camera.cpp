@@ -138,6 +138,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(EnergyOrbPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData( TerrainPipeline::CameraData{
 		.view = view_,
 		.proj = proj_,
@@ -195,7 +200,7 @@ void Camera::updateGFX(GFX& gfx) {
 }
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {
-	proj_ = mu::persp(fovy, aspect, nearz, farz);
+	proj_ = mu::perspReversedZ(fovy, aspect, nearz, farz);
 	fovy_ = fovy;
 	aspect_ = aspect;
 	nearz_ = nearz;

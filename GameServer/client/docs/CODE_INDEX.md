@@ -82,12 +82,14 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RigidBody::applyForce()` | `rigidBody.cpp` | force accumulator에 추가 |
 | `RigidBody::applyImpulse()` | `rigidBody.cpp` | 즉시 vel/omega 변경 |
 | `RigidBody::applyTorqueImpulse()` | `rigidBody.cpp` | 즉시 omega 변경 (joint/PD 토크용) |
+| `RigidBody::setGravityScale()` / `gravityScale()` | `rigidBody.hpp #110` | per-body 중력 배율(Unity gravityScale 등가, 기본 1). integrate Dynamic 분기에서 `gravity_ * gravityScale()`; 접지 중력 게이팅이 0/1 토글 |
 | `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
 | `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
 | `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
+| `ContactConstraint::isTerrainContact()` | `contactConstraint.hpp #49` | terrain support 접촉 여부 getter (게임 레이어 접지 판정용) |
 | `StaticContact` struct | `staticDepenetration.hpp` | Static-Dynamic/Static-Kinematic 충돌 레코드; normal은 static→movable; ContactConstraint solver 우회 |
 | `resolveStaticPenetration()` | `staticDepenetration.hpp/cpp` | static 침투 positional depenetration(partial+slop+clamp) + inward normal-vel 클램프; 회전·분리속도 미주입; Kinematic도 직접 이동(invMass 무관); 이동 body는 outMoved로 반환(BVH 재빌드용) |
 | `staticdepen::kSlop/kCorrectFrac/kMaxCorrect` | `staticDepenetration.hpp` | 진동 방지 파라미터 0.005m / 0.8 / 0.2m |
@@ -149,13 +151,17 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `getHumanoidRagdollDef()` | `ragdollDef.cpp #10` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
 | `importRagdollConfig()` | `mesh.cpp` | binary → Model::ragdollDef 로드 |
 | `Model::ragdollDef` | `mesh.hpp` | std::optional<RagdollDef>, 파일에서 로드된 ragdoll 설정 |
+| `Model::baseScale` | `mesh.hpp` | Unity root localScale(`ModelScale` 필드); `Object::setModel`이 흡수해 `modelBaseScale_⊙instanceScale_`로 body scale 적용 (vertex bake 대체, graphicsArchitecture.md 참조) |
+| `Object::applyCompositeScale()` | `object.cpp` | `body_.scale()=modelBaseScale_⊙instanceScale_` 합성 + rebuildBodyBVH. setModel/setScale에서 호출 |
 | `RagdollBone` struct | `ragdoll.hpp #15` | boneIdx, body*(non-owning), parentJoint*(non-owning), capsuleOffset |
 | `Ragdoll` class | `ragdoll.hpp #33` | bone별 RigidBody + Constraint 소유, PhysicsWorld 비소유 등록 |
-| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 |
+| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 (modelScale 인자로 halfExtents/관성에 모델 scale 반영) |
 | `Ragdoll::destroy()` | `ragdoll.cpp` | joint 먼저, body 나중 제거 (dangling ptr 방지) |
 | `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
 | `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |
 | `Ragdoll::syncToPose()` | `ragdoll.cpp` | body pos/orient → AnimFrame pose (DFS) |
+| `Ragdoll::syncToFinalXforms()` | `ragdoll.cpp` | body transform → finalXforms 덮어씀 + passenger 본 재구성 |
+| `Ragdoll::buildPassengers()` | `ragdoll.cpp` | 비-body 본 → 최근접 ragdoll body에 강체 바인딩 (DFS 조상 + 고아 본 BFS 2-pass) |
 | `Ragdoll::activate()` | `ragdoll.cpp` | Kinematic → Dynamic |
 | `Ragdoll::deactivate()` | `ragdoll.cpp` | Dynamic → Kinematic |
 | `ActiveRagdollController` class | `activeRagdoll.hpp #25` | PD 토크 컨트롤러, 피격 반응 포함 |
@@ -210,7 +216,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, `(mask & category)` 후 hitbox×target 쌍만 emit |
 | `SkillSystem::update()` | `skillSystem.cpp` | activeList 순회 → updateHitboxes → checkHitboxCollisions → processHitResults |
 | `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집(category=factionBit) → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
-| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파 |
+| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파, 프레임별 `particleLocalIdx` 기록 |
+| `processHitResults()` 비관통 처리 | `skillSystem.cpp` | `penetrate=false` 히트박스 명중 시 소스 파티클을 `killParticle`로 소멸(소스별 인덱스 내림차순); `debugStats().particlesDestroyedOnHit` 카운트. `particleHitboxDeterminism.md` §8 |
 | `Faction` enum / `hostileMask()` | `object.hpp` | 피아 식별: Neutral/Players/Monsters; 히트박스 targetMask = hostileMask(owner.faction) |
 | `Object::faction()`/`setFaction()` | `object.hpp` | 진영 접근자(생성 지점에서 setFaction 호출) |
 | `SkillInstance::seed` / `startSkill(..., seed)` | `skillSystem.hpp/.cpp` | per-cast 결정론 시드 (C/S_SkillStart로 공유); PlayVFX에서 `fx->setDeterministicSeed(mixSeed(seed, vfxId))` |
@@ -238,18 +245,19 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |---|---|---|
 | 스킬 메타(`weaponType/loadoutSlot/isBasic/chargeCost/cooldown`) | `client|RoomServer/skill/skillTypes.hpp` `SkillAsset` | skill lua에서 파싱(`skillCompiler.cpp::tableToAsset`) |
 | `SkillLoadout::build()` | `client|RoomServer/skill/skillLoadout.hpp` | 컴파일된 자산 → 무기별 {기본, 3슬롯 assetId/코스트/쿨} |
-| 신규 패킷 | `ServerEngine/protocol.hpp` | `C_SelectSkill / S_SkillSelect / S_SkillCharge / S_SkillUseReject / S_ComboState` (사용 요청은 기존 `C_SkillStart` 재사용) |
-| `ChargeConfig` | `RoomServer/chargeConfig.{hpp,cpp}` | `resources/data/chargeConfig.lua`(몬스터 charge·윈도우·콤보·소프트캡) sol2 로드, `AssetManager` 전 룸 공유 |
-| `Player` 충전 상태 | `RoomServer/object.hpp` | `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_` |
+| 신규 패킷 | `ServerEngine/protocol.hpp` | `C_SelectSkill / S_SkillSelect / S_SkillCharge / S_SkillUseReject / S_ComboState / S_PlayerHp`(서버 권위 HP 회복 푸시, 이벤트·애니 없음) (사용 요청은 기존 `C_SkillStart` 재사용) |
+| `ChargeConfig` | `RoomServer/chargeConfig.{hpp,cpp}` | `resources/data/chargeConfig.lua`(몬스터 charge·윈도우·콤보·소프트캡·`regen{basePerSec,capPerSec,halfCombo,exponent}`) sol2 로드, `AssetManager` 전 룸 공유. `hpRegenPerSec(combo)`=S자(Hill) `base+(cap-base)·xⁿ/(xⁿ+halfComboⁿ)`(높은 문턱: half=10,n=3) |
+| `Player` 충전 상태 | `RoomServer/object.hpp` | `selectedSlot_/skillCharge_[3]/cooldownEnd_[3]/comboCount_/lastCreditMs_/hpRegenAccum_/lastSyncedHp_` |
 | `Object` 데미저 로그 + reward | `RoomServer/object.hpp` | `killChargeReward_`(스폰 시 `setupGoblin`에서 주입), `noteDamager`/`collectRecentDamagers` |
-| `Room::noteAndMaybeReward / distributeKillCharge` | `RoomServer/Room.cpp` | 데미지 기록 + HP 0 전이 시 최근 데미저 선택슬롯에 `reward×콤보×소프트캡`, `S_SkillCharge`/`S_ComboState` |
+| `Room::noteAndMaybeReward / distributeKillCharge` | `RoomServer/Room.cpp` | 데미지 기록 + HP 0 전이 시 최근 데미저 선택슬롯에 `reward×소프트캡`(콤보 가속 제거됨), `S_SkillCharge`/`S_ComboState` |
+| `Room::updatePlayerRegen` | `RoomServer/Room.cpp` | 60fps 틱 콤보 기반 HP 회복 적분(`hpRegenAccum_` carry, `kPlayerMaxHp` 상한), 변경분만 ~10Hz `S_PlayerHp` 브로드캐스트 |
 | `Room::selectSkill / skillStart`(게이트) / `updateComboExpiry` | `RoomServer/Room.cpp` | 선택 동기화·사용 게이트(스택/쿨, 실패 시 `S_SkillUseReject`)·콤보 만료 |
 | `SkillDialHUD` | `client/ui/skillDialHUD.{hpp,cpp}` | 우하단 소형 120° 회전 휠(선택=꼭대기), 반투명 회색 도넛 배경(effectMode 3) 위에 3 아이콘 배치, 슬롯별 충전/스택, ×N 배지, 0→1 준비 펄스. 크기·도넛 상수는 `.cpp` 상단(`kRadius/kSelSize/kRingPad/kRingHole`) |
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
-| 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터) |
+| 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
 > 시안: `docs/skill_hud_mockup/radial_dial.html`. 남은 폴리시(파티원 HUD 스택·콤보 바·사운드 자산·밸런스)는 설계 문서 §7 참조.
 
@@ -270,7 +278,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `EvHit` struct | `event.hpp #88-95` | targetId, hp |
 | `EvBlood` struct | `event.hpp #96-101` | victimId |
 | `EvDeath` struct | `event.hpp #102-107` | victimId |
-| `EvAttack` struct | `event.hpp #108-113` | attackerId |
+| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case) |
 | `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
 | `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
 | `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
@@ -323,12 +331,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
-| `MonsterAnimBlender` (구 `AnimBlenderGoblin`) | `object.hpp #67-113` — clipPrefix("Goblin"/"Snake"/"Mushroom")로 파라미터화; `using AnimBlenderGoblin = MonsterAnimBlender` alias 유지 |
-| `AnimBlenderAnubis` | `object.hpp #100-140` |
-| `AnimBlenderBat` | `object.hpp #142-182` |
-| `AnimBlenderBomber` | `object.hpp #184-???` |
-| `AnimBlenderDemon` 이하 | 순서대로 약 42줄 간격 |
+| `AnimBlenderPlayer` | `object.hpp #16` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
+| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
 
@@ -372,7 +379,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
 | `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
-| `Object::render()` | `object.cpp #490` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함) |
+| `Object::render()` | `object.cpp #843` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
 | `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
@@ -381,7 +388,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::worldCullBounds()` | `object.cpp` | Hi-Z cull용 월드 AABB = worldBVH 본 부착 노드 합집합(+15% 마진), 포즈/랙돌 추종. 비스킨이면 nullopt |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
+| `Object::adoptAnimBlender()` | `object.cpp` (Object::setModel 직전) | 이미 init된 `unique_ptr<AnimBlender>` 채택(소유권 이전): 기존 블렌더 `animSystem.untrackAnimBlender` 후 교체. `setAnimBlender`(클래스 고정 타입)와 달리 런타임 임의 블렌더 교체용 — 에디터 캐스터 핫스왑(`setMonsterCaster`) |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
+| `Object::updateGroundedGravityGate()` | `object.cpp #708` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
+| `Object::isGrounded()` | `object.hpp #232` | 접지 판정 결과 (updateGroundedGravityGate가 갱신) |
 
 **구체 오브젝트 클래스:**
 
@@ -389,10 +399,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|
 | `Cube` | `object.hpp #591` |
 | `Player` | `object.hpp #600` |
-| `Monster` (base) | `object.hpp #360` — ragdoll 공유 필드·`EventBus` 포함 |
-| `Goblin` | `object.hpp #387` : `Monster` |
-| `Snake` | `object.hpp #395` : `Monster` |
-| `Mushroom` | `object.hpp #403` : `Monster` |
+| `Object` ragdoll 가상 접근자 | `object.hpp #263` 인근 — `ragdoll()`(`Ragdoll*`, 베이스 nullptr)/`ragdollPendingActivation`/`ragdollInitVelocity`; `idMonsterMap_<Object*>` 통합 순회용 |
+| `Goblin` | `object.hpp #454` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
+| `Snake` | `object.hpp #481` : `Object` — 고블린과 동일 패턴 복제 |
+| `Mushroom` | `object.hpp #508` : `Object` — 고블린과 동일 패턴 복제 |
+| `Bomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — 몬스터 스킬 캐스터(에디터). Mushroom 패턴 복제, 모두 활성(가드 제거됨). 리소스 클라·서버 `*.bin`+`*Server.bin` 전부 존재 |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
 | `Bomber` | `object.hpp #696` |
@@ -441,6 +452,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
+| `mu::perspReversedZ()` | `mathUtil.hpp` (client + common, 동일 내용) | Reversed-Z LH 퍼스펙티브 투영(near→depth 1.0, far→depth 0.0). `Camera::setPerspective()`(`camera.cpp`)가 사용 — 메인/로비/포트레이트 카메라 전부 적용. 그림자맵(ortho)은 미적용. 상세: `docs/graphicsArchitecture.md` "Reversed-Z 깊이 버퍼" |
 
 **파이프라인 파일 목록:**
 
@@ -451,7 +463,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | PBRDeferredPipeline | `pbrDeferredPipeline.hpp` / `pbrDeferredPipeline.cpp` | 정적 메시 Deferred Shading (Shadow + GBuffer + Lighting). **Hi-Z 추가(2026-06-15)**: `occludeeCandidate` DrawEvent는 `occluderPass()`(근거리 prop depth)→`hiZPass()`(cull/compact/command, skinned 5 compute 셰이더+`cmdSig_` 재사용, feedback ring 없음)→`gBufferIndirectPass()`(`PBRDeferredIndirectGBufferShader` + `gVisibleIndices` remap). 비-occludee는 기존 `gBufferPass()` direct. `OccluderInfo{mesh,subMesh,world}`/`Resources::HiZPass`/`OccluderPass` |
 | PBRDeferredSkinnedPipeline | `pbrDeferredSkinnedPipeline.hpp` / `pbrDeferredSkinnedPipeline.cpp` | 스킨드 메시 Deferred Shading (Shadow + GBuffer만; Lighting은 PBRDeferredPipeline 담당). Hi-Z occlusion(2-slot feedback ring, CPU readback) |
 | Masked foliage shadow | `shadowMapCSMMasked.hlsl` / `shader.cpp::createShadowMapCSMMaskedShader` | alpha-cutout 캐스터(나뭇잎/풀)용 그림자 변형. `PBRDeferredPipeline::shadowDraw/MT`가 `material->constantAlphaCutoff>0` 그룹만 masked PSO(Position+UV, `CULL_NONE`, `clip(albedo.a-cutoff)` PS)로 분기. b0=`ShadowMapCSMMaskedShader::PerDrawcallData`(`perDrawcallDataMasked`), VB=`"PBRDeferredPipeline_ShadowMasked"`. 공용 DefaultRootSig의 bindless 풀 사용. 상세: `graphicsArchitecture.md` |
-| frustumCull | `frustumCull.hpp` | 재사용 VFC 헬퍼: `Frustum`/`extractFrustum(viewProj)`(Gribb-Hartmann)/`intersects(Frustum,AABB)`. scatter prop per-instance VFC 전용(기존 `cullObjects()`는 미변경) |
+| frustumCull | `frustumCull.hpp` | 재사용 VFC 헬퍼: `Frustum`/`extractFrustum(viewProj)`(Gribb-Hartmann)/`intersects(Frustum,AABB)`/`intersects(Frustum,OBB)`(OBB SAT). scatter prop VFC + `Light::shadowVisible`(그림자 컬링) 공용 |
 | BVPipeline | `BVPipeline.hpp` | 바운딩 볼륨 디버그 |
 | BillboardPipeline | `billboardPipeline.hpp` | 빌보드 |
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
@@ -468,7 +480,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|
 | `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체 + scatter(`ScatterPrototype`/`ScatterInstance`, `ChunkIndex::scatterPrototypes`/`ChunkIndexEntry::scatter`), chunk streaming 함수 선언 |
 | `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`(v2: ScatterPrototypes 전역 섹션 + Chunk 내 Scatter 블록; v3: per-instance `Rot` 쿼터니언, v2는 `Yaw` 레거시→Y쿼터니언 변환)/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
-| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + **BVH 기준 컬링**: 비-BVH=거리컬 `kDetailCullRadius`(80m), BVH=`setCullCamera`로 받은 `frustum_`로 per-instance VFC→Hi-Z(`occludeeCandidate`)+근거리(`kPropOccluderRadius` 40m) occluder)/`setCullCamera(Frustum,eye)`, `buildCrossQuadMesh`(양면 빌보드). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384, 정적 Hi-Z 65536) |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + **BVH 기준 컬링**: 비-BVH=거리컬 `kDetailCullRadius`(80m), BVH=메인카메라 `frustum_` VFC와 `Light::shadowVisible` **그림자 컬링을 독립 평가**→ `viewFrustumCulled`/`shadowCulled` 분리 설정(화면 밖 나무도 그림자 유지), 둘 다 안 보이면 skip; Hi-Z occludee/occluder는 메인 가시 시에만)/`setCullCamera(Frustum,eye)`, `buildCrossQuadMesh`(양면 빌보드). **`submitDrawEvents(GFX&, const Light&)`**: chunk 메시도 `shadowVisible(AABB, expand=3)`로 그림자 컬링(`TerrainObject::setShadowCulled`→DrawEvent `shadowCulled`, terrain shadowDraw 루프에서 skip; gbuffer는 무영향). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384, 정적 Hi-Z 65536) |
 | `docs/scatterSystem.md` | Scatter 시스템 설계: 포맷 v3(per-instance Rot 쿼터니언·Align To Ground 베이크), 이름 매핑(ModelExtractor targetName), 자동 인스턴싱, 알파 컷아웃(+albedo 맵 누락 클리핑 함정), 빌보드, 충돌(ScatterCollider 구현) |
 | `docs/scatterAuthoringGuide.md` | 지형에 Tree/Rock/Flower/Bush/Plant 띄우는 실전 작성 가이드(ModelExtractor→TerrainExtractor→DDS 변환→배치→실행, 트러블슈팅) |
 | `unityScripts/TerrainExtractor.cs` | 지형+산포 추출(Export All Chunks). chunks_index v3 작성, `ScanPrototypes`(이름=매핑키), `GatherScatter`(트리=treeInstances·디테일=`ComputeDetailInstanceTransforms`), per-instance `Rot` 쿼터니언에 Align To Ground 틸트 베이크 |
@@ -505,7 +517,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
 3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
-4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
+4. calcCSMShadow(posV, posRel, normalW, ndotl) → 5x5 PCF 그림자 적용
 5. globalAmbient + IBL(`computeIBL`, `#define IBL_ENABLED`) ambient 가산 → Reinhard tonemapping → gamma (forward inline; 인게임 지형은 `terrainDeferred.hlsl`→공용 ACES resolve 경로)
 
 **Deferred Shading 관련 파일:**
@@ -515,8 +527,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `pbrDeferredPipeline.hpp` / `.cpp` | PBRDeferredPipeline 네임스페이스 — Shadow + GBuffer + Lighting 패스 |
 | `pbrDeferredSkinnedPipeline.hpp` / `.cpp` | PBRDeferredSkinnedPipeline 네임스페이스 — Shadow + GBuffer 패스 |
 | `pbrDeferred.hlsl` | GBuffer Geometry Pass VS/PS (정적 메시) |
-| `pbrDeferredSkinned.hlsl` | GBuffer Geometry Pass VS/PS (스킨드 메시) |
+| `pbrDeferredSkinned.hlsl` | GBuffer Geometry Pass VS/PS (스킨드 메시). **흡수 물결(M5)**: `PerInstanceData`에 ripple 배열(`ripplePosAge[4]`/`rippleColorIntensity[4]`/`rippleCount`, per-instance) 추가 — VS가 `instIdx`(nointerpolation) 전달, PS가 `gInstances[instIdx]`의 ripple을 가우시안 확장 링으로 GB2 emissive에 가산(`exp(-d*d)`, pow(neg) NaN 회피). 로컬 플레이어만 `rippleCount>0` |
 | `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
+| `energyOrbPipeline.hpp` / `.cpp` + `energyOrb.hlsl` | **몬스터 사망 에너지 오브 렌더 파이프라인**. MeshParticle 복제 + GS quad. 죽은 서브메시 정점을 사망 포즈로 스키닝(boneData t2) → 해시 구체로 모핑(`morphT`) → 카메라향 quad point-sprite, **SceneColorHDR에 가산(bloom 이전)**. PS: 서브메시 albedo→HDR 색 `lerp(_, _, morphT)` × radial falloff. `DrawEvent{world,pMesh,pSubMesh,pAlbedo,boneXforms,sphereCenter,sphereRadius,colorHDR,morphT,pointSize,vertexCount}` |
+| `energyOrbSystem.hpp` / `.cpp` | **에너지 오브 라이프사이클**(모드 비종속). `Orb` 상태머신 Forming→Tracking→Absorbing→Dead. `spawnFromMonster(model,finalXforms,objWorld,totalCharge,slot,corpseId)`=서브메시당 1오브(첫 정점 LBS 스키닝을 구체 중심으로), 플레이어 추적+가속, 근접 시 `onAbsorb`. **응축 스케일**(`renderScale`: 접근 시 월드크기 축소로 원근 팽창/bloom 블롭 억제). `hasActiveOrbs(corpseId)`/`update(dt,playerPos)`/`submitDrawEvents`. 노브: kForming 0.85s, kMaxSpeed 13, kSphereRadius 0.32, kPointSize 0.04, HDR 강도 2.0~3.8, kCondenseMinScale 0.5 |
+| `object.cpp/.hpp` `Object::addBodyRipple`/`BodyRipple`/`bodyRipples_` | 흡수 물결 앵커(M5). 오브 흡수 시 `onlineGame` onAbsorb가 호출 → 본체 위치 기준 오프셋으로 저장(매 프레임 live pos에 재앵커→몸 추적), `update`에서 노화(`kBodyRippleLife=1.0s`, HLSL `RIPPLE_LIFE`와 일치), deferred-skinned DrawEvent의 `ripplePosAge/rippleColorIntensity/rippleCount`로 주입 |
+| `onlineGame.cpp` 시체/풀 (`migrateToCorpse`/`updateCorpses`/`reinitFromPool`/`returnMonsterToPool`) | 사망 연출 게임 레벨 라이프사이클(client-authored Corpse). Live→Corpse 이관(맵/컨테이너/`barrierObjects_` 제거, body `snapToCurrent`, `kDetachedCorpseId` 고정 id, `corpseId=renderObjectId`), 래그돌 2.5s→오브 전환, 흡수 완료 시 per-kind 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`/`bomberPool_`/`birdyPool_`/`slimePool_`/`treantPool_`) 반환·재사용. **신규 몬스터(Bomber/Birdy/Slime/Treant)**: goblins_/snakes_/mushrooms_처럼 타입별 벡터(`bombers_`/`birdys_`/`slimes_`/`treants_`)+타입별 HP바 맵으로 처리 — `justDied`/render/cull/HiZ/HP바 모두 타입별 개별 루프, migrate/return/reinit switch도 타입별 case. 공용 셋업은 `configureNetMonster`(HP바 맵 인자), 각 createX가 타입 벡터에 push. Grandbaum→treants_(Treant kind), Isys→birdys_(Birdy kind). 오브 연출은 kind-무관 자동. **renderObjectId 객체당 1회 발급·평생 유지**(범람 방지, `setMaxRenderObjectId(10000)`). **중복 스폰 ghost 가드**: `create{Goblin,Hobgoblin,Snake,Mushroom,Bomber,Birdy,Slime,Treant}`이 `idMonsterMap_`에 이미 있으면 스킵(S_Enter/S_NpcSpawnBatch 중복 대응). 상세: `gameArchitecture.md` "에너지 오브 사망 연출" |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::Portrait` 네임스페이스 — 로비 슬롯 캐릭터용 오프스크린 포트레이트 RT(가로 아틀라스, room별 triple-buffer). `addPortraitRT`/`transitionToWrite`/`transitionToRead`/`clearPortraitRT`. GFX 채널: `addLobbyPortraitDrawEvent`/`setLobbyPortraitCamera`/`addLobbyPortraitLightData`/`setLobbyPortraitActive`/`lobbyPortraitTextureForThisFrame`/`lobbyPortraitCellUvScaleBias`. 제출: `Object::renderPortrait(gfx, slot)`. render() 삽입: deferred lighting 이후 → UI 이전. 상세: `docs/lobbyScene.md` 작업 B-3 |
 
@@ -528,31 +544,33 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
 | GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (정적·스킨드·지형 모두 emissive 전용; ambient/IBL는 lighting 패스) + Roughness.a |
 | GB3 | R8_UNORM | Metallic |
+| GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원에서 NDC 깊이 양자화 회피용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 - GB1 클리어 값: `(0.5, 0.5, 0, 0)` → octDecode 시 정면 법선 (0, 0, 1)
 - Normal Oct Encoding: `pbrLighting.hlsli`의 `octEncode()` / `octDecode()` 유틸리티 사용
-- depth + invProj → posV, posV + invView → posW (Lighting 패스에서 위치 재구성)
+- GB4(linear view-Z) × invProj 뷰 광선 → posV(NDC 깊이 양자화 회피), posV × invView → posW; CSM 그림자는 posW−camPos(**camera-relative**)로 샘플 (Lighting 패스 위치 재구성)
 
 **HDR / IBL / Bloom 관련 파일 (상세 아키텍처: `docs/graphicsArchitecture.md` "HDR + IBL + Bloom 파이프라인"):**
 
 | 파일 | 설명 |
 |------|------|
-| `sharedResources.{hpp,cpp}` | `SharedResources::SceneColor` — per-room R16G16B16A16_FLOAT HDR RT(+SRV). `SharedResources::IBL` — irradiance/prefiltered 큐브 + BRDF LUT(정적). `SharedResources::Bloom` — per-room HDR 밉체인(밉별 RTV+단일밉 SRV, 서브리소스별 상태 추적, `transitionMip`/`mip0Srv`) |
+| `sharedResources.{hpp,cpp}` | `SharedResources::SceneColor` — per-room R16G16B16A16_FLOAT HDR RT(+SRV). `SharedResources::IBL` — irradiance/prefiltered 큐브 + BRDF LUT(정적). `SharedResources::Bloom` — per-room HDR 밉체인(밉별 RTV+단일밉 SRV, 서브리소스별 상태 추적, `transitionMip`/`mip0Srv`). `SharedResources::ColorGrading` — color grading용 3D LUT(`.cube` 파싱→R8G8B8A8_UNORM Texture3D, 정적, 단일) |
 | `iblIrradiance.hlsl` / `iblPrefilter.hlsl` / `iblBRDFLUT.hlsl` | IBL 프리컴퓨트 컴퓨트 셰이더(코사인 컨볼루션 / GGX importance / split-sum LUT). `envIsLDR` 토글 |
 | `iblPrecomputePipeline.{hpp,cpp}` | `precomputeIBL()` — 로드 타임 1회(LoadFence), 스카이박스 큐브→IBL 맵 3종 생성 |
 | `pbrLighting.hlsli` | `computeIBL`/`fresnelSchlickRoughness`(상단 정의, split-sum). `#define IBL_ENABLED` 셰이더만 컴파일 |
-| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → backbuffer. debugMode≠0 패스스루 |
+| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루 |
 | `bloom.hlsl` / `BloomPipeline.{hpp,cpp}` | 픽셀 기반 bloom(VS 공유 + PSPrefilter/PSDownsample/PSUpsample). `Dispatcher::render()`가 전 패스를 단일 cmdlist에 기록 |
+| `bindless.hlsli` | `gTex2Ds`/`gTex2DArrays`/`gTexCubes`/`gTex3Ds` bindless 배열(`IDX_RANGE_*`). `sampleBindless3D`: LUT half-texel 보정(`uvw = v*(N-1)/N + 0.5/N`, N은 `BindlessIndex.idxInArray`에 저장) |
 
 - IBL/HDR/Bloom 노브(`gfx.hpp`): `tonemapExposure_`(1.0), `bloomThreshold_`(1.0), `bloomIntensity_`(0.08), `iblIntensity`(lpfd/forward FrameData).
 - Forward IBL 패리티: `pbr.hlsl`·`pbrSkinned.hlsl`·`terrain.hlsl` cbuffer에 camPos+IBL 필드, 포트레이트는 `FrameData::iblIntensity=0`.
-- **디스크립터 풀:** bloom RTV(밉×room) 때문에 `rtvPool_`/`rtvHeap_`=64. per-room×N RT 추가 시 풀 용량 갱신 필수.
+- **디스크립터 풀:** bloom RTV(밉×room) 때문에 `rtvPool_`/`rtvHeap_`=64. per-room×N RT 추가 시 풀 용량 갱신 필수. Color grading LUT는 `srvTex3DPool_`(SRVHeap `[2100,2116)`, `gfx.cpp` 생성자) — bindless Texture3D 전용 4번째 텍스처 풀(`DefaultRootSig`의 `Texture3DPool` 파라미터, `t10 space4`).
 
 **Deferred 렌더 패스 순서 (`gfx.cpp::render()`):**
 1. GBuffer + SceneColorHDR 클리어 (`clearGBuffer` + SceneColor `transitionToWrite`/clear)
 2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
-3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
+3. GBuffer Pass (정적) — MRT 5개(GB0~GB4) + DSV에 geometry 기록
 4. **GBuffer Indirect Pass (스킨드)** — Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw. Compact Pass 이후 visibleFlags → `visibilityReadback` 복사(1-frame delay). 동일 MRT + DSV.
 5. GBuffer Pass (지형) — TerrainDeferredPipeline, 동일 MRT + DSV
 6. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
@@ -560,7 +578,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행.
 9. SceneColorHDR RTV→SRV (`SceneColor::transitionToRead`)
 10. **Bloom** (`gBufferDebugMode_==0`일 때): SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample) → mip0 SRV
-11. **Tonemap resolve**: SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **backbuffer(LDR)**
+11. **Tonemap resolve**: SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT, `SharedResources::ColorGrading::lutData`) → **backbuffer(LDR)**
 12. Forward-always 오버레이(backbuffer, resolve 이후): Skybox, BV debug, Billboard, 파티클류 (GBuffer/SceneColorHDR 미사용)
 
 **GFX RenderPath 선택 (`gfx.hpp`):**
@@ -649,7 +667,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `particleSystem.hpp` | `ParticleSystem`, `Particle` (`trail` ring buffer 포함, kMaxTrailSegments=32), `TrailPoint`, `SubEmitterEvent`. 결정론 모드 API: `setGameplayConfig()`, `setDeterministicSeed()`, `deterministic()` |
 | `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()`, det 모드: `emitScheduledBurstsDet()`, `emitRateDet()` |
 | `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous`. `SubEmitterBinding`, `PendingSubEmitterBurst` |
-| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()`, `setDeterministicSeed()` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()`, `setChildSpawnCallback()`, `setDeterministicSeed()` |
 | `../common/particleGameplay.hpp` | `pg::` 결정론 코어 (클라/서버 공유): `DetRng`(SplitMix64 카운터 PRNG), `GameplayConfig`, `sampleSpawn()`, `evaluateParticles()`(서버 해석적 평가), `importGameplayConfig()`. 설계: `docs/particleHitboxDeterminism.md` |
 | `../common/simpleJson.{hpp,cpp}` | (client/에서 이동) flat-vector DOM JSON 파서 — 클라 임포터 + 서버 게임플레이 설정 로드 공용 |
 
@@ -665,12 +683,14 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `startContinuous()` | init() 기반 연속 방출 시작 |
 | `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
 | `stopContinuous()` | 연속 방출 정지 |
+| `killParticle(int index)` | `particles()` 인덱스의 파티클 즉시 소멸(표준 사망 경로: Death 서브이미터 + swap-remove). 비관통 히트박스의 외부 통제 hook. 내부 `killParticleAt(i)` 공유 |
 
 **Sub Emitters (`particleEffect.hpp` / `particleModules.hpp`):**
 - `SubEmittersModule` — `Event::Birth` / `Event::Death`, `emitProbability`, `inheritVelocity/Color/Size`
 - `SubEmitterBinding` — parentIdx + subEmitterCfgIdx + childIdx 연결 레코드
 - `PendingSubEmitterBurst` — 활성 burst-sequence 인스턴스; 시간 시뮬레이션으로 Unity burst 타이밍 재현
 - `ParticleEffect::bindSubEmitter(parentIdx, cfgIdx, childIdx)` — 자식 시스템 등록; 이후 play()에서 자식 자동 재생 차단, update()에서 ParentEvent → PendingBurst 변환
+- `ParticleEffect::setChildSpawnCallback(cb(childIdx,pos))` — 서브이미터 자식 스폰 시 월드 위치로 콜백(부모 이벤트당 1회, burst 수와 무관). VFX↔사운드 디커플링 훅(예: 화살 발사/폭발 SFX를 실제 launch/impact 시점에 재생)
 
 **MainModule 주요 필드:**
 - `duration` — 한 사이클 길이(초); 0 = 시간 제한 없음
@@ -733,9 +753,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
 | `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
-| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
+| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → feedbackCullResultToAnim |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |
-| `Game::applyHiZCulling()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled (gfx_.render() 이후 호출) |
+| `Game::feedbackCullResultToAnim()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled, hasEverUpdated()==false면 culled 강제 해제 (gfx_.render() 이후 호출) |
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
@@ -785,7 +805,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산 |
+| `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산. **카메라-상대 공간**에서 frustum corner 직접 생성(역행렬 없음: camView 열=basis·camProj=fov) + center texel snap — shadow shimmering 해결 (radius 양자화는 시도 후 제거: 이동 중 떨림 유발) |
+| `Light::cascadeCameraPos()` | `light.hpp #55` | camera-relative cascade 빌드에 쓰인 카메라 eye. caster/receiver가 `posW-camPos` rebase에 사용(`shadowVisible`도 이 값으로 bounds rebase) |
+| `Light::shadowVisible(AABB/OBB/variant, expand=1)` | `light.hpp #57` / `light.cpp` | **그림자(light-frustum) 컬링 단일 진입점.** `updateCSMCascades`에서 캐시한 `cascadeFrusta_`(ortho=OBB, camera-relative)에 대해 `cascadeCameraPos_` rebase + `expand`로 half-extent 확장 후 `intersects` 테스트, 어느 cascade에라도 보이면 true(cascade 0개면 항상 true=미컬). 엔티티(`cullObjectsForShadow`)·지형 chunk(expand=3)·scatter prop(expand=1) 모두 이 함수 사용. ortho z-pad는 `minZ-2·radius` 유지(radius 축소는 foliage가 near 뒤로 사라져 되돌림) |
 | `Light::render()` | `light.hpp #35` | PBR, PBRSkinned, Terrain 세 파이프라인에 LightData 자기등록 |
 | `Light::dir()` | `light.hpp #52` | 조명 방향 (NVec3) |
 
@@ -803,7 +825,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `piercingSlashEffect_` | PiercingSlash — `SM_VFX_Slash_01_HD` 메시 + PiercingSlashMeshPipeline (MatPiercingSlash), `PS_VFX_Slash_ParticleSystems.json` / `M_VFX_Slash_Fire.json` |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
-| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템: [0] Arrow StretchedBillboard (`Arrow_ParticleSystems.json` → `EnergyExplosionArrowTex`), [1] Charge (8x6 Additive, sub-emitter on Arrow Birth), [2] Hit (8x6 Additive, sub-emitter on Arrow Death), [3] HitWhiteBG (8x6 Multiply, sub-emitter on Arrow Death) |
+| `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템(game.cpp `bindSubEmitter` 기준): [0] Charge(16), [1] Arrow StretchedBillboard(32, Charge.Death 서브이미터), [2] Hit(16, Arrow.Death), [3] HitWhiteBG(16, Arrow.Death). Lua `addVFX` 테이블([0]Charge [1]Arrow [2]Hit)과 인덱스 일치. 화살 비관통 트리거=`VFXParticleAttach(13,1)`, 폭발 판정=`(13,2)`. **SFX 훅**: `setChildSpawnCallback`(game/onlineGame)로 child1(Arrow) 스폰=`charge_shoot`, child2(Hit) 스폰=`charge_explosion` 재생 → 명중/최대사거리 양쪽 동기. 차징음=`arrow_charge` lua PlaySound@120 |
 | `tornadoEffect_` | 토네이도 연속 이펙트. 4 시스템 (`Par_TornadoContinous_ParticleSystems.json`): [0] 메인 링 (`Par_TornadoContinous`, MatWindRing), [1] 하단 링 (`/Bottom`, MatWindRing), [2] 링 라이즈 (`/RingRise`, MatWindRing), [3] 버스트 점 (`/Par_BurstParticles`, MatUnlit Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
@@ -871,7 +893,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
    a. `cullObjects()` — frustum culling → setFrustumCulled
    b. Object::render() 호출들 — frustum culled만 제외, Hi-Z culled는 DrawEvent 제출
    c. `gfx_.render()` — Hi-Z readback 복사 포함
-   d. `applyHiZCulling()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled
+   d. `feedbackCullResultToAnim()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled (최초 1회는 hasEverUpdated() 보정으로 강제 갱신)
 
 ---
 
@@ -1035,7 +1057,8 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수 (Player 18스킬/Goblin) |
+| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수. Player(18스킬) + 몬스터 7종(Goblin/Mushroom/Snake/Birdy/Bomber/Slime/Treant) 전부 활성. 스킬명=`<Mon>_<Attack>`(lua `resources/skills/*_attackN.lua`) |
+| `Controller::setMonsterCaster(kind)` | `editor/editorController.cpp` | 몬스터 선택 시 단일 몬스터 객체(goblin_)를 해당 모델+`AnimBlender<Name>`로 핫스왑(`setModel`+`adoptAnimBlender`). kind별 switch(전부 활성). `selectCharacter`가 비-Player에서 호출. InitRefs에 `assetManager`/`animSystem` 주입(game.cpp editorRefs) |
 | `Editor::SkillDraft` | `editor/skillDraft.hpp/.cpp` | 컴파일 에셋의 original/draft 사본 + 편집 필드 목록 + diff 콘솔 덤프 |
 | `SkillDraft::Field` / `FieldType` | `editor/skillDraft.hpp` | 편집 가능한 스칼라 필드(center/half/euler/onHit/time/duration) |
 | `SkillDraft::load/buildFields/applyDelta/dumpDiff` | `editor/skillDraft.cpp` | 로드/필드구성/넛지/가이드 출력 |
@@ -1056,9 +1079,13 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
 | `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
 | `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
+| `SkillHitboxDef::penetrate` | `skillTypes.hpp` (클라/서버) | VFXParticle 전용: false=비관통(첫 피격 시 소스 파티클 소멸). 서버: `ParticleHitboxSource::consumedKeys`/`consumeAnchor`로 권위 처리. `particleHitboxDeterminism.md` §8 |
 | `SkillEventPayload::PlayVFX` (localEulerDeg/advanceForwardLocal/flags) | `skillTypes.hpp` | VFX 배치+방향 오프셋+진행방향+yawOnly; lua orient/advance/groundLock 키 |
 | PlayVFX 디스패치 (aim=rotateRPYH×baseRot, yawOnly, 2/4-인자 play) | `skillSystem.cpp` | `dispatchEvent` PlayVFX case |
 | PlayVFX 컴파일 (orient/advance/groundLock 파싱) | `skillCompiler.cpp` | `tableToAsset` PlayVFX case |
+| `SkillEventType::PlaySound` + `SkillEventPayload::PlaySound` (soundName[24] + `maxDurationMs`/`fadeMs` u16 + `volume` float) | `skill/skillTypes.hpp` (클라 전용) | 박자별 연출 SFX. lua `PlaySound{sound=..., durationMs=, fadeMs=, volume=}`. `durationMs>0`이면 시작 후 그만큼 뒤 `fadeMs`로 페이드아웃(사운드가 짧은 이펙트보다 길게 남지 않게; 예 arrow_rain). `volume`(0..1, 기본 1)은 이벤트별 게인—카탈로그 defaultVolume과 별개라 같은 음을 다른 스킬에서 다른 크기로(예 PiercingMulti 난무 0.6) 재생 가능. 서버는 미지원 이벤트로 스킵(결정론 무영향) |
+| PlaySound 디스패치 (caster `renderState().pos`에서 `ctx.playSound` 호출) | `skill/skillSystem.cpp` `dispatchEvent` PlaySound case | `SkillDispatchContext::playSound` 콜백(클라=`playSfx3D`, 서버=null no-op) |
+| PlaySound 콜백 바인딩 | `standalone/game.cpp` / `online/onlineGame.cpp` skillCtx 셋업 | `skillCtx_.playSound = [](name,pos){ sound().playSfx3D }` |
 | 스킬 제작 가이드 (Lua API + 유형별 레시피: 검격/화살/부채꼴/PBAoE/메테오) | `docs/skillCreationGuide.md` | 스킬 작성자용 문서 |
 | `screenToRay(...)` | `camera.hpp` | 스크린 픽셀 → 월드 ray (inverse view-proj) |
 
@@ -1124,7 +1151,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **백엔드:** miniaudio (단일 헤더, `client/sound/miniaudio.h` — 외부 참조, 수정 금지)
 **엔진 추상화:** `client/sound/soundManager.hpp` / `soundManager.cpp`
 **카탈로그:** `client/sound/soundCatalog.hpp` / `soundCatalog.cpp`
-**자산 폴더:** `resources/audio/bgm/*.mp3`, `resources/audio/sfx/*.wav`
+**자산 폴더:** `resources/audio/bgm/*.wav`(lobby / Action 5), `resources/audio/sfx/ui_click.wav` + `sfx/sword/*.mp3` + `sfx/bow/*.mp3` + `sfx/wand/*` + `sfx/spear/*.mp3`(스킬음, mp3/wav 혼용)
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
@@ -1132,20 +1159,26 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `SoundManager::Bus` enum | `sound/soundManager.hpp` | Bgm / Sfx / Ui — master 하위 sound group |
 | `SoundManager::Impl` | `sound/soundManager.cpp` | `ma_engine` + 버스 그룹 + BGM 2슬롯(크로스페이드) + SFX voice 풀(32) + warnOnce |
 | `playBgm/stopBgm` | `sound/soundManager.cpp` | 스트리밍 BGM, 페이드/크로스페이드 |
-| `playSfx/playSfx3D` | `sound/soundManager.cpp` | voice 풀 기반 one-shot. 3D는 월드 위치 spatialization |
+| `playSfx/playSfx3D` | `sound/soundManager.cpp` | voice 풀 기반 one-shot. 3D는 월드 위치 spatialization. `playSfx3D(name,pos,vol,maxDurationMs,fadeMs)` — maxDurationMs>0이면 시작 후 그만큼 뒤 fade-stop 예약(Voice `stopAtSec`/`stopFadeMs`, `update()`에서 발화→`!ma_sound_is_playing`로 회수) |
 | `setListener` | `sound/soundManager.cpp` | 카메라 eye/forward/up → miniaudio 리스너 (좌-손 패닝 핸디드니스는 Stage4 튜닝 대상) |
 | `miniaudio_impl.cpp` | `sound/miniaudio_impl.cpp` | `MINIAUDIO_IMPLEMENTATION` 전용 TU. **PCH NotUsing** (vcxproj), `MA_NO_ENCODING` |
 | `findSound(name)` | `sound/soundCatalog.cpp` | 논리이름→{경로,버스,loop,stream,기본볼륨} 테이블 조회 |
 | 소유/접근 | `ClientApp.cpp` `init/release/update`, `ClientApp::sound()` | 프로세스 전역 단일 소유, init 1회/매 프레임 update tick |
 | BGM 씬 연결 | `online/onlineGame.cpp` `enterLobby`("lobby") / `enterInGame`("ingame") | 씬 전환 시 크로스페이드 |
 | UI 클릭음 훅 | `ui/widgets/Button.hpp` `sClickSfx`(정적), `online/onlineGame.cpp` `enterLobby`에서 1회 바인딩 | UI 레이어 ↔ 사운드 백엔드 디커플링 |
-| 전투 SFX(3D) | `online/onlineGame.cpp` 이벤트 디스패치 루프, `standalone/game.cpp` 이벤트 루프 | Hit/Death/Attack를 대상 `renderState().pos`에서 재생 |
+| (제거됨) 전투/HUD 플레이스홀더 SFX | — | hit/death/attack(이벤트 루프 디스패치)·skill_hit·ui_hover·skill_ready 카탈로그+.wav+코드 일괄 제거(2026-06-19 정리). 현재 SFX = ui_click + PlaySound 스킬음만 |
+| 스킬 SFX(검 4종) | `sound/soundCatalog.cpp`(`sword_slash_1`/`sword_slash_finish`/`sword_slash_7`/`slash_wave`, .mp3), 각 `resources/skills/*.lua` PlaySound | PlaySound 이벤트 경유 스윙음. SwordSlash(sword_slash@100ms)·Slash7(sword_slash_7@100ms)·SlashWave(slash_wave@120ms)·SlashCombo(slash_1 150/550/750 + finish 1250). 단일 스윙=1회, 콤보=히트박스 웨이브별 |
+| 스킬 SFX(활 5종) | `sound/soundCatalog.cpp`(`arrow_default`/`arrow_rain`/`arrow_charge`/`charge_shoot`/`charge_explosion`, .mp3, `sfx/bow/`) | Arrow·ArrowVolley=`arrow_default` lua PlaySound@120(발사), ArrowRain=`arrow_rain`@120(durationMs 1200/fadeMs 200 — 레인 종료에 맞춰 페이드아웃). EnergyExplosionArrow=차징(`arrow_charge` lua@120) + 발사(`charge_shoot`)·폭발(`charge_explosion`)은 `setChildSpawnCallback` 이벤트 구동(타임라인 아닌 실제 spawn 시점). |
+| 스킬 SFX(완드 4종) | `sound/soundCatalog.cpp`(`quake`/`ice_crossfade`/`ice_front_attack`/`red_energy`, `sfx/wand/`, mp3+wav), 각 `resources/skills/*.lua` PlaySound | 전부 PlayVFX 시점 @150ms lua PlaySound 단발. Spikes=`quake`, CrystalsCrossFade=`ice_crossfade`, CrystalsFrontAttack=`ice_front_attack`, RedEnergyExplosion=`red_energy`(red_energy.mp3; **PlaySound@0**=PlayVFX와 동일 캐스트 시작; durationMs/fadeMs로 페이드아웃). ⚠️PlaySound를 캐스트 시작보다 늦게 두면 interruptible 스킬에서 연속 캐스트·서버 거부 롤백(`interruptAll`) 시 종료된 인스턴스가 그 이벤트를 스킵→VFX는 떠도 소리 누락. 캐스트음은 0ms 권장.
+| 스킬 SFX(창 3종) | `sound/soundCatalog.cpp`(`spear1`/`spear2`/`spear3`, `sfx/spear/`, mp3), 각 `resources/skills/piercing*.lua` PlaySound | Piercing(기본)=`spear1`@100, PiercingSlash(dial0)=`spear2`@100, PiercingCircleSlash(dial1)=`spear3`@100. **PiercingMulti(dial2 난무)=웨이브별 스탭음**: lua 루프로 10발(100+60*w ms, 파티클 버스트 동기) spear1/2/3 로테이션 + durationMs90/fadeMs50 컷 + volume0.6 → 겹침(위상간섭·음량누적·mud) 방지 | **주의: lua `sound=`는 파일명이 아니라 카탈로그 논리이름**(확장자 없이; findSound가 논리이름→경로 매핑) |
 | 3D 리스너 갱신 | `online/onlineGame.cpp` `camera_.update` 직후, `standalone/game.cpp` `camera_.updateGFX` 직전 | 매 프레임 카메라 추종 |
 | 볼륨 설정값 | `ui/settingsPanel.hpp` `GameSettings` masterVolume/bgmVolume/sfxVolume(%) | 영속 설정 |
 | 볼륨 설정 UI | `ui/settingsPanel.cpp` "사운드" 그룹(makeStepperRow ×3) | 투명도 행과 동일 스텝퍼 패턴 |
 | 볼륨 적용 | `online/onlineGame.cpp` `render()` | 매 프레임 폴링 → setMasterVolume/setBusVolume. UI 버스=SFX 볼륨 |
 | 포커스 뮤트 | `main.cpp` `gWindowActive`+`WM_ACTIVATEAPP`, `onlineGame.cpp` `render()` 게이팅 | 창 비활성 시 master=0 |
 | SFX 디듀프 | `sound/soundManager.cpp` `sfxAllowed` (kSfxDedupeCooldownSec=35ms) | 동일 SFX 버스트 throttle |
+| SFX 프리로드(첫 재생 무지연) | `sound/soundManager.cpp` `Impl::preloadSfx`(init에서 호출)+`Impl::sfxTemplates`, `soundCatalog.cpp` `allSounds()` | 비스트리밍 카탈로그 전부 init 시 디코드→템플릿(ma_sound) 보관. `startOneShot`은 템플릿 있으면 `ma_sound_init_copy`로 클론(디스크/디코드 0), 없으면 `init_from_file` 폴백. + init 시 무음 워밍업 1회 |
+| SFX 선행무음 스킵(onset 타이트) | `sound/soundManager.cpp` `Impl::detectLeadSilenceFrames`+`sfxLeadFrames`, `startOneShot`의 `ma_sound_seek_to_pcm_frame` | mp3 인코더 패딩/조용한 클립 머리 = 디코드된 PCM 앞 무음 → 프리로드 때 첫 비무음 프레임(-50dBFS) 측정, 재생 시 그만큼 seek. **첫 타격음 지연의 실제 원인**(디코드 아님; wav는 무음 없어 정상이었음) |
 | 존 BGM 예시 | `online/onlineGame.cpp` `bindZoneHandlers()` | 태그 정의 시 `playBgm(...)` 1줄 연결 (데이터 의존) |
 
 ### UI 스크롤/클리핑 (설정 패널 창모드 오버플로 대응)

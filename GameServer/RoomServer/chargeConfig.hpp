@@ -20,8 +20,10 @@ public:
     // Charge points granted per kill for a monster ObjectType (0 if not listed).
     float monsterCharge(ObjectType type) const;
 
-    // Combo multiplier for a 1-based combo count (clamped to maxMult).
-    float comboMult(uint16 comboCount) const;
+    // Player HP regen per second as a function of the kill-combo count. S-curve
+    // (Hill): base at combo 0, staying low until the combo builds and rising to the
+    // base->cap midpoint around `halfCombo`, asymptoting to cap.
+    float hpRegenPerSec(uint16 comboCount) const;
 
     // Incoming-charge scale once a slot already holds curStacks full casts.
     float softCapFactor(int curStacks) const;
@@ -33,10 +35,15 @@ private:
     static constexpr std::size_t kMaxObjectTypes = 16;
     std::array<float, kMaxObjectTypes> monsterCharge_{};  // by ObjectType ordinal
 
-    std::vector<float> comboMult_{ 1.f };
-    float        comboMaxMult_  = 2.f;
     Milliseconds comboWindowMs_ { 3000.f };
     Milliseconds damageWindowMs_{ 15000.f };
+
+    // HP regen accelerator (combo-driven, S-curve). base = no-combo rate, cap = asymptote,
+    // halfCombo = combo at the base->cap midpoint, exponent = steepness (>1 = slow start).
+    float regenBasePerSec_ = 1.f;
+    float regenCapPerSec_  = 25.f;
+    float regenHalfCombo_  = 10.f;
+    float regenExponent_   = 3.f;
 
     int   softCapStart_ = 5;
     float softCapDecay_ = 0.3f;

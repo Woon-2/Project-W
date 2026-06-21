@@ -19,6 +19,8 @@ enum class PacketType : uint16 {
 	C_Move,
 	S_Move,
 
+	C_DebugTeleport,   // 디버그 전용: 안티치트 클램프를 우회해 플레이어를 임의 좌표로 이동(아레나 텔레포트 테스트)
+
 	C_MouseMove,
 	S_MouseMove,
 
@@ -45,6 +47,8 @@ enum class PacketType : uint16 {
 	S_SkillUseReject,
 	S_ComboState,
 
+	S_PlayerHp,   // server-authoritative player HP push (regen); no hit animation
+
 	S_DebugHitbox,
 
 	S_StrongholdState,
@@ -61,6 +65,8 @@ enum class PacketType : uint16 {
 	C_LeaveRoom,
 	S_LobbyRoomPlayerJoined,
 	S_LobbyRoomPlayerLeft,
+	C_SelectWeapon,
+	S_LobbyWeaponSelected,
 	C_GameStart,
 	S_GameStart,
 };
@@ -72,6 +78,14 @@ enum class ObjectType : uint16 {
 	Stronghold,
 	Snake,
 	Mushroom,
+	Hobgoblin,
+	// Append-only (ordinals are wire values shared by client + server).
+	Bomber,
+	Birdy,
+	Slime,
+	Treant,
+	Grandbaum,   // named variant of Treant (shares Treant anims, different model)
+	Isys,        // named variant of Birdy  (shares Birdy anims, different model)
 };
 
 enum class PlayerWeaponType : uint8 {
@@ -106,12 +120,13 @@ private:
 
 // Authoritative default player HP, shared by client and server so enter-time
 // HP sync agrees on the same value.
-constexpr int32 kPlayerMaxHp = 500;
+constexpr int32 kPlayerMaxHp = 5000;
 
 #pragma pack(push, 1)
 
 struct CEnterPacket : public PacketHeader {
 	char lobbyCode[7];   // 로비에서 받은 방 코드(6자리 영숫자 + null). RoomServer가 방 그룹화에 사용.
+	PlayerWeaponType weaponType;
 };
 
 struct PlayerInfo {
@@ -163,6 +178,12 @@ struct SLeavePacket : public PacketHeader {
 struct CMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT3 velocity;
+};
+
+// 디버그 전용 텔레포트. 서버가 C_Move의 7m/패킷 클램프를 우회해 플레이어를 pos로 즉시 이동시킨다
+// (아레나 zone 트리거 테스트용). 이후 S_Move로 다른 클라에 전파된다.
+struct CDebugTeleportPacket : public PacketHeader {
+	DirectX::XMFLOAT3 pos;
 };
 
 struct SMovePacket : public PacketHeader {
@@ -349,6 +370,14 @@ struct SComboStatePacket : public PacketHeader {
 	float  windowMs;
 };
 
+// Server -> all: authoritative player HP value (driven by server-side regen).
+// Applied directly (setHp) on the client without any hit event/animation, so the
+// HP bar/text reflect continuous regen via the existing per-frame read.
+struct SPlayerHpPacket : public PacketHeader {
+	uint16 playerId;
+	int32  newHp;
+};
+
 struct OBBInfo {
 	DirectX::XMFLOAT3 center;
 	DirectX::XMFLOAT3 halfExtents;
@@ -388,6 +417,7 @@ struct SDebugHitboxPacket : public PacketHeader {
 
 struct LobbyPlayerInfo {
 	uint16 sessionId;
+	PlayerWeaponType weaponType;
 };
 
 struct SCreateRoomPacket : public PacketHeader {
@@ -420,6 +450,15 @@ struct SLobbyRoomPlayerJoinedPacket : public PacketHeader {
 
 struct SLobbyRoomPlayerLeftPacket : public PacketHeader {
 	uint16 sessionId;
+};
+
+struct CSelectWeaponPacket : public PacketHeader {
+	PlayerWeaponType weaponType;
+};
+
+struct SLobbyWeaponSelectedPacket : public PacketHeader {
+	uint16 sessionId;
+	PlayerWeaponType weaponType;
 };
 
 struct SGameStartPacket : public PacketHeader {

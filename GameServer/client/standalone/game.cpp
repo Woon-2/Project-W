@@ -665,8 +665,8 @@ Game::Game() {
 }
 
 Game::~Game() {
-	if (goblin_ && goblin_->ragdoll().isBuilt())
-		goblin_->ragdoll().destroy(physicsWorld_);
+	if (goblin_ && goblin_->ragdoll()->isBuilt())
+		goblin_->ragdoll()->destroy(physicsWorld_);
 	threadPool_.stop();
 
 	// Drain the GPU before member destruction: members declared after gfx_ are
@@ -720,7 +720,7 @@ void Game::setupStage() {
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(132.f), mu::Degree(0.f)));
 	dirLight_.color = mu::Vec3(0.9f, 0.86f, 0.66f);
-	dirLight_.intensity = 6.6f;
+	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
@@ -829,6 +829,10 @@ void Game::setupStage() {
 		skillCtx_.vfxById        = skillVfxById_.data();
 		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
 		skillCtx_.camera         = &camera_;
+		// Wire PlaySound timeline events to the 3D SFX backend (cosmetic; caster position).
+		skillCtx_.playSound = [](const char* name, mu::Vec3 pos, float maxMs, float fadeMs, float vol) {
+			INet::ClientApp::sound().playSfx3D(name, pos, vol, maxMs, fadeMs);
+		};
 
 		// Terrain query for ground-snapped placement (PlayVFX ground flags,
 		// AttachType::Ground hitboxes, particle ground-conform/collision).
@@ -850,6 +854,8 @@ void Game::setupStage() {
 	editorRefs.debugBV     = &debugBVView_;
 	editorRefs.player      = player_;
 	editorRefs.goblin      = goblin_;
+	editorRefs.assetManager = &assetManager_;   // monster caster model/anim source (setMonsterCaster)
+	editorRefs.animSystem  = &animSystem_;       // (un)track blenders on caster hot-swap
 	editorRefs.hwnd        = ghWnd;
 	editorRefs.terrainHeightAt = groundSampler_.heightAt;
 	// UI 위젯(스킬 드롭다운) 재구성 시 GPU가 in-flight로 참조 중인 텍스트 텍스처를 해제하지 않도록
@@ -2138,6 +2144,14 @@ void Game::setParticle()
 		energyExplosionArrowEffect_.bindSubEmitter( 0, 0, 1 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 0, 2 );
 		energyExplosionArrowEffect_.bindSubEmitter( 1, 1, 3 );
+
+		// Positional SFX on the real spawn: arrow launch (child 1) and explosion
+		// (child 2). Fires at the actual impact/max-range point and time, so the
+		// explosion sound stays in sync whether the arrow hits or flies its range.
+		energyExplosionArrowEffect_.setChildSpawnCallback([](int child, const mu::Vec3& pos) {
+			if (child == 1)      INet::ClientApp::sound().playSfx3D("charge_shoot", pos);
+			else if (child == 2) INet::ClientApp::sound().playSfx3D("charge_explosion", pos);
+		});
 	}
 
 	// TornadoShot: same visual as Tornado Continuous, moved forward each frame via setOrigin().
@@ -2370,10 +2384,11 @@ void Game::configureGoblin(Goblin& goblin) {
 	setupMonsterBody(goblin.body(), 40.f);
 
 	if (goblin.model() && goblin.model()->ragdollDef) {
-		goblin.ragdoll().build(
+		goblin.ragdoll()->build(
 			goblin.model()->skeleton,
 			*goblin.model()->ragdollDef,
-			physicsWorld_
+			physicsWorld_,
+			goblin.scale()
 		);
 	}
 }
@@ -2485,26 +2500,8 @@ void Game::update(Milliseconds deltaTime) {
 	editor_.refresh();
 
 	// 이벤트 처리
-	auto resolveSfxObj = [&](i32t id) -> Object* {
-		if (goblin_ && goblin_->getId() == id) return goblin_.get();
-		if (player_ && player_->getId() == id) return player_.get();
-		return nullptr;
-	};
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
-
-		// 전투 효과음(3D). 디스패치 로직과 독립적으로(추가만) 대상 위치에서 재생한다.
-		{
-			Object* sfxObj = nullptr;
-			const char* sfxName = nullptr;
-			switch (pEv->type) {
-			case EventType::Hit:    sfxName = "hit";    sfxObj = resolveSfxObj(static_cast<EvHit*>(pEv)->targetId);      break;
-			case EventType::Attack: sfxName = "attack"; sfxObj = resolveSfxObj(static_cast<EvAttack*>(pEv)->attackerId); break;
-			case EventType::Death:  sfxName = "death";  sfxObj = resolveSfxObj(static_cast<EvDeath*>(pEv)->victimId);    break;
-			default: break;
-			}
-			if (sfxObj && sfxName) INet::ClientApp::sound().playSfx3D(sfxName, sfxObj->renderState().pos);
-		}
 
 		switch (pEv->type) {
 		case EventType::Hit:
@@ -2599,6 +2596,10 @@ void Game::update(Milliseconds deltaTime) {
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 접지 중력 게이팅: 이번 step의 terrain 접촉으로 플레이어 접지 판정 + 중력
+		// 게이트 설정(다음 step 반영) + ground-snap. online 경로와 동일 동작.
+		// 물리 step 루프 안에서 호출(고정 timestep 의미 유지).
+		if (player_) player_->updateGroundedGravityGate(physicsWorld_, effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
@@ -2745,7 +2746,7 @@ void Game::update(Milliseconds deltaTime) {
 		auto activateRagdollIfPending = [&](Goblin& g) {
 			if (!g.ragdollPendingActivation()) return;
 			g.setRagdollPendingActivation(false);
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
 			rd.seedFromFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -2782,7 +2783,7 @@ void Game::update(Milliseconds deltaTime) {
 		};
 
 		auto syncRagdollToAnim = [&](Goblin& g) {
-			Ragdoll& rd = g.ragdoll();
+			Ragdoll& rd = *g.ragdoll();
 			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
 			rd.syncToFinalXforms(
 				g.animBlender()->finalXformData(),
@@ -2963,13 +2964,13 @@ void Game::render() {
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
-		chunkManager_.submitDrawEvents(gfx_);
+		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
 
 	gfx_.render();
-	applyHiZCulling();
+	feedbackCullResultToAnim();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -3188,82 +3189,34 @@ void Game::cullObjects() {
 }
 
 void Game::cullObjectsForShadow() {
-	const u32t cascadeCount = dirLight_.cascadeCount();
-	if (cascadeCount == 0u) return;
+	if (dirLight_.cascadeCount() == 0u) return;
 
 	auto entities = std::vector<std::shared_ptr<Object>>{};
 	entities.reserve(1u + goblins_.size());
 	entities.push_back(goblin_);
 	for (auto& g : goblins_) entities.push_back(g);
 
-	// Gribb-Hartmann planes for each cascade (row-vector convention: col(i))
-	struct CascadePlanes { mu::Vec4 p[6]; };
-	auto cascadePlanes = std::vector<CascadePlanes>(cascadeCount);
-	for (u32t ci = 0u; ci < cascadeCount; ++ci) {
-		const auto vp = dirLight_.cascadeViews()[ci] * dirLight_.cascadeProjs()[ci];
-		const auto c0 = vp.col(0), c1 = vp.col(1), c2 = vp.col(2), c3 = vp.col(3);
-		cascadePlanes[ci].p[0] = c3 + c0;
-		cascadePlanes[ci].p[1] = c3 - c0;
-		cascadePlanes[ci].p[2] = c3 + c1;
-		cascadePlanes[ci].p[3] = c3 - c1;
-		cascadePlanes[ci].p[4] = c2;
-		cascadePlanes[ci].p[5] = c3 - c2;
-	}
-
-	for (auto& entt : entities) {
-		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
-
-		// Visible in any cascade => not shadow-culled
-		bool visibleInAny = false;
-		for (u32t ci = 0u; ci < cascadeCount && !visibleInAny; ++ci) {
-			const auto* pl = cascadePlanes[ci].p;
-			bool inside = true;
-
-			if (std::holds_alternative<AABB>(rootShape)) {
-				const auto& aabb = std::get<AABB>(rootShape);
-				const mu::Vec3 c = aabb.center;
-				const mu::Vec3 h = aabb.size * 0.5f;
-				for (int i = 0; i < 6 && inside; ++i) {
-					const float e = std::abs(pl[i].x()) * h.x()
-					              + std::abs(pl[i].y()) * h.y()
-					              + std::abs(pl[i].z()) * h.z();
-					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
-					if (dist + e < 0.f) inside = false;
-				}
-			} else {
-				const auto& obb = std::get<OBB>(rootShape);
-				const mu::Vec3 c  = obb.center;
-				const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
-				const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
-				const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
-				for (int i = 0; i < 6 && inside; ++i) {
-					const float e =
-						std::abs(pl[i].x()*ax.x() + pl[i].y()*ax.y() + pl[i].z()*ax.z()) * obb.halfExtents.x()
-					  + std::abs(pl[i].x()*ay.x() + pl[i].y()*ay.y() + pl[i].z()*ay.z()) * obb.halfExtents.y()
-					  + std::abs(pl[i].x()*az.x() + pl[i].y()*az.y() + pl[i].z()*az.z()) * obb.halfExtents.z();
-					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
-					if (dist + e < 0.f) inside = false;
-				}
-			}
-
-			if (inside) visibleInAny = true;
-		}
-
-		entt->setShadowCulled(!visibleInAny);
-	}
+	// All light-frustum culling funnels through Light::shadowVisible (cascade frusta
+	// cached in camera-relative space; rebase/expand/SAT handled internally).
+	for (auto& entt : entities)
+		entt->setShadowCulled(!dirLight_.shadowVisible(entt->body().worldBVH().nodes[0].shape));
 }
 
-void Game::applyHiZCulling() {
+// applyHiZCulling이었던 함수. 컬링 자체를 결정하지 않고, 이미 계산된 Hi-Z/frustum
+// 결과를 Object/AnimBlender에 반영(피드백)하는 역할이라 이름을 바꿨다.
+// 새로 생성된 오브젝트는 컬링 판정과 무관하게 최초 1회는 애니메이션이 갱신되도록
+// (animBlender->hasEverUpdated() == false면) culled를 강제로 false로 둔다.
+void Game::feedbackCullResultToAnim() {
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& entt : { std::static_pointer_cast<Object>(goblin_) }) {
 			entt->setHiZCulled(false);
 			if (auto* blender = entt->animBlender())
-				blender->setCulled(entt->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && entt->isFrustumCulled());
 		}
 		for (auto& g : goblins_) {
 			g->setHiZCulled(false);
 			if (auto* blender = g->animBlender())
-				blender->setCulled(g->isFrustumCulled());
+				blender->setCulled(blender->hasEverUpdated() && g->isFrustumCulled());
 		}
 		return;
 	}
@@ -3272,7 +3225,7 @@ void Game::applyHiZCulling() {
 		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
 	};
 	applyToEntity(goblin_);
 	for (auto& g : goblins_)

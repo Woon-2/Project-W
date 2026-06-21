@@ -51,6 +51,26 @@ Ragdoll 뼈대: group=2, mask=0xFFFD → 뼈대끼리 self-collision 필터링.
 
 ---
 
+## 캐릭터 접지 중력 게이팅 (Grounded Gravity Gating)
+
+플레이어가 지형 위에 정지해 있을 때, 매 step 중력이 접촉 솔버와 싸우며 잔여 수직 미세 튐(micro-jitter)을
+만들고 이것이 follow camera·그림자로 전파된다. Unity `Rigidbody.gravityScale` + UE 캐릭터 컨트롤러의
+표준 grounded-gating + ground-snap 패턴으로 제거한다.
+
+- **재사용 프리미티브:** `RigidBody::gravityScale_`(기본 1) — integrate Dynamic 분기에서
+  `linAcc = gravity_ * gravityScale() + forceAccum*invMass` (`physicsWorld.cpp`). 0이면 중력 off.
+- **접지 판정(게임 레이어):** `Object::updateGroundedGravityGate(world, dt)` — 물리 step **직후**(렌더 프레임 아님)
+  호출. `world.forEachContact`로 이 body가 bodyA인 terrain 접촉(`isTerrainContact()`) 중 normal.y ≥ 0.7(≈45°)인
+  것을 찾고, 상승 중(vy > 0.05)이 아니면 접지 후보. 별도 ground probe 없이 기존 접촉 데이터를 재사용.
+- **비대칭 히스테리시스:** 접지는 연속 2 step 지속을 요구(flicker 방지), 공중 전환은 즉시(낙하 지연 0).
+- **접지 시:** `setGravityScale(0)` + 작은 하강속도(vy∈(-1,0))만 0으로 ground-snap. 상승속도는 절대 불간섭
+  (점프/넉백 보존), 빠른 하강(vy<-1, 막 착지)은 솔버가 처리하도록 둔다.
+- **호출 지점:** online `online/onlineGame.cpp`·standalone `standalone/game.cpp`의 물리 step while 루프 안(`player_` 가드).
+- **확장 메모:** `kGroundNormalY=0.7`은 현재 terrain normal이 항상 Y-up이라 항상 통과 — 경사 normal 도입 시
+  경사 한계로 의미가 생긴다. 슬라이딩이 필요하면 `kSnapMaxSpeed`(1.0 m/s)·접지 조건을 재검토.
+
+---
+
 ## PhysicsWorld::step() 흐름
 
 ```
@@ -273,6 +293,18 @@ PhysicsWorld::jointRefs_     ──ref──>  Constraint*    (addJointRef/remov
 finalXforms[boneIdx] = bone.toLocal * (boneWorldMat / renderState_.world);
 // boneWorldMat: orient=body->orient(), translation=bone origin (캡슐 중심 - orient.rotate(capsuleOffset))
 ```
+
+**Passenger 본 커버리지 불변식 (필수):**
+래그돌 활성 시 메인 `body_`가 unregister되어 `renderState_.world`가 사망 위치에 동결된다.
+따라서 ragdoll body가 없는 본의 `finalXforms`를 갱신하지 않으면 그 본은 **월드 공간에 고정**되어,
+스킨 메시가 고정점에 앵커된 채 나머지 ragdoll이 움직이면 **늘어난다(stretch)**.
+→ `buildPassengers`는 **비-body 본 전부**를 어떤 ragdoll body에 강체 바인딩해야 한다:
+- Pass 1 (`buildPassengersDFS`): ragdoll body의 **자손** 본 → 최근접 조상 body.
+- Pass 2 (고아 본): ragdoll 조상이 없는 본(body들보다 계층상 위/옆, 예: 중심 허브 본) →
+  스켈레톤 무방향 그래프(parent+children) 다중 소스 BFS로 찾은 **최근접 body**.
+
+휴머노이드(Hips가 루트 body)는 루트 위 본에 스킨 버텍스가 없어 우연히 동작했으나,
+버섯처럼 중심 허브(`MushroomPelvis`)에 body가 없는 스켈레톤에서 동결/늘어남이 드러났다 (2026-06-18 수정).
 
 ---
 

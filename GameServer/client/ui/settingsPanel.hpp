@@ -35,8 +35,8 @@ struct GameSettings {
     int  resolutionIndex      = 0;    // index into the runtime windowed-resolution list (0 = smallest/default)
     int  monsterDamageOpacity = 100;  // percent, [0..100]
     int  masterVolume         = 80;   // percent, [0..100]
-    int  bgmVolume            = 5;    // percent, [0..100]
-    int  sfxVolume            = 100;  // percent, [0..100]
+    int  bgmVolume            = 15;    // percent, [0..100]
+    int  sfxVolume            = 15;  // percent, [0..100]
 };
 
 namespace UI {

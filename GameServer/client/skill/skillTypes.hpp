@@ -68,6 +68,10 @@ struct SkillHitboxDef {
     float            hitGroupCooldownMs   = 0.f;    // 0 = hit target only once; >0 = re-hit after N ms
     bool             useParticleSize      = false;  // VFXParticle only: scale halfExtents by particle's current visual size
     bool             applyAttachRotation  = true;   // false = ignore attachment orientation (position still tracks)
+    // VFXParticle only: false = non-penetrating -- the source particle is destroyed on first hit
+    // (ParticleSystem::killParticle), so the projectile/effect stops after impact. true (default) =
+    // penetrating (particle persists; multi-hit governed by hitGroupCooldownMs). No-op for Bone/Ground.
+    bool             penetrate            = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -85,6 +89,7 @@ enum class SkillEventType : u8t {
     ApplyImpulse,
     CameraShake,
     SetGroundAnchor,
+    PlaySound,
     SIZE
 };
 
@@ -120,8 +125,9 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char  clipName[24];  // null-terminated, max 23 chars
+        char  clipName[24];  // null-terminated, max 23 chars (documentation / readability)
         float blendTime;
+        u8t   attackIndex;   // selects which attack clip the AnimBlender plays (index into attackClips_)
     } playAnimation;
 
     struct PlayVFX {
@@ -151,6 +157,13 @@ union SkillEventPayload {
         float        magnitude;
         Milliseconds duration;
     } cameraShake;
+
+    struct PlaySound {
+        char soundName[24];  // sound-catalog logical name, null-terminated (max 23 chars)
+        u16t maxDurationMs;  // 0 = play to the file's natural end; else fade-stop this many ms after start
+        u16t fadeMs;         // fade-out length applied when maxDurationMs elapses (0 = hard cut)
+        float volume;        // 0..1 playback gain (clamped), scales the catalog default; 1 = default
+    } playSound;
 
     struct SendGameplayEvent {
         u8t  eventTypeOrdinal;  // EventType ordinal

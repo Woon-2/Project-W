@@ -18,6 +18,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCMovePacket(session, buffer, len);
 		break;
 
+	case PacketType::C_DebugTeleport:
+		handleCDebugTeleportPacket(session, buffer, len);
+		break;
+
 	case PacketType::C_MouseMove:
 		handleCMouseMovePacket(session, buffer, len);
 		break;
@@ -43,6 +47,11 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 void PacketManager::handleCEnterPacket(GameSession* session, byte* buffer, int32 len) {
 	auto pkt = reinterpret_cast<CEnterPacket*>(buffer);
 	std::string code(pkt->lobbyCode, strnlen_s(pkt->lobbyCode, sizeof(pkt->lobbyCode)));
+	const auto ordinal = static_cast<uint8>(pkt->weaponType);
+	session->player()->setWeaponType(
+		ordinal <= static_cast<uint8>(PlayerWeaponType::HeavyArrow)
+			? pkt->weaponType
+			: PlayerWeaponType::Katana);
 	session->enterRoom(code);
 }
 
@@ -55,6 +64,14 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 	
 	session->room()->doAsync([session, cMvPktClone]() {
 		session->room()->move(session->id(), cMvPktClone);
+	});
+}
+
+void PacketManager::handleCDebugTeleportPacket(GameSession* session, byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<CDebugTeleportPacket*>(buffer);
+	const DirectX::XMFLOAT3 pos = pkt->pos;
+	session->room()->doAsync([session, pos]() {
+		session->room()->debugTeleport(session->id(), pos);
 	});
 }
 
@@ -407,6 +424,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSComboStatePacket(uint16 playerId
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_ComboState;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSPlayerHpPacket(uint16 playerId, int32 newHp) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SPlayerHpPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SPlayerHpPacket>();
+	pkt->playerId = playerId;
+	pkt->newHp    = newHp;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_PlayerHp;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

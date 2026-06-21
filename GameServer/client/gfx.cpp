@@ -150,7 +150,7 @@ void GFX::init() {
 	setD3DName(cmdQ_.Get(), "CommandQueue");
 
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
-	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 96u);
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
@@ -185,9 +185,10 @@ void GFX::init() {
 	);
 
 	// SRV & CBV & UAV Heap은 GPU Visible, bind 필요
+	// 2100(Tex2D 1800 + TexArray 100 + TexCube 100 + UAV 100) + Tex3D 16(color grading LUT 등) = 2116
 	srvCbvUavHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = 2100u,
+		.NumDescriptors = 2116u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		.NodeMask = 0
 	} );
@@ -232,6 +233,15 @@ void GFX::init() {
 
 	cpuStart.ptr += 100u * cbvSrvUavIncSize;
 	gpuStart.ptr += 100u * cbvSrvUavIncSize;
+
+	// SRV Texture3D Pool: SRVHeap의 [2100, 2116) 범위 (color grading LUT 등 volume texture)
+	srvTex3DPool_ = DescriptorPool(16u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 16u * cbvSrvUavIncSize;
+	gpuStart.ptr += 16u * cbvSrvUavIncSize;
 
 	// Sampler Heap은 GPU Visible, bind 필요
 	samHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
@@ -288,6 +298,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShaderMultiply", createBillboardShaderMultiply( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderPremultiplied", createBillboardShaderPremultiplied( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("EnergyOrbShader", createEnergyOrbShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("WindRingShader", createWindRingShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
@@ -345,6 +356,7 @@ void GFX::init() {
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsMeshParticlePipeline_.reserve(256u);
+	drawEventsEnergyOrbPipeline_.reserve(EnergyOrbPipeline::kMaxOrbDrawcalls);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
 	drawEventsBlendCGMeshPipeline_.reserve(256u);
 	drawEventsPiercingMeshPipeline_.reserve(256u);
@@ -525,10 +537,10 @@ void GFX::createSwapChain() {
 	);
 	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
-		device_.Get(), sizeof(BVShader::PerInstanceData) * 50'000u, backBuffers_.size(), "BV_PerInstanceData"
+		device_.Get(), sizeof(BVShader::PerInstanceData) * 120'000u, backBuffers_.size(), "BV_PerInstanceData"
 	);
 	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(BVShader::PerDrawcallData), 50'000u, backBuffers_.size(), "BV_PerDrawcallData"
+		device_.Get(), sizeof(BVShader::PerDrawcallData), 120'000u, backBuffers_.size(), "BV_PerDrawcallData"
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
@@ -549,6 +561,19 @@ void GFX::createSwapChain() {
 	);
 	resourcesMeshParticlePipeline_.perFrameData.init(
 		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
+	);
+
+	resourcesEnergyOrbPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( EnergyOrbShader::PerInstanceData ) * EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerInstanceData"
+	);
+	resourcesEnergyOrbPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( EnergyOrbShader::PerDrawcallData ), EnergyOrbPipeline::kMaxOrbDrawcalls, backBuffers_.size(), "EnergyOrb_PerDrawcallData"
+	);
+	resourcesEnergyOrbPipeline_.perFrameData.init(
+		device_.Get(), sizeof( EnergyOrbShader::PerFrameData ), backBuffers_.size(), "EnergyOrb_PerFrameData"
+	);
+	resourcesEnergyOrbPipeline_.boneData.init(
+		device_.Get(), sizeof( EnergyOrbShader::BoneData ) * 64'000u, backBuffers_.size(), "EnergyOrb_BoneData"
 	);
 	// Wind Ring Pipeline ----
 	resourcesWindRingPipeline_.perInstanceData.init(
@@ -679,7 +704,7 @@ void GFX::createSwapChain() {
 	);
 	// PBR Deferred Pipeline ----
 	resourcesPBRDeferredPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 120'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapCSMShader::PerDrawcallData), 10'000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallData"
@@ -691,7 +716,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferred_Shadow_PerFrameData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 32'768u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 120'000u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
 	);
 	resourcesPBRDeferredPipeline_.gBufferPass.lightData.init(
 		device_.Get(), sizeof(PBRDeferredGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferred_GBuffer_LightData"
@@ -713,10 +738,10 @@ void GFX::createSwapChain() {
 		);
 		// PBR Deferred Pipeline — Hi-Z occlusion cull + indirect draw (BVH props) ----
 		resourcesPBRDeferredPipeline_.hiZPass.groupOffsets.init(
-			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_GroupOffset"
+			device_.Get(), sizeof(u32t) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_GroupOffset"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.indirectCmd.init(
-			device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_IndirectCommand"
+			device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_IndirectCommand"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perFrameDataClear.init(
 			device_.Get(), sizeof(HiZClearShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataClear"
@@ -731,10 +756,10 @@ void GFX::createSwapChain() {
 			device_.Get(), sizeof(HiZCullShader::PerFrameData), backBuffers_.size(), "PBRDeferred_HiZ_PerFrameDataCull"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perGroupCnt.init(
-			device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupCnt"
+			device_.Get(), sizeof(u32t) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupCnt"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perGroupData.init(
-			device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupData"
+			device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 10'000u, backBuffers_.size(), "PBRDeferred_HiZ_PerGroupData"
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.perInstanceDataCompact.init(
 			device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_PerInstanceDataCompact"
@@ -760,10 +785,10 @@ void GFX::createSwapChain() {
 	}
 	// PBR Deferred Skinned Pipeline ----
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.groupOffsets.init(
-		device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_GroupOffset"
+		device_.Get(), sizeof(u32t) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_GroupOffset"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.indirectCmd.init(
-		device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_IndirectCommand"
+		device_.Get(), sizeof(HiZCommandShader::IndirectCommand) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_IndirectCommand"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perFrameDataClear.init(
 		device_.Get(), sizeof(HiZClearShader::PerFrameData), backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerFrameDataClear"
@@ -778,10 +803,10 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(HiZCullShader::PerFrameData), backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerFrameDataCull"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupCnt.init(
-		device_.Get(), sizeof(u32t) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupCnt"
+		device_.Get(), sizeof(u32t) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupCnt"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupData.init(
-		device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupData"
+		device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 4000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perInstanceDataCompact.init(
 		device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCompact"
@@ -1018,6 +1043,18 @@ void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
 	frameDataMeshParticlePipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const EnergyOrbPipeline::DrawEvent& drawEvent ) {
+	drawEventsEnergyOrbPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const EnergyOrbPipeline::CameraData& cameraData ) {
+	cameraDataEnergyOrbPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const EnergyOrbPipeline::FrameData& frameData ) {
+	frameDataEnergyOrbPipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent ) {
@@ -1304,6 +1341,11 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 	// IBL 타깃 리소스 생성 (irradiance/prefiltered 큐브 + BRDF LUT). 정적(환경 의존),
 	// 스카이박스 큐브 상주 후 loadRequestedAssets에서 precomputeIBL이 채운다.
 	SharedResources::IBL::addIBL(device_.Get(), uavPool_, srvTexCubePool_, srvTexPool_);
+	// Color grading LUT. 씬 전역, 정적, tonemap resolve 패스가 gamma 보정 직후 항상 적용한다.
+	SharedResources::ColorGrading::addColorGradingLUT(
+		device_.Get(), cmdList.Get(), fence, srvTex3DPool_,
+		"../resources/LUT/warm-natural_6.C0008.cube"
+	);
 	// hi-z map 생성 (hi-z occlusion culling용)
 	SharedResources::HiZMap::addHiZMaps(
 		device_.Get(), static_cast<u32t>(gClientRect.right  - gClientRect.left),
@@ -1740,10 +1782,11 @@ void GFX::render() {
 	}
 
 	// D32_FLOAT 깊이 버퍼는 stencil aspect가 없으므로 DEPTH만 클리어한다(STENCIL 플래그 시 경고 #821).
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
 	DISPLAY_ERROR_DX_VOID(
 		cmdListClear->ClearDepthStencilView(depthBufferDsvs_[backbufIdx],
 			D3D12_CLEAR_FLAG_DEPTH,
-			1.0f, 0u, 0u, nullptr
+			0.0f, 0u, 0u, nullptr
 		), false
 	);
 
@@ -1900,6 +1943,11 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Color grading LUT bindless index: 로드되지 않았으면(created==false) grading 미적용.
+	const BindlessIndex colorGradingLUTSrv = SharedResources::ColorGrading::lutData.created
+		? SharedResources::ColorGrading::lutData.lut.idxSrv
+		: BindlessIndex{ -1, -1, -1, -1 };
+
 	// Tonemap resolve dispatcher (deferred path에서만 draw; SceneColorHDR -> 백버퍼 LDR)
 	auto tonemapPipelineDispatcher = TonemapPipeline::Dispatcher(
 		tmpDescriptorHeaps,
@@ -1911,7 +1959,8 @@ void GFX::render() {
 		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
 		sceneColorSrv, sceneColorRoomIdx,
 		tonemapExposure_, bloomIntensity_, gBufferDebugMode_,
-		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx)
+		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx),
+		&srvTex3DPool_, colorGradingLUTSrv
 	);
 
 	// Bloom dispatcher (deferred path only; runs before the resolve composite reads mip 0).
@@ -1955,6 +2004,23 @@ void GFX::render() {
 		&fenceToSignal, &resourcesMeshParticlePipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsMeshParticlePipeline_ ),
 		cameraDataMeshParticlePipeline_, frameDataMeshParticlePipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// Energy orbs render into SceneColorHDR (so bloom catches them), not the backbuffer.
+	const D3D12_CPU_DESCRIPTOR_HANDLE energyOrbRtv = !SharedResources::SceneColor::sceneColorData.empty()
+		? SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].rtv
+		: backBufferRtvs_[backbufIdx];
+	auto energyOrbDispatcher = EnergyOrbPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "EnergyOrbShader" ),
+		cmdQ_, viewport, clRect,
+		energyOrbRtv, depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesEnergyOrbPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsEnergyOrbPipeline_ ),
+		cameraDataEnergyOrbPipeline_, frameDataEnergyOrbPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
@@ -2402,6 +2468,7 @@ void GFX::render() {
 			lpfd.idxGB2   = gbData.gb2.idxSrv;
 			lpfd.idxGB3   = gbData.gb3.idxSrv;
 			lpfd.idxDepth = gbData.depth.idxSrv;
+			lpfd.idxGB4   = gbData.gb4.idxSrv;
 			lpfd.debugMode = gBufferDebugMode_;
 			lpfd.idxSkybox = skyboxIdxSrv;
 			// IBL maps (generated at load by precomputeIBL)
@@ -2409,7 +2476,7 @@ void GFX::render() {
 			lpfd.idxPrefiltered      = SharedResources::IBL::iblData.prefiltered.idxSrv;
 			lpfd.idxBRDFLUT          = SharedResources::IBL::iblData.brdfLUT.idxSrv;
 			lpfd.prefilteredMipCount = SharedResources::IBL::iblData.prefilteredMipCount;
-			lpfd.iblIntensity        = 1.0f;
+			lpfd.iblIntensity        = 0.92f;
 			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
 			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
 			lpfd.fogDensity = 0.0008f;
@@ -2512,6 +2579,13 @@ void GFX::render() {
 			}
 		}
 
+		// Energy orbs: additive HDR glow into SceneColorHDR (still a RENDER_TARGET at
+		// this point), depth-tested against scene depth, BEFORE bloom so they glow.
+		if (!SharedResources::SceneColor::sceneColorData.empty() && gBufferDebugMode_ == 0u) {
+			energyOrbDispatcher.updateGPUDataSingleThreaded();
+			energyOrbDispatcher.drawSingleThreaded();
+		}
+
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).
 		// deferred lighting 직후 수행. 이후 skybox/오버레이는 백버퍼에 그린다.
 		if (!SharedResources::SceneColor::sceneColorData.empty()) {
@@ -2536,8 +2610,10 @@ void GFX::render() {
 
 		// Forward-always 패스: skybox(raw, 백버퍼)·BV·파티클. resolve 이후 백버퍼에 그린다.
 		// (skybox는 원래도 톤매핑 없이 raw로 그려졌으므로 SceneColorHDR를 거치지 않는다.)
-		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-		skyboxPipelineDispatcher.drawSingleThreaded();
+		if (gBufferDebugMode_ < 11)  {
+			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+			skyboxPipelineDispatcher.drawSingleThreaded();
+		}
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();

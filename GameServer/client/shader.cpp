@@ -191,7 +191,7 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -747,7 +747,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -872,7 +872,7 @@ ComPtr<ID3D12PipelineState> createPBRShaderCSMDebug(ID3D12Device* device, ID3D12
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1016,7 +1016,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1159,7 +1159,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device,
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1249,7 +1249,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1341,7 +1341,7 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1443,7 +1443,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = false,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1567,7 +1567,7 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1689,7 +1689,7 @@ ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1789,7 +1789,7 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -1804,8 +1804,8 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	};
 
 	// 4 GBuffer RTVs (matches GBufferData layout in sharedResources.hpp)
-	psoDesc.NumRenderTargets = 4u;
-	for (int i = 0; i < 4; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (int i = 0; i < 5; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable = false;
 		psoDesc.BlendState.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	}
@@ -1813,6 +1813,7 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;    // NormalV oct-encoded
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // LightAccum.rgb + Roughness.a
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;        // Metallic
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -2040,7 +2041,7 @@ static ComPtr<ID3D12PipelineState> createBillboardShaderImpl(
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2175,7 +2176,7 @@ ComPtr<ID3D12PipelineState> createMeshParticleShader( ID3D12Device* device, ID3D
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2208,6 +2209,125 @@ ComPtr<ID3D12PipelineState> createMeshParticleShader( ID3D12Device* device, ID3D
 	);
 
 	setD3DName( ret.Get(), "MeshParticleShader" );
+
+	return ret;
+}
+
+// Energy orb point-sprite shader. Renders into SceneColorHDR (R16G16B16A16_FLOAT)
+// with additive blending so bloom makes the orbs glow. Each source vertex is a
+// point, GS-expanded to a camera-facing quad. Reversed-Z depth test (GREATER) with
+// no depth write, so orbs are occluded by scene geometry but never write depth.
+ComPtr<ID3D12PipelineState> createEnergyOrbShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader( "energyOrb.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "energyOrb.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto gsCode = compileShader( "energyOrb.hlsl", nullptr, "GSMain", "gs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+
+	// Slot0=POSITION(float3), Slot1=BONE_INDICES(int4), Slot2=BONE_WEIGHTS(float4), Slot3=UV(float2).
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "BONE_INDICES",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32A32_SINT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "BONE_WEIGHTS",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+			.InputSlot = 2u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 3u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.GS = gsCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		// Reversed-Z: depth-test only (GREATER), no depth write.
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	// Additive HDR: src * 1 + dst * 1.
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;  // SceneColorHDR
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState( &psoDesc, __uuidof(ID3D12PipelineState), &ret ),
+		false
+	);
+
+	setD3DName( ret.Get(), "EnergyOrbShader" );
 
 	return ret;
 }
@@ -2278,7 +2398,7 @@ ComPtr<ID3D12PipelineState> createWindRingShader( ID3D12Device* device, ID3D12Ro
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2373,7 +2493,7 @@ ComPtr<ID3D12PipelineState> createSmokeBlendCGShader( ID3D12Device* device, ID3D
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2474,7 +2594,7 @@ ComPtr<ID3D12PipelineState> createBlendCGMeshShader( ID3D12Device* device, ID3D1
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2575,7 +2695,7 @@ ComPtr<ID3D12PipelineState> createPiercingMeshShader( ID3D12Device* device, ID3D
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2676,7 +2796,7 @@ ComPtr<ID3D12PipelineState> createPiercingSlashMeshShader( ID3D12Device* device,
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2778,7 +2898,7 @@ ComPtr<ID3D12PipelineState> createSwordSlashShader( ID3D12Device* device, ID3D12
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2890,7 +3010,7 @@ ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12Ro
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -2977,7 +3097,7 @@ ComPtr<ID3D12PipelineState> createHiZOccluderShader(ID3D12Device* device, ID3D12
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,
@@ -3457,6 +3577,24 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	} );
 
+	const auto tex3dRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 10u,
+		.RegisterSpace = 4u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// t10, space4: Texture3DPool (color grading LUT 등 volume texture)
+	addParam( "Texture3DPool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &tex3dRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
 	const auto samRange = D3D12_DESCRIPTOR_RANGE {
 		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
 		.NumDescriptors = UINT(-1),
@@ -3622,7 +3760,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable      = true,
 			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc        = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable    = false,
 			.StencilReadMask  = 0u,
 			.StencilWriteMask = 0u,
@@ -3637,8 +3775,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	};
 
 	// 4 GBuffer render targets
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3652,6 +3790,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;     // GB1
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB2
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;         // GB3
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;        // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3705,7 +3844,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable      = true,
 			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc        = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable    = false,
 			.StencilReadMask  = 0u,
 			.StencilWriteMask = 0u,
@@ -3719,8 +3858,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 		.Flags                  = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3734,6 +3873,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3787,7 +3927,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable      = true,
 			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc        = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable    = false,
 			.StencilReadMask  = 0u,
 			.StencilWriteMask = 0u,
@@ -3801,8 +3941,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3816,6 +3956,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -3868,7 +4009,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable      = true,
 			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ALL,
-			.DepthFunc        = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable    = false,
 			.StencilReadMask  = 0u,
 			.StencilWriteMask = 0u,
@@ -3882,8 +4023,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	psoDesc.NumRenderTargets = 4u;
-	for (UINT i = 0u; i < 4u; ++i) {
+	psoDesc.NumRenderTargets = 5u;
+	for (UINT i = 0u; i < 5u; ++i) {
 		psoDesc.BlendState.RenderTarget[i].BlendEnable           = false;
 		psoDesc.BlendState.RenderTarget[i].SrcBlend              = D3D12_BLEND_ONE;
 		psoDesc.BlendState.RenderTarget[i].DestBlend             = D3D12_BLEND_ZERO;
@@ -3897,6 +4038,7 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
 	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -4166,7 +4308,7 @@ static ComPtr<ID3D12PipelineState> createTrailShaderImpl(
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
 			.StencilWriteMask = 0u,

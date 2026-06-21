@@ -282,6 +282,7 @@ void Dispatcher::shadowUpdate() {
             light.cascadeViews[ci] * light.cascadeProjs[ci]
         ).getXmf();
         pfd.cascadeIdx = ci;
+        pfd.camPos     = light.cascadeCameraPos.getXmf();  // camera-relative caster rebase
         pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
 }
@@ -345,7 +346,7 @@ void Dispatcher::shadowDraw() {
         pResources_->shadowPass.perFrameData.cbuffers[ci].bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
         for (const auto& ev : drawEvents_) {
-            if (!ev.terrain) continue;
+            if (!ev.terrain || ev.shadowCulled) continue;
             const auto& mesh = ev.terrain->mesh;
             if (mesh.subMeshes.empty()) continue;
 
@@ -425,7 +426,7 @@ void Dispatcher::gBufferDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(gBufferShader_.Get()), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(4u, rtvGB_, false, &dsvGB_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(5u, rtvGB_, false, &dsvGB_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
     DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 

@@ -22,6 +22,10 @@ void PacketManager::handlePacket( GameSession* session, byte* buffer, int32 len 
 		handleCLeaveRoomPacket( session, buffer, len );
 		break;
 
+	case PacketType::C_SelectWeapon:
+		handleCSelectWeaponPacket( session, buffer, len );
+		break;
+
 	case PacketType::C_GameStart:
 		handleCGameStartPacket( session, buffer, len );
 		break;
@@ -76,6 +80,19 @@ void PacketManager::handleCLeaveRoomPacket( GameSession* session, byte* buffer, 
 
 	session->myRoom_->leave( session );
 	session->myRoom_ = nullptr;
+}
+
+void PacketManager::handleCSelectWeaponPacket( GameSession* session, byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<CSelectWeaponPacket*>(buffer);
+	const auto ordinal = static_cast<uint8>(pkt->weaponType);
+	if ( ordinal > static_cast<uint8>(PlayerWeaponType::HeavyArrow) ) {
+		return;
+	}
+
+	session->selectedWeaponType_ = pkt->weaponType;
+	if ( session->myRoom_ ) {
+		session->myRoom_->selectWeapon( session, pkt->weaponType );
+	}
 }
 
 void PacketManager::handleCGameStartPacket( GameSession* session, byte* buffer, int32 len ) {
@@ -158,6 +175,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSLobbyRoomPlayerLeftPacket( uint1
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_LobbyRoomPlayerLeft;
+
+	sendBuffer->close( bw.writeSize() );
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSLobbyWeaponSelectedPacket( uint16 sessionId, PlayerWeaponType weaponType ) {
+	auto sendBuffer = SendBufferManager::open( sizeof( SLobbyWeaponSelectedPacket ) );
+	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
+
+	auto pkt = bw.reserve<SLobbyWeaponSelectedPacket>();
+	pkt->sessionId = sessionId;
+	pkt->weaponType = weaponType;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_LobbyWeaponSelected;
 
 	sendBuffer->close( bw.writeSize() );
 	return sendBuffer;

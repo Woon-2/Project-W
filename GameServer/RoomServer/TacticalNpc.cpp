@@ -4,10 +4,14 @@
 #include "GameSession.hpp"
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 /*-----------------------------
       파일 범위 헬퍼 함수
 -----------------------------*/
+
+// Mirrors Npc.cpp's per-thread RNG (uniform attack selection).
+static thread_local std::mt19937 s_rng{ std::random_device{}() };
 
 // 0~1 사이의 균등 분포 해시값 반환. 입력이 같으면 항상 같은 값, 입력이 다르면 거의 항상 다른 값.
 static float hash01( uint32 v ) {
@@ -59,7 +63,19 @@ void TacticalNpc::applyConfig( const TacticalNpcConfig& cfg ) {
     attackRecoverTime_ = cfg.attackRecoverTime;
     separationRadius_ = cfg.separationRadius;
     separationWeight_ = cfg.separationWeight;
+    attackDamageScale_ = cfg.attackDamageScale;
     setHp( static_cast<int32>(cfg.maxHp) );
+}
+
+void TacticalNpc::addAttack( uint32 skillId, std::string clipKey ) {
+    if ( skillId == 0 ) return;   // skill not found in registry -> skip (keeps legacy fallback intact)
+    attacks_.push_back( { skillId, std::move( clipKey ) } );
+}
+
+const TacticalNpcAttack& TacticalNpc::pickAttack() const {
+    // Uniform random selection over the registered attacks (multi-attack monsters).
+    std::uniform_int_distribution<size_t> dist( 0, attacks_.size() - 1 );
+    return attacks_[dist( s_rng )];
 }
 
 // ─── 접근자 ───────────────────────────────────────────────────────────────────
@@ -110,6 +126,7 @@ void TacticalNpc::receiveCommand( const TacticalCommand& cmd ) {
 }
 
 void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
+    restoreChargeMotorAcceleration();
     setPos( p );
     setLinearVel( mu::Vec3{} );      // 순간이동 잔여 속도 제거
     setDesiredVel( mu::Vec3{} );     // motor 목표도 정지
@@ -150,12 +167,24 @@ void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
 
 // ─── transitionTo ─────────────────────────────────────────────────────────────
 
+void TacticalNpc::restoreChargeMotorAcceleration() {
+    if ( !chargeMotorOverrideActive_ ) {
+        return;
+    }
+    body().setMotorMaxAcceleration( savedChargeMotorAcceleration_ );
+    chargeMotorOverrideActive_ = false;
+}
+
 void TacticalNpc::transitionTo( TacticalNpcState next ) {
     if ( state_ == next ) {
         return;
     }
+    if ( state_ == TacticalNpcState::ChargeThrough && next != TacticalNpcState::ChargeThrough ) {
+        restoreChargeMotorAcceleration();
+    }
     if ( next == TacticalNpcState::AttackWindup ) {
         windupTimer_ = 0s;
+        attackCast_  = false;
     }
     if ( next == TacticalNpcState::AttackRecover ) {
         recoverTimer_ = 0s;
@@ -233,6 +262,13 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         impactDamage_   = pendingCmd_.impactDamage;
         passDistance_   = pendingCmd_.passDistance;
         speedMult_      = pendingCmd_.speedMult;
+        if ( pendingCmd_.chargeAcceleration > 0.f ) {
+            if ( !chargeMotorOverrideActive_ ) {
+                savedChargeMotorAcceleration_ = body().motor().maxAcceleration;
+                chargeMotorOverrideActive_ = true;
+            }
+            body().setMotorMaxAcceleration( pendingCmd_.chargeAcceleration );
+        }
         chargeComplete_ = false;
         transitionTo( TacticalNpcState::ChargeThrough );
         break;
@@ -684,6 +720,27 @@ void TacticalNpc::updateAttackWindup( Seconds dt, Room& room ) {
         return;
     }
 
+    // Skill-based attack (preferred): cast once at the start of the windup. The skill's
+    // own timeline (PlayAnimation + SpawnHitbox) supplies the telegraph and hit; its
+    // hitbox applies damage authoritatively (no direct setHp). Multi-attack monsters pick
+    // a random attack here. AttackRecover holds the NPC until the skill finishes so the
+    // server hitbox bones stay valid (see updateAttackRecover). Mirrors Npc::updateAttackWindup.
+    if ( hasSkillAttacks() ) {
+        if ( !attackCast_ ) {
+            setFacingDir( *this, target->player()->pos() - pos() );
+            const TacticalNpcAttack& atk = pickAttack();
+            if ( !atk.clipKey.empty() ) animController().switchClip( atk.clipKey );
+            const uint32 seed = std::random_device{}();
+            room.skillStartInternal( static_cast<int32>( getId() ), atk.skillId, seed, attackDamageScale_ );
+            attackCast_ = true;
+        }
+        windupTimer_ += dt;
+        if ( windupTimer_ >= attackWindupTime_ )
+            transitionTo( TacticalNpcState::AttackRecover );
+        return;
+    }
+
+    // ===== Legacy fallback: direct-damage melee (no registered skill) =====
     windupTimer_ += dt;
     if ( windupTimer_ >= attackWindupTime_ ) {
         mu::Vec3 targetPos = target->player()->pos();
@@ -732,7 +789,10 @@ void TacticalNpc::updateAttackRecover( Seconds dt, Room& room ) {
 
     recoverTimer_ += dt;
 
-    if ( recoverTimer_ >= attackRecoverTime_ ) {
+    // Skill-based NPCs hold AttackRecover (and the cast attack clip) until the skill
+    // instance finishes, so the server hitbox bones stay valid for late hitboxes.
+    if ( recoverTimer_ >= attackRecoverTime_ &&
+         !( hasSkillAttacks() && room.npcSkillActive( static_cast<int32>( getId() ) ) ) ) {
         if ( (pos() - target->player()->pos()).len2() <= attackRange_ * attackRange_ && canEnterAttackSlot( room ) ) {
             transitionTo( TacticalNpcState::AttackWindup );
         }
@@ -904,7 +964,8 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
 
         constexpr float TWO_PI = 2.f * 3.14159265f;
         float angle = r1 * TWO_PI;
-        float radius = CONFUSED_WANDER_RADIUS * (0.25f + 0.75f * r2);
+        float radius = CONFUSED_WANDER_RADIUS * (
+            CONFUSED_TARGET_MIN_RADIUS_MULT + (1.f - CONFUSED_TARGET_MIN_RADIUS_MULT) * r2 );
         confusedTarget_ = confusedAnchor_ + mu::Vec3( std::cosf( angle ) * radius, 0.f, std::sinf( angle ) * radius );
         confusedRetargetTimer_ = CONFUSED_RETARGET_MIN + CONFUSED_RETARGET_SPAN * r1;
         distToTarget = (pos() - confusedTarget_).len();
@@ -928,7 +989,7 @@ void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
         moveDir = norm3( confusedAnchor_ - pos() );
     }
 
-    float spd = moveSpeed_ * CONFUSED_SPEED_MULT;
+    float spd = std::min( moveSpeed_ * CONFUSED_SPEED_MULT, CONFUSED_MAX_SPEED );
     setFacingDir( *this, moveDir );
     setDesiredVel( mu::Vec3( moveDir.x() * spd, 0.f, moveDir.z() * spd ) );
 }
@@ -984,7 +1045,7 @@ bool MU_CALLCONV TacticalNpc::updateSlotSettled( float distToSlot ) {
             slotSettled_ = false;   // 크게 밀려나면 래치 해제 → 재접근
         }
     }
-    else if ( distToSlot < separationRadius_ * TACTICAL_SLOT_SETTLE_RADIUS_MULT ) {
+    else if ( distToSlot <= TACTICAL_SLOT_SETTLE_RADIUS ) {
         slotSettled_ = true;        // 충분히 가까우면 안착
     }
     return slotSettled_;
@@ -1027,9 +1088,15 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
             if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
                 applyPeerSeparation( room, slotDir, separationRadius_ );
             }
-            float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-                spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+            float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+            float spd = baseSpd * speedMult_;
+            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+                // 접근 가속을 슬롯에 가까워질수록 제거하고 속도를 0으로 수렴시킨다.
+                // 방패벽(speedMult=2)의 기존 최저 5.25m/s가 슬롯을 왕복하던 문제를 막는다.
+                float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+                float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+                spd = baseSpd * approachMult * slowScale;
+            }
             setFacingDir( *this, slotDir );
             setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
             return;
@@ -1060,9 +1127,13 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
     if ( distToSlot > separationRadius_ ) {               // en route에서만 peer 회피(슬롯 근처는 밀집 패킹 보존)
         applyPeerSeparation( room, slotDir, separationRadius_ );
     }
-    float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
-    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
-        spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
+    float baseSpd = moveSpeed_ * TACTICAL_SPEED_MULT;
+    float spd = baseSpd * speedMult_;
+    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS ) { // 도착 감속(오버슈트 진동 방지)
+        float slowScale = std::clamp( distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS, 0.f, 1.f );
+        float approachMult = 1.f + (speedMult_ - 1.f) * slowScale;
+        spd = baseSpd * approachMult * slowScale;
+    }
     setFacingDir( *this, slotDir );
     setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
 }

@@ -1,6 +1,8 @@
 #include "pch.hpp"
 #include "editorController.hpp"
 
+#include "../AssetManager.hpp"   // monster caster model/anim accessors (setMonsterCaster)
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -42,6 +44,8 @@ void Controller::init(const InitRefs& refs) {
     debugBV_     = refs.debugBV;
     player_      = refs.player;
     goblin_      = refs.goblin;
+    assetManager_ = refs.assetManager;
+    animSystem_  = refs.animSystem;
     hwnd_        = refs.hwnd;
     terrainHeightAt_ = refs.terrainHeightAt;
     flushGpu_    = refs.flushGpu;
@@ -119,7 +123,9 @@ void Controller::buildUI() {
         L"  free: WASD move, RMB look, Q/E down/up\n"
         L"follow: WASD move caster, RMB orbit\n"
         L"P      : dump edit diff to console\n"
-        L"R      : reset characters");
+        L"R      : reset characters\n"
+        L"C      : kill front particle (debug)\n"
+        L"T      : put target in line of fire");
 
     panel_ = static_cast<UI::Panel*>(root->addChild(std::make_unique<UI::Panel>()));
     panel_->name    = "editorPanel";
@@ -160,6 +166,77 @@ std::shared_ptr<Object> Controller::targetObj() const {
     return player_;
 }
 
+void Controller::setMonsterCaster(CharacterKind kind) {
+    // Reuse the single monster object (goblin_) as the caster rig: swap its model and
+    // AnimBlender to the selected monster. Keeps the existing physics body / HP bar /
+    // render wiring (only the visual rig + animation change). The blender is built and
+    // init'd here (not via Object::setAnimBlender, which is hard-wired per class), then
+    // adopted by the object (which un-tracks the previous blender from the AnimSystem).
+    // Note: the ragdoll is not rebuilt for the new skeleton; death ragdoll on a swapped
+    // rig is out of scope for attack-pattern authoring.
+    if (!goblin_ || !assetManager_ || !animSystem_) return;
+    switch (kind) {
+    case CharacterKind::Goblin: {
+        goblin_->setModel(assetManager_->modelGoblin());
+        auto b = std::make_unique<AnimBlenderGoblin>();
+        b->init(assetManager_->modelGoblin(), assetManager_->goblinAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Mushroom: {
+        goblin_->setModel(assetManager_->modelMushroom());
+        auto b = std::make_unique<AnimBlenderMushroom>();
+        b->init(assetManager_->modelMushroom(), assetManager_->mushroomAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Snake: {
+        goblin_->setModel(assetManager_->modelSnake());
+        auto b = std::make_unique<AnimBlenderSnake>();
+        b->init(assetManager_->modelSnake(), assetManager_->snakeAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Birdy: {
+        goblin_->setModel(assetManager_->modelBirdy());
+        auto b = std::make_unique<AnimBlenderBirdy>();
+        b->init(assetManager_->modelBirdy(), assetManager_->birdyAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Bomber: {
+        goblin_->setModel(assetManager_->modelBomber());
+        auto b = std::make_unique<AnimBlenderBomber>();
+        b->init(assetManager_->modelBomber(), assetManager_->bomberAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Slime: {
+        goblin_->setModel(assetManager_->modelSlime());
+        auto b = std::make_unique<AnimBlenderSlime>();
+        b->init(assetManager_->modelSlime(), assetManager_->slimeAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Treant: {
+        goblin_->setModel(assetManager_->modelTreant());
+        auto b = std::make_unique<AnimBlenderTreant>();
+        b->init(assetManager_->modelTreant(), assetManager_->treantAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    case CharacterKind::Boss: {
+        goblin_->setModel(assetManager_->modelBoss());
+        auto b = std::make_unique<AnimBlenderBoss>();
+        b->init(assetManager_->modelBoss(), assetManager_->bossAnimations());
+        goblin_->adoptAnimBlender(std::move(b), *animSystem_);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 void Controller::positionDummyInFront() {
     auto c = casterObj();
     auto t = targetObj();
@@ -186,6 +263,23 @@ void Controller::positionDummyInFront() {
                            mu::Radian(std::atan2(-fwd.x(), -fwd.z()))));
 }
 
+void Controller::killFrontParticle() {
+    // Debug hook for the kill primitive: destroy the first live particle of any
+    // active effect. A non-penetrating skill destroys its own particle on hit
+    // through the same ParticleSystem::killParticle() path; this lets the
+    // primitive (and any Death sub-emitter chain, e.g. an explosion) be observed
+    // in isolation before the hitbox plumbing is exercised.
+    if (!skillCtx_ || !skillCtx_->vfxById) return;
+    for (int v = 0; v < skillCtx_->vfxByIdSize; ++v) {
+        ParticleEffect* fx = skillCtx_->vfxById[v];
+        if (!fx) continue;
+        for (int s = 0; s < fx->systemCount(); ++s) {
+            ParticleSystem& sys = fx->system(s);
+            if (sys.activeCount() > 0) { sys.killParticle(0); return; }
+        }
+    }
+}
+
 void Controller::clearHitboxSelection() {
     selectedHitboxIdx_ = -1;
     selectedDefIdx_    = -1;
@@ -200,6 +294,11 @@ void Controller::selectCharacter(int idx) {
 
     if (casterKind_ == CharacterKind::Player) { casterId_ = 0; targetId_ = 1; }
     else                                      { casterId_ = 1; targetId_ = 0; }
+
+    // Monster caster: hot-swap goblin_ to this monster's model + AnimBlender so its
+    // attack skills animate on the right rig. No-op for Player (and for monster kinds
+    // whose [Name] case is still disabled).
+    if (casterKind_ != CharacterKind::Player) setMonsterCaster(casterKind_);
 
     resetCharacters();
 
@@ -413,6 +512,8 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
     if (isPressed(cur, prev, VK_SPACE))  play();
     if (isPressed(cur, prev, 'P'))       { if (draft_.valid()) draft_.dumpDiff(); }
     if (isPressed(cur, prev, 'R'))       resetCharacters();
+    if (isPressed(cur, prev, 'C'))       killFrontParticle();
+    if (isPressed(cur, prev, 'T'))       positionDummyInFront();
     if (isPressed(cur, prev, 'F'))       enableFreeCamera(!cameraFree_);
     if (isPressed(cur, prev, VK_ESCAPE)) clearHitboxSelection();
 
@@ -532,15 +633,16 @@ void Controller::refreshPanel() {
     if (statusLabel_) {
         std::wstring s = L"Skill: ";
         s += draft_.valid() ? widen(draft_.name()) : L"(none)";
-        wchar_t buf[160];
+        wchar_t buf[200];
         auto t = targetObj();
         const int thp  = t ? t->hp()    : 0;
         const int tmax = t ? t->maxHp() : 0;
-        swprintf_s(buf, L"  |  scale %.2f%s  |  cam:%s  |  target HP %d/%d  |  %s",
+        const unsigned destroyed = skillSystem_ ? skillSystem_->debugStats().particlesDestroyedOnHit : 0u;
+        swprintf_s(buf, L"  |  scale %.2f%s  |  cam:%s  |  target HP %d/%d  |  destroyed %u  |  %s",
                    timeScale_,
                    (timeScale_ <= 0.f ? L" PAUSED" : L""),
                    (cameraFree_ ? L"FREE" : L"FOLLOW"),
-                   thp, tmax,
+                   thp, tmax, destroyed,
                    (selectedDefIdx_ >= 0 ? L"editing def (Esc to exit)" : L"click a hitbox to edit"));
         s += buf;
         statusLabel_->setText(s);

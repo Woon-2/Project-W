@@ -162,6 +162,11 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
+    <ClCompile Include="bomber.cpp" />
+    <ClCompile Include="birdy.cpp" />
+    <ClCompile Include="slime.cpp" />
+    <ClCompile Include="treant.cpp" />
+    <ClCompile Include="BehaviorTree.cpp" />
     <ClCompile Include="MidBossTacticBase.cpp" />
     <ClCompile Include="GoblinMidBossTactic.cpp" />
     <ClCompile Include="GrandbaumMidBossTactic.cpp" />
@@ -170,6 +175,11 @@
     <ClCompile Include="PlatoonLeader.cpp" />
     <ClCompile Include="snake.cpp" />
     <ClCompile Include="TacticalGoblin.cpp" />
+    <ClCompile Include="TacticalSlime.cpp" />
+    <ClCompile Include="TacticalSnake.cpp" />
+    <ClCompile Include="TacticalBirdy.cpp" />
+    <ClCompile Include="TacticalBomber.cpp" />
+    <ClCompile Include="TacticalTreant.cpp" />
     <ClCompile Include="TacticalNpc.cpp" />
     <ClCompile Include="TacticalSquad.cpp" />
     <ClCompile Include="JobTimer.cpp" />
@@ -217,6 +227,11 @@
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="goblin.hpp" />
+    <ClInclude Include="bomber.hpp" />
+    <ClInclude Include="birdy.hpp" />
+    <ClInclude Include="slime.hpp" />
+    <ClInclude Include="treant.hpp" />
+    <ClInclude Include="BehaviorTree.hpp" />
     <ClInclude Include="IMidBossTactic.hpp" />
     <ClInclude Include="MidBossTacticBase.hpp" />
     <ClInclude Include="GoblinMidBossTactic.hpp" />
@@ -226,6 +241,11 @@
     <ClInclude Include="PlatoonLeader.hpp" />
     <ClInclude Include="snake.hpp" />
     <ClInclude Include="TacticalGoblin.hpp" />
+    <ClInclude Include="TacticalSlime.hpp" />
+    <ClInclude Include="TacticalSnake.hpp" />
+    <ClInclude Include="TacticalBirdy.hpp" />
+    <ClInclude Include="TacticalBomber.hpp" />
+    <ClInclude Include="TacticalTreant.hpp" />
     <ClInclude Include="TacticalNpc.hpp" />
     <ClInclude Include="TacticalSquad.hpp" />
     <ClInclude Include="JobTimer.hpp" />
@@ -258,6 +278,11 @@
     <ClInclude Include="zone.hpp" />
     <ClInclude Include="..\common\zoneDef.hpp" />
     <ClInclude Include="..\common\markerDef.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\resources\data\chargeConfig.lua">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

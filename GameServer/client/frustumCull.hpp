@@ -56,4 +56,23 @@ inline bool intersects(const Frustum& f, const AABB& aabb) {
     return true;
 }
 
+// OBB variant: same projection-radius test, but the box half-extents are projected
+// onto each plane normal through the OBB's own oriented axes. Conservative.
+inline bool intersects(const Frustum& f, const OBB& obb) {
+    const mu::Vec3 c  = obb.center;
+    const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+    const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+    const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+
+    for (const auto& pl : f.planes) {
+        const float e =
+            std::abs(pl.x()*ax.x() + pl.y()*ax.y() + pl.z()*ax.z()) * obb.halfExtents.x()
+          + std::abs(pl.x()*ay.x() + pl.y()*ay.y() + pl.z()*ay.z()) * obb.halfExtents.y()
+          + std::abs(pl.x()*az.x() + pl.y()*az.y() + pl.z()*az.z()) * obb.halfExtents.z();
+        const float dist = pl.x()*c.x() + pl.y()*c.y() + pl.z()*c.z() + pl.w();
+        if (dist + e < 0.f) return false;
+    }
+    return true;
+}
+
 #endif  // __frustumCull_HPP

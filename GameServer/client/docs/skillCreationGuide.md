@@ -130,6 +130,7 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 | `hitGroup` | 0 | 같은 그룹끼리 중복 피격 제거 공유 |
 | `hitGroupCooldownMs` | 0 | 0 = 대상당 1회 / >0 = N ms 후 재피격 |
 | `useParticleSize` | false | VFXParticle 전용: 파티클 시각 크기로 반치수 스케일 |
+| `penetrate` | true | VFXParticle 전용: false = 비관통(첫 피격 시 소스 파티클 소멸). §3.4 참조 |
 | `onHit` | — | `OnHit{...}` |
 
 #### DestroyHitbox
@@ -179,6 +180,12 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 5. `applyAttachRotation`(파티클 부착 시 회전 추종):
    - `true`  — 박스가 파티클의 회전(spin, baseRotation)을 따라감. 길쭉한 투사체 박스에 적합.
    - `false` — 위치만 추종, 회전 고정.
+6. `penetrate`(관통 여부, 기본 `true`):
+   - `true`  — 관통. 파티클이 유지되며 다중 피격은 `hitGroupCooldownMs`로 조절.
+   - `false` — 비관통. 첫 피격 시 소스 파티클이 `ParticleSystem::killParticle`로 소멸한다.
+     그 파티클에 Death 서브이미터(예: 폭발)가 있으면 충돌 지점에서 자식 이펙트가 재생된다
+     (`energy_explosion_arrow`: 화살=데미지 0 비관통 트리거, 폭발=데미지). 클라는 예측 소멸,
+     서버는 권위적으로 소비 처리 — 상세는 `particleHitboxDeterminism.md` §8.
 
 **전제 조건 / 주의:**
 - 해당 `vfxId`가 **PlayVFX로 재생되어 파티클이 살아 있어야** 박스가 생긴다. 보통 PlayVFX → (약간 뒤) SpawnHitbox 순.

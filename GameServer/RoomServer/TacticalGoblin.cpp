@@ -24,7 +24,8 @@ TacticalNpcConfig TacticalGoblin::bossConfig() {
 		.attackWindupTime	= 0.35s,
 		.attackRecoverTime	= 0.6s,
 		.separationRadius	= 4.f,
-		.separationWeight	= 0.3f
+		.separationWeight	= 0.3f,
+		.attackDamageScale	= 3.0f   // boss uses the baseline Goblin skill but hits ~3x harder
     };
     return cfg;
 }

@@ -43,6 +43,7 @@ struct LightData {
     XMFLOAT4 cascadeSplitsFarV = {};
     u32t cascadeCount = MAX_CSM_CASCADES;
     std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
+    mu::Vec3 cascadeCameraPos = {};  // camera eye for camera-relative cascade space (caster/receiver rebase)
 };
 
 struct CameraData {
@@ -73,6 +74,15 @@ struct DrawEvent {
     mu::Vec3 worldCullMin{};
     mu::Vec3 worldCullMax{};
     bool     hasWorldCullBounds = false;
+
+    // Energy-orb absorption ripples (body-surface emissive wave). Only the local
+    // player ever sets rippleCount>0; all other instances default to 0 (no effect).
+    // Excluded from operator<=> so a ripple-carrying instance still batches with its
+    // material group — the ripples are written per-instance, not per-drawcall.
+    static constexpr int kMaxRipples = 4;   // must match shader MAX_ABSORB_RIPPLES
+    mu::Vec4 ripplePosAge[kMaxRipples]{};          // xyz = contact world pos, w = age (sec)
+    mu::Vec4 rippleColorIntensity[kMaxRipples]{};  // rgb = HDR color, w = intensity
+    u32t     rippleCount = 0u;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -126,7 +136,7 @@ struct Resources {
         StructuredBuffer    perInstanceData;   // t0
         StructuredBuffer    lightData;         // t1
         StructuredBuffer    boneData;          // t2
-        ConstantBufferArray perDrawcallData;   // b0
+        ConstantBufferArray perDrawcallData;   // b0: material constants, including alpha cutoff
         ConstantBuffer      perFrameData;      // b1
     } gBufferPass;
 };
@@ -244,7 +254,7 @@ private:
     ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
     D3D12_VIEWPORT    viewport_{};
     D3D12_RECT        scissorRect_{};
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvGB_[4]{};
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvGB_[5]{};
     D3D12_CPU_DESCRIPTOR_HANDLE dsvGB_{};
     Fence* pFence_ = nullptr;
     ThreadPool*       threadPool_  = nullptr;

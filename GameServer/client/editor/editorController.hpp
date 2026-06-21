@@ -41,6 +41,11 @@ public:
         DebugBVView*            debugBV     = nullptr;
         std::shared_ptr<Player> player;
         std::shared_ptr<Goblin> goblin;
+        // Monster caster hot-swap (setMonsterCaster): the model/animation source and
+        // the AnimSystem to (un)track the swapped blender. Required only once monster
+        // entries in kCharacterSkillMap are enabled; safe to leave set otherwise.
+        const AssetManager*     assetManager = nullptr;
+        AnimSystem*             animSystem   = nullptr;
         HWND                    hwnd        = nullptr;
         // Terrain height query (x,z)->y; used to drop the test dummy onto the ground.
         std::function<float(float, float)> terrainHeightAt;
@@ -74,7 +79,12 @@ private:
     void selectSkill(int idx);
     void play();
     void resetCharacters();
+    // Hot-swap the single monster object (goblin_) to the model + AnimBlender of the
+    // selected monster kind, so its attack skills play on the right rig. Per-kind
+    // cases are disabled behind [Name] guards (enable with the monster's scaffolding).
+    void setMonsterCaster(CharacterKind kind);
     void positionDummyInFront();   // place the target object in front of the caster, on the ground
+    void killFrontParticle();      // debug: destroy the first live particle of any active VFX (tests killParticle)
     void clearHitboxSelection();   // ESC: leave hitbox editing
 
     // --- editing ---
@@ -101,6 +111,8 @@ private:
     DebugBVView*          debugBV_     = nullptr;
     std::shared_ptr<Player> player_;
     std::shared_ptr<Goblin> goblin_;
+    const AssetManager*   assetManager_ = nullptr;   // monster caster model/anim source
+    AnimSystem*           animSystem_   = nullptr;    // (un)track blenders on hot-swap
     HWND                  hwnd_        = nullptr;
     std::function<float(float, float)> terrainHeightAt_;
     std::function<void()> flushGpu_;   // drains GPU before destroying UI widgets (see InitRefs::flushGpu)

@@ -115,6 +115,15 @@ void AnimController::registerClip(std::string_view key, const ServerAnimClip* cl
 bool AnimController::switchClip(std::string_view key, float startTime) {
     auto it = clips_.find(std::string(key));
     if (it == clips_.end()) return false;
+    // Never switch the live clip to null. A key registered with a missing clip
+    // (findServerAnimClip returned nullptr) would otherwise null `clip`, and the
+    // bone-attached collision/hit BVH only updates while a clip is active
+    // (Object::updateAnimBones early-returns on null) — so it would freeze at the
+    // last pose while the Dynamic body keeps integrating, desyncing the hit BVH
+    // from the body (monsters fall through terrain + become unhittable). Keeping
+    // the current valid clip preserves BVH tracking; the caller's intended clip
+    // just doesn't play (a missing-asset symptom, not a physics break).
+    if (!it->second) return false;
     ServerAnimState::switchClip(it->second, startTime);
     return true;
 }

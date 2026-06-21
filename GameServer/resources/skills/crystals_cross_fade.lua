@@ -34,6 +34,9 @@ skill:addEvent(150, "PlayVFX", {
     particleConform = "SnapAndAlign"
 })
 
+-- Ice crystals rise SFX, with the VFX.
+skill:addEvent(150, "PlaySound", { sound = "ice_crossfade" })
+
 local onHit = OnHit({
     damage          = 48,
     vfxId           = 255,

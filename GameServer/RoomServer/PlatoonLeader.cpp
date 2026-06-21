@@ -4,6 +4,7 @@
 #include "Room.hpp"
 #include "GameSession.hpp"
 #include "object.hpp"
+#include <random>
 
 PlatoonLeader::PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg, std::unique_ptr<IMidBossTactic> tactic )
     : TacticalNpc( std::move( base ), cfg ), tactic_( std::move( tactic ) )
@@ -44,6 +45,15 @@ void PlatoonLeader::applyHitToSession( GameSession* session, float damage ) {
     int32 newHp = std::max( 0, p->hp() - static_cast<int32>(damage) );
     p->setHp( newHp );
     recordHit( static_cast<uint16>(session->id()), newHp );
+}
+
+bool PlatoonLeader::castSkillAttack( Room& room ) {
+    if ( !hasSkillAttacks() ) return false;   // no roster -> caller does legacy melee
+    const TacticalNpcAttack& atk = pickAttack();
+    if ( !atk.clipKey.empty() ) animController().switchClip( atk.clipKey );
+    const uint32 seed = std::random_device{}();
+    room.skillStartInternal( static_cast<int32>( getId() ), atk.skillId, seed, attackDamageScale_ );
+    return true;
 }
 
 TacticalNpcUpdateResult PlatoonLeader::update( Seconds dt, Room& room ) {

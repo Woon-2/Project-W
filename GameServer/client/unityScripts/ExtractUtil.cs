@@ -18,12 +18,12 @@ public static class ExtractUtil
         return string.Format("</{0}>", tagSource);
     }
 
-    // WriteXX...: BinaryWriter·Î Æ¯Á¤ÇÑ ÀÚ·áÇüÀ» Ãâ·ÂÇÏ±â À§ÇÑ À¯Æ¿¸®Æ¼ ÇÔ¼ö
-    // ExtractXX...: WriteXX... ÇÔ¼öµéÀ» ÀÌ¿ëÇÏ¿© À¯´ÏÆ¼ÀÇ Æ¯Á¤ÇÑ ÀÚ·á±¸Á¶¸¦ Ãâ·ÂÇÏ´Â ÇÔ¼ö
+    // WriteXX...: BinaryWriterë¡œ íŠ¹ì •í•œ ìë£Œí˜•ì„ ì¶œë ¥í•˜ê¸° ìœ„í•œ ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
+    // ExtractXX...: WriteXX... í•¨ìˆ˜ë“¤ì„ ì´ìš©í•˜ì—¬ ìœ ë‹ˆí‹°ì˜ íŠ¹ì •í•œ ìë£Œêµ¬ì¡°ë¥¼ ì¶œë ¥í•˜ëŠ” í•¨ìˆ˜
 
-    // @param Transform ³ëµå °³¼ö ÃßÀûÀÇ ´ë»óÀÌ µÉ Æ®¸®(¼­ºêÆ®¸®)ÀÇ ·çÆ®³ëµå
-    // @param nodeCnt ³ëµå °³¼ö¸¦ ´©Àû½ÃÅ³ º¯¼ö
-    // Transform Æ®¸®(¼­ºêÆ®¸®)ÀÇ ³ëµå °³¼ö¸¦ nodeCnt¿¡ ´©ÀûÇÑ´Ù.
+    // @param Transform ë…¸ë“œ ê°œìˆ˜ ì¶”ì ì˜ ëŒ€ìƒì´ ë  íŠ¸ë¦¬(ì„œë¸ŒíŠ¸ë¦¬)ì˜ ë£¨íŠ¸ë…¸ë“œ
+    // @param nodeCnt ë…¸ë“œ ê°œìˆ˜ë¥¼ ëˆ„ì ì‹œí‚¬ ë³€ìˆ˜
+    // Transform íŠ¸ë¦¬(ì„œë¸ŒíŠ¸ë¦¬)ì˜ ë…¸ë“œ ê°œìˆ˜ë¥¼ nodeCntì— ëˆ„ì í•œë‹¤.
     public static void AccNodeCnt(Transform xform, ref int nodeCnt)
     {
         nodeCnt++;
@@ -165,30 +165,55 @@ public static class ExtractUtil
         WriteMatrix(binaryWriter, tagSource, matrix);
     }
 
+    // === ë©”ì‹œ ì§€ì˜¤ë©”íŠ¸ë¦¬ dress ê³µê°„ ë² ì´í¬ ===
+    // ëª¨ë¸ ë£¨íŠ¸ì˜ scaleì„ ì •ì ì— ë¯¸ë¦¬ êµ¬ì›Œë„£ì–´, ì„í¬íŠ¸/ëŸ°íƒ€ì„ì´ ëª¨ë¸ ê³ ìœ  scaleì„
+    // ì‹ ê²½ ì“°ì§€ ì•Šê²Œ í•œë‹¤. ë…¸ë“œ DressMatrix D = Scale(rootScale)Â·root.worldToLocalÂ·node.localToWorld.
+    // (DëŠ” ì •ì ì„ mesh-local â†’ dress ê³µê°„ìœ¼ë¡œ ì˜®ê¸´ë‹¤. ë³¸ toDress/toLocalê³¼ ê°™ì€ ê³µê°„ì´ë¼
+    //  ìŠ¤í‚¤ë‹ íŒ”ë ˆíŠ¸ê°€ ì¼ê´€ë˜ê²Œ ë™ì‘í•œë‹¤.)
+
+    // ì •ì  ìœ„ì¹˜ ë°°ì—´ì„ Dë¡œ ë³€í™˜(affine point).
+    public static Vector3[] BakePositions(Vector3[] verts, Matrix4x4 D)
+    {
+        Vector3[] outv = new Vector3[verts.Length];
+        for (int i = 0; i < verts.Length; i++)
+            outv[i] = D.MultiplyPoint3x4(verts[i]);
+        return outv;
+    }
+
+    // ë°©í–¥(ë…¸ë©€/íƒ„ì  íŠ¸) ë°°ì—´ì„ í–‰ë ¬ mìœ¼ë¡œ ë³€í™˜ í›„ ì •ê·œí™”.
+    // ë…¸ë©€ì€ normalMatrix(= D.inverse.transpose), íƒ„ì  íŠ¸ëŠ” Dë¥¼ ë„˜ê¸´ë‹¤.
+    public static Vector3[] BakeDirections(Vector3[] dirs, Matrix4x4 m)
+    {
+        Vector3[] outv = new Vector3[dirs.Length];
+        for (int i = 0; i < dirs.Length; i++)
+            outv[i] = m.MultiplyVector(dirs[i]).normalized;
+        return outv;
+    }
+
     public static void GetRelativeTRS(
         Transform target, Transform reference,
         out Vector3 relativePosition,
         out Quaternion relativeRotation,
         out Vector3 relativeScale)
     {
-        // µÎ TransformÀÇ ¿ùµå Çà·Ä
+        // ë‘ Transformì˜ ì›”ë“œ í–‰ë ¬
         Matrix4x4 targetMatrix = target.localToWorldMatrix;
         Matrix4x4 referenceMatrix = reference.localToWorldMatrix;
 
-        // BÀÇ ¿ªÇà·Ä * A = A¸¦ B ±âÁØÀ¸·Î º¯È¯
+        // Bì˜ ì—­í–‰ë ¬ * A = Aë¥¼ B ê¸°ì¤€ìœ¼ë¡œ ë³€í™˜
         Matrix4x4 relativeMatrix = referenceMatrix.inverse * targetMatrix;
 
-        // Çà·ÄÀ» position, rotation, scale·Î ºĞÇØ
+        // í–‰ë ¬ì„ position, rotation, scaleë¡œ ë¶„í•´
         relativePosition = relativeMatrix.GetColumn(3);
 
-        // ½ºÄÉÀÏ ÃßÃâ (¿­ º¤ÅÍ ±æÀÌ)
+        // ìŠ¤ì¼€ì¼ ì¶”ì¶œ (ì—´ ë²¡í„° ê¸¸ì´)
         relativeScale = new Vector3(
             relativeMatrix.GetColumn(0).magnitude,
             relativeMatrix.GetColumn(1).magnitude,
             relativeMatrix.GetColumn(2).magnitude
         );
 
-        // Á¤±ÔÈ­ ÈÄ È¸Àü ÃßÃâ
+        // ì •ê·œí™” í›„ íšŒì „ ì¶”ì¶œ
         Quaternion rot = Quaternion.LookRotation(
             relativeMatrix.GetColumn(2).normalized,
             relativeMatrix.GetColumn(1).normalized
@@ -223,6 +248,8 @@ public static class ExtractUtil
 
     public static void WriteDressMatrix(BinaryWriter binaryWriter, string tagSource, Transform dressXform, Transform xform)
     {
+        // dressXform(ë³´í†µ ëª¨ë¸ ë£¨íŠ¸)ì˜ worldToLocalMatrixë¡œ ì”¬ ë°°ì¹˜ìš© ìœ„ì¹˜/íšŒì „/ìŠ¤ì¼€ì¼ì„ ì œê±°í•œë‹¤.
+        // ëª¨ë¸ ê³ ìœ  scaleë„ í•¨ê»˜ ë¹ ì§€ë©°, ëŸ°íƒ€ì„ì— body scaleë¡œ í•œ ë²ˆë§Œ ì ìš©ëœë‹¤(í´ë¼ setModel ê²½ë¡œì™€ ë™ì¼).
         WriteMatrix(binaryWriter, tagSource, dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
     }
 

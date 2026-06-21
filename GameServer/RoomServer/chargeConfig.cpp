@@ -13,6 +13,13 @@ static ObjectType parseObjectType(const std::string& s) {
     if (s == "Stronghold") return ObjectType::Stronghold;
     if (s == "Snake")      return ObjectType::Snake;
     if (s == "Mushroom")   return ObjectType::Mushroom;
+    if (s == "Hobgoblin")  return ObjectType::Hobgoblin;
+    if (s == "Bomber")     return ObjectType::Bomber;
+    if (s == "Birdy")      return ObjectType::Birdy;
+    if (s == "Slime")      return ObjectType::Slime;
+    if (s == "Treant")     return ObjectType::Treant;
+    if (s == "Grandbaum")  return ObjectType::Grandbaum;
+    if (s == "Isys")       return ObjectType::Isys;
     return ObjectType::Goblin;
 }
 
@@ -46,15 +53,13 @@ void ChargeConfig::load(const std::filesystem::path& luaPath) {
 
     if (sol::optional<sol::table> combo = t["combo"]) {
         comboWindowMs_ = Milliseconds{ static_cast<float>(combo->get_or("windowMs", 3000.0)) };
-        comboMaxMult_  = static_cast<float>(combo->get_or("maxMult", 2.0));
-        if (sol::optional<sol::table> mult = (*combo)["mult"]) {
-            std::vector<float> tiers;
-            for (std::size_t i = 1; i <= mult->size(); ++i) {
-                sol::optional<double> m = (*mult)[i];
-                if (m) tiers.push_back(static_cast<float>(*m));
-            }
-            if (!tiers.empty()) comboMult_ = std::move(tiers);
-        }
+    }
+
+    if (sol::optional<sol::table> regen = t["regen"]) {
+        regenBasePerSec_ = static_cast<float>(regen->get_or("basePerSec", 1.0));
+        regenCapPerSec_  = static_cast<float>(regen->get_or("capPerSec", 25.0));
+        regenHalfCombo_  = static_cast<float>(regen->get_or("halfCombo", 10.0));
+        regenExponent_   = static_cast<float>(regen->get_or("exponent", 3.0));
     }
 
     if (sol::optional<sol::table> sc = t["softCap"]) {
@@ -71,12 +76,15 @@ float ChargeConfig::monsterCharge(ObjectType type) const {
     return idx < monsterCharge_.size() ? monsterCharge_[idx] : 0.f;
 }
 
-float ChargeConfig::comboMult(uint16 comboCount) const {
-    if (comboMult_.empty()) return 1.f;
-    const std::size_t idx = (comboCount == 0)
-        ? 0
-        : std::min<std::size_t>(comboCount - 1, comboMult_.size() - 1);
-    return std::min(comboMult_[idx], comboMaxMult_);
+float ChargeConfig::hpRegenPerSec(uint16 comboCount) const {
+    // S-curve (Hill): y = base + (cap - base) * x^n / (x^n + halfCombo^n). Stays near
+    // base for low combo, crosses the base->cap midpoint at x = halfCombo, asymptotes to cap.
+    const float x  = static_cast<float>(comboCount);
+    const float xn = std::pow(x, regenExponent_);
+    const float mn = std::pow(regenHalfCombo_, regenExponent_);
+    const float denom = xn + mn;
+    const float t  = (denom > 0.f) ? xn / denom : 0.f;
+    return regenBasePerSec_ + (regenCapPerSec_ - regenBasePerSec_) * t;
 }
 
 float ChargeConfig::softCapFactor(int curStacks) const {

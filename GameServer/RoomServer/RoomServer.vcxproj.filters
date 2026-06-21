@@ -61,6 +61,33 @@
     <Filter Include="contents\Npc\mushroom">
       <UniqueIdentifier>{ddd567da-93a8-40b9-b544-7ae37270d79c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents\tacticalNpc\snake">
+      <UniqueIdentifier>{c552c70a-1028-41bc-87f7-ec7ca32d51c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\birdy">
+      <UniqueIdentifier>{6b5244c3-7d6c-448b-b315-f5cf881f460b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\slime">
+      <UniqueIdentifier>{2afa3ca6-8094-44b5-a690-65accbd7eefd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\treant">
+      <UniqueIdentifier>{887dbb13-35d8-47c9-8b8d-3ed3ec3defb6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\bomber">
+      <UniqueIdentifier>{0e7eb6ca-993c-414d-a0b7-21f9cc43439c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\birdy">
+      <UniqueIdentifier>{435a4855-29c1-4357-870d-cf98f49fd338}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\bomber">
+      <UniqueIdentifier>{9e6dfbdf-7e84-4f78-80de-7d34b75f24ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\slime">
+      <UniqueIdentifier>{db6ff77a-ea25-4355-a536-24f3c76534b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\treant">
+      <UniqueIdentifier>{04b7a6ed-9743-4ee5-b521-23b8730fcdd1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -144,19 +171,14 @@
     <ClCompile Include="terrain.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
-    <ClCompile Include="skill\skillCompiler.cpp" />
-    <ClCompile Include="skill\skillSystem.cpp" />
     <ClCompile Include="PlatoonLeader.cpp">
-      <Filter>contents\tacticalNpc</Filter>
-    </ClCompile>
-    <ClCompile Include="TacticalNpc.cpp">
-      <Filter>contents\tacticalNpc</Filter>
-    </ClCompile>
-    <ClCompile Include="TacticalSquad.cpp">
       <Filter>contents\tacticalNpc</Filter>
     </ClCompile>
     <ClCompile Include="TacticalGoblin.cpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClCompile>
+    <ClCompile Include="BehaviorTree.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
     <ClCompile Include="MidBossTacticBase.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
@@ -170,15 +192,62 @@
     <ClCompile Include="IsysMidBossTactic.cpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
-    <ClCompile Include="chargeConfig.cpp" />
-    <ClCompile Include="stronghold.cpp" />
-    <ClCompile Include="zone.cpp" />
-    <ClCompile Include="..\common\simpleJson.cpp" />
     <ClCompile Include="snake.cpp">
       <Filter>contents\Npc\snake</Filter>
     </ClCompile>
     <ClCompile Include="mushroom.cpp">
       <Filter>contents\Npc\mushroom</Filter>
+    </ClCompile>
+    <ClCompile Include="chargeConfig.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\simpleJson.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillCompiler.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillSystem.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="stronghold.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="zone.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalNpc.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalSquad.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalBirdy.cpp">
+      <Filter>contents\tacticalNpc\birdy</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalTreant.cpp">
+      <Filter>contents\tacticalNpc\treant</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalSlime.cpp">
+      <Filter>contents\tacticalNpc\slime</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalSnake.cpp">
+      <Filter>contents\tacticalNpc\snake</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalBomber.cpp">
+      <Filter>contents\tacticalNpc\bomber</Filter>
+    </ClCompile>
+    <ClCompile Include="birdy.cpp">
+      <Filter>contents\Npc\birdy</Filter>
+    </ClCompile>
+    <ClCompile Include="bomber.cpp">
+      <Filter>contents\Npc\bomber</Filter>
+    </ClCompile>
+    <ClCompile Include="slime.cpp">
+      <Filter>contents\Npc\slime</Filter>
+    </ClCompile>
+    <ClCompile Include="treant.cpp">
+      <Filter>contents\Npc\treant</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -275,14 +344,11 @@
     <ClInclude Include="PlatoonLeader.hpp">
       <Filter>contents\tacticalNpc</Filter>
     </ClInclude>
-    <ClInclude Include="TacticalNpc.hpp">
-      <Filter>contents\tacticalNpc</Filter>
-    </ClInclude>
-    <ClInclude Include="TacticalSquad.hpp">
-      <Filter>contents\tacticalNpc</Filter>
-    </ClInclude>
     <ClInclude Include="TacticalGoblin.hpp">
       <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClInclude>
+    <ClInclude Include="BehaviorTree.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
     <ClInclude Include="IMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
@@ -299,18 +365,70 @@
     <ClInclude Include="IsysMidBossTactic.hpp">
       <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
-    <ClInclude Include="chargeConfig.hpp" />
-    <ClInclude Include="skill\skillLoadout.hpp" />
-    <ClInclude Include="strongholdDef.hpp" />
-    <ClInclude Include="stronghold.hpp" />
-    <ClInclude Include="zone.hpp" />
-    <ClInclude Include="..\common\zoneDef.hpp" />
-    <ClInclude Include="..\common\markerDef.hpp" />
     <ClInclude Include="snake.hpp">
       <Filter>contents\Npc\snake</Filter>
     </ClInclude>
     <ClInclude Include="mushroom.hpp">
       <Filter>contents\Npc\mushroom</Filter>
     </ClInclude>
+    <ClInclude Include="chargeConfig.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\markerDef.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillLoadout.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="stronghold.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="strongholdDef.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="zone.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\zoneDef.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalNpc.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSquad.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalBirdy.hpp">
+      <Filter>contents\tacticalNpc\birdy</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalTreant.hpp">
+      <Filter>contents\tacticalNpc\treant</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSlime.hpp">
+      <Filter>contents\tacticalNpc\slime</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSnake.hpp">
+      <Filter>contents\tacticalNpc\snake</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalBomber.hpp">
+      <Filter>contents\tacticalNpc\bomber</Filter>
+    </ClInclude>
+    <ClInclude Include="birdy.hpp">
+      <Filter>contents\Npc\birdy</Filter>
+    </ClInclude>
+    <ClInclude Include="bomber.hpp">
+      <Filter>contents\Npc\bomber</Filter>
+    </ClInclude>
+    <ClInclude Include="slime.hpp">
+      <Filter>contents\Npc\slime</Filter>
+    </ClInclude>
+    <ClInclude Include="treant.hpp">
+      <Filter>contents\Npc\treant</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\resources\data\chargeConfig.lua">
+      <Filter>contents\etc</Filter>
+    </None>
   </ItemGroup>
 </Project>

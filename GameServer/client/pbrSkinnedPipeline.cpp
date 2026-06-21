@@ -243,6 +243,7 @@ void Dispatcher::shadowUpdate() {
 			mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
 		).getXmf();
 		pfd.cascadeIdx = ci;
+		pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
 		pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
 	}
 }
@@ -298,6 +299,7 @@ void Dispatcher::shadowUpdateMT() {
 			mainDirectionalLightData_.cascadeViews[ci] * mainDirectionalLightData_.cascadeProjs[ci]
 		).getXmf();
 		pfd.cascadeIdx = ci;
+		pfd.camPos     = mainDirectionalLightData_.cascadeCameraPos.getXmf();  // camera-relative caster rebase
 		pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
 	}
 

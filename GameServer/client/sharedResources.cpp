@@ -697,7 +697,8 @@ Texture createDepthRT( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 	Texture tex = createTexture( device, width, height, format,
 		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		clearVal
@@ -744,18 +745,21 @@ void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 		gb.gb1   = createGB1RT  (device, width, height,                               rtvPool, srvTexPool, ("GBuffer_GB1" + suffix).c_str());
 		gb.gb2   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB2" + suffix).c_str());
 		gb.gb3   = createColorRT(device, width, height, DXGI_FORMAT_R8_UNORM,          rtvPool, srvTexPool, ("GBuffer_GB3" + suffix).c_str());
+		gb.gb4   = createColorRT(device, width, height, DXGI_FORMAT_R32_FLOAT,         rtvPool, srvTexPool, ("GBuffer_GB4" + suffix).c_str());
 		gb.depth = createDepthRT(device, width, height,                 dsvPool, srvTexPool, ("GBuffer_Depth" + suffix).c_str());
 
 		gb.rtvHandles[0] = rtvPool.cpuHandle(gb.gb0.idxRtv);
 		gb.rtvHandles[1] = rtvPool.cpuHandle(gb.gb1.idxRtv);
 		gb.rtvHandles[2] = rtvPool.cpuHandle(gb.gb2.idxRtv);
 		gb.rtvHandles[3] = rtvPool.cpuHandle(gb.gb3.idxRtv);
+		gb.rtvHandles[4] = rtvPool.cpuHandle(gb.gb4.idxRtv);
 		gb.dsvHandle     = dsvPool.cpuHandle(gb.depth.idxDsv);
 
 		gb.curStateGB[0] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[1] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[2] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateGB[3] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateGB[4] = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		gb.curStateDepth = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
 		gBufferData.push_back(std::move(gb));
@@ -764,9 +768,9 @@ void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 
 void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& gb = gBufferData[roomIdx];
-	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+	Texture* colorTex[5] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 };
 
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < 5; ++i) {
 		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_RENDER_TARGET) {
 			transitionResourceState(cmdList, colorTex[i]->res.Get(),
 				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -787,9 +791,9 @@ void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) 
 
 void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& gb = gBufferData[roomIdx];
-	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+	Texture* colorTex[5] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 };
 
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < 5; ++i) {
 		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
 			transitionResourceState(cmdList, colorTex[i]->res.Get(),
 				D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -815,18 +819,22 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	const float kBlack[4] = { 0.f, 0.f, 0.f, 0.f };
 	// GB1: clear to (0.5, 0.5, 0, 0) — octDecode((0.5,0.5)) = (0,0,1) forward normal
 	const float kNormalClear[4] = { 0.5f, 0.5f, 0.f, 0.f };
+	// GB4 (linear view-space Z): background pixels = 0 (overwritten by skybox in the forward pass)
+	const float kZeroZ[4] = { 0.f, 0.f, 0.f, 0.f };
 
 	cmdList->ClearRenderTargetView(gb.rtvHandles[0], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[1], kNormalClear, 0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[2], kBlack,       0u, nullptr);
 	cmdList->ClearRenderTargetView(gb.rtvHandles[3], kBlack,       0u, nullptr);
-	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+	cmdList->ClearRenderTargetView(gb.rtvHandles[4], kZeroZ,       0u, nullptr);
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 0.f, 0u, 0u, nullptr);
 }
 
 void eraseGBuffer( DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool ) {
 	for (auto& gb : gBufferData) {
-		// 색상 RT 4개: RTV + SRV 반납
-		for (auto* colorTex : { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 }) {
+		// 색상 RT 5개: RTV + SRV 반납
+		for (auto* colorTex : { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3, &gb.gb4 }) {
 			freeRTV(*colorTex, rtvPool);
 			freeSRV(*colorTex, srvTexPool);
 		}
@@ -1072,7 +1080,8 @@ Texture createPortraitDepth( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: 포트레이트 카메라도 setPerspective를 쓰므로 far plane이 0.0에 매핑된다.
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 	Texture tex = createTexture( device, width, height, format,
 		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		clearVal
@@ -1143,7 +1152,7 @@ void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	auto& p = portraitData[roomIdx];
 	const float kTransparent[4] = { 0.f, 0.f, 0.f, 0.f };
 	cmdList->ClearRenderTargetView(p.rtv, kTransparent, 0u, nullptr);
-	cmdList->ClearDepthStencilView(p.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+	cmdList->ClearDepthStencilView(p.dsv, D3D12_CLEAR_FLAG_DEPTH, 0.f, 0u, 0u, nullptr);
 }
 
 }	// namespace Portrait
@@ -1163,7 +1172,9 @@ void addHiZMaps( ID3D12Device* device, u32t width, u32t height,
 	constexpr DXGI_FORMAT formatF = DXGI_FORMAT_R32_FLOAT;
 	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
 
-	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	// Reversed-Z: far plane이 0.0에 매핑되므로 0.0으로 클리어한다.
+	// (실제 매 프레임 클리어는 clearHiZMap()에서 clearDepth 상수를 사용한다.)
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 0.f } };
 
 	for (std::size_t r = 0u; r < roomCnt; ++r) {
 		auto& mapData = hiZMaps.emplace_back();
@@ -1423,5 +1434,138 @@ void eraseIBL( DescriptorPool& uavPool, DescriptorPool& srvTexCubePool, Descript
 }
 
 }	// namespace SharedResources::IBL
+
+namespace ColorGrading {
+
+ColorGradingData lutData;
+
+namespace {
+
+// 한 줄에서 공백으로 구분된 RGB float 3개를 읽는다.
+bool parseRgbLine(const std::string& line, float& r, float& g, float& b) {
+	std::istringstream iss(line);
+	return static_cast<bool>(iss >> r >> g >> b);
+}
+
+// .cube 파일(텍스트, "LUT_3D_SIZE N" 헤더 + N^3개의 "r g b" 라인)을 파싱해
+// R8G8B8A8_UNORM 바이트 버퍼로 변환한다. 표준 .cube 순서(R이 가장 빠르게, G가 중간,
+// B가 가장 느리게 변화)가 그대로 Texture3D의 (x=R, y=G, z=B) 축과 일치한다.
+bool parseCubeLUT(const std::filesystem::path& path, u32t& outSize, std::vector<u8t>& outData) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		DISPLAY_ERROR_STR(false, "[GFX Error] SharedResources::ColorGrading::parseCubeLUT: \""s
+			+ path.string() + "\" 파일을 열 수 없습니다.", false
+		);
+		return false;
+	}
+
+	u32t size = 0u;
+	std::string line;
+	while (std::getline(file, line)) {
+		std::istringstream iss(line);
+		std::string token;
+		if (!(iss >> token)) continue;
+		if (token == "LUT_3D_SIZE") {
+			iss >> size;
+			break;
+		}
+		// TITLE / DOMAIN_MIN / DOMAIN_MAX / # 주석 등의 다른 헤더 라인은 무시한다.
+	}
+
+	if (size == 0u) {
+		DISPLAY_ERROR_STR(false, "[GFX Error] SharedResources::ColorGrading::parseCubeLUT: \""s
+			+ path.string() + "\"에서 LUT_3D_SIZE를 찾지 못했습니다.", false
+		);
+		return false;
+	}
+
+	const auto texelCnt = static_cast<std::size_t>(size) * size * size;
+	outData.assign(texelCnt * 4u, 0u);
+
+	std::size_t idx = 0u;
+	float r = 0.f, g = 0.f, b = 0.f;
+	while (idx < texelCnt && std::getline(file, line)) {
+		if (!parseRgbLine(line, r, g, b)) continue;
+		outData[idx * 4u + 0u] = static_cast<u8t>(std::clamp(r, 0.f, 1.f) * 255.f + 0.5f);
+		outData[idx * 4u + 1u] = static_cast<u8t>(std::clamp(g, 0.f, 1.f) * 255.f + 0.5f);
+		outData[idx * 4u + 2u] = static_cast<u8t>(std::clamp(b, 0.f, 1.f) * 255.f + 0.5f);
+		outData[idx * 4u + 3u] = 255u;
+		++idx;
+	}
+
+	if (idx != texelCnt) {
+		DISPLAY_ERROR_STR(false, "[GFX Error] SharedResources::ColorGrading::parseCubeLUT: \""s
+			+ path.string() + "\"의 데이터 라인 수가 LUT_3D_SIZE^3과 일치하지 않습니다.", false
+		);
+		return false;
+	}
+
+	outSize = size;
+	return true;
+}
+
+}	// anonymous namespace
+
+void addColorGradingLUT( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, DescriptorPool& srvTex3DPool, const std::filesystem::path& lutPath
+) {
+	if (lutData.created) return;
+
+	u32t size = 0u;
+	std::vector<u8t> rgba8{};
+	if (!parseCubeLUT(lutPath, size, rgba8)) return;
+
+	constexpr DXGI_FORMAT lutFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	lutData.size = size;
+	lutData.lut  = createTexture3D( device, size, lutFormat,
+		D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST
+	);
+	setD3DName(lutData.lut.res.Get(), "ColorGradingLUT_"s + lutPath.stem().string());
+
+	const UINT rowPitch   = size * 4u;
+	const UINT slicePitch = rowPitch * size;
+
+	const D3D12_SUBRESOURCE_DATA subresource{
+		.pData      = rgba8.data(),
+		.RowPitch   = rowPitch,
+		.SlicePitch = slicePitch
+	};
+
+	const auto requiredBytes = GetRequiredIntermediateSize(lutData.lut.res.Get(), 0u, 1u);
+	auto uploadBuffer = createBufferResource(device, nullptr, requiredBytes, BufferCreationType::UploadBuffer);
+
+	DISPLAY_ERROR_DX_VOID(
+		UpdateSubresources(cmdList, lutData.lut.res.Get(), uploadBuffer.Get(), 0, 0, 1u, &subresource), false
+	);
+	fenceToAssociate.associatedResources_.push_back(std::move(uploadBuffer));
+
+	transitionResourceState(cmdList, lutData.lut.res.Get(),
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+	);
+
+	createSRV( device, lutData.lut, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = lutFormat,
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture3D = D3D12_TEX3D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u, .ResourceMinLODClamp = 0.f }
+	}, srvTex3DPool );
+	lutData.lut.idxSrv.idxRange   = etoi(Texture::Type::Tex3D);
+	lutData.lut.idxSrv.idxSampler = etoi(Samplers::TrilinearClamp);
+	// Tex3D는 array slice가 없어 idxInArray가 비어 있으므로, half-texel 보정에 필요한
+	// LUT 한 축의 해상도(N)를 여기 실어 셰이더(sampleBindless3D)로 전달한다.
+	lutData.lut.idxSrv.idxInArray = static_cast<i32t>(size);
+
+	lutData.created = true;
+}
+
+void eraseColorGradingLUT( DescriptorPool& srvTex3DPool ) {
+	if (!lutData.created) return;
+
+	srvTex3DPool.free(lutData.lut.idxSrv.idxResource);
+	lutData = ColorGradingData{};
+}
+
+}	// namespace SharedResources::ColorGrading
 
 }	// namespace SharedResources

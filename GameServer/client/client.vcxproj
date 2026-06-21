@@ -177,6 +177,8 @@
     <ClCompile Include="piercingSlashMeshPipeline.cpp" />
     <ClCompile Include="piercingSlashMaterial.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
+    <ClCompile Include="energyOrbPipeline.cpp" />
+    <ClCompile Include="energyOrbSystem.cpp" />
     <ClCompile Include="windRingPipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -352,6 +354,8 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
+    <ClInclude Include="energyOrbPipeline.hpp" />
+    <ClInclude Include="energyOrbSystem.hpp" />
     <ClInclude Include="physicsTestObject.hpp" />
     <ClInclude Include="windRingPipeline.hpp" />
     <ClInclude Include="smokeBlendCGPipeline.hpp" />
@@ -469,6 +473,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
+    <FxCompile Include="energyOrb.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="smokeBlendCG.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -583,10 +591,18 @@
     <None Include="..\resources\skills\arrow.lua" />
     <None Include="..\resources\skills\arrow_rain.lua" />
     <None Include="..\resources\skills\arrow_volley.lua" />
+    <None Include="..\resources\skills\birdy_attack1.lua" />
+    <None Include="..\resources\skills\birdy_attack2.lua" />
+    <None Include="..\resources\skills\bomber_attack1.lua" />
     <None Include="..\resources\skills\crystals_cross_fade.lua" />
     <None Include="..\resources\skills\crystals_front_attack.lua" />
     <None Include="..\resources\skills\energy_explosion_arrow.lua" />
+    <None Include="..\resources\skills\goblin_attack1.lua" />
+    <None Include="..\resources\skills\goblin_attack2.lua" />
+    <None Include="..\resources\skills\goblin_attack3.lua" />
     <None Include="..\resources\skills\lua\skill_api.lua" />
+    <None Include="..\resources\skills\mushroom_attack1.lua" />
+    <None Include="..\resources\skills\mushroom_attack2.lua" />
     <None Include="..\resources\skills\piercing.lua" />
     <None Include="..\resources\skills\piercing_circle_slash.lua" />
     <None Include="..\resources\skills\piercing_multi.lua" />
@@ -595,9 +611,14 @@
     <None Include="..\resources\skills\slash_7.lua" />
     <None Include="..\resources\skills\slash_combo.lua" />
     <None Include="..\resources\skills\slash_wave.lua" />
+    <None Include="..\resources\skills\slime_attack1.lua" />
+    <None Include="..\resources\skills\snake_attack1.lua" />
     <None Include="..\resources\skills\spikes.lua" />
     <None Include="..\resources\skills\sword_slash.lua" />
     <None Include="..\resources\skills\tornado_shot.lua" />
+    <None Include="..\resources\skills\treant_clap.lua" />
+    <None Include="..\resources\skills\treant_punch.lua" />
+    <None Include="..\resources\skills\treant_spinkick.lua" />
     <None Include="bindless.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

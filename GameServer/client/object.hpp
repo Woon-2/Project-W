@@ -11,6 +11,7 @@
 class AssetManager;
 class Object;
 class Timer;
+class PhysicsWorld;
 
 class AnimBlenderPlayer : public AnimBlender {
 public:
@@ -61,19 +62,17 @@ private:
 	bool dead_ = false;
 };
 
-// Generic monster animation blender. Supports the 5-clip set
-// (Idle, Walk, Attack, Hit, Death) shared by all monster types.
-// Clip prefix (e.g. "Goblin", "Snake", "Mushroom") is supplied at init time.
-class MonsterAnimBlender : public AnimBlender {
+// 고블린 애니메이션 블렌더. 5-클립 세트(Idle/Walk/Attack/Hit/Death)를
+// 속력 기반으로 블렌딩한다. 몬스터별 클립이 추가될 수 있으므로 각 몬스터마다
+// 독립된 블렌더 클래스를 둔다(공용 블렌더로 일반화하지 않음).
+class AnimBlenderGoblin : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
 	public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
 
-	void init(const Model* model,
-	          const std::vector<std::shared_ptr<AnimClip>>& anims,
-	          std::string_view clipPrefix);
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
 	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
@@ -82,12 +81,6 @@ public:
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
-
-	std::string clipIdle_{};
-	std::string clipWalk_{};
-	std::string clipAttack_{};
-	std::string clipHit_{};
-	std::string clipDeath_{};
 
 	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
@@ -110,10 +103,262 @@ private:
 	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
 	float tDeath_ = 0.f;
 	bool dead_ = false;
+
+	// 다중 공격 클립 지원: 로드된 공격 클립 풀네임의 순서 목록.
+	// lua PlayAnimation.attackIndex가 이 목록의 인덱스로 해석된다(EvAttack로 전파).
+	// init에서 실제 로드된 클립만 채우며, 비면 공격 애니메이션이 비활성화된다.
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};   // 현재 선택된 공격 클립(비면 공격 없음)
 };
 
-// Backward-compat alias: Goblin continues to use MonsterAnimBlender.
-using AnimBlenderGoblin = MonsterAnimBlender;
+// 뱀 애니메이션 블렌더. AnimBlenderGoblin과 동일한 5-클립 구조이나
+// 향후 뱀 고유 클립 추가를 위해 별도 클래스로 둔다.
+class AnimBlenderSnake : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+
+	// 다중 공격 클립 지원([[AnimBlenderGoblin]]과 동일). attackClips_ 인덱스 = attackIndex.
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+// 버섯 애니메이션 블렌더. 동일한 5-클립 구조이나 향후 버섯 고유 클립
+// 추가를 위해 별도 클래스로 둔다.
+class AnimBlenderMushroom : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+
+	// 다중 공격 클립 지원([[AnimBlenderGoblin]]과 동일). attackClips_ 인덱스 = attackIndex.
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+// Monster skill-caster AnimBlenders (Bomber / Birdy / Slime / Treant). Same shape
+// as AnimBlenderGoblin; only the clip prefix + attack-clip list differ (set in init).
+class AnimBlenderBomber : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+class AnimBlenderBirdy : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+class AnimBlenderSlime : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+class AnimBlenderTreant : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+};
+
+// Temporary boss caster blender: the current boss resource only provides
+// Boss_Idle / Boss_Walk / Boss_Attack, so this intentionally ignores Hit/Death.
+class AnimBlenderBoss : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims);
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	std::string currentAttackClip_{ "Boss_Attack" };
+};
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
@@ -179,6 +424,11 @@ public:
 
 	virtual void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {}
 
+	// 이미 init된 AnimBlender 인스턴스를 채택한다(소유권 이전). 기존 블렌더는
+	// AnimSystem에서 추적 해제 후 교체된다. setAnimBlender가 클래스마다 고정된 블렌더
+	// 타입을 쓰는 것과 달리, 런타임에 임의의 블렌더로 교체할 때 쓴다(에디터 캐스터 핫스왑).
+	void adoptAnimBlender(std::unique_ptr<AnimBlender> blender, AnimSystem& animSystem);
+
 	// 모델을 설정한다.
 	// 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
 	// 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
@@ -209,7 +459,7 @@ public:
 	mu::NQuat MU_CALLCONV orient() const { return body_.orient(); }
 	// 크기를 갱신한다. prev/curr 모두 동기화. BVH 재빌드.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 MU_CALLCONV scale() const { return body_.scale(); }
+	mu::Vec3 MU_CALLCONV scale() const { return instanceScale_; }
 
 	mu::Vec3 MU_CALLCONV forward() const { return forward_; }
 	mu::Vec3 MU_CALLCONV right() const { return right_; }
@@ -218,6 +468,17 @@ public:
 	// Physics body accessor. PhysicsWorld 등록 시 &body()를 전달한다.
 	RigidBody&       body()       { return body_; }
 	const RigidBody& body() const { return body_; }
+
+	// 접지 중력 게이팅 (character controller grounded gravity gating).
+	// 물리 step() 직후, 이번 step이 만든 terrain 접촉을 보고 이 body가 접지 상태인지
+	// 판정한 뒤 body_.gravityScale()을 설정한다(접지=0, 공중=1). 접지 시 작은 하강
+	// 속도를 0으로 스냅(ground-snap)해 중력↔접촉 솔버의 미세 진동(jitter)을 제거한다.
+	// 공중 전환(낭떠러지/점프/넉백)은 즉시 일어나 낙하가 정상 동작한다.
+	// 반드시 physicsWorld.step() 이후(렌더 프레임이 아닌 물리 step 루프)에서 호출한다.
+	void updateGroundedGravityGate(const PhysicsWorld& world, Seconds physicsDt);
+
+	// 현재 접지 판정 결과(읽기 전용). updateGroundedGravityGate()가 갱신한다.
+	bool isGrounded() const { return grounded_; }
 	// CombatSystem/DebugBVView 등 BVH 접근용 편의 accessor.
 	const BVH& worldBVH() const { return body_.worldBVH(); }
 
@@ -249,6 +510,15 @@ public:
 	i32t getId( ) const { return id_; }
 
 	virtual IEventBus* eventBus() { return &gNullEventBus; }
+
+	// 래그돌 접근자(베이스 기본값: 래그돌 없음). 래그돌을 보유하는 몬스터 클래스가
+	// 오버라이드한다. idMonsterMap_ 등 Object* 기반 통합 순회에서 종류와 무관하게 접근하기 위함.
+	// (eventBus()/setAnimBlender()와 동일한 no-op 가상 패턴)
+	virtual Ragdoll* ragdoll() { return nullptr; }
+	virtual bool ragdollPendingActivation() const { return false; }
+	virtual void setRagdollPendingActivation(bool) {}
+	virtual mu::Vec3 ragdollInitVelocity() const { return {}; }
+	virtual void MU_CALLCONV setRagdollInitVelocity(mu::Vec3) {}
 
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
@@ -286,13 +556,53 @@ public:
 	void setHiZCulled(bool v)       { hiZCulled_ = v; }
 	bool isHiZCulled() const        { return hiZCulled_; }
 
+	// When true the mesh is not rendered: the corpse has dissolved into energy orbs.
+	void setHiddenByOrb(bool v)     { hiddenByOrb_ = v; }
+	bool isHiddenByOrb() const      { return hiddenByOrb_; }
+
+	// --- Energy-orb absorption ripples (body-surface emissive wave) ---
+	// When an energy orb is absorbed, a ripple is spawned at the contact point and
+	// fed into this object's deferred-skinned per-instance data. The shader renders
+	// an expanding emissive ring of colorHDR across the mesh surface (GB2 emissive,
+	// auto-bloomed). Local effect: only the absorbing player accumulates ripples.
+	// Ripples are aged in update() and evicted when older than the shader's lifetime.
+	struct BodyRipple {
+		// Anchor stored relative to the object position at trigger time, so the ring
+		// follows the body as the player moves (re-anchored to the live position each
+		// frame in render) instead of staying pinned to a world point.
+		mu::Vec3 offset{};
+		mu::Vec3 colorHDR{ 1.f, 1.f, 1.f };
+		float    age       = 0.f;
+		float    intensity = 1.f;
+	};
+	static constexpr int kMaxBodyRipples = 4;   // must match shader MAX_ABSORB_RIPPLES
+	void MU_CALLCONV addBodyRipple(mu::Vec3 contactPosW, mu::Vec3 colorHDR, float intensity = 1.f);
+	const std::vector<BodyRipple>& bodyRipples() const { return bodyRipples_; }
+
+	// Network interpolation state for server-position-driven objects (remote players
+	// AND monsters). Each S_Move resets netInterpAcc_ to 0; the owner calls update()
+	// with t = min(netInterpAcc_ / netInterpDuration_, 1), so render lerps prev->curr
+	// over one move interval and HOLDS at curr once moves stop. This avoids the
+	// prev<->curr oscillation that the physics-step clock (tPhysicInterpolation)
+	// produces when moves are sparse/stopped (it cycles 0->1 every physics step).
+	Seconds netInterpDuration_{ 1s / 20.f };
+	Seconds netInterpAcc_{ 0s };
+
 	// BV rendering color for collision visualization.
 	// Default green: no collision. Red: terrain-object. Blue: object-object.
 	void MU_CALLCONV setBVColor(mu::Vec4 color) { bvColor_ = color; }
 	mu::Vec4         bvColor()            const { return bvColor_; }
 
 protected:
+	// 모델 고유 scale(modelBaseScale_)과 게임플레이 per-instance scale(instanceScale_)을
+	// 합성해 body_.scale()로 적용하고 BVH를 재빌드한다. setModel/setScale에서 호출.
+	void applyCompositeScale();
+
 	RigidBody body_{};
+
+	// body_.scale() = modelBaseScale_ * instanceScale_ (component-wise).
+	mu::Vec3 modelBaseScale_{ 1.f, 1.f, 1.f };   // setModel에서 pModel->baseScale 흡수 (모델 고유 scale)
+	mu::Vec3 instanceScale_ { 1.f, 1.f, 1.f };   // setScale이 쓰는 게임플레이 scale (기본 1)
 
 	RenderState renderState_{};
 
@@ -314,9 +624,19 @@ protected:
 	Faction faction_ = Faction::Neutral;
 	bool barrierActive_ = false;
 
+	// --- 접지 중력 게이팅 상태 (updateGroundedGravityGate가 관리) ---
+	// grounded_      : 현재 접지 여부(중력 게이트 off 상태와 동일).
+	// groundedSteps_ : 연속 접지 step 수. 게이트를 끄기 전 짧은 지속을 요구해
+	//                  단발성 접촉으로 인한 상태 flicker를 방지한다. 공중 전환은
+	//                  즉시(0으로 리셋) 일어나 낙하가 지연 없이 동작한다.
+	bool grounded_      = false;
+	int  groundedSteps_ = 0;
+
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;
+	bool     hiddenByOrb_             = false;  // corpse dissolved into energy orbs
 	bool     shadowLightFrustumCulled_ = false;
+	std::vector<BodyRipple> bodyRipples_{};     // active absorption ripples (local player)
 	mu::Vec4 bvColor_{ 0.f, 1.f, 0.f, 1.f };
 
 private:
@@ -351,21 +671,20 @@ public:
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
 
-	// 원격 플레이어 네트워크 보간 상태. 로컬 플레이어에서는 사용되지 않음.
-	// onlineGame.cpp의 Game 루프에서 관리됨.
-	Seconds netInterpDuration_{ 1s / 20.f };
-	Seconds netInterpAcc_{ 0s };
+	// netInterpDuration_ / netInterpAcc_ are now on Object (shared by remote players
+	// and monsters — both are server-position-driven and need network interpolation).
 
 private:
 	EventBus eventBus_{};
 };
 
-// Common base for all monster types: holds ragdoll state and the shared
-// EventBus that handles Hit / Death / Attack / Respawn events uniformly.
-class Monster : public Object {
+// 각 몬스터는 Object를 직접 상속한다. 공용 Monster 베이스로 일반화하지 않고,
+// ragdoll 상태와 Hit/Death/Attack/Respawn을 처리하는 EventBus를 클래스마다 복제한다.
+// 행동/클립이 몬스터별로 분기하므로 의도적으로 패턴만 반복한다.
+class Goblin : public Object {
 public:
-	Monster() = default;
-	Monster(Object&& base) : Object(std::move(base)) {}
+	Goblin() = default;
+	Goblin(Object&& base) : Object(std::move(base)) {}
 
 	class EventBus : public IEventBus {
 	public:
@@ -374,41 +693,211 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
-	Ragdoll& ragdoll() { return ragdoll_; }
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
 
-	bool ragdollPendingActivation() const { return ragdollPendingActivation_; }
-	void setRagdollPendingActivation(bool v) { ragdollPendingActivation_ = v; }
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 
-	mu::Vec3 ragdollInitVelocity() const { return ragdollInitVelocity_; }
-	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) { ragdollInitVelocity_ = v; }
-
-protected:
+private:
 	EventBus eventBus_{};
 	Ragdoll  ragdoll_{};
 	bool     ragdollPendingActivation_ = false;
 	mu::Vec3 ragdollInitVelocity_{};
 };
 
-class Goblin : public Monster {
+// Goblin과 같은 리그(91본, 동일 이름/순서)와 Goblin_* 클립을 공유하는 모델 변형(전술 전투
+// 중간보스 전용 외형). 별개 종(species)이 아니라 Goblin의 스킨 교체이므로, 다른 몬스터들과
+// 달리 Object 직접 상속을 반복하지 않고 Goblin을 상속해 EventBus/ragdoll을 그대로 재사용한다.
+class Hobgoblin : public Goblin {
 public:
-	Goblin() = default;
-	Goblin(Object&& base) : Monster(std::move(base)) {}
+	Hobgoblin() = default;
+	Hobgoblin(Object&& base) : Goblin(std::move(base)) {}
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };
 
-class Snake : public Monster {
+class Snake : public Object {
 public:
 	Snake() = default;
-	Snake(Object&& base) : Monster(std::move(base)) {}
+	Snake(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+class Mushroom : public Object {
+public:
+	Mushroom() = default;
+	Mushroom(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+// Monster skill-caster Object classes (Bomber / Birdy / Slime / Treant).
+// Each is the Goblin/Mushroom pattern (EventBus + Ragdoll); only the name differs.
+class Bomber : public Object {
+public:
+	Bomber() = default;
+	Bomber(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+class Birdy : public Object {
+public:
+	Birdy() = default;
+	Birdy(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+class Slime : public Object {
+public:
+	Slime() = default;
+	Slime(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+class Treant : public Object {
+public:
+	Treant() = default;
+	Treant(Object&& base) : Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	Ragdoll* ragdoll() override { return &ragdoll_; }
+	bool ragdollPendingActivation() const override { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) override { ragdollPendingActivation_ = v; }
+	mu::Vec3 ragdollInitVelocity() const override { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) override { ragdollInitVelocity_ = v; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+
+private:
+	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
+};
+
+// Grandbaum: Treant 변종 미드보스 보스. 같은 리그/애니(Treant_*)·EventBus·래그돌을 그대로 상속하고
+// 전용 모델(modelGrandbaum)만 쓴다(Hobgoblin이 Goblin을 확장하는 관계와 동일).
+class Grandbaum : public Treant {
+public:
+	Grandbaum() = default;
+	Grandbaum(Object&& base) : Treant(std::move(base)) {}
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };
 
-class Mushroom : public Monster {
+// Isys: Birdy 변종 미드보스 보스. 같은 리그/애니(Birdy_*)·EventBus·래그돌을 상속하고 전용 모델(modelIsys)만 쓴다.
+class Isys : public Birdy {
 public:
-	Mushroom() = default;
-	Mushroom(Object&& base) : Monster(std::move(base)) {}
+	Isys() = default;
+	Isys(Object&& base) : Birdy(std::move(base)) {}
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };
@@ -421,6 +910,8 @@ public:
 	Stronghold() = default;
 	Stronghold(Object&& base)
 		: Object(std::move(base)) {}
+
+	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4()) override;
 
 	class EventBus : public IEventBus {
 	public:
