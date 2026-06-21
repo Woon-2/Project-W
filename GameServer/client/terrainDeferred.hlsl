@@ -68,8 +68,8 @@ VSOutput VSMain(
 struct GBufferOutput {
     float4 gb0 : SV_TARGET0; // Albedo.rgb + AO.a        | R8G8B8A8_UNORM
     float2 gb1 : SV_TARGET1; // NormalV oct-encoded       | R16G16_FLOAT
-    float4 gb2 : SV_TARGET2; // LightAccum.rgb + Roughness.a | R8G8B8A8_UNORM
-    float  gb3 : SV_TARGET3; // Metallic                  | R8_UNORM
+    float4 gb2 : SV_TARGET2; // Emissive.rgb (HDR)        | R11G11B10_FLOAT
+    float2 gb3 : SV_TARGET3; // Metallic.r + Roughness.g  | R8G8_UNORM
     float  gb4 : SV_TARGET4; // Linear view-space Z (posV.z) | R32_FLOAT
 };
 
@@ -151,8 +151,8 @@ GBufferOutput PSMain(VSOutput input) {
     GBufferOutput o;
     o.gb0 = float4(albedo, ao);
     o.gb1 = octEncode(shadingNormalV);
-    o.gb2 = float4(lightAccum, roughness);
-    o.gb3 = metallic;
+    o.gb2 = float4(lightAccum, 0.0f);          // rgb=emissive (=0 for terrain), a unused
+    o.gb3 = float2(metallic, roughness);       // r=metallic, g=roughness
     o.gb4 = input.posV.z;  // exact linear view-space depth (deferred reconstruction)
     return o;
 }

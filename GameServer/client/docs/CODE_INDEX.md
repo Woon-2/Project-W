@@ -570,8 +570,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
-| GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (정적·스킨드·지형 모두 emissive 전용; ambient/IBL는 lighting 패스) + Roughness.a |
-| GB3 | R8_UNORM | Metallic |
+| GB2 | R11G11B10_FLOAT | **Emissive.rgb (HDR)** (정적·스킨드·지형 모두 emissive 전용; intensity>1 보존) |
+| GB3 | R8G8_UNORM | Metallic.r + Roughness.g |
 | GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원에서 NDC 깊이 양자화 회피용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 

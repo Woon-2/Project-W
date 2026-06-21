@@ -219,14 +219,16 @@ Light::updateCSMCascades()
 |------|------|------|
 | GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space), 클리어값 (0.5, 0.5) → (0,0,1) |
-| GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (ambient/IBL는 lighting 패스로 이동) + Roughness.a |
-| GB3 | R8_UNORM | Metallic |
+| GB2 | R11G11B10_FLOAT | **Emissive.rgb (HDR)** — intensity>1 보존(Unity 발광·블룸) |
+| GB3 | R8G8_UNORM | Metallic.r + Roughness.g |
 | GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원이 NDC 깊이 양자화 대신 사용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 > **주의:** GB2.rgb는 emissive 전용이다. `pbrDeferred.hlsl`·`pbrDeferredSkinned.hlsl`·`terrainDeferred.hlsl` 모두 `lightAccum = emissive`(지형/스킨드 모두)로 기록해야 한다. 과거 스킨드 셰이더만 `globalAmbient*albedo`를 굽던 버그가 있었고(이중 ambient: GB2 상수 ambient + lighting 패스 IBL), 셋 다 emissive-only로 통일했다.
 >
-> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. 단, **GB2는 UNORM이라 emissive가 [0,1]로 클램프**된다 — HDR 물결이 불가능하므로 트리거 측(`onlineGame` onAbsorb)에서 색을 정규화·탈채도·강도 하향해 부드러운 워시로 보정한다(아래 절 참조).
+> **GB2 HDR 전환(2026-06-22):** GB2는 과거 `R8G8B8A8_UNORM`이라 emissive intensity>1이 [0,1]로 클램프되어 Unity 같은 발광/블룸이 안 났다. `R11G11B10_FLOAT`로 바꿔 HDR을 보존한다. GB2의 alpha에 있던 **roughness는 GB3로 이전**(GB3를 `R8G8_UNORM` 2채널화: `.r=metallic`, `.g=roughness`). 셰이더 시맨틱도 Unity와 맞춰 `emission = emissionColor × emissionMap`(대입→곱) + `pow(2.2)` 선형화로 통일. GBuffer-writing 3종 + reading(`pbrDeferredLighting.hlsl`) + PSO RTV 5종(`shader.cpp`) + RT 생성(`sharedResources.cpp`)을 일괄 정합.
+>
+> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. GB2가 HDR(`R11G11B10_FLOAT`)이 되어 HDR 물결을 직접 블룸으로 표현할 수 있다(트리거 측 정규화·하향 보정은 연출 의도에 따라 선택).
 
 **Normal Oct Encoding (`pbrLighting.hlsli`):**
 - `octEncode(float3 n)` — view-space unit normal → float2 [0,1]
@@ -376,9 +378,9 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   `pow(음수, 2)`가 `exp(2·log(neg))=NaN`이 되어 bloom 검은 사각형을 유발하기 때문(아래 GGX NaN 절과 동일 함정).
 - 앵커는 월드 고정점이 아니라 **본체 위치 기준 오프셋**으로 저장(Object `BodyRipple`)해 매 프레임 live
   pos에 재앵커 → 플레이어가 이동/달려도 링이 몸을 따라간다. 수명 `kBodyRippleLife`(1.0s) == HLSL `RIPPLE_LIFE`.
-- **GB2 UNORM 클램프** 때문에 HDR 물결이 불가하므로, 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색
-  혼합(탈채도)+강도 하향(0.5)해 산만하지 않은 부드러운 워시로 보정한다. 진짜 HDR 물결을 원하면 오브처럼
-  별도 가산 HDR 패스로 분리해야 한다(미구현).
+- 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색 혼합(탈채도)+강도 하향(0.5)해 산만하지 않은
+  부드러운 워시로 보정한다. (2026-06-22 GB2를 `R11G11B10_FLOAT` HDR로 전환한 뒤로는 클램프 제약이
+  사라져 HDR 물결을 직접 표현할 수 있다 — 위 보정은 연출 선택사항이 됨.)
 
 **커맨드 리스트 풀:** EnergyOrb 디스패처가 RenderingSlave cmdlist를 추가 소비하므로 `cmdListPool_`
 RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI 디스패처가 alloc 실패해 해당 패스가

@@ -743,8 +743,8 @@ void addGBuffer( ID3D12Device* device, u32t width, u32t height,
 		auto suffix = "[" + std::to_string(r) + "]";
 		gb.gb0   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB0" + suffix).c_str());
 		gb.gb1   = createGB1RT  (device, width, height,                               rtvPool, srvTexPool, ("GBuffer_GB1" + suffix).c_str());
-		gb.gb2   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB2" + suffix).c_str());
-		gb.gb3   = createColorRT(device, width, height, DXGI_FORMAT_R8_UNORM,          rtvPool, srvTexPool, ("GBuffer_GB3" + suffix).c_str());
+		gb.gb2   = createColorRT(device, width, height, DXGI_FORMAT_R11G11B10_FLOAT, rtvPool, srvTexPool, ("GBuffer_GB2" + suffix).c_str());
+		gb.gb3   = createColorRT(device, width, height, DXGI_FORMAT_R8G8_UNORM,        rtvPool, srvTexPool, ("GBuffer_GB3" + suffix).c_str());
 		gb.gb4   = createColorRT(device, width, height, DXGI_FORMAT_R32_FLOAT,         rtvPool, srvTexPool, ("GBuffer_GB4" + suffix).c_str());
 		gb.depth = createDepthRT(device, width, height,                 dsvPool, srvTexPool, ("GBuffer_Depth" + suffix).c_str());
 

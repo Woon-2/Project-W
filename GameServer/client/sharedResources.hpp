@@ -117,8 +117,8 @@ extern std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowM
 struct GBufferData {
 	Texture gb0;    // R8G8B8A8_UNORM  — Albedo.rgb + AO.a
 	Texture gb1;    // R16G16_FLOAT    — NormalV oct-encoded
-	Texture gb2;    // R8G8B8A8_UNORM  — LightAccum.rgb + Roughness.a
-	Texture gb3;    // R8_UNORM        — Metallic
+	Texture gb2;    // R11G11B10_FLOAT — Emissive.rgb (HDR)
+	Texture gb3;    // R8G8_UNORM      — Metallic.r + Roughness.g
 	Texture gb4;    // R32_FLOAT       — Linear view-space Z (posV.z)
 	Texture depth;  // R32_TYPELESS resource; DSV=D32_FLOAT, SRV=R32_FLOAT
 	u32t width;

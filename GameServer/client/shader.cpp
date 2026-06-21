@@ -2001,8 +2001,8 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;  // Albedo.rgb + AO.a
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;    // NormalV oct-encoded
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // LightAccum.rgb + Roughness.a
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;        // Metallic
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
@@ -3978,8 +3978,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB0
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;     // GB1
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB2
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;         // GB3
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;        // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -4061,8 +4061,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -4144,8 +4144,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -4226,8 +4226,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
