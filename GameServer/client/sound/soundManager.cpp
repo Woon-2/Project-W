@@ -38,6 +38,7 @@ struct SoundManager::Impl {
 	struct BgmSlot {
 		ma_sound    sound{};
 		bool        active = false;
+		bool        pendingStart = false;
 		std::string name;
 	};
 	BgmSlot bgm[2]{};
@@ -274,7 +275,12 @@ void SoundManager::shutdown() {
 		if (v.inUse) { ma_sound_uninit(&v.sound); v.inUse = false; }
 	}
 	for (auto& b : impl_->bgm) {
-		if (b.active) { ma_sound_uninit(&b.sound); b.active = false; b.name.clear(); }
+		if (b.active) {
+			ma_sound_uninit(&b.sound);
+			b.active = false;
+			b.pendingStart = false;
+			b.name.clear();
+		}
 	}
 	for (auto& [path, tmpl] : impl_->sfxTemplates) {
 		ma_sound_uninit(&tmpl);
@@ -314,21 +320,37 @@ void SoundManager::update(float deltaSeconds) {
 		}
 	}
 	// Reclaim any BGM slot whose (possibly faded-out) playback has stopped. A
-	// looping foreground track keeps playing and is not reclaimed.
+	// looping foreground track keeps playing and is not reclaimed. A delayed
+	// start is not considered finished while it is waiting for its start time.
 	for (auto& b : impl_->bgm) {
-		if (b.active && !ma_sound_is_playing(&b.sound)) {
+		if (!b.active) continue;
+		if (b.pendingStart) {
+			if (ma_sound_is_playing(&b.sound)) b.pendingStart = false;
+			else continue;
+		}
+		if (!ma_sound_is_playing(&b.sound)) {
 			ma_sound_uninit(&b.sound);
 			b.active = false;
+			b.pendingStart = false;
 			b.name.clear();
 		}
 	}
 }
 
 void SoundManager::playBgm(std::string_view name, float fadeMs, bool loop) {
+	playBgm(name, fadeMs, fadeMs, 0.f, loop);
+}
+
+void SoundManager::playBgm(std::string_view name, float fadeOutMs, float fadeInMs,
+	                       float fadeInDelayMs, bool loop) {
 	if (!impl_->enabled) return;
 
 	const snd::CatalogEntry* e = snd::findSound(name);
 	if (!e) { impl_->warnOnce(name); return; }
+
+	fadeOutMs     = std::max(fadeOutMs, 0.f);
+	fadeInMs      = std::max(fadeInMs, 0.f);
+	fadeInDelayMs = std::max(fadeInDelayMs, 0.f);
 
 	// Already playing this track in the foreground: nothing to do.
 	if (impl_->bgm[impl_->curBgm].active && impl_->bgm[impl_->curBgm].name == name) return;
@@ -338,6 +360,7 @@ void SoundManager::playBgm(std::string_view name, float fadeMs, bool loop) {
 	if (impl_->bgm[next].active) {
 		ma_sound_uninit(&impl_->bgm[next].sound);
 		impl_->bgm[next].active = false;
+		impl_->bgm[next].pendingStart = false;
 		impl_->bgm[next].name.clear();
 	}
 
@@ -351,11 +374,26 @@ void SoundManager::playBgm(std::string_view name, float fadeMs, bool loop) {
 	}
 	ma_sound_set_looping(&impl_->bgm[next].sound, loop ? MA_TRUE : MA_FALSE);
 	impl_->bgm[next].active = true;
+	impl_->bgm[next].pendingStart = fadeInDelayMs > 0.f;
 	impl_->bgm[next].name.assign(name);
 
-	if (fadeMs > 0.0f) {
-		ma_sound_set_fade_in_milliseconds(&impl_->bgm[next].sound, 0.0f, e->defaultVolume,
-		                                  static_cast<ma_uint64>(fadeMs));
+	ma_uint64 startTimeMs = 0;
+	if (fadeInDelayMs > 0.f) {
+		startTimeMs = ma_engine_get_time_in_milliseconds(&impl_->engine)
+		            + static_cast<ma_uint64>(fadeInDelayMs);
+		ma_sound_set_start_time_in_milliseconds(&impl_->bgm[next].sound, startTimeMs);
+	}
+
+	if (fadeInMs > 0.f) {
+		if (fadeInDelayMs > 0.f) {
+			ma_sound_set_fade_start_in_milliseconds(&impl_->bgm[next].sound,
+			                                        0.f, e->defaultVolume,
+			                                        static_cast<ma_uint64>(fadeInMs),
+			                                        startTimeMs);
+		} else {
+			ma_sound_set_fade_in_milliseconds(&impl_->bgm[next].sound, 0.f, e->defaultVolume,
+			                                  static_cast<ma_uint64>(fadeInMs));
+		}
 	} else {
 		ma_sound_set_volume(&impl_->bgm[next].sound, e->defaultVolume);
 	}
@@ -363,9 +401,12 @@ void SoundManager::playBgm(std::string_view name, float fadeMs, bool loop) {
 
 	// Fade out the previous foreground track; it is reclaimed in update().
 	if (impl_->bgm[impl_->curBgm].active) {
-		if (fadeMs > 0.0f) {
+		// A transition superseded before its delayed track started can be reclaimed
+		// immediately instead of remaining protected as a pending start forever.
+		impl_->bgm[impl_->curBgm].pendingStart = false;
+		if (fadeOutMs > 0.f) {
 			ma_sound_stop_with_fade_in_milliseconds(&impl_->bgm[impl_->curBgm].sound,
-			                                        static_cast<ma_uint64>(fadeMs));
+			                                        static_cast<ma_uint64>(fadeOutMs));
 		} else {
 			ma_sound_stop(&impl_->bgm[impl_->curBgm].sound);
 		}
