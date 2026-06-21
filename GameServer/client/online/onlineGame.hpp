@@ -191,6 +191,9 @@ private:
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
+	void setupTacticalZoneIntroUI();
+	void triggerTacticalZoneIntro(std::string_view arenaPrefix);
+	void updateTacticalZoneIntro(float deltaTimeSec);
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -495,6 +498,18 @@ private:
 	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
+
+	// Tactical arena entry title card shared by Hobgoblin, Grandbaum, and Isys.
+	UI::Panel* tacticalZoneIntroRoot_ = nullptr;
+	UI::Panel* tacticalZoneIntroScrim_ = nullptr;
+	UI::Image* tacticalZoneIntroBanner_ = nullptr;
+	UI::Image* tacticalZoneIntroEmblem_ = nullptr;
+	UI::Panel* tacticalZoneIntroLineLeft_ = nullptr;
+	UI::Panel* tacticalZoneIntroLineRight_ = nullptr;
+	UI::Label* tacticalZoneIntroCategory_ = nullptr;
+	UI::Label* tacticalZoneIntroTitle_ = nullptr;
+	float tacticalZoneIntroElapsed_ = 0.f;
+	bool tacticalZoneIntroActive_ = false;
 
 	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
 	GameSettings         settings_{};

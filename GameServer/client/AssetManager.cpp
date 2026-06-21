@@ -318,6 +318,42 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.sampler         = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "TacticalZoneTitleBanner",
+		.texturePath     = "../resources/UI/title_banner_mask.dds",
+		.pDest           = &tacticalZoneTitleBanner_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "HobgoblinEmblem",
+		.texturePath     = "../resources/UI/Hobgoblin_emblem.dds",
+		.pDest           = &hobgoblinEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "GrandbaumEmblem",
+		.texturePath     = "../resources/UI/Grandbaum_emblem.dds",
+		.pDest           = &grandbaumEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "IsysEmblem",
+		.texturePath     = "../resources/UI/Isys_emblem.dds",
+		.pDest           = &isysEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
 	// Skill dial icons (12) — one per selectable weapon skill.
 	auto loadSkillIcon = [&]( const char* name, const char* file, Texture* dest ) {
 		gfx.addRequestTextureLoad( RequestTextureLoad{
