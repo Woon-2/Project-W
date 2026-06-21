@@ -5192,6 +5192,7 @@ void Game::castSkillByName(std::string_view name) {
 	const SkillAsset* asset = skillSystem_.findAsset(name);
 	if (!asset) return;
 	if (skillSystem_.hasActiveSkill(player_->getId())) return;
+	std::cout << "[DIAG cast] name=" << name << " assetId=" << asset->id << "\n";
 
 	// Per-cast deterministic seed: used locally AND sent to the server
 	// (C_SkillStart) so server hitboxes / remote visuals match exactly.

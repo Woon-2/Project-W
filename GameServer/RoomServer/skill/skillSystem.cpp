@@ -858,7 +858,11 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
     hitboxEntries_.clear();
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
-        if (!hb.active || hb.worldOBBs.empty()) continue;
+        if (!hb.active) continue;
+        std::cout << "[DIAG hbentry] owner=" << hb.ownerObjectId << " obbs=" << hb.worldOBBs.size()
+                  << " aabbC=(" << hb.worldAABB.center.x() << "," << hb.worldAABB.center.y() << "," << hb.worldAABB.center.z() << ")"
+                  << " mask=" << hb.targetMask << "\n";
+        if (hb.worldOBBs.empty()) continue;
         hitboxEntries_.push_back({ hb.worldAABB, hi, hb.targetMask });
     }
     if (hitboxEntries_.empty()) return;

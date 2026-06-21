@@ -1302,11 +1302,12 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 	{
 		const uint32 pid = player->getId();
 		const bool ownerSlotOk = (pid < objectById_.size()) && (objectById_[pid] == player);
+		const SkillAsset* dbgAsset = findSkillAsset(skillAssetId);
 		std::cout << "[DIAG skillStart] sid=" << sessionId
 		          << " pid=" << pid
-		          << " faction=" << static_cast<int>(player->faction())
-		          << " hp=" << player->hp()
-		          << " objSize=" << objectById_.size()
+		          << " asset=" << skillAssetId
+		          << " name=" << (dbgAsset ? dbgAsset->name : std::string("NULL"))
+		          << " pos=(" << player->pos().x() << "," << player->pos().y() << "," << player->pos().z() << ")"
 		          << " ownerSlotOk=" << ownerSlotOk << "\n";
 	}
 	if (player->hp() <= 0) return;
