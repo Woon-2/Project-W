@@ -45,6 +45,11 @@ public:
 	// Crossfades from the current track to the catalog entry `name`. Re-requesting
 	// the already-playing track is a no-op. fadeMs <= 0 switches instantly.
 	void playBgm(std::string_view name, float fadeMs = 800.f, bool loop = true);
+	// Asymmetric transition: the old track fades out immediately over fadeOutMs,
+	// while the new track starts after fadeInDelayMs and fades in over fadeInMs.
+	// Each duration is clamped to zero; zero means an immediate operation.
+	void playBgm(std::string_view name, float fadeOutMs, float fadeInMs,
+	             float fadeInDelayMs, bool loop = true);
 	void stopBgm(float fadeMs = 600.f);
 
 	// ---- Sound effects (one-shot, fire-and-forget from a fixed voice pool) ----

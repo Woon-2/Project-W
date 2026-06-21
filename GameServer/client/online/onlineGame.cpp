@@ -3002,8 +3002,28 @@ void Game::renderBarrierMagicCircleQuads() {
 // 일방향 슬랩을 빌드한다(zone tag로 Wall prefix 도출, 두 벽 중점이 interior 기준점). state==0이면
 // 해제. 물리 벽은 만들지 않는다 — 후퇴 차단은 resolveArenaWallLeash의 위치 클램프가 담당한다.
 void Game::onZoneState( uint16 zoneId, uint8 state ) {
+	std::string prefix;
+	for ( const auto& z : chunkManager_.zones() ) {
+		if ( z.id != static_cast<int>( zoneId ) ) continue;
+		prefix = arenaWallPrefix( z );
+		break;
+	}
+
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
+
+	// 홉고블린 아레나의 서버 권위 차단 상태와 BGM을 동기화한다.
+	// state==1은 WallHobgoblin_* 통과 불가 시점이다. 기존 곡을 빠르게 낮춘 뒤 짧은 지연을 두고
+	// 전용곡을 천천히 올리는 비대칭 전환을 사용하며, 해제 시에도 같은 방식으로 기본곡에 복귀한다.
+	if ( prefix == "WallHobgoblin" ) {
+		constexpr float kArenaBgmFadeOutMs = 1100.f;
+		constexpr float kArenaBgmFadeInMs = 3400.f;
+		constexpr float kArenaBgmFadeInDelayMs = 800.f;
+		INet::ClientApp::sound().playBgm( state == 1 ? "hobgoblin_arena" : "ingame",
+		                                  kArenaBgmFadeOutMs,
+		                                  kArenaBgmFadeInMs,
+		                                  kArenaBgmFadeInDelayMs );
+	}
 
 	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
 
@@ -3011,12 +3031,6 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	if ( state == 1 ) {
 		// zone id로 tag를 찾아 Wall prefix("Wall"+<Arena_ 뒷부분>)를 도출 → 해당 Wall 마커들로
 		// 양끝 일방향 슬랩을 빌드. interior 기준점 = 그 마커들의 중점(두 벽 사이).
-		std::string prefix;
-		for ( const auto& z : chunkManager_.zones() ) {
-			if ( z.id != static_cast<int>( zoneId ) ) continue;
-			prefix = arenaWallPrefix( z );   // "Arena_Hobgoblin" -> "WallHobgoblin"
-			break;
-		}
 		if ( !prefix.empty() ) {
 			std::vector<const MarkerDef*> wallMarkers;
 			mu::Vec3 wallSum{};
