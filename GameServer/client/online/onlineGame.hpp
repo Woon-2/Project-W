@@ -148,7 +148,7 @@ private:
 
 	void sendMovePacket();
 	void sendMouseMovePacket();
-	// Debug teleport (F5/F6/F7): jump the player to an arena zone center to test mid-boss triggers.
+	// Debug teleport (F5/F6/F7/F9): jump the player to an arena zone center to test arena triggers.
 	// Looks up the zone center by tag, sets the local predicted pos, and sends C_DebugTeleport so the
 	// server moves its authoritative pos (bypassing the anti-cheat clamp) and the zone Enter fires.
 	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
@@ -499,7 +499,7 @@ private:
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
-	// Tactical arena entry title card shared by Hobgoblin, Grandbaum, and Isys.
+	// Tactical arena entry title card. WallBoss prepends a dedicated WARNING phase.
 	UI::Panel* tacticalZoneIntroRoot_ = nullptr;
 	UI::Panel* tacticalZoneIntroScrim_ = nullptr;
 	UI::Image* tacticalZoneIntroBanner_ = nullptr;
@@ -508,8 +508,16 @@ private:
 	UI::Panel* tacticalZoneIntroLineRight_ = nullptr;
 	UI::Label* tacticalZoneIntroCategory_ = nullptr;
 	UI::Label* tacticalZoneIntroTitle_ = nullptr;
+	UI::Panel* tacticalZoneWarningScrim_ = nullptr;
+	UI::Image* tacticalZoneWarningNoise_ = nullptr;
+	UI::Image* tacticalZoneWarningGlitchRed_ = nullptr;
+	UI::Image* tacticalZoneWarningGlitchCyan_ = nullptr;
+	UI::Label* tacticalZoneWarningText_ = nullptr;
+	UI::Label* tacticalZoneWarningTextRed_ = nullptr;
+	UI::Label* tacticalZoneWarningTextCyan_ = nullptr;
 	float tacticalZoneIntroElapsed_ = 0.f;
 	bool tacticalZoneIntroActive_ = false;
+	bool tacticalZoneIntroHasWarning_ = false;
 
 	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
 	GameSettings         settings_{};

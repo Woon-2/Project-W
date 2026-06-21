@@ -559,6 +559,79 @@ void Game::setupTacticalZoneIntroUI() {
 	tacticalZoneIntroTitle_->setTextColor(0.93f, 0.90f, 0.84f, 1.f);
 	tacticalZoneIntroTitle_->colorTint.a = 0.f;
 	tacticalZoneIntroTitle_->zOrder = 5;
+
+	tacticalZoneWarningScrim_ = static_cast<UI::Panel*>(
+		tacticalZoneIntroRoot_->addChild(std::make_unique<UI::Panel>())
+	);
+	tacticalZoneWarningScrim_->name = "tacticalZoneWarningScrim";
+	tacticalZoneWarningScrim_->anchor = UI::Anchors::Center;
+	tacticalZoneWarningScrim_->pivot = UI::Pivots::Center;
+	tacticalZoneWarningScrim_->width = UI::DimValue::pct(140.f);
+	tacticalZoneWarningScrim_->height = UI::DimValue::pct(100.f);
+	tacticalZoneWarningScrim_->drawSolidBackground = true;
+	tacticalZoneWarningScrim_->colorTint = { 0.f, 0.f, 0.f, 0.f };
+	tacticalZoneWarningScrim_->zOrder = 20;
+	tacticalZoneWarningScrim_->visible = false;
+
+	tacticalZoneWarningNoise_ = static_cast<UI::Image*>(
+		tacticalZoneIntroRoot_->addChild(std::make_unique<UI::Image>())
+	);
+	tacticalZoneWarningNoise_->name = "tacticalZoneWarningNoise";
+	tacticalZoneWarningNoise_->anchor = UI::Anchors::Center;
+	tacticalZoneWarningNoise_->pivot = UI::Pivots::Center;
+	tacticalZoneWarningNoise_->width = UI::DimValue::pct(105.f);
+	tacticalZoneWarningNoise_->height = UI::DimValue::pct(100.f);
+	tacticalZoneWarningNoise_->texture = assetManager_.warningNoiseMask();
+	tacticalZoneWarningNoise_->colorMul = { 1.f, 1.f, 1.f, 0.f };
+	tacticalZoneWarningNoise_->zOrder = 21;
+	tacticalZoneWarningNoise_->visible = false;
+
+	auto makeWarningGlitch = [&](const char* name, const XMFLOAT4& tint, int zOrder) {
+		auto* image = static_cast<UI::Image*>(
+			tacticalZoneIntroRoot_->addChild(std::make_unique<UI::Image>())
+		);
+		image->name = name;
+		image->anchor = UI::Anchors::Center;
+		image->pivot = UI::Pivots::Center;
+		image->width = UI::DimValue::px(1024.f);
+		image->height = UI::DimValue::px(440.f);
+		image->texture = assetManager_.warningGlitchFragments();
+		image->colorMul = tint;
+		image->zOrder = zOrder;
+		image->visible = false;
+		return image;
+	};
+	tacticalZoneWarningGlitchRed_ =
+		makeWarningGlitch("tacticalZoneWarningGlitchRed", { 1.f, 0.08f, 0.04f, 0.f }, 22);
+	tacticalZoneWarningGlitchCyan_ =
+		makeWarningGlitch("tacticalZoneWarningGlitchCyan", { 0.08f, 0.9f, 0.95f, 0.f }, 23);
+
+	auto makeWarningLabel = [&](const char* name, const D2D1_COLOR_F& color, int zOrder) {
+		auto* label = static_cast<UI::Label*>(
+			tacticalZoneIntroRoot_->addChild(std::make_unique<UI::Label>())
+		);
+		label->name = name;
+		label->anchor = UI::Anchors::Center;
+		label->pivot = UI::Pivots::Center;
+		label->width = UI::DimValue::px(1000.f);
+		label->height = UI::DimValue::px(190.f);
+		label->setText(L"WARNING");
+		label->setFontFamily(L"Arial Black");
+		label->setFontSize(112.f);
+		label->setTextHAlign(UI::TextHAlign::Center);
+		label->setTextVAlign(UI::TextVAlign::Center);
+		label->setTextColor(color.r, color.g, color.b, 1.f);
+		label->colorTint.a = 0.f;
+		label->zOrder = zOrder;
+		label->visible = false;
+		return label;
+	};
+	tacticalZoneWarningTextRed_ =
+		makeWarningLabel("tacticalZoneWarningTextRed", D2D1::ColorF(0.94f, 0.08f, 0.05f), 24);
+	tacticalZoneWarningTextCyan_ =
+		makeWarningLabel("tacticalZoneWarningTextCyan", D2D1::ColorF(0.12f, 0.88f, 0.9f), 25);
+	tacticalZoneWarningText_ =
+		makeWarningLabel("tacticalZoneWarningText", D2D1::ColorF(1.f, 0.24f, 0.18f), 26);
 }
 
 void Game::triggerTacticalZoneIntro(std::string_view arenaPrefix) {
@@ -592,6 +665,13 @@ void Game::triggerTacticalZoneIntro(std::string_view arenaPrefix) {
 		emblemColor = { 0.64f, 0.86f, 1.f, 0.f };
 		accentColor = { 0.24f, 0.62f, 0.94f, 0.f };
 	}
+	else if (arenaPrefix == "WallBoss") {
+		emblem = assetManager_.grandBamEmblem();
+		category = L"보스 전투 구역";
+		title = L"그랜드 밤";
+		emblemColor = { 1.f, 0.68f, 0.48f, 0.f };
+		accentColor = { 0.94f, 0.08f, 0.05f, 0.f };
+	}
 	else {
 		return;
 	}
@@ -603,6 +683,15 @@ void Game::triggerTacticalZoneIntro(std::string_view arenaPrefix) {
 	tacticalZoneIntroCategory_->setText(category);
 	tacticalZoneIntroTitle_->setText(title);
 
+	tacticalZoneIntroHasWarning_ = (arenaPrefix == "WallBoss");
+	tacticalZoneWarningScrim_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningNoise_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningGlitchRed_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningGlitchCyan_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningText_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningTextRed_->visible = tacticalZoneIntroHasWarning_;
+	tacticalZoneWarningTextCyan_->visible = tacticalZoneIntroHasWarning_;
+
 	tacticalZoneIntroElapsed_ = 0.f;
 	tacticalZoneIntroActive_ = true;
 	tacticalZoneIntroRoot_->visible = true;
@@ -612,7 +701,60 @@ void Game::updateTacticalZoneIntro(float deltaTimeSec) {
 	if (!tacticalZoneIntroActive_ || !tacticalZoneIntroRoot_) return;
 
 	tacticalZoneIntroElapsed_ += std::max(0.f, deltaTimeSec);
-	const float t = tacticalZoneIntroElapsed_;
+	constexpr float kWarningDuration = 1.4f;
+	const float warningT = tacticalZoneIntroElapsed_;
+
+	if (tacticalZoneIntroHasWarning_ && warningT < kWarningDuration) {
+		const float flicker = 0.55f + 0.45f * std::fabs(std::sin(warningT * 31.f));
+		const float burst = std::max(0.f, std::sin(warningT * 47.f));
+		const float edgeFade = std::min(
+			std::clamp(warningT / 0.12f, 0.f, 1.f),
+			std::clamp((kWarningDuration - warningT) / 0.18f, 0.f, 1.f)
+		);
+		const float warningAlpha = flicker * edgeFade;
+
+		tacticalZoneIntroScrim_->colorTint.a = 0.f;
+		tacticalZoneIntroBanner_->colorMul.w = 0.f;
+		tacticalZoneIntroEmblem_->colorMul.w = 0.f;
+		tacticalZoneIntroLineLeft_->colorTint.a = 0.f;
+		tacticalZoneIntroLineRight_->colorTint.a = 0.f;
+		tacticalZoneIntroCategory_->colorTint.a = 0.f;
+		tacticalZoneIntroTitle_->colorTint.a = 0.f;
+
+		tacticalZoneWarningScrim_->colorTint.a = 0.82f * edgeFade;
+		tacticalZoneWarningNoise_->colorMul.w = (0.08f + 0.34f * burst) * edgeFade;
+		tacticalZoneWarningNoise_->offsetX = UI::DimValue::px(std::sin(warningT * 73.f) * 5.f);
+
+		tacticalZoneWarningGlitchRed_->colorMul.w = (0.22f + 0.5f * burst) * edgeFade;
+		tacticalZoneWarningGlitchCyan_->colorMul.w = (0.12f + 0.38f * burst) * edgeFade;
+		tacticalZoneWarningGlitchRed_->offsetX = UI::DimValue::px(-8.f + std::sin(warningT * 53.f) * 12.f);
+		tacticalZoneWarningGlitchCyan_->offsetX = UI::DimValue::px(8.f + std::cos(warningT * 59.f) * 12.f);
+
+		const float jitterX = std::sin(warningT * 67.f) * (3.f + 9.f * burst);
+		const float jitterY = std::cos(warningT * 43.f) * (1.f + 3.f * burst);
+		tacticalZoneWarningText_->offsetX = UI::DimValue::px(jitterX);
+		tacticalZoneWarningText_->offsetY = UI::DimValue::px(jitterY);
+		tacticalZoneWarningText_->colorTint.a = warningAlpha;
+		tacticalZoneWarningTextRed_->offsetX = UI::DimValue::px(jitterX - 8.f);
+		tacticalZoneWarningTextRed_->offsetY = UI::DimValue::px(jitterY);
+		tacticalZoneWarningTextRed_->colorTint.a = 0.42f * warningAlpha;
+		tacticalZoneWarningTextCyan_->offsetX = UI::DimValue::px(jitterX + 8.f);
+		tacticalZoneWarningTextCyan_->offsetY = UI::DimValue::px(jitterY + 1.f);
+		tacticalZoneWarningTextCyan_->colorTint.a = 0.32f * warningAlpha;
+		return;
+	}
+
+	if (tacticalZoneIntroHasWarning_) {
+		tacticalZoneWarningScrim_->visible = false;
+		tacticalZoneWarningNoise_->visible = false;
+		tacticalZoneWarningGlitchRed_->visible = false;
+		tacticalZoneWarningGlitchCyan_->visible = false;
+		tacticalZoneWarningText_->visible = false;
+		tacticalZoneWarningTextRed_->visible = false;
+		tacticalZoneWarningTextCyan_->visible = false;
+	}
+
+	const float t = tacticalZoneIntroElapsed_ - (tacticalZoneIntroHasWarning_ ? kWarningDuration : 0.f);
 	constexpr float kFadeInEnd = 0.42f;
 	constexpr float kFadeOutStart = 3.15f;
 	constexpr float kDuration = 4.25f;
@@ -653,6 +795,7 @@ void Game::updateTacticalZoneIntro(float deltaTimeSec) {
 
 	if (t >= kDuration) {
 		tacticalZoneIntroActive_ = false;
+		tacticalZoneIntroHasWarning_ = false;
 		tacticalZoneIntroRoot_->visible = false;
 	}
 }
@@ -3255,7 +3398,8 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
 	if (previousState != 1 && state == 1
-		&& (prefix == "WallHobgoblin" || prefix == "WallGrandbaum" || prefix == "WallIsys")) {
+		&& (prefix == "WallHobgoblin" || prefix == "WallGrandbaum"
+			|| prefix == "WallIsys" || prefix == "WallBoss")) {
 		triggerTacticalZoneIntro(prefix);
 	}
 
@@ -5704,6 +5848,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Grandbaum" );
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
 		debugTeleportToArena( "Arena_Isys" );
+	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) )
+		debugTeleportToArena( "Arena_Boss" );
 
 	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
 	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {

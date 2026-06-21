@@ -354,6 +354,33 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.sampler         = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "GrandBamEmblem",
+		.texturePath     = "../resources/UI/GrandBam_emblem.dds",
+		.pDest           = &grandBamEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WarningGlitchFragments",
+		.texturePath     = "../resources/UI/warning_glitch_fragments.dds",
+		.pDest           = &warningGlitchFragments_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WarningNoiseMask",
+		.texturePath     = "../resources/UI/warning_noise_mask.dds",
+		.pDest           = &warningNoiseMask_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
 	// Skill dial icons (12) — one per selectable weapon skill.
 	auto loadSkillIcon = [&]( const char* name, const char* file, Texture* dest ) {
 		gfx.addRequestTextureLoad( RequestTextureLoad{
