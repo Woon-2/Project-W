@@ -473,7 +473,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | frustumCull | `frustumCull.hpp` | 재사용 VFC 헬퍼: `Frustum`/`extractFrustum(viewProj)`(Gribb-Hartmann)/`intersects(Frustum,AABB)`/`intersects(Frustum,OBB)`(OBB SAT). scatter prop VFC + `Light::shadowVisible`(그림자 컬링) 공용 |
 | BVPipeline | `BVPipeline.hpp` | 바운딩 볼륨 디버그 |
 | BillboardPipeline | `billboardPipeline.hpp` | 빌보드 |
-| SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
+| SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스. **Deferred 경로는 SceneColorHDR에 합성**(`skyboxRtv` renderPath 분기, 렌더순서 6a — heat/bloom이 하늘에도 적용), Forward(로비)만 backbuffer 직접. PSO는 타깃 포맷별 2종: `SkyboxShaderHDR`(R16G16B16A16F)/`SkyboxShader`(R8G8B8A8) — `createSkyboxShaderImpl` |
 | UIPipeline | `uiPipeline.hpp` | UI 요소 |
 | SamplePipeline | `samplePipeline.hpp` | 샘플 렌더 |
 | TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Forward path: shadowPass + mainPass) |
@@ -588,7 +588,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `iblIrradiance.hlsl` / `iblPrefilter.hlsl` / `iblBRDFLUT.hlsl` | IBL 프리컴퓨트 컴퓨트 셰이더(코사인 컨볼루션 / GGX importance / split-sum LUT). `envIsLDR` 토글 |
 | `iblPrecomputePipeline.{hpp,cpp}` | `precomputeIBL()` — 로드 타임 1회(LoadFence), 스카이박스 큐브→IBL 맵 3종 생성 |
 | `pbrLighting.hlsli` | `computeIBL`/`fresnelSchlickRoughness`(상단 정의, split-sum). `#define IBL_ENABLED` 셰이더만 컴파일 |
-| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루. **보스 heat distortion 굴절 워프**도 여기서(SceneColorHDR 샘플 UV 오프셋, GB4 깊이 게이팅) |
+| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루. **보스 heat distortion 굴절 워프**도 여기서(SceneColorHDR 샘플 UV 오프셋, GB4 깊이 게이팅). **배경(GB4==0=하늘) 픽셀은 패스스루**(톤맵 미적용+bloom)로 SceneColorHDR에 합성된 skybox 룩 보존 — graphicsArchitecture.md 렌더순서 6a/9 |
 | `bloom.hlsl` / `BloomPipeline.{hpp,cpp}` | 픽셀 기반 bloom(VS 공유 + PSPrefilter/PSDownsample/PSUpsample). `Dispatcher::render()`가 전 패스를 단일 cmdlist에 기록 |
 | `heatHaze.hlsl` + `heatField.hlsli` / `HeatDistortionPipeline.{hpp,cpp}` | 보스 위압 heat distortion. 가산 글로우 패스(bloom 이전 SceneColorHDR, GB4 깊이 게이팅)+공유 `evalHeatField`(절차 noise, 굴절 워프는 tonemap이 소비). `HeatDistortionShader`(shader.hpp). 데이터: `GFX::addHeatSource`/`setHeatGlobals`. graphicsArchitecture.md "보스 Heat Distortion" 참조 |
 | `Online::Game::submitBossHeatSources()` (`online/onlineGame.cpp`) | 생존 보스→화면 `HeatSource` 투영(centerUV·해석적 radiusUV·view-Z), 보스별 `BossHeatState` 틴트, 스폰/사망 페이드. `StandAlone::Game` F9 디버그 소스(goblin_) |

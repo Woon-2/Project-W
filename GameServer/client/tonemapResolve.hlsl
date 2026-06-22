@@ -76,13 +76,24 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     evalHeatField(input.uv, pixelZ, gHeatSources, gHeatCount,
                   gHeatTime, gHeatWarp, gHeatGlow, warp, glowUnused);
 
-    float3 color = sampleBindless(idxSceneColor, input.uv + warp).rgb;
-
+    const float2 sampleUV = input.uv + warp;
+    float3 color  = sampleBindless(idxSceneColor, sampleUV).rgb;
     // Additive bloom (sampled at the unwarped UV). sampleBindless returns 0 for an
     // invalid index, so this is a no-op until the bloom pass is wired.
-    color += sampleBindless(idxBloom, input.uv).rgb * bloomIntensity;
+    const float3 bloomColor = sampleBindless(idxBloom, input.uv).rgb * bloomIntensity;
 
-    // Exposure -> ACES Filmic -> gamma.
+    // Background pixels (GB4 == 0 = no geometry written) hold the skybox, which the
+    // deferred path composited into SceneColorHDR already display-referred. Pass it
+    // through (no exposure/ACES/gamma/LUT) + bloom so the sky keeps its authored look
+    // while still receiving the heat warp + glow. Decided by the SAMPLED pixel's depth
+    // so the encoding matches the (possibly warped) color we read.
+    const float sampleZ = sampleBindless(idxGB4, sampleUV).r;
+    if (sampleZ <= 1e-3f) {
+        return float4(color + bloomColor, 1.0f);
+    }
+
+    // Geometry: linear HDR -> exposure -> ACES Filmic -> gamma -> LUT.
+    color += bloomColor;
     color *= exposure;
     color = acesFilmic(color);
     color = pow(abs(color), 1.0f / 2.2f);

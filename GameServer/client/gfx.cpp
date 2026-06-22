@@ -315,6 +315,7 @@ void GFX::init() {
 	shaders_.try_emplace("TrailShaderAdditive",  createTrailShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderHDR",       createTrailShaderHDR(      device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("SkyboxShaderHDR", createSkyboxShaderHDR(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
@@ -2055,13 +2056,24 @@ void GFX::render() {
 	// heatParams now owns a copy; both dispatchers copy from it at construction.
 	heatSources_.clear();
 
+	// Deferred path renders the skybox INTO SceneColorHDR (before bloom/heat), so the
+	// heat-distortion warp/glow + bloom apply over the sky; the resolve passes background
+	// pixels through untonemapped. Forward path (lobby) keeps drawing raw to the backbuffer.
+	// The PSO's RTV format must match the bound target, so pick the HDR skybox PSO for the
+	// SceneColorHDR target and the LDR one for the backbuffer.
+	const bool skyboxToHDR =
+		(renderPath_ == RenderPath::Deferred && !SharedResources::SceneColor::sceneColorData.empty());
+	const D3D12_CPU_DESCRIPTOR_HANDLE skyboxRtv = skyboxToHDR
+		? SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].rtv
+		: backBufferRtvs_[backbufIdx];
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at(skyboxToHDR ? "SkyboxShaderHDR" : "SkyboxShader"),
 		cmdQ_, viewport, clRect,
-		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		skyboxRtv, depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
 		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
@@ -2740,6 +2752,12 @@ void GFX::render() {
 		// Energy orbs: additive HDR glow into SceneColorHDR (still a RENDER_TARGET at
 		// this point), depth-tested against scene depth, BEFORE bloom so they glow.
 		if (!SharedResources::SceneColor::sceneColorData.empty() && gBufferDebugMode_ == 0u) {
+			// Skybox into SceneColorHDR FIRST (background only, depth-tested), so the additive
+			// glows + bloom + heat distortion warp all apply over the sky and survive to the
+			// resolve. The resolve passes background pixels through untonemapped, preserving the
+			// sky's authored look. (Forward/lobby path still draws the skybox to the backbuffer.)
+			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+			skyboxPipelineDispatcher.drawSingleThreaded();
 			energyOrbDispatcher.updateGPUDataSingleThreaded();
 			energyOrbDispatcher.drawSingleThreaded();
 			// Path-guidance ribbons glow: additive HDR trail into SceneColorHDR, before bloom.
@@ -2772,13 +2790,9 @@ void GFX::render() {
 			tonemapPipelineDispatcher.drawSingleThreaded();
 		}
 
-		// Forward-always 패스: skybox(raw, 백버퍼)·BV·파티클. resolve 이후 백버퍼에 그린다.
-		// (skybox는 원래도 톤매핑 없이 raw로 그려졌으므로 SceneColorHDR를 거치지 않는다.)
-		if (gBufferDebugMode_ < 11)  {
-			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-			skyboxPipelineDispatcher.drawSingleThreaded();
-		}
-
+		// Forward-always 패스: BV·파티클. resolve 이후 백버퍼에 그린다.
+		// (Deferred 경로의 skybox는 위 6b에서 SceneColorHDR에 합성 후 resolve가 배경 패스스루로
+		//  내보내므로 여기서 다시 그리지 않는다 — heat distortion/bloom이 하늘에도 적용되게 함.)
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
 

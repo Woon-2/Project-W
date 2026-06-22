@@ -63,16 +63,17 @@
    - PBRDeferredSkinned Hi-Z: Cull→visibleFlags + visibility feedback 2-slot ring → CPU readback(1-frame delay, anim/물리 스킵용)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
-6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
+6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 SceneColorHDR 합성/Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
+6a. **Skybox → SceneColorHDR 합성**(Deferred, `gBufferDebugMode_==0`) — SceneColorHDR가 **아직 RENDER_TARGET**일 때 backbuffer scene depth(reversed-Z far)로 depth-test해 **배경 픽셀만** raw 스카이박스로 채운다. 이후 가산 글로우/bloom/heat 워프가 하늘에도 적용되고 resolve까지 살아남는다(resolve가 배경 픽셀을 패스스루로 내보내 하늘 룩 보존). **Forward(로비) 경로는 종전대로 backbuffer에 직접**(아래 10) — `skyboxRtv`를 renderPath로 분기. **PSO RTV 포맷이 타깃과 일치해야 하므로 SceneColorHDR(R16G16B16A16F) 타깃엔 `SkyboxShaderHDR`, backbuffer(R8G8B8A8) 타깃엔 `SkyboxShader`를 선택**(한 빌더 `createSkyboxShaderImpl`에서 RTV 포맷만 다르게)
 6b. **Energy orb 패스(EnergyOrbPipeline)** — `gBufferDebugMode_==0`일 때만. SceneColorHDR가 **아직 RENDER_TARGET 상태**일 때, 복사된 backbuffer scene depth(reversed-Z)로 depth-test하며 **가산(additive) HDR**로 렌더 → bloom 이전이라 발광/bloom이 산다. 몬스터 사망 시 서브메시별 에너지 오브(정점→구체 모핑, GS quad). 단일 스레드(`updateGPUDataSingleThreaded`/`drawSingleThreaded`)
 6c. **Heat-haze 패스(HeatDistortionPipeline)** — `gBufferDebugMode_==0`일 때만(보스 위압 연출). EnergyOrb와 동일 슬롯(SceneColorHDR=RENDER_TARGET, bloom 이전)에서 **가산 HDR**로 보스별 틴트 글로우를 그려 bloom이 발광시킨다. depth는 GB4(linear view-Z)로 게이팅. 활성 heat source가 없으면 self-skip. 굴절 워프는 별도 패스가 아니라 resolve(아래 9)에 흡수. 아래 "보스 Heat Distortion" 참조
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
-9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**. **보스 heat distortion 굴절 워프**도 여기서 적용: SceneColorHDR 샘플 UV를 보스 영역에서 오프셋(`heatField.hlsli`, GB4 깊이 게이팅; heat source 0개면 워프=0 → 무변화)
-10. Forward-always 오버레이(backbuffer, resolve 이후): Skybox(raw) → BV → Billboard → 파티클류
+9. **Tonemap resolve** — **배경(GB4==0, 하늘) 픽셀은 패스스루**(노출/ACES/감마/LUT 미적용, raw 하늘+bloom)로 스카이박스 룩 보존; **지오메트리 픽셀**은 SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT** → backbuffer. **보스 heat distortion 굴절 워프**도 여기서: 샘플 UV를 보스 영역에서 오프셋(`heatField.hlsli`, GB4 깊이 게이팅; 패스스루/톤맵 분기는 **샘플된 픽셀**의 GB4로 결정해 인코딩 일치)
+10. Forward-always 오버레이(backbuffer, resolve 이후): BV → Billboard → 파티클류. (**Deferred 경로의 skybox는 6a로 이동**; Forward 경로에서만 skybox를 backbuffer에 직접)
 11. mainPass(UI)
 
-Skybox / Billboard / UI / 파티클은 renderPath에 관계없이 항상 backbuffer에 직접 그린다(SceneColorHDR·GBuffer 미사용). Forward path(로비)는 HDR/Bloom/resolve를 거치지 않고 셰이더 내 inline tonemap으로 backbuffer에 직접 출력한다.
+Billboard / UI / 파티클은 renderPath에 관계없이 backbuffer에 직접 그린다. **Skybox는 Deferred 경로에서 SceneColorHDR(6a)에 합성되어 heat distortion/bloom이 하늘에도 적용**되고, Forward path(로비)에서만 backbuffer에 직접 raw로 그려진다(HDR/Bloom/resolve 미경유, 셰이더 inline tonemap).
 Terrain은 Deferred path에서 gBufferPass로 GBuffer에 기록, Forward path에서만 mainPass로 실행한다.
 
 #### Reversed-Z 깊이 버퍼
@@ -410,7 +411,13 @@ RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI �
 - **깊이 인지(전경 차폐):** 두 패스 모두 GB4(linear view-Z, R32_FLOAT)를 샘플해 `pixelZ >= bossZ - margin`
   또는 배경(GB4==0, 지오메트리 미기록=하늘/공기)인 픽셀만 효과 적용. 보스보다 카메라에 가까운 전경 prop은
   왜곡/글로우에서 제외. (view-space Z는 양수 전방·LH; reversed-Z는 메인 depth 버퍼에만 적용되고 GB4는 선형)
-- **노이즈:** 절차적 value-noise fbm(텍스처 asset 없음). 상승 기류 도메인(시간에 따라 화면 -Y로 스크롤).
+- **하늘(skybox)에도 적용:** 종전엔 skybox가 tonemap **이후** backbuffer에 raw로 그려져 하늘 영역의 heat
+  효과를 덮어썼다(버그). 수정: Deferred 경로에서 skybox를 **SceneColorHDR에 합성**(render 순서 6a, bloom/heat
+  이전, 배경 픽셀만 depth-test)하고, **tonemap이 배경 픽셀을 패스스루**(노출/ACES/감마/LUT 미적용)로 내보내 하늘
+  룩을 보존하면서 워프·글로우·bloom이 하늘에도 적용되게 했다. forward 오버레이의 deferred skybox 그리기는 제거
+  (Forward/로비 경로만 backbuffer 직접). 부수효과: 하늘이 이제 bloom 입력에 포함돼 매우 밝은 하늘은 약하게 bloom될 수 있음(threshold≈1.0이라 미미). 디버그 뷰(`gBufferDebugMode_≠0`)에선 하늘 합성을 스킵(배경 검정).
+- **노이즈:** 절차적 value-noise fbm(텍스처 asset 없음). 워프 flow는 raw 노이즈가 아니라 **노이즈 기울기(central
+  difference)** 를 정규화한 gradient/curl 형 흐름장. 상승 기류 도메인(시간에 따라 화면 -Y로 스크롤).
 - **game→gfx 데이터(단방향):** `GFX::addHeatSource(HeatSource)` + `setHeatGlobals(time, warpStrength, glowStrength)`
   를 매 프레임 render() 전에 호출. gfx는 최대 `kMaxSources`(=4)개를 `HeatParams`로 모아 haze CB와 tonemap CB
   양쪽에 업로드하고, 소비 후 `heatSources_`를 비운다. `HeatSource`={centerRadius(UV), zMarginIntensity(viewZ/
@@ -418,11 +425,11 @@ RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI �
 - **Online 연결:** `Online::Game::submitBossHeatSources()`(renderInGame, `camera_.updateGFX` 직후)가
   `bossNpcIds_`∩`idMonsterMap_` 생존 보스마다 `worldToScreen` 류 clip 계산으로 centerUV, `proj._11/_22`
   해석적 투영으로 radiusUV(세로 타원 aspectY), 보스 pivot view-Z를 구해 `HeatSource`를 push. 보스별 틴트/강도/
-  반경은 `BossHeatState`(createGrandbaum/createIsys/createBoss에서 등록; FinalBoss=진홍-보라 최강, Grandbaum=
-  병든 에메랄드, Isys=차가운 보라-시안). 스폰 페이드 인(~0.8s)·사망 페이드 아웃(~1.2s, idMonsterMap_에서 사라진 뒤
+  반경은 보스별 `BossHeatState`(createGrandbaum/createIsys/createBoss에서 distinct 틴트·강도·반경 등록 — 값은
+  `onlineGame.cpp`에서 튜닝). 스폰 페이드 인(~0.8s)·사망 페이드 아웃(~1.2s, idMonsterMap_에서 사라진 뒤
   마지막 위치에서 감쇠)을 intensity envelope로 적용하고, 다 사라지면 `bossHeatProfiles_`에서 erase.
 - **Standalone 디버그:** `StandAlone::Game`에서 **F9**로 `goblin_`에 디버그 heat source 토글(서버 없이 튜닝),
-  `[`/`]`=warp 강도, `-`/`=`=glow 강도 조절.
+  **J/K**=warp 강도, **-/=**=glow 강도 조절. (테스트 키는 시뮬레이션 속도 키와 겹치지 않게 선택)
 - **디버그 뷰:** `gBufferDebugMode_≠0`이면 haze 패스 스킵 + resolve 워프 스킵(기존 bloom/tonemap 게이팅과 동일).
 
 #### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)

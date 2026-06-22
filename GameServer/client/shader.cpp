@@ -1197,7 +1197,12 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device,
 	return ret;
 }
 
-ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+// Skybox PSO builder. The deferred path renders the skybox into SceneColorHDR
+// (R16G16B16A16_FLOAT), the forward/lobby path into the backbuffer (R8G8B8A8_UNORM),
+// so the RTV format must match the bound target — hence two PSOs from one builder.
+static ComPtr<ID3D12PipelineState> createSkyboxShaderImpl(
+	ID3D12Device* device, ID3D12RootSignature* rootSig, DXGI_FORMAT rtvFormat, const char* name
+) {
 	ComPtr<ID3D12PipelineState> ret{};
 
 	// 셰이더 컴파일
@@ -1276,7 +1281,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.RTVFormats[0] = rtvFormat;
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -1284,9 +1289,19 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 		false
 	);
 
-	setD3DName(ret.Get(), "SkyboxShader");
+	setD3DName(ret.Get(), name);
 
 	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	return createSkyboxShaderImpl(device, rootSig, DXGI_FORMAT_R8G8B8A8_UNORM, "SkyboxShader");
+}
+
+// HDR variant: targets SceneColorHDR for the deferred path (skybox composited before
+// bloom/heat so the heat distortion + bloom apply over the sky).
+ComPtr<ID3D12PipelineState> createSkyboxShaderHDR(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	return createSkyboxShaderImpl(device, rootSig, DXGI_FORMAT_R16G16B16A16_FLOAT, "SkyboxShaderHDR");
 }
 
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {

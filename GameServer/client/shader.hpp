@@ -57,6 +57,7 @@ ComPtr<ID3D12PipelineState> createTrailShaderAdditive(ID3D12Device* device, ID3D
 // bloom so path-guidance ribbons glow. Same VS/PS/depth as the additive variant.
 ComPtr<ID3D12PipelineState> createTrailShaderHDR(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createSkyboxShaderHDR(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);

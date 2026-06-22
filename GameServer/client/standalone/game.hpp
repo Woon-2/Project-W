@@ -214,7 +214,7 @@ private:
 
 	// F9: debug toggle for the boss heat-distortion effect (no server needed).
 	// When on, a heat source is attached to goblin_ each frame so the effect can be
-	// tuned standalone. [/[ ]] adjust warp/glow strength.
+	// tuned standalone. J/K adjust warp strength, -/= adjust glow strength.
 	bool  heatDebugEnabled_   = false;
 	float heatDebugWarpScale_ = 1.0f;
 	float heatDebugGlowScale_ = 1.0f;
