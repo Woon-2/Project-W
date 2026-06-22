@@ -38,6 +38,8 @@ public:
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
 	const Texture* tacticalZoneTitleBanner() const { return &tacticalZoneTitleBanner_; }
+	const Texture* monsterHpFrame() const { return &monsterHpFrame_; }
+	const Texture* monsterHpBar() const { return &monsterHpBar_; }
 	const Texture* hobgoblinEmblem() const { return &hobgoblinEmblem_; }
 	const Texture* grandbaumEmblem() const { return &grandbaumEmblem_; }
 	const Texture* isysEmblem() const { return &isysEmblem_; }
@@ -168,6 +170,8 @@ private:
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
 	Texture tacticalZoneTitleBanner_{};
+	Texture monsterHpFrame_{};
+	Texture monsterHpBar_{};
 	Texture hobgoblinEmblem_{};
 	Texture grandbaumEmblem_{};
 	Texture isysEmblem_{};

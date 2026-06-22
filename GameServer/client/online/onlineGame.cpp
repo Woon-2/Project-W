@@ -161,6 +161,16 @@ static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
 static constexpr float   kPartyHpBarWidth           = 230.f;
 static constexpr float   kPartyHpBarHeight          = 14.f;
 static constexpr float   kPartyHpNameHeight         = 20.f;
+static constexpr float   kBossHpHudWidth            = 768.f;
+static constexpr float   kBossHpHudHeight           = 128.f;
+static constexpr float   kBossHpHudTop              = 52.f;
+static constexpr float   kBossHpFillX               = 136.f;
+static constexpr float   kBossHpFillY               = 13.f;
+static constexpr float   kBossHpFillWidth           = 580.f;
+static constexpr float   kBossHpFillHeight          = 100.f;
+static constexpr float   kBossHpEmblemX              = 42.f;
+static constexpr float   kBossHpEmblemY              = 22.f;
+static constexpr float   kBossHpEmblemSize           = 84.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -425,12 +435,108 @@ void Game::setupStage() {
 	killCountWidget_->setTextures(assetManager_.digitAtlasTex(), assetManager_.killIconTex());
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
+	setupBossHpHud();
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
 	gfx_.setMaxRenderObjectId(1000u);
+}
+
+void Game::setupBossHpHud() {
+	bossHpRoot_ = uiManager_.root()->addChild(std::make_unique<UI::UIElement>());
+	bossHpRoot_->name    = "bossHpHud";
+	bossHpRoot_->anchor  = UI::Anchors::TopCenter;
+	bossHpRoot_->pivot   = UI::Pivots::TopCenter;
+	bossHpRoot_->offsetY = UI::DimValue::px(kBossHpHudTop);
+	bossHpRoot_->width   = UI::DimValue::px(kBossHpHudWidth);
+	bossHpRoot_->height  = UI::DimValue::px(kBossHpHudHeight);
+	bossHpRoot_->zOrder  = 20;
+	bossHpRoot_->visible = false;
+
+	bossHpBar_ = static_cast<UI::ProgressBar*>(
+		bossHpRoot_->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	bossHpBar_->name          = "bossHpBar";
+	bossHpBar_->anchor        = UI::Anchors::TopLeft;
+	bossHpBar_->pivot         = UI::Pivots::TopLeft;
+	bossHpBar_->offsetX       = UI::DimValue::px(kBossHpFillX);
+	bossHpBar_->offsetY       = UI::DimValue::px(kBossHpFillY);
+	bossHpBar_->width         = UI::DimValue::px(kBossHpFillWidth);
+	bossHpBar_->height        = UI::DimValue::px(kBossHpFillHeight);
+	bossHpBar_->bgColor       = { 0.f, 0.f, 0.f, 0.f };
+	bossHpBar_->fillTex       = assetManager_.monsterHpBar();
+	bossHpBar_->zOrder        = 0;
+	bossHpBar_->setProgress(1.f);
+
+	bossHpFrame_ = static_cast<UI::Image*>(
+		bossHpRoot_->addChild(std::make_unique<UI::Image>())
+	);
+	bossHpFrame_->name    = "bossHpFrame";
+	bossHpFrame_->anchor  = UI::Anchors::TopLeft;
+	bossHpFrame_->pivot   = UI::Pivots::TopLeft;
+	bossHpFrame_->width   = UI::DimValue::pct(100.f);
+	bossHpFrame_->height  = UI::DimValue::pct(100.f);
+	bossHpFrame_->texture = assetManager_.monsterHpFrame();
+	bossHpFrame_->zOrder  = 1;
+
+	bossHpEmblem_ = static_cast<UI::Image*>(
+		bossHpRoot_->addChild(std::make_unique<UI::Image>())
+	);
+	bossHpEmblem_->name    = "bossHpEmblem";
+	bossHpEmblem_->anchor  = UI::Anchors::TopLeft;
+	bossHpEmblem_->pivot   = UI::Pivots::TopLeft;
+	bossHpEmblem_->offsetX = UI::DimValue::px(kBossHpEmblemX);
+	bossHpEmblem_->offsetY = UI::DimValue::px(kBossHpEmblemY);
+	bossHpEmblem_->width   = UI::DimValue::px(kBossHpEmblemSize);
+	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
+	bossHpEmblem_->texture = assetManager_.grandBamEmblem();
+	bossHpEmblem_->zOrder  = 2;
+}
+
+void Game::showBossHpHud() {
+	bossHpHudActive_ = true;
+	bossHpTarget_ = nullptr;
+	if (bossHpBar_) bossHpBar_->setProgress(1.f);
+	if (bossHpRoot_) bossHpRoot_->visible = true;
+}
+
+void Game::hideBossHpHud() {
+	bossHpHudActive_ = false;
+	bossHpTarget_ = nullptr;
+	if (bossHpRoot_) bossHpRoot_->visible = false;
+}
+
+void Game::updateBossHpHud() {
+	if (!bossHpHudActive_) {
+		if (bossHpRoot_) bossHpRoot_->visible = false;
+		return;
+	}
+
+	if (!bossHpTarget_) {
+		auto it = std::ranges::find_if(bosses_, [](const std::shared_ptr<Boss>& boss) {
+			return boss && !boss->isDead() && boss->hp() > 0;
+		});
+		if (it != bosses_.end()) {
+			bossHpTarget_ = it->get();
+		}
+	}
+
+	if (bossHpTarget_) {
+		if (bossHpTarget_->isDead() || bossHpTarget_->hp() <= 0) {
+			hideBossHpHud();
+			return;
+		}
+		if (bossHpBar_) {
+			bossHpBar_->setProgress(
+				static_cast<float>(bossHpTarget_->hp()) /
+				static_cast<float>(std::max(1, bossHpTarget_->maxHp()))
+			);
+		}
+	}
+
+	if (bossHpRoot_) bossHpRoot_->visible = true;
 }
 
 void Game::updatePlayerHpHudLayout() {
@@ -3022,6 +3128,9 @@ void Game::bindZoneHandlers() {
 				}
 				localArenaPresentationZoneId_ = zone.id();
 				tacticalZoneIntro_.trigger(wallPrefix);
+				if (wallPrefix == "WallBoss") {
+					showBossHpHud();
+				}
 
 				constexpr float kArenaBgmFadeOutMs = 1100.f;
 				constexpr float kArenaBgmFadeInMs = 3400.f;
@@ -3148,6 +3257,9 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 
 	if (previousState == 1 && state == 0) {
 		const bool firstClear = completedArenaZoneIds_.insert(localZoneId).second;
+		if (prefix == "WallBoss" && bossHpHudActive_) {
+			hideBossHpHud();
+		}
 
 		if (localArenaPresentationZoneId_ == localZoneId) {
 			constexpr float kArenaBgmFadeOutMs = 1100.f;
@@ -4113,6 +4225,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		}
 		updatePartyHpHudValues();
+		updateBossHpHud();
 
 		for (auto& [id, entry] : otherPlayerHpBars_) {
 			if (!entry.player || entry.player->hp() <= 0) {
@@ -4551,6 +4664,7 @@ void Game::enterLobby() {
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
 	completedArenaZoneIds_.clear();
+	hideBossHpHud();
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -5034,6 +5148,7 @@ void Game::enterInGame() {
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
 	completedArenaZoneIds_.clear();
+	hideBossHpHud();
 	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	lobbyUI_.setLoadingVisible(false);
 	lobbyUI_.setRootVisible(false);
