@@ -51,6 +51,11 @@ struct DrawEvent {
     float         flowSpeed          = 0.f;      // Tile-mode UV scroll along the trail; 0 = static
     u32t          alignMode          = 0u;       // 0 = camera-facing (default), 1 = ground-aligned
 
+    // Premultiplies alpha into rgb before output so additive (One/One) blending
+    // actually fades by per-vertex age instead of ignoring alpha. Only meaningful
+    // for additive draws; leave 0 for the standard SRC_ALPHA-blended PSO.
+    u32t          premultiplyAlpha   = 0u;
+
     // Material / sort
     const Texture* pMainTex          = nullptr;
     bool          additive           = false;

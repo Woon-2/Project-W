@@ -185,7 +185,10 @@ void PathGuideSystem::update(float dtSec, const mu::Vec3& playerPos, const Terra
     };
 
     // --- Ribbon window (re-conformed every frame) ---
-    const float sStart = clampf(sPlayer - cfg_.windowBehind, 0.f, p.totalLen);
+    // sStart sits ahead of the player (never behind), so the ribbon reads as
+    // materializing a few meters in front of them rather than trailing from
+    // underneath/behind.
+    const float sStart = clampf(sPlayer + cfg_.leadGap, 0.f, p.totalLen);
     const float sEnd   = clampf(sPlayer + cfg_.windowAhead, 0.f, p.totalLen);
     if (sEnd - sStart >= 0.5f) {
         const float winLen = sEnd - sStart;
@@ -253,6 +256,8 @@ void PathGuideSystem::submitDrawEvents(GFX& gfx, const Texture* ribbonTex, const
         ev.currentSystemTime = flowTime_;
         ev.flowSpeed         = cfg_.flowSpeed;
         ev.alignMode         = 1u;            // ground-aligned ribbon
+        ev.premultiplyAlpha  = 1u;            // HDR channel is always additive (One/One) -- needs
+                                               // alpha premultiplied for the end-fade to be visible
         ev.pMainTex          = ribbonTex;
         ev.additive          = true;
         ev.renderOrder       = 0;

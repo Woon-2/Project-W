@@ -36,6 +36,12 @@ cbuffer PerDrawcallData : register(b0) {
     float    currentSystemTime;
     float    flowSpeed;             // Tile-mode UV scroll along the trail; 0 = static (default)
     uint     alignMode;             // 0 = camera-facing (default), 1 = ground-aligned (world-up)
+
+    // 1 = premultiply alpha into rgb before output, so additive (One/One) blending
+    // actually attenuates by the age fade below instead of ignoring alpha. 0 = off
+    // (default; required for the non-additive SRC_ALPHA PSO to stay correct).
+    uint     premultiplyAlpha;
+    float3   pad0;
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -131,5 +137,7 @@ PSInput VSMain(uint vid : SV_VertexID) {
 
 float4 PSMain(PSInput input) : SV_TARGET {
     float4 src = sampleBindless(idxMainTex, input.uv);
-    return float4(src.rgb * input.color.rgb, src.a * input.color.a);
+    float4 ret = float4(src.rgb * input.color.rgb, src.a * input.color.a);
+    if (premultiplyAlpha != 0u) ret.rgb *= ret.a;
+    return ret;
 }

@@ -1247,7 +1247,7 @@ struct PerInstanceData {           // 32B (matches HLSL TrailVertex)
 };
 
 // b0 — per-drawcall: one drawcall = one particle's trail.
-struct PerDrawcallData {           // 144B
+struct PerDrawcallData {           // 160B
     XMFLOAT4X4    localToWorld;        // 64B
     BindlessIndex idxMainTex;          // 16B
     XMFLOAT4      baseColor;           // 16B
@@ -1266,6 +1266,14 @@ struct PerDrawcallData {           // 144B
     float         currentSystemTime;   // 4B
     float         flowSpeed;           // 4B   Tile-mode UV scroll; 0 = static (default)
     u32t          alignMode;           // 4B   0 = camera-facing, 1 = ground-aligned
+
+    // additive (One/One) blending ignores the alpha channel entirely, so a
+    // per-vertex age/fade baked only into alpha (see trail.hlsl PSMain) has no
+    // visual effect unless premultiplied into rgb first. 0 = unchanged (default,
+    // matches the SrcBlend=SRC_ALPHA non-additive PSO where the hardware blend
+    // already applies alpha -- premultiplying again would double-darken it).
+    u32t          premultiplyAlpha;    // 4B
+    XMFLOAT3      pad0;                // 12B
 };
 
 // b1 — per-frame.
