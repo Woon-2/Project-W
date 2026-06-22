@@ -438,6 +438,15 @@
     <ClCompile Include="energyOrbSystem.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="pathGuideSystem.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="HeatDistortionPipeline.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="renderSubmitter.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -872,6 +881,15 @@
     <ClInclude Include="energyOrbSystem.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="renderSubmitter.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="pathGuideSystem.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="HeatDistortionPipeline.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -987,6 +1005,7 @@
     <FxCompile Include="piercing.hlsl" />
     <FxCompile Include="piercingSlash.hlsl" />
     <FxCompile Include="energyOrb.hlsl" />
+    <FxCompile Include="heatHaze.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="bindless.hlsli">
@@ -1103,5 +1122,6 @@
     <None Include="..\resources\skills\boss_swings.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
+    <None Include="heatField.hlsli" />
   </ItemGroup>
 </Project>

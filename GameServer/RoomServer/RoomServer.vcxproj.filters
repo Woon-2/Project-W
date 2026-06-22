@@ -252,6 +252,7 @@
     <ClCompile Include="treant.cpp">
       <Filter>contents\Npc\treant</Filter>
     </ClCompile>
+    <ClCompile Include="finalBoss.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -431,6 +432,7 @@
     <ClInclude Include="treant.hpp">
       <Filter>contents\Npc\treant</Filter>
     </ClInclude>
+    <ClInclude Include="finalBoss.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\resources\data\chargeConfig.lua">

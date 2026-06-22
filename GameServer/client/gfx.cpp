@@ -1778,15 +1778,19 @@ void GFX::resize(u32t width, u32t height) {
 	scd_.Width  = width;
 	scd_.Height = height;
 
+	// 4. 백버퍼 + RTV 재생성 (createSwapChain과 동일한 절차).
+	backBuffers_.resize(3u);
+
 	// ResizeBuffers는 flip-model 스왑체인의 current back buffer 인덱스를 0으로 리셋한다.
 	// backbufIdx를 frameIdx_ % N으로 결정론적으로 계산하므로, 다음 프레임의 인덱스가 0이
 	// 되도록 frameIdx_를 N의 배수로 올림 정렬해 스왑체인 상태와 다시 동기화한다.
 	// (GPU는 위에서 idle 상태이므로 모든 Fence가 완료되어 재정렬이 안전하다.)
+	// 주의: 이 계산은 반드시 위에서 backBuffers_를 다시 N개로 채운 뒤에 해야 한다.
+	//       2.단계의 backBuffers_.clear() 직후엔 size()==0이라 0으로 나눠 정수 나눗셈
+	//       예외로 프로세스가 즉사한다(전체화면/해상도 변경 크래시의 원인).
 	const auto n = backBuffers_.size();
 	frameIdx_ = ((frameIdx_ + n - 1u) / n) * n;
 
-	// 4. 백버퍼 + RTV 재생성 (createSwapChain과 동일한 절차).
-	backBuffers_.resize(3u);
 	for (int i = 0; i < 3; ++i) {
 		DISPLAY_ERROR_DX_HR(
 			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
