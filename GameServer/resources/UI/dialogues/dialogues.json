@@ -20,28 +20,28 @@
       "fontSize": 24,
       "fadeOutSeconds": 0.45,
       "pages": [
-        "이 앞에 보이는 거점.. 적들을 끊임없이 소환하고 있어.",
-        "거점을 빠르게 처리하지 않으면, 곤란할 것 같아.",
+        "이 앞에 보이는 석상... 적들을 끊임없이 소환하고 있어.",
+        "석상을 파괴하면 적들의 공세를 조금 늦출 수 있을 것 같아.",
         "좌클릭 - 공격, SHIFT+좌클릭 - 스킬\n(눈 앞의 적들을 쓰러트리자)"
       ]
     },
     {
-      "eventId": "sample_whisper",
+      "eventId": "sample_context",
       "rect": {
-        "x": 590,
-        "y": 92,
-        "width": 350,
-        "height": 132
+        "x": 128,
+        "y": 504,
+        "width": 768,
+        "height": 176
       },
-      "background": [0.12, 0.04, 0.16, 0.68],
-      "textColor": [0.94, 0.86, 1.0, 1.0],
-      "padding": 18,
+      "background": [0.03, 0.05, 0.08, 0.82],
+      "textColor": [0.96, 0.98, 1.0, 1.0],
+      "padding": 24,
       "fontFamily": "Malgun Gothic",
-      "fontSize": 19,
-      "fadeOutSeconds": 0.8,
+      "fontSize": 24,
+      "fadeOutSeconds": 0.45,
       "pages": [
-        "…누군가 이쪽을 보고 있어.",
-        "고개를 들지 마."
+        "이 녀석들 우두머리가 있는 모양이야.",
+        "시간의 돌을 되찾으려면 계속 나아가야 할 것 같아."
       ]
     }
   ]

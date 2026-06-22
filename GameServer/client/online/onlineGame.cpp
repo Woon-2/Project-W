@@ -3113,7 +3113,7 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	}
 
 	if (previousState == 1 && state == 0) {
-		completedArenaZoneIds_.insert(localZoneId);
+		const bool firstClear = completedArenaZoneIds_.insert(localZoneId).second;
 
 		if (localArenaPresentationZoneId_ == localZoneId) {
 			constexpr float kArenaBgmFadeOutMs = 1100.f;
@@ -3124,6 +3124,14 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 				kArenaBgmFadeInMs,
 				kArenaBgmFadeInDelayMs);
 			localArenaPresentationZoneId_ = -1;
+		}
+
+		// First clear of the Hobgoblin tactical zone (server-authoritative wall
+		// removal, 1 -> 0): show the follow-up monologue once. firstClear comes
+		// from completedArenaZoneIds_, kept in sync on every client via
+		// S_ZoneState, so each client shows it exactly once per clear cycle.
+		if (firstClear && prefix == "WallHobgoblin") {
+			dialogueSystem_.show("sample_context");
 		}
 	}
 

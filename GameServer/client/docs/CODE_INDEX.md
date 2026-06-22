@@ -1251,7 +1251,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | HTML authoring preview | `docs/dialogue_preview/index.html` | Live position, size, color, opacity, font, pages, and fade editor |
 | Preview launcher | `docs/dialogue_preview/preview.ps1` | Serves the repository locally and opens the preview |
 | Standalone integration | `standalone/game.cpp` | Input priority, per-frame fade update, and F8 sample trigger |
-| Online integration | `online/onlineGame.cpp` | `init` in `setupStage`; `sample_intro` shown in `setupPlayer` (local player spawn complete); per-frame `update` in `InGameScene`, `handleWndMsg` first in `receiveWndMsg`, gameplay input gated while `active()` |
+| Online integration | `online/onlineGame.cpp` | `init` in `setupStage`; `sample_intro` shown in `setupPlayer` (local player spawn complete); `sample_context` shown in `onZoneState` on first Hobgoblin clear (`WallHobgoblin`, state 1->0, gated by `completedArenaZoneIds_` insert result); per-frame `update` in `InGameScene`, `handleWndMsg` first in `receiveWndMsg`, gameplay input gated while `active()` |
 
 ---
 

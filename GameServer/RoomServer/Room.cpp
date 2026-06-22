@@ -957,7 +957,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 		// Final boss is not part of updateTacticalAI(), so its arena would otherwise
 		// never reach the tactical all-dead teardown path. Release WallBoss and send
 		// S_ZoneState(0) once the boss dies so clients restore the normal combat BGM.
-		if (arenaWallsActive_ && boss_->hp() <= 0) {
+		if (arenaWallsActive_ && finalBoss_->hp() <= 0) {
 			teardownArenaWalls();
 		}
 	}
