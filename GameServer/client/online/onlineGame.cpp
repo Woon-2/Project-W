@@ -3882,7 +3882,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				const int dmg = (pEv->type == EventType::Hit)
 					? prevHp - static_cast<const EvHit*>(pEv)->hp
 					: prevHp;   // Death: remaining HP is the killing-blow damage
-				if (dmg > 0) {
+				// A confirmed non-lethal hit may legitimately deal zero damage (for
+				// example, against a tactically invulnerable NPC). Negative deltas are
+				// stale/out-of-order HP updates and remain hidden.
+				const bool shouldShowDamage = (pEv->type == EventType::Hit)
+					? dmg >= 0
+					: dmg > 0;
+				if (shouldShowDamage) {
 					const uint16 targetId = static_cast<uint16>(routeId);
 					DamageKind kind = DamageKind::EnemyHit;
 					if (idPlayerMap_.find(targetId) != idPlayerMap_.end())
@@ -4485,7 +4491,7 @@ void Game::renderInGame() {
 	minimapIcons_.clear();
 	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
 	for (const auto& [id, p] : idPlayerMap_) {
-		if (id == myId_ || !p) continue;
+		if (id == static_cast<uint16>(player_->getId()) || !p) continue;
 		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
 	}
 	for (const auto& [id, obj] : idMonsterMap_) {
