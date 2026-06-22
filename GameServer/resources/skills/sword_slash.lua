@@ -1,4 +1,4 @@
--- sword_slash.lua
+﻿-- sword_slash.lua
 -- Basic melee sword slash skill.
 
 local skill = Skill()
@@ -24,7 +24,7 @@ skill:addEvent(250, "PlayVFX", {
 })
 
 -- Swing SFX, on the slash.
-skill:addEvent(450, "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(350, "PlaySound", { sound = "sword_slash_1" })
 
 local onHitDefBase = OnHit({
     damage          = 200,
@@ -53,9 +53,9 @@ local hitboxBase = {
 }
 
 -- Right backward sweep segment
-skill:addEvent(320, "SpawnHitbox", {
+skill:addEvent(200, "SpawnHitbox", {
     slot      = 0,
-    localOBBs = { OBB(0.3, -0.25, 1.45, 0.15, 1.1, 0.8, 0, -77, 0) },
+    localOBBs = { OBB(0.25, -1.45, 0.3, 0.15, 1.1, 0.8, 0, 0, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
@@ -64,9 +64,9 @@ skill:addEvent(320, "SpawnHitbox", {
 })
 
 -- Right forward sweep segment
-skill:addEvent(340, "SpawnHitbox", {
+skill:addEvent(220, "SpawnHitbox", {
     slot      = 1,
-    localOBBs = { OBB(0.3, -1.4, 0.75, 0.15, 1.3, 1.2, 0, -48, 0) },
+    localOBBs = { OBB(1.4, -0.75, 0.3, 0.15, 1.3, 1.2, 0, 0, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
@@ -75,9 +75,9 @@ skill:addEvent(340, "SpawnHitbox", {
 })
 
 -- forward sweep segment
-skill:addEvent(360, "SpawnHitbox", {
+skill:addEvent(240, "SpawnHitbox", {
     slot      = 2,
-    localOBBs = { OBB(0.3, -1.6, 0.0, 0.15, 1.55, 1.0, 0, 0, 0) },
+    localOBBs = { OBB(1.6, 0.0, 0.3, 0.15, 1.55, 1.0, 0, 0, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
@@ -86,9 +86,9 @@ skill:addEvent(360, "SpawnHitbox", {
 })
 
 -- Left forward sweep segment
-skill:addEvent(380, "SpawnHitbox", {
+skill:addEvent(260, "SpawnHitbox", {
     slot      = 3,
-    localOBBs = { OBB(0.3, -1.4, -0.75, 0.15, 1.3, 1.2, 0, 48, 0) },
+    localOBBs = { OBB(1.4, 0.75, 0.3, 0.15, 1.3, 1.2, 0, 0, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
@@ -97,9 +97,9 @@ skill:addEvent(380, "SpawnHitbox", {
 })
 
 -- Left backward sweep segment
-skill:addEvent(400, "SpawnHitbox", {
+skill:addEvent(280, "SpawnHitbox", {
     slot      = 4,
-    localOBBs = { OBB(0.3, -0.25, -1.45, 0.15, 1.1, 0.8, 0, 77, 0) },
+    localOBBs = { OBB(0.25, 1.45, 0.3, 0.15, 1.1, 0.8, 77, 0, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
@@ -107,10 +107,10 @@ skill:addEvent(400, "SpawnHitbox", {
     onHit               = onHitLB
 })
 
-skill:addEvent(560, "DestroyHitbox", { slot = 0 })
-skill:addEvent(680, "DestroyHitbox", { slot = 1 })
-skill:addEvent(600, "DestroyHitbox", { slot = 2 })
-skill:addEvent(620, "DestroyHitbox", { slot = 3 })
-skill:addEvent(640, "DestroyHitbox", { slot = 4 })
+skill:addEvent(400, "DestroyHitbox", { slot = 0 })
+skill:addEvent(420, "DestroyHitbox", { slot = 1 })
+skill:addEvent(440, "DestroyHitbox", { slot = 2 })
+skill:addEvent(460, "DestroyHitbox", { slot = 3 })
+skill:addEvent(480, "DestroyHitbox", { slot = 4 })
 
 return skill
