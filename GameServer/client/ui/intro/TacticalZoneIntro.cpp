@@ -211,7 +211,7 @@ bool TacticalZoneIntro::trigger(std::string_view arenaPrefix) {
     else if (arenaPrefix == "WallGrandbaum") {
         emblem = assetManager_->grandbaumEmblem();
         category = L"전술 전투 구역 2";
-        title = L"그란바움";
+        title = L"그랜드밤";
         emblemColor = { 1.f, 0.76f, 0.38f, 0.f };
         accentColor = { 0.88f, 0.52f, 0.16f, 0.f };
     }
@@ -223,9 +223,9 @@ bool TacticalZoneIntro::trigger(std::string_view arenaPrefix) {
         accentColor = { 0.24f, 0.62f, 0.94f, 0.f };
     }
     else if (arenaPrefix == "WallBoss") {
-        emblem = assetManager_->grandBamEmblem();
+        emblem = assetManager_->erdMoreEmblem();
         category = L"보스 전투 구역";
-        title = L"그랜드 밤";
+        title = L"에르드모어";
         emblemColor = { 1.f, 0.68f, 0.48f, 0.f };
         accentColor = { 0.94f, 0.08f, 0.05f, 0.f };
     }

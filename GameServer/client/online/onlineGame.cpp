@@ -76,6 +76,9 @@ static constexpr float    kBarrierMagicMinDiameter = 8.f;
 static constexpr float    kBarrierMagicMaxDiameter = 24.f;
 static constexpr int      kBarrierMagicRenderOrder = 4;
 static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
+// 로컬 플레이어가 벽 평면의 안/바깥 어느 쪽인지 판정하는 임계값(clampOneWayWall과 동일 부호 규칙).
+// outward 기준 부호거리 <= eps 면 안쪽 = 나갈 수 없음(빨강), 초과면 바깥 = 입장 가능(파랑).
+static constexpr float    kBarrierMagicBlockedSideEps = 0.01f;
 
 static float barrierMagicDiameter(const MarkerDef& m) {
 	const float wallHeight = std::fabs(m.scale.y());
@@ -104,7 +107,7 @@ static const std::unordered_map<std::string, BarrierMagicAdjust>& barrierMagicAd
 	static const std::unordered_map<std::string, BarrierMagicAdjust> kTable{
 		// 보스 아레나(Arena_Boss)
 		{ "WallBoss",         { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
-		// 그란바움 아레나(Arena_Grandbaum)
+		// 그랜드밤 아레나(Arena_Grandbaum)
 		{ "WallGrandbaum_0",  { mu::Vec3{ 0.f,   0.f, -10.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
 		{ "WallGrandbaum_1",  { mu::Vec3{ 0.f,   0.f,  0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
 		{ "WallGrandbaum_2",  { mu::Vec3{ 0.f,   0.f,  -5.0f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
@@ -158,6 +161,16 @@ static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
 static constexpr float   kPartyHpBarWidth           = 230.f;
 static constexpr float   kPartyHpBarHeight          = 14.f;
 static constexpr float   kPartyHpNameHeight         = 20.f;
+static constexpr float   kBossHpHudWidth            = 768.f;
+static constexpr float   kBossHpHudHeight           = 128.f;
+static constexpr float   kBossHpHudTop              = 52.f;
+static constexpr float   kBossHpFillX               = 136.f;
+static constexpr float   kBossHpFillY               = 13.f;
+static constexpr float   kBossHpFillWidth           = 580.f;
+static constexpr float   kBossHpFillHeight          = 100.f;
+static constexpr float   kBossHpEmblemX              = 42.f;
+static constexpr float   kBossHpEmblemY              = 22.f;
+static constexpr float   kBossHpEmblemSize           = 84.f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -404,7 +417,7 @@ void Game::setupStage() {
 	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
 	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
 	playerNameText_->setFontSize(18.0f);
-	playerNameText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	playerNameText_->setTextColor(0.0f, 0.0f, 0.0f, 1.0f);
 	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
@@ -422,12 +435,108 @@ void Game::setupStage() {
 	killCountWidget_->setTextures(assetManager_.digitAtlasTex(), assetManager_.killIconTex());
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
+	setupBossHpHud();
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
 	gfx_.setMaxRenderObjectId(1000u);
+}
+
+void Game::setupBossHpHud() {
+	bossHpRoot_ = uiManager_.root()->addChild(std::make_unique<UI::UIElement>());
+	bossHpRoot_->name    = "bossHpHud";
+	bossHpRoot_->anchor  = UI::Anchors::TopCenter;
+	bossHpRoot_->pivot   = UI::Pivots::TopCenter;
+	bossHpRoot_->offsetY = UI::DimValue::px(kBossHpHudTop);
+	bossHpRoot_->width   = UI::DimValue::px(kBossHpHudWidth);
+	bossHpRoot_->height  = UI::DimValue::px(kBossHpHudHeight);
+	bossHpRoot_->zOrder  = 20;
+	bossHpRoot_->visible = false;
+
+	bossHpBar_ = static_cast<UI::ProgressBar*>(
+		bossHpRoot_->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	bossHpBar_->name          = "bossHpBar";
+	bossHpBar_->anchor        = UI::Anchors::TopLeft;
+	bossHpBar_->pivot         = UI::Pivots::TopLeft;
+	bossHpBar_->offsetX       = UI::DimValue::px(kBossHpFillX);
+	bossHpBar_->offsetY       = UI::DimValue::px(kBossHpFillY);
+	bossHpBar_->width         = UI::DimValue::px(kBossHpFillWidth);
+	bossHpBar_->height        = UI::DimValue::px(kBossHpFillHeight);
+	bossHpBar_->bgColor       = { 0.f, 0.f, 0.f, 0.f };
+	bossHpBar_->fillTex       = assetManager_.monsterHpBar();
+	bossHpBar_->zOrder        = 0;
+	bossHpBar_->setProgress(1.f);
+
+	bossHpFrame_ = static_cast<UI::Image*>(
+		bossHpRoot_->addChild(std::make_unique<UI::Image>())
+	);
+	bossHpFrame_->name    = "bossHpFrame";
+	bossHpFrame_->anchor  = UI::Anchors::TopLeft;
+	bossHpFrame_->pivot   = UI::Pivots::TopLeft;
+	bossHpFrame_->width   = UI::DimValue::pct(100.f);
+	bossHpFrame_->height  = UI::DimValue::pct(100.f);
+	bossHpFrame_->texture = assetManager_.monsterHpFrame();
+	bossHpFrame_->zOrder  = 1;
+
+	bossHpEmblem_ = static_cast<UI::Image*>(
+		bossHpRoot_->addChild(std::make_unique<UI::Image>())
+	);
+	bossHpEmblem_->name    = "bossHpEmblem";
+	bossHpEmblem_->anchor  = UI::Anchors::TopLeft;
+	bossHpEmblem_->pivot   = UI::Pivots::TopLeft;
+	bossHpEmblem_->offsetX = UI::DimValue::px(kBossHpEmblemX);
+	bossHpEmblem_->offsetY = UI::DimValue::px(kBossHpEmblemY);
+	bossHpEmblem_->width   = UI::DimValue::px(kBossHpEmblemSize);
+	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
+	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
+	bossHpEmblem_->zOrder  = 2;
+}
+
+void Game::showBossHpHud() {
+	bossHpHudActive_ = true;
+	bossHpTarget_ = nullptr;
+	if (bossHpBar_) bossHpBar_->setProgress(1.f);
+	if (bossHpRoot_) bossHpRoot_->visible = true;
+}
+
+void Game::hideBossHpHud() {
+	bossHpHudActive_ = false;
+	bossHpTarget_ = nullptr;
+	if (bossHpRoot_) bossHpRoot_->visible = false;
+}
+
+void Game::updateBossHpHud() {
+	if (!bossHpHudActive_) {
+		if (bossHpRoot_) bossHpRoot_->visible = false;
+		return;
+	}
+
+	if (!bossHpTarget_) {
+		auto it = std::ranges::find_if(bosses_, [](const std::shared_ptr<Boss>& boss) {
+			return boss && !boss->isDead() && boss->hp() > 0;
+		});
+		if (it != bosses_.end()) {
+			bossHpTarget_ = it->get();
+		}
+	}
+
+	if (bossHpTarget_) {
+		if (bossHpTarget_->isDead() || bossHpTarget_->hp() <= 0) {
+			hideBossHpHud();
+			return;
+		}
+		if (bossHpBar_) {
+			bossHpBar_->setProgress(
+				static_cast<float>(bossHpTarget_->hp()) /
+				static_cast<float>(std::max(1, bossHpTarget_->maxHp()))
+			);
+		}
+	}
+
+	if (bossHpRoot_) bossHpRoot_->visible = true;
 }
 
 void Game::updatePlayerHpHudLayout() {
@@ -589,7 +698,7 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyName->setTextHAlign(UI::TextHAlign::Leading);
 	partyName->setTextVAlign(UI::TextVAlign::Center);
 	partyName->setFontSize(16.0f);
-	partyName->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	partyName->setTextColor(0.0f, 0.0f, 0.0f, 1.0f);
 	partyName->setText(partyDisplayName(playerId));
 
 	auto* partyBar = static_cast<UI::ProgressBar*>(
@@ -3044,6 +3153,9 @@ void Game::bindZoneHandlers() {
 				}
 				localArenaPresentationZoneId_ = zone.id();
 				tacticalZoneIntro_.trigger(wallPrefix);
+				if (wallPrefix == "WallBoss") {
+					showBossHpHud();
+				}
 
 				constexpr float kArenaBgmFadeOutMs = 1100.f;
 				constexpr float kArenaBgmFadeInMs = 3400.f;
@@ -3056,8 +3168,10 @@ void Game::bindZoneHandlers() {
 	}
 }
 
-// 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
-// 가능/미진입, 빨간색=해당 아레나 활성). 한 아레나에 진입해도 다른 아레나의 마법진 색은 영향받지 않는다.
+// 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall 마커로 마법진 quad를 재구성한다. 색(tint)은
+// 여기서 정하지 않는다 — 로컬 플레이어 위치에 따라 매 프레임 renderBarrierMagicCircleQuads에서 결정한다.
+// 한 플레이어가 진입(state==1)해도 아직 밖에 있는 플레이어는 일방향 벽으로 입장 가능하므로 파란색을 봐야
+// 하기 때문. 여기서는 그 판정에 필요한 벽 평면(center/outward, makeOneWayWall과 동일)만 캐시한다.
 void Game::rebuildBarrierMagicCircleQuads() {
 	barrierMagicCircleQuads_.clear();
 
@@ -3065,10 +3179,17 @@ void Game::rebuildBarrierMagicCircleQuads() {
 		const std::string prefix = arenaWallPrefix(z);
 		if (prefix.empty()) continue;
 
-		uint8 state = 0;   // 미진입 zone은 기본 통과 가능(파란색)
-		if (auto it = zoneStates_.find(static_cast<uint16>(z.id)); it != zoneStates_.end())
-			state = it->second;
-		const bool blocked = (state == 1);
+		// interior 기준점 = 이 아레나 Wall 마커들의 중점(arenaWalls_ 빌드와 동일 규칙). outward 부호가
+		// 이 기준점으로 정해지므로, 마법진 색 판정도 충돌 벽과 정확히 같은 안/바깥을 쓴다.
+		mu::Vec3 wallSum{};
+		int wallCount = 0;
+		for (const auto& m : chunkManager_.markers()) {
+			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
+			wallSum += m.pos;
+			++wallCount;
+		}
+		if (wallCount == 0) continue;
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
 
 		for (const auto& m : chunkManager_.markers()) {
 			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
@@ -3076,6 +3197,8 @@ void Game::rebuildBarrierMagicCircleQuads() {
 			const float diameter = barrierMagicDiameter(m);
 			const BarrierMagicAdjust adj = barrierMagicAdjust(m);
 			const mu::Vec3 circlePos = m.pos + m.orient.rotate(adj.offset);
+			const OneWayWall w = makeOneWayWall(m, mid);
+
 			BarrierMagicCircleQuad quad{};
 			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
 			           * mu::translate(circlePos);
@@ -3084,8 +3207,10 @@ void Game::rebuildBarrierMagicCircleQuads() {
 			                          * mu::rotateYH(mu::Degree(adj.rotateDeg.y()))
 			                          * mu::rotateZH(mu::Degree(adj.rotateDeg.z()));
 			quad.rotation = kBarrierMagicQuadPlaneFix * extraRot * mu::Mat4x4(m.orient);
-			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
 			quad.sortPos = circlePos;
+			quad.zoneId = static_cast<uint16>(z.id);
+			quad.wallCenter = w.center;
+			quad.wallOutward = w.outward;
 			barrierMagicCircleQuads_.push_back(quad);
 		}
 	}
@@ -3095,11 +3220,29 @@ void Game::renderBarrierMagicCircleQuads() {
 	const Texture* tex = assetManager_.magicCircleTex();
 	if (!tex) return;
 
+	// 색은 (1) 서버 권위 zone 상태와 (2) 로컬 플레이어가 그 벽을 통과할 수 있는지로 결정한다.
+	// state==1(아레나 활성)이라도 로컬 플레이어가 벽 바깥(아직 입장 가능)이면 파란색 — 한 명이
+	// 진입해도 다른 플레이어 화면에선 통과 가능 색으로 보인다(일방향 벽이 안쪽으로는 통과 허용).
+	const bool havePlayer = (player_ != nullptr);
+	const mu::Vec3 playerPos = havePlayer ? player_->pos() : mu::Vec3{};
+
 	for (const auto& quad : barrierMagicCircleQuads_) {
+		uint8 state = 0;   // 미진입 zone은 기본 통과 가능(파란색)
+		if (auto it = zoneStates_.find(quad.zoneId); it != zoneStates_.end())
+			state = it->second;
+
+		bool blocked = false;
+		if (state == 1 && havePlayer) {
+			// outward 기준 부호거리. 안쪽(<= eps)이면 이 벽을 넘어 나갈 수 없음 → 빨강.
+			const float side = (playerPos.x() - quad.wallCenter.x()) * quad.wallOutward.x()
+			                 + (playerPos.z() - quad.wallCenter.z()) * quad.wallOutward.z();
+			blocked = (side <= kBarrierMagicBlockedSideEps);
+		}
+
 		gfx_.addDrawEvent(BillboardPipeline::DrawEvent{
 			.world = quad.world,
 			.pTex = tex,
-			.tint = quad.tint,
+			.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor,
 			.blend = ps::BlendMode::Alpha,
 			.rotation3D = quad.rotation,
 			.alignment = ps::RendererModule::Alignment::Local,
@@ -3139,6 +3282,9 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 
 	if (previousState == 1 && state == 0) {
 		const bool firstClear = completedArenaZoneIds_.insert(localZoneId).second;
+		if (prefix == "WallBoss" && bossHpHudActive_) {
+			hideBossHpHud();
+		}
 
 		if (localArenaPresentationZoneId_ == localZoneId) {
 			constexpr float kArenaBgmFadeOutMs = 1100.f;
@@ -4104,6 +4250,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		}
 		updatePartyHpHudValues();
+		updateBossHpHud();
 
 		for (auto& [id, entry] : otherPlayerHpBars_) {
 			if (!entry.player || entry.player->hp() <= 0) {
@@ -4620,6 +4767,7 @@ void Game::enterLobby() {
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
 	completedArenaZoneIds_.clear();
+	hideBossHpHud();
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -5103,6 +5251,7 @@ void Game::enterInGame() {
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
 	completedArenaZoneIds_.clear();
+	hideBossHpHud();
 	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	lobbyUI_.setLoadingVisible(false);
 	lobbyUI_.setRootVisible(false);

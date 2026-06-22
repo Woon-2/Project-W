@@ -328,6 +328,24 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "MonsterHpFrame",
+		.texturePath     = "../resources/UI/Monster_Hp_Frame.dds",
+		.pDest           = &monsterHpFrame_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "MonsterHpBar",
+		.texturePath     = "../resources/UI/Monster_Hp_Bar2.dds",
+		.pDest           = &monsterHpBar_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "HobgoblinEmblem",
 		.texturePath     = "../resources/UI/Hobgoblin_emblem.dds",
 		.pDest           = &hobgoblinEmblem_,
@@ -355,9 +373,9 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
-		.name            = "GrandBamEmblem",
-		.texturePath     = "../resources/UI/GrandBam_emblem.dds",
-		.pDest           = &grandBamEmblem_,
+		.name            = "ErdMoreEmblem",
+		.texturePath     = "../resources/UI/ErdMore_emblem.dds",
+		.pDest           = &erdMoreEmblem_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

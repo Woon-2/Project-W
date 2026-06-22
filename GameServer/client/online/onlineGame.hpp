@@ -193,6 +193,10 @@ private:
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
+	void setupBossHpHud();
+	void showBossHpHud();
+	void hideBossHpHud();
+	void updateBossHpHud();
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -398,8 +402,14 @@ private:
 	struct BarrierMagicCircleQuad {
 		mu::Mat4x4 world{};
 		mu::Mat4x4 rotation{};
-		mu::Vec4   tint{ 1.f, 1.f, 1.f, 1.f };
 		mu::Vec3   sortPos{};
+		// Color is decided per-frame from the LOCAL player's side of this wall, not the
+		// shared S_ZoneState alone: a one-way wall lets latecomers walk in, so a player
+		// still outside (passable) must see blue even while another player triggered the
+		// arena (state==1). wallCenter/wallOutward define the plane; zoneId picks the state.
+		mu::Vec3   wallCenter{};
+		mu::Vec3   wallOutward{};   // unit; player on interior side (can't exit) => blocked tint
+		uint16     zoneId{ 0 };
 	};
 	std::vector<BarrierMagicCircleQuad> barrierMagicCircleQuads_{};
 
@@ -533,6 +543,15 @@ private:
 	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
+
+	// Final-boss HUD. Presentation is armed only by this client's local Arena_Boss
+	// enter callback, so another player entering the room cannot reveal it here.
+	UI::UIElement*   bossHpRoot_    = nullptr;  // owned by uiManager_
+	UI::ProgressBar* bossHpBar_     = nullptr;  // owned by bossHpRoot_
+	UI::Image*       bossHpFrame_   = nullptr;  // owned by bossHpRoot_
+	UI::Image*       bossHpEmblem_  = nullptr;  // owned by bossHpRoot_
+	Object*          bossHpTarget_  = nullptr;  // non-owning; kept alive by active/corpse/pool storage
+	bool             bossHpHudActive_ = false;
 
 	// Tactical arena entry title card (self-contained overlay module; the boss
 	// arena adds a WARNING phase). onlineGame only owns it and delegates.
