@@ -40,7 +40,7 @@ skill:addEvent(150, "PlayVFX", {
 skill:addEvent(150, "PlaySound", { sound = "ice_front_attack" })
 
 local onHit = OnHit({
-    damage          = 42,
+    damage          = 72,
     vfxId           = 255,
     impulseStrength = 500.0,
     impulseDir      = Vec3(0.0, 0.7, 0.5)

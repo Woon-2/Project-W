@@ -20,12 +20,12 @@ skill:addEvent(0, "PlayAnimation", {
     attackIndex = 0,
     blendTime   = 0.1
 })
-skill:addEvent(500, "PlayAnimation", {
+skill:addEvent(400, "PlayAnimation", {
     clipName    = "Combat_2H_Attack01",
     attackIndex = 1,
     blendTime   = 0.1
 })
-skill:addEvent(1100, "PlayAnimation", {
+skill:addEvent(800, "PlayAnimation", {
     clipName    = "Combat_2H_AttackSpecial",
     attackIndex = 2,
     blendTime   = 0.1
@@ -39,12 +39,12 @@ skill:addEvent(100, "PlayVFX", {
 -- Per-beat swing SFX, aligned to the four hitbox waves (SpawnHitbox times):
 --   150 / 550 / 750ms = light slashes; 1250ms = finisher (the big double-arc wave).
 skill:addEvent(150,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(350,  "PlaySound", { sound = "sword_slash_1" })
 skill:addEvent(550,  "PlaySound", { sound = "sword_slash_1" })
-skill:addEvent(750,  "PlaySound", { sound = "sword_slash_1" })
-skill:addEvent(1250, "PlaySound", { sound = "sword_slash_finish" })
+skill:addEvent(1000, "PlaySound", { sound = "sword_slash_finish" })
 
 local onHit = OnHit({
-    damage          = 35,
+    damage          = 75,
     vfxId           = 0,
     impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.1, 1.0)
@@ -154,7 +154,7 @@ skill:addEvent(750, "SpawnHitbox", {
     onHit               = onHit
 })
 
-skill:addEvent(1250, "SpawnHitbox", {
+skill:addEvent(900, "SpawnHitbox", {
     slot                = 10,
     localOBBs           = { OBB(0.4, -0.95, -0.75, 0.65, 1.15, 2.3, 0, 50, 0) },
     attach              = BoneAttach("spine_01"),
@@ -164,7 +164,7 @@ skill:addEvent(1250, "SpawnHitbox", {
     onHit               = onHitFinisher
 })
 
-skill:addEvent(1250, "SpawnHitbox", {
+skill:addEvent(900, "SpawnHitbox", {
     slot                = 11,
     localOBBs           = { OBB(0.4, 1.1, 0.7, 0.65, 1.15, 2.3, 0, 50, 0) },
     attach              = BoneAttach("spine_01"),
@@ -184,7 +184,7 @@ skill:addEvent(900, "DestroyHitbox", { slot = 6 })
 skill:addEvent(900, "DestroyHitbox", { slot = 7 })
 skill:addEvent(900, "DestroyHitbox", { slot = 8 })
 skill:addEvent(900, "DestroyHitbox", { slot = 9 })
-skill:addEvent(1500, "DestroyHitbox", { slot = 10 })
-skill:addEvent(1500, "DestroyHitbox", { slot = 11 })
+skill:addEvent(1100, "DestroyHitbox", { slot = 10 })
+skill:addEvent(1100, "DestroyHitbox", { slot = 11 })
 
 return skill

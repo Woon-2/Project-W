@@ -41,7 +41,7 @@ skill:addEvent(0, "PlayVFX", {
 skill:addEvent(0, "PlaySound", { sound = "red_energy", durationMs = 900, fadeMs = 200 })
 
 local onHitBase = OnHit({
-    damage          = 40,
+    damage          = 409,
     vfxId           = 255,
     impulseStrength = 900.0,
     impulseDir      = Vec3(0.0, 1.0, 0.0)

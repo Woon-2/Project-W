@@ -30,7 +30,7 @@ skill:addEvent(150, "PlayVFX", {
 skill:addEvent(150, "PlaySound", { sound = "quake" })
 
 local onHitBase = OnHit({
-    damage          = 20,
+    damage          = 70,
     vfxId           = 0,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)
