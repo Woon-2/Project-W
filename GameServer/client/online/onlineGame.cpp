@@ -417,7 +417,7 @@ void Game::setupStage() {
 	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
 	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
 	playerNameText_->setFontSize(18.0f);
-	playerNameText_->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	playerNameText_->setTextColor(0.0f, 0.0f, 0.0f, 1.0f);
 	updatePlayerHpHudLayout();
 
 	// Kill Count HUD (top-center). Textures are bound by pointer; they may still
@@ -698,7 +698,7 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyName->setTextHAlign(UI::TextHAlign::Leading);
 	partyName->setTextVAlign(UI::TextVAlign::Center);
 	partyName->setFontSize(16.0f);
-	partyName->setTextColor(1.0f, 1.0f, 1.0f, 1.0f);
+	partyName->setTextColor(0.0f, 0.0f, 0.0f, 1.0f);
 	partyName->setText(partyDisplayName(playerId));
 
 	auto* partyBar = static_cast<UI::ProgressBar*>(
