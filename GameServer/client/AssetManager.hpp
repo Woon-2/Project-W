@@ -43,7 +43,7 @@ public:
 	const Texture* hobgoblinEmblem() const { return &hobgoblinEmblem_; }
 	const Texture* grandbaumEmblem() const { return &grandbaumEmblem_; }
 	const Texture* isysEmblem() const { return &isysEmblem_; }
-	const Texture* grandBamEmblem() const { return &grandBamEmblem_; }
+	const Texture* erdMoreEmblem() const { return &erdMoreEmblem_; }
 	const Texture* warningGlitchFragments() const { return &warningGlitchFragments_; }
 	const Texture* warningNoiseMask() const { return &warningNoiseMask_; }
 	// Skill dial icon resolved by compiled skill asset name (e.g. "SlashWave").
@@ -175,7 +175,7 @@ private:
 	Texture hobgoblinEmblem_{};
 	Texture grandbaumEmblem_{};
 	Texture isysEmblem_{};
-	Texture grandBamEmblem_{};
+	Texture erdMoreEmblem_{};
 	Texture warningGlitchFragments_{};
 	Texture warningNoiseMask_{};
 	// Skill dial icons (12), one per selectable weapon skill.

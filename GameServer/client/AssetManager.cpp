@@ -373,9 +373,9 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
-		.name            = "GrandBamEmblem",
-		.texturePath     = "../resources/UI/GrandBam_emblem.dds",
-		.pDest           = &grandBamEmblem_,
+		.name            = "ErdMoreEmblem",
+		.texturePath     = "../resources/UI/ErdMore_emblem.dds",
+		.pDest           = &erdMoreEmblem_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

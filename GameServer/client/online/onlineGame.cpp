@@ -107,7 +107,7 @@ static const std::unordered_map<std::string, BarrierMagicAdjust>& barrierMagicAd
 	static const std::unordered_map<std::string, BarrierMagicAdjust> kTable{
 		// 보스 아레나(Arena_Boss)
 		{ "WallBoss",         { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
-		// 그란바움 아레나(Arena_Grandbaum)
+		// 그랜드밤 아레나(Arena_Grandbaum)
 		{ "WallGrandbaum_0",  { mu::Vec3{ 0.f,   0.f, -10.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
 		{ "WallGrandbaum_1",  { mu::Vec3{ 0.f,   0.f,  0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
 		{ "WallGrandbaum_2",  { mu::Vec3{ 0.f,   0.f,  -5.0f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
@@ -491,7 +491,7 @@ void Game::setupBossHpHud() {
 	bossHpEmblem_->offsetY = UI::DimValue::px(kBossHpEmblemY);
 	bossHpEmblem_->width   = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
-	bossHpEmblem_->texture = assetManager_.grandBamEmblem();
+	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
 	bossHpEmblem_->zOrder  = 2;
 }
 
