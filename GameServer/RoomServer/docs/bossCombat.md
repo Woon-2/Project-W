@@ -15,7 +15,15 @@
 - **프레임워크**: `RoomServer/BehaviorTree.{hpp,cpp}`(`BtSelector`/`BtSequence`/`BtCondition`/
   `BtCooldown`). `BtContext = { FinalBoss& boss; Room& room; }`(blackboard는 `FinalBoss` 멤버가 겸함).
 - **타깃 평가(`evaluateTarget`)**: 보스 전용 Zone이라 **감지 거리 없음** — `Room::getLivingPlayers()`
-  전원을 점수(현재는 거리 최근접)로 평가해 매 0.5s 또는 타깃 소실 시 재선택. `targetId_`=session id.
+  전원을 점수로 평가해 매 0.5s 또는 타깃 소실 시 재선택. `targetId_`=session id.
+  - **점수(`scoreTarget`)** = 거리·저HP·위협을 각 [0,1]로 정규화한 **가중 합**:
+    - 근접 `1/(dist+1)` × `TARGET_W_PROXIMITY`(1.0)
+    - 저HP `1 - hp/kPlayerMaxHp` × `TARGET_W_LOWHP`(0.6) — 약한 플레이어 마무리 유도
+    - 위협 `최근 보스를 때린 플레이어?1:0` × `TARGET_W_THREAT`(0.8). 위협 목록은 보스가
+      chargeable이라 이미 채워지는 `Object::collectRecentDamagers(now, TARGET_THREAT_WINDOW)`를
+      평가당 1회 수집해 공유. damager objId == session id이므로 `s->id()`로 매칭.
+  - **히스테리시스**: 현재 타깃에 `TARGET_STICKY_BONUS`(0.15) 가산 → 비슷한 점수에서 0.5s마다
+    타깃이 튀는 현상 방지(점수 차가 크면 정상 전환).
 - **트리 구조**:
   ```
   Root(Selector)
@@ -35,8 +43,8 @@
   windup/hit/recover를 담당하므로 멀티페이즈 노드 불필요).
 - **빌드 시점**: `Room::setupFinalBoss`가 `addAttack` 4종 등록 **직후** `buildBehaviorTree()` 호출
   (리프가 인덱스 0~3으로 skillId/clipKey 참조).
-- **튜닝 포인트**: 거리 밴드(`gapRange_`), 스킬별 쿨다운, `damageScale_`, 타깃 점수 함수(저HP/위협
-  가중치 추가 여지).
+- **튜닝 포인트**: 거리 밴드(`gapRange_`), 스킬별 쿨다운, `damageScale_`, 타깃 점수 가중치
+  (`TARGET_W_PROXIMITY`/`TARGET_W_LOWHP`/`TARGET_W_THREAT`/`TARGET_STICKY_BONUS`/`TARGET_THREAT_WINDOW`).
 
 ## 리소스
 - 모델: 클라 `resources/boss/boss.bin`, 서버 `resources/boss/bossServer.bin`
@@ -110,4 +118,5 @@
 - **Rage/페이즈 전이**(미구현): BT Root 최상단의 예약 우선순위 가지 + 클라 `AnimBlenderBoss` Rage
   트리거 + 전용 패킷이 필요. `Boss_Rage` 클립은 등록만 돼 있음.
 - 공격 거리 밴드/쿨다운/`damageScale` 콘텐츠 튜닝(스킬 lua 히트박스 사거리와 정합).
-- 타깃 점수에 저HP/위협 가중치 추가(현재는 최근접만). 돌진 등 신규 패턴은 전용 스킬 lua 저작 후 BT 리프 추가.
+- ~~타깃 점수에 저HP/위협 가중치 추가~~ → **구현됨**(거리+저HP+위협 가중 합 + 히스테리시스).
+  돌진 등 신규 패턴은 전용 스킬 lua 저작 후 BT 리프 추가.

@@ -37,7 +37,7 @@ skill:addEvent(100, "PlayVFX", {
 skill:addEvent(120, "PlaySound", { sound = "slash_wave" })
 
 local onHit = OnHit({
-    damage          = 20,
+    damage          = 200,
     vfxId           = 0,
     impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)

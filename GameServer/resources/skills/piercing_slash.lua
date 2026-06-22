@@ -29,7 +29,7 @@ skill:addEvent(100, "PlayVFX", {
 skill:addEvent(100, "PlaySound", { sound = "spear2" })
 
 local onHitBase = OnHit({
-    damage          = 2,
+    damage          = 200,
     vfxId           = 0,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)
