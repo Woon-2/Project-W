@@ -327,7 +327,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
 | `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.cpp #300` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리 |
+| `AnimSystem::update()` | `animation.cpp #386` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
