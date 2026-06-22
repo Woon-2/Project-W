@@ -476,6 +476,10 @@ private:
 
 	ComPtr<ID3D12Device> device_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
+	// Owns the dedicated submission thread; every ExecuteCommandLists / Present / Signal
+	// on cmdQ_ is routed through this so the queue is touched by one thread only.
+	// Declared after cmdQ_ so it is destroyed (thread joined) before the queue is released.
+	std::unique_ptr<RenderSubmitter> submitter_;
 
 	CommandListPool cmdListPool_{};
 

@@ -30,7 +30,7 @@ public:
         DescriptorPool* pCmpSamPool,
         const std::shared_ptr<RootSig>& rootSig,
         const ComPtr<ID3D12PipelineState>& blurShader,
-        const ComPtr<ID3D12CommandQueue>& cmdQ,
+        RenderSubmitter* submitter,
         Fence* pFence,
         Resources* pResources,
         CommandListPool* commandListPool,
@@ -51,7 +51,7 @@ private:
     DescriptorPool* pCmpSamPool_   = nullptr;
     std::shared_ptr<RootSig> rootSig_ = nullptr;
     ComPtr<ID3D12PipelineState> blurShader_ = nullptr;
-    ComPtr<ID3D12CommandQueue>  cmdQ_ = nullptr;
+    RenderSubmitter* submitter_ = nullptr;
     Fence* pFence_ = nullptr;
     Resources* pResources_ = nullptr;
     CommandListPool* cmdListPool_ = nullptr;

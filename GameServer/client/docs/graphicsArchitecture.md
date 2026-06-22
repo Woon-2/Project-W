@@ -20,6 +20,34 @@
    a. 멀티스레드 렌더링 시 master/slave 구조로 렌더링이 이루어짐
    b. 3개의 백버퍼를 활용, 가용 백버퍼가 있다면 present를 wait하지 않고 곧바로 다음 렌더링을 수행
 
+#### 제출 스레드 (Render Submission Thread) — `RenderSubmitter`
+
+`ExecuteCommandLists`(이하 ECL)/`Present`/`Signal`은 단일 `ID3D12CommandQueue`에서 드라이버가
+직렬화하며, 메인 렌더 스레드의 가장 큰 CPU 비용이다. 이를 메인 스레드 임계 경로에서 빼내기 위해
+**전용 제출 스레드(`client/renderSubmitter.*`, `RenderSubmitter`)** 를 둔다.
+
+- 모든 Dispatcher / barrier·clear / present / signal / 리소스 로딩(IBL precompute 포함)은
+  `cmdQ_->ExecuteCommandLists`를 직접 호출하지 않고 `submitter_->submit/present/signal`로 enqueue한다.
+  `cmdQ_`는 **제출 스레드만** 만진다(생성/네이밍/스왑체인·폰트 연결 같은 비-ECL 호출 제외).
+- 내부 큐는 **순서 보장 단일 소비자 FIFO**(mutex+deque+cv) → enqueue 순서 = GPU 제출 순서.
+  기존 패스 간/배리어 순서가 그대로 보존된다. (ThreadPool에 ECL을 분산하지 않는 이유: 같은 큐는
+  어느 스레드에서 호출해도 직렬화되어 병렬 이득이 없고 순서가 깨진다. 순서 무관 작업의 진짜 병렬화는
+  별도 큐(async compute/copy)의 몫 — 후속 과제.)
+- **불변식**: ① 커맨드 리스트는 `Close()` 후 enqueue. ② 리스트 객체(ComPtr) 수명은 프레임
+  Fence의 `associatedCmdCtxs_`가 보장(submit은 raw 포인터만 보관). ③ `Fence::desiredValue`
+  증가/대기는 메인 스레드 전용, 제출 스레드는 전달받은 값으로 Signal만. ④ `render()` 시작부의
+  `waitOnFence`가 백프레셔(메인이 제출 스레드보다 최대 ~3프레임 앞섬).
+- **수명**: 초기화 단계는 inline 모드(`start(cmdQ, async=false)`)로 메인 스레드에서 직접 실행,
+  첫 `render()`에서 `goAsync()`로 전용 스레드 가동. 셧다운/`drainGpu()`는 `flushBlocking()` 후
+  Fence 대기, 소멸 시 `stop()`으로 join(멤버 선언이 `cmdQ_` 뒤라 큐보다 먼저 파괴).
+- **⚠ back buffer 인덱스는 결정론적으로**: Present가 제출 스레드에서 비동기로 일어나므로 메인
+  스레드가 `swapChain_->GetCurrentBackBufferIndex()`를 질의하면 stale 값(직전 프레임 Present
+  미처리)을 받아 잘못된 back buffer에 기록 → `EXECUTECOMMANDLISTS_WRONGSWAPCHAINBUFFERREFERENCE`
+  → 디바이스 제거(크래시). 따라서 back buffer 인덱스는 반드시 `frameIdx_ % backBuffers_.size()`
+  로 계산한다(매 프레임 1회 Present → current == presents%N == frameIdx_%N, render()의 roomIdx와 동일).
+  `GFX::resize()`는 `ResizeBuffers`가 current 인덱스를 0으로 리셋하므로, `drainGpu()`로 idle 후
+  `frameIdx_`를 N의 배수로 올림 정렬해 다음 프레임 인덱스를 0으로 재동기화한다.
+
 `GFX`에 객체 그리기를 요청할 때에는 어떤 파이프라인을 통할지를 정해야 함
 함수 오버로딩을 통해 어떤 파이프라인에 종속된 인자를 전달하느냐에 따라 결정
 `GFX::renderPath()` 로 Forward / Deferred 경로를 런타임에 선택 가능

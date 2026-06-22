@@ -7,6 +7,9 @@
 extern RECT gWndRect;
 extern RECT gClientRect;
 
+// Owns the single graphics command queue submission path (see renderSubmitter.hpp).
+class RenderSubmitter;
+
 // createBufferResource 함수에서
 // 리소스 힙 타입과 리소스 초기 상태를 설정하는데 참고하는 정보
 enum class BufferCreationType {

@@ -131,7 +131,7 @@ public:
 		const std::shared_ptr<RootSig>& rootSig,
 		const ComPtr<ID3D12PipelineState>& mainShader,
 		const ComPtr<ID3D12PipelineState>& shadowShader,
-		const ComPtr<ID3D12CommandQueue>& cmdQ,
+		RenderSubmitter* submitter,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE rtv,
 		D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence,
@@ -238,7 +238,7 @@ private:
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
 	ComPtr<ID3D12PipelineState> mainShader_ = nullptr;
 	ComPtr<ID3D12PipelineState> shadowShader_ = nullptr;
-	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
+	RenderSubmitter* submitter_ = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv_{};

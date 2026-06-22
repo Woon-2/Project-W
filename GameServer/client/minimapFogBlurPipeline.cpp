@@ -13,7 +13,7 @@ Dispatcher::Dispatcher(
     DescriptorPool* pCmpSamPool,
     const std::shared_ptr<RootSig>& rootSig,
     const ComPtr<ID3D12PipelineState>& blurShader,
-    const ComPtr<ID3D12CommandQueue>& cmdQ,
+    RenderSubmitter* submitter,
     Fence* pFence,
     Resources* pResources,
     CommandListPool* commandListPool,
@@ -22,7 +22,7 @@ Dispatcher::Dispatcher(
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-    rootSig_(rootSig), blurShader_(blurShader), cmdQ_(cmdQ),
+    rootSig_(rootSig), blurShader_(blurShader), submitter_(submitter),
     pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
     roomIdx_(roomIdx), blurRadiusTexels_(blurRadiusTexels),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
@@ -110,7 +110,7 @@ void Dispatcher::render() {
     }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 

@@ -280,6 +280,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="renderSubmitter.cpp" />
     <ClCompile Include="timer.cpp" />
     <ClCompile Include="uiPipeline.cpp" />
     <ClCompile Include="ui\UIElement.cpp" />
@@ -355,6 +356,7 @@
     <ClInclude Include="font.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
+    <ClInclude Include="renderSubmitter.hpp" />
     <ClInclude Include="IGame.hpp" />
     <ClInclude Include="ClientApp.hpp" />
     <ClInclude Include="jointConstraint.hpp" />

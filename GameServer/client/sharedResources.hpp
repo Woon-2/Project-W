@@ -74,13 +74,13 @@ void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3D12Gra
 // 그림자맵의 상태가 현재 Depth Write가 아니라면 Depth Write로 변경한다.
 // cmdListPool에서 자체적으로 Rendering Slave 타입 명령 컨텍스트 하나를 할당해 명령을 기록하고
 // cmdQ를 실행한 뒤, 명령 컨텍스트를 fence에 연관시켜놓는다.
-void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 // 그림자맵의 상태가 현재 Shader Resource가 아니라면 Shader Resource로 변경한다.
 void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 그림자맵의 상태가 현재 Shader Resource가 아니라면 Shader Resource로 변경한다.
 // cmdListPool에서 자체적으로 Rendering Slave 타입 명령 컨텍스트 하나를 할당해 명령을 기록하고
 // cmdQ를 실행한 뒤, 명령 컨텍스트를 fence에 연관시켜놓는다.
-void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 // CSM shadow map의 cascade ci를 Depth Write 상태로 전환한다.
 void getCSMReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList);
 // CSM shadow map의 cascade ci를 Shader Resource 상태로 전환한다.
@@ -88,11 +88,11 @@ void getCSMReadyAsShaderResource(const std::string& key, std::size_t roomIdx, u3
 // 모든 cascade를 Depth Write 상태로 전환하는 배리어 명령을 기록한다.
 void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 모든 cascade를 Depth Write 상태로 전환하는 배리어 명령을 기록하고 제출한다.
-void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 // 모든 cascade를 Shader Resource 상태로 전환하는 배리어 명령을 기록한다.
 void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 모든 cascade를 Shader Resource 상태로 전환하는 배리어 명령을 기록하고 제출한다.
-void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 // 모든 cascade DSV를 depth=1로 클리어하는 명령을 단 한 번 기록한다.
 // 각 shadow pipeline이 개별 클리어 없이 누적 기록할 수 있도록,
 // getCSMAllReadyAsDepthWrite() 직후에 호출해야 한다.
@@ -100,7 +100,7 @@ void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, ID3D12Gr
 // 모든 cascade DSV를 depth=1로 클리어하는 명령을 단 한 번 제출한다.
 // 각 shadow pipeline이 개별 클리어 없이 누적 기록할 수 있도록,
 // getCSMAllReadyAsDepthWrite() 직후에 호출해야 한다.
-void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 
 // 미등록 key가 있으면 오류 메시지를 표시하고 std::exit(-1)을 호출한다.
 // Dispatcher 생성자에서 필수 리소스 등록 여부를 확인하기 위해 사용한다.
@@ -361,7 +361,7 @@ void eraseHiZMaps( DescriptorPool& srvTexPool,
 );
 
 void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
-void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence);
 
 }	// namespace SharedResources::HiZMap
 

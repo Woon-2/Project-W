@@ -100,7 +100,7 @@ Dispatcher::Dispatcher(
     const ComPtr<ID3D12PipelineState>& shadowShader,
     const ComPtr<ID3D12PipelineState>& gBufferShader,
     DescriptorPool* pDsvPool,
-    const ComPtr<ID3D12CommandQueue>& cmdQ,
+    RenderSubmitter* submitter,
     const D3D12_VIEWPORT& viewport,
     const D3D12_RECT& scissorRect,
     Fence* pFence,
@@ -119,7 +119,7 @@ Dispatcher::Dispatcher(
     rootSig_(rootSig), occluderShader_(occluderShader),
     shadowShader_(shadowShader), gBufferShader_(gBufferShader),
     pDsvPool_(pDsvPool),
-    cmdQ_(cmdQ), viewport_(viewport), scissorRect_(scissorRect),
+    submitter_(submitter), viewport_(viewport), scissorRect_(scissorRect),
     pFence_(pFence), pResources_(pResources),
     threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)), occluderInfos_(std::move(occluderInfos)),
@@ -248,7 +248,7 @@ void Dispatcher::occluderDraw() {
     }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .push_back(std::move(cmdCtx));
@@ -375,7 +375,7 @@ void Dispatcher::shadowDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -520,7 +520,7 @@ void Dispatcher::gBufferDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 

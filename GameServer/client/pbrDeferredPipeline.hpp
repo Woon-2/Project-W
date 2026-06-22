@@ -169,7 +169,7 @@ public:
         const ComPtr<ID3D12PipelineState>& indirectGBufferShader,
         const ComPtr<ID3D12PipelineState>& shadowShader,
         const ComPtr<ID3D12PipelineState>& shadowMaskedShader,
-        const ComPtr<ID3D12CommandQueue>& cmdQ,
+        RenderSubmitter* submitter,
         const D3D12_VIEWPORT& viewport,
         const D3D12_RECT& scissorRect,
         Fence* pFence,
@@ -258,7 +258,7 @@ private:
     ComPtr<ID3D12PipelineState> indirectGBufferShader_ = nullptr;
     ComPtr<ID3D12PipelineState> shadowShader_  = nullptr;
     ComPtr<ID3D12PipelineState> shadowMaskedShader_ = nullptr;  // foliage alpha-test shadow PSO
-    ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
+    RenderSubmitter* submitter_          = nullptr;
     D3D12_VIEWPORT    viewport_{};
     D3D12_RECT        scissorRect_{};
     D3D12_CPU_DESCRIPTOR_HANDLE rtvGB_[5]{};

@@ -103,7 +103,7 @@ Dispatcher::Dispatcher(
     const ComPtr<ID3D12PipelineState>& shader,
     const ComPtr<ID3D12PipelineState>& shadowShader,
     DescriptorPool* pDsvPool,
-    const ComPtr<ID3D12CommandQueue>& cmdQ,
+    RenderSubmitter* submitter,
     const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv,
     Fence* pFence, Resources* pResources,
@@ -118,7 +118,7 @@ Dispatcher::Dispatcher(
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
     rootSig_(rootSig), shader_(shader), shadowShader_(shadowShader), pDsvPool_(pDsvPool),
-    cmdQ_(cmdQ),
+    submitter_(submitter),
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)), occluderInfos_(std::move(occluderInfos)),
@@ -241,7 +241,7 @@ void Dispatcher::occluderDraw() {
     }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .push_back(std::move(cmdCtx));
@@ -385,7 +385,7 @@ void Dispatcher::shadowDraw() {
     }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .push_back(std::move(cmdCtx));
@@ -602,7 +602,7 @@ void Dispatcher::mainDraw() {
     }
 
     ID3D12CommandList* lists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, lists), false);
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .push_back(std::move(cmdCtx));

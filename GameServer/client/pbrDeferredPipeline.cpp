@@ -82,7 +82,7 @@ Dispatcher::Dispatcher(
     const ComPtr<ID3D12PipelineState>& indirectGBufferShader,
     const ComPtr<ID3D12PipelineState>& shadowShader,
     const ComPtr<ID3D12PipelineState>& shadowMaskedShader,
-    const ComPtr<ID3D12CommandQueue>& cmdQ,
+    RenderSubmitter* submitter,
     const D3D12_VIEWPORT& viewport,
     const D3D12_RECT& scissorRect,
     Fence* pFence,
@@ -104,7 +104,7 @@ Dispatcher::Dispatcher(
     hiZCommandShader_(hiZCommandShader), occluderShader_(occluderShader),
     gBufferShader_(gBufferShader), indirectGBufferShader_(indirectGBufferShader),
     shadowShader_(shadowShader), shadowMaskedShader_(shadowMaskedShader),
-    cmdQ_(cmdQ), viewport_(viewport), scissorRect_(scissorRect),
+    submitter_(submitter), viewport_(viewport), scissorRect_(scissorRect),
     rtvGB_{}, dsvGB_(SharedResources::GBuffer::gBufferData[roomIdx].dsvHandle),
     pFence_(pFence), pResources_(pResources),
     threadPool_(threadPool), cmdListPool_(commandListPool),
@@ -350,7 +350,7 @@ void Dispatcher::shadowDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -432,7 +432,7 @@ void Dispatcher::shadowDrawMT() {
     auto staged = std::vector<ID3D12CommandList*>();
     staged.reserve(cmdCtxs.size());
     for (auto& ctx : cmdCtxs) staged.push_back(ctx.cmdList.Get());
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(static_cast<UINT>(staged.size()), staged.data()), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(static_cast<UINT>(staged.size()), staged.data()), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .splice(pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].end(), std::move(cmdCtxs));
 }
@@ -660,7 +660,7 @@ void Dispatcher::gBufferDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -713,7 +713,7 @@ void Dispatcher::gBufferDrawMT() {
     auto staged = std::vector<ID3D12CommandList*>();
     staged.reserve(cmdCtxs.size());
     for (auto& ctx : cmdCtxs) staged.push_back(ctx.cmdList.Get());
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(static_cast<UINT>(staged.size()), staged.data()), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(static_cast<UINT>(staged.size()), staged.data()), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .splice(pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].end(), std::move(cmdCtxs));
 }
@@ -1014,7 +1014,7 @@ void Dispatcher::occluderDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -1171,7 +1171,7 @@ void Dispatcher::hiZPassCompute() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -1339,7 +1339,7 @@ void Dispatcher::gBufferIndirectDraw() {
     if (hrClose < 0) { cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx)); return; }
 
     ID3D12CommandList* staged[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 

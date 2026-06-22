@@ -46,7 +46,7 @@ void precomputeIBL(
 	DescriptorPool& samPool,
 	DescriptorPool& cmpSamPool,
 	ConstantBufferArray& iblParamsCBs,
-	ID3D12CommandQueue* cmdQ,
+	RenderSubmitter* submitter,
 	CommandListPool& cmdListPool,
 	Fence& loadFence,
 	bool envIsLDR
