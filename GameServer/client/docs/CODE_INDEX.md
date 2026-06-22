@@ -1253,3 +1253,16 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | HTML authoring preview | `docs/dialogue_preview/index.html` | Live position, size, color, opacity, font, pages, and fade editor |
 | Preview launcher | `docs/dialogue_preview/preview.ps1` | Serves the repository locally and opens the preview |
 | Standalone integration | `standalone/game.cpp` | Input priority, per-frame fade update, and F8 sample trigger |
+| Online integration | `online/onlineGame.cpp` | `init` in `setupStage`; `sample_intro` shown in `setupPlayer` (local player spawn complete); `sample_context` shown in `onZoneState` on first Hobgoblin clear (`WallHobgoblin`, state 1->0, gated by `completedArenaZoneIds_` insert result); per-frame `update` in `InGameScene`, `handleWndMsg` first in `receiveWndMsg`, gameplay input gated while `active()` |
+
+---
+
+## Tactical Zone Intro (arena entry title card)
+
+| Item | Location | Description |
+|------|----------|-------------|
+| `UI::TacticalZoneIntro` | `ui/intro/TacticalZoneIntro.hpp/.cpp` | Self-contained overlay module: builds its own UI subtree, animates banner/emblem/title reveal; boss arena adds a glitchy WARNING phase |
+| `TacticalZoneIntro::init` | `ui/intro/TacticalZoneIntro.cpp` | Builds the hidden widget tree under `UIManager::root`; textures from `AssetManager` |
+| `TacticalZoneIntro::trigger` | `ui/intro/TacticalZoneIntro.cpp` | Starts the intro for an arena wall prefix (`WallHobgoblin`/`WallGrandbaum`/`WallIsys`/`WallBoss`); unknown prefixes return false |
+| `TacticalZoneIntro::update` | `ui/intro/TacticalZoneIntro.cpp` | Per-frame alpha/offset/size animation; hides itself when finished |
+| Online integration | `online/onlineGame.cpp` | `setupStage` init, local `ZoneSystem::Enter` triggers arena intro/BGM from `player_->pos()`, per-frame update in `InGameScene`; shared `onZoneState` never starts presentation |

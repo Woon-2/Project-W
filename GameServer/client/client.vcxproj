@@ -285,6 +285,7 @@
     <ClCompile Include="ui\UIElement.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="ui\dialogue\DialogueSystem.cpp" />
+    <ClCompile Include="ui\intro\TacticalZoneIntro.cpp" />
     <ClCompile Include="ui\widgets\Panel.cpp" />
     <ClCompile Include="ui\widgets\Image.cpp" />
     <ClCompile Include="ui\widgets\Label.cpp" />
@@ -431,6 +432,7 @@
     <ClInclude Include="ui\UIElement.hpp" />
     <ClInclude Include="ui\UIManager.hpp" />
     <ClInclude Include="ui\dialogue\DialogueSystem.hpp" />
+    <ClInclude Include="ui\intro\TacticalZoneIntro.hpp" />
     <ClInclude Include="ui\widgets\Panel.hpp" />
     <ClInclude Include="ui\widgets\Image.hpp" />
     <ClInclude Include="ui\widgets\Label.hpp" />
