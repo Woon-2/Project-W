@@ -330,6 +330,29 @@ private:
 	// 미니맵 아이콘이 일반 몬스터(빨강)와 보스(주황)를 구별하는 데 쓴다(RTTI/dynamic_cast 무의존).
 	// idMonsterMap_에 없는 id는 순회되지 않으므로 죽은 보스의 잔존 엔트리는 무해(리스폰 시 재삽입).
 	std::unordered_set<uint16> bossNpcIds_{};
+
+	// Heat-distortion (boss intimidation) per-boss config + runtime fade state. Keyed by
+	// npc id; registered at spawn (createGrandbaum/createIsys/createBoss) with a distinct
+	// tint per boss. The emission loop in renderInGame projects each live boss to a
+	// screen-space HeatSource (spawn fade-in) and keeps emitting a fading source after the
+	// boss leaves idMonsterMap_ (death fade-out), erasing the entry once fully faded.
+	struct BossHeatState {
+		mu::Vec3 tint{ 0.6f, 0.18f, 0.9f };   // HDR tint color
+		float intensity   = 1.0f;             // peak intensity
+		float worldRadius  = 2.2f;            // halo radius (meters) at the boss
+		float heightBias   = 1.4f;            // center raised above the pivot (meters)
+		float aspectY      = 1.7f;            // vertical stretch (rising plume)
+		float warpAmp      = 0.006f;          // refraction amplitude (UV)
+		float shimmerSpeed = 0.18f;           // upward scroll speed
+		// runtime
+		mu::Vec3 lastPos{};                   // last known world pivot (for death fade)
+		float bornSec      = -1.0f;           // first-seen time (lazy init); spawn fade-in anchor
+		float lastSeenSec  = 0.0f;            // last time seen alive (death fade-out clock)
+		uint64 lastSeenStamp = 0ull;          // == heatFrame_ when seen alive this frame
+	};
+	std::unordered_map<uint16, BossHeatState> bossHeatProfiles_{};
+	uint64 heatFrame_ = 0ull;   // monotonically increasing render frame stamp for liveness
+
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -347,6 +370,10 @@ private:
 	void bindZoneHandlers();
 	void rebuildBarrierMagicCircleQuads();
 	void renderBarrierMagicCircleQuads();
+	// Projects each live/dying boss to a screen-space HeatSource and pushes it to GFX
+	// (boss intimidation heat distortion). Handles spawn fade-in / death fade-out and
+	// erases faded-out entries. Called once per frame from renderInGame.
+	void submitBossHeatSources();
 
 	// 아레나 후방 Wall 일방향 벽 상태(S_ZoneState로 토글). 물리 벽 대신 위치 클램프로
 	// "들어오기 자유 / 나가기 차단"을 구현한다(서버 Room::move()가 권위로 미러).

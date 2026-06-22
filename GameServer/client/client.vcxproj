@@ -232,6 +232,7 @@
     <ClCompile Include="pbrDeferredPipeline.cpp" />
     <ClCompile Include="pbrDeferredSkinnedPipeline.cpp" />
     <ClCompile Include="iblPrecomputePipeline.cpp" />
+    <ClCompile Include="HeatDistortionPipeline.cpp" />
     <ClCompile Include="TonemapPipeline.cpp" />
     <ClCompile Include="BloomPipeline.cpp" />
     <ClCompile Include="minimapTerrainPipeline.cpp" />
@@ -386,6 +387,7 @@
     <ClInclude Include="pbrDeferredPipeline.hpp" />
     <ClInclude Include="pbrDeferredSkinnedPipeline.hpp" />
     <ClInclude Include="iblPrecomputePipeline.hpp" />
+    <ClInclude Include="HeatDistortionPipeline.hpp" />
     <ClInclude Include="TonemapPipeline.hpp" />
     <ClInclude Include="BloomPipeline.hpp" />
     <ClInclude Include="minimapTerrainPipeline.hpp" />
@@ -541,6 +543,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
+    <FxCompile Include="heatHaze.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="minimapTerrain.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -648,6 +654,10 @@
     <None Include="..\resources\skills\treant_punch.lua" />
     <None Include="..\resources\skills\treant_spinkick.lua" />
     <None Include="bindless.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <None Include="heatField.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>

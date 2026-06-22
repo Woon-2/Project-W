@@ -15,6 +15,7 @@
 #include "billboardPipeline.hpp"
 #include "meshParticlePipeline.hpp"
 #include "energyOrbPipeline.hpp"
+#include "HeatDistortionPipeline.hpp"
 #include "windRingPipeline.hpp"
 #include "smokeBlendCGPipeline.hpp"
 #include "blendCGMeshPipeline.hpp"
@@ -215,6 +216,13 @@ public:
 	void addCameraData( const EnergyOrbPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const EnergyOrbPipeline::FrameData& frameData );
+	// Heat-distortion (boss intimidation): per-frame screen-space sources. The game
+	// computes screen center/radius/tint/depth per boss and pushes them here before
+	// render(). Consumed by both the pre-bloom haze pass and the tonemap warp, then
+	// cleared at the end of render(). setHeatGlobals sets shared time/strength.
+	void addHeatSource( const HeatDistortionShader::HeatSource& source );
+	void setHeatGlobals( float timeSec, float warpStrength, float glowStrength );
+
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
@@ -571,6 +579,13 @@ private:
 	EnergyOrbPipeline::Resources              resourcesEnergyOrbPipeline_{};
 	EnergyOrbPipeline::CameraData             cameraDataEnergyOrbPipeline_{};
 	EnergyOrbPipeline::FrameData              frameDataEnergyOrbPipeline_{};
+	// Heat Distortion Pipeline (boss intimidation). Per-frame screen-space sources +
+	// shared globals; consumed by the pre-bloom haze pass and the tonemap warp.
+	std::vector<HeatDistortionShader::HeatSource> heatSources_{};
+	HeatDistortionPipeline::Resources             resourcesHeatDistortion_{};
+	float heatTimeSec_      = 0.0f;
+	float heatWarpStrength_ = 1.0f;
+	float heatGlowStrength_ = 1.0f;
 	// Wind Ring Pipeline
 	std::vector<WindRingPipeline::DrawEvent> drawEventsWindRingPipeline_{};
 	WindRingPipeline::Resources              resourcesWindRingPipeline_{};

@@ -212,6 +212,13 @@ private:
 	bool cursorShowEnabled_ = true;
 	bool gravityEnabled_ = true;
 
+	// F9: debug toggle for the boss heat-distortion effect (no server needed).
+	// When on, a heat source is attached to goblin_ each frame so the effect can be
+	// tuned standalone. [/[ ]] adjust warp/glow strength.
+	bool  heatDebugEnabled_   = false;
+	float heatDebugWarpScale_ = 1.0f;
+	float heatDebugGlowScale_ = 1.0f;
+
 	// --- Physics constraint debug state ---
 	std::vector<PhysicsTestObject> rdObjects_{};
 	float rdImpulseStrength_ = 5.f;    // N*s applied by R key

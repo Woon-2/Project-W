@@ -65,9 +65,10 @@
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 오버레이가 올바른 깊이 기준으로 렌더링하도록
 6b. **Energy orb 패스(EnergyOrbPipeline)** — `gBufferDebugMode_==0`일 때만. SceneColorHDR가 **아직 RENDER_TARGET 상태**일 때, 복사된 backbuffer scene depth(reversed-Z)로 depth-test하며 **가산(additive) HDR**로 렌더 → bloom 이전이라 발광/bloom이 산다. 몬스터 사망 시 서브메시별 에너지 오브(정점→구체 모핑, GS quad). 단일 스레드(`updateGPUDataSingleThreaded`/`drawSingleThreaded`)
+6c. **Heat-haze 패스(HeatDistortionPipeline)** — `gBufferDebugMode_==0`일 때만(보스 위압 연출). EnergyOrb와 동일 슬롯(SceneColorHDR=RENDER_TARGET, bloom 이전)에서 **가산 HDR**로 보스별 틴트 글로우를 그려 bloom이 발광시킨다. depth는 GB4(linear view-Z)로 게이팅. 활성 heat source가 없으면 self-skip. 굴절 워프는 별도 패스가 아니라 resolve(아래 9)에 흡수. 아래 "보스 Heat Distortion" 참조
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
-9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**
+9. **Tonemap resolve** — SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT color grading**(고정 단일 LUT) → **backbuffer(LDR)**. **보스 heat distortion 굴절 워프**도 여기서 적용: SceneColorHDR 샘플 UV를 보스 영역에서 오프셋(`heatField.hlsli`, GB4 깊이 게이팅; heat source 0개면 워프=0 → 무변화)
 10. Forward-always 오버레이(backbuffer, resolve 이후): Skybox(raw) → BV → Billboard → 파티클류
 11. mainPass(UI)
 
@@ -310,7 +311,7 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
 
 **4) Tonemap resolve (`tonemapResolve.hlsl`, `TonemapPipeline`)** — 단일 톤매핑 지점
 - fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → **3D LUT color grading** → backbuffer.
-- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode, idxColorGradingLUT. (debugMode≠0 → 패스스루, idxColorGradingLUT.x<0 → grading 미적용)
+- `PerDrawcallData(b0)`: idxSceneColor, idxBloom, exposure, bloomIntensity, debugMode, idxColorGradingLUT, **HeatParams heat + idxGB4**(heat distortion 굴절 워프용). (debugMode≠0 → 패스스루이며 워프도 스킵, idxColorGradingLUT.x<0 → grading 미적용)
 - 노브: `GFX::tonemapExposure_`(기본 1.0).
 
 **5) Color grading LUT (`SharedResources::ColorGrading`, `bindless.hlsli::sampleBindless3D`)** — gamma 보정 직후 적용되는 고정 단일 3D LUT
@@ -391,6 +392,38 @@ RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI �
 사망으로 오브가 이 수를 넘으면 `perDrawcallData.cbuffers[idx]` 가 vector 범위를 벗어나 **액세스 위반**이
 났다. 해결: Dispatcher 생성자에서 초과분을 truncate(로그) + draw 루프에 방어 가드. 초과 오브는 그 프레임
 드롭(graceful degrade).
+
+#### 보스 Heat Distortion (위압 연출, HeatDistortionPipeline + tonemap warp)
+
+중간보스(Grandbaum/Isys)·최종보스(FinalBoss) 주변 공기가 일렁이며 왜곡(굴절)되고, 왜곡 영역에 보스별
+틴트가 입혀져 bloom으로 발광하는 화면 공간 효과. 파일: `heatField.hlsli`(공유 평가 헬퍼), `heatHaze.hlsl`
++ `HeatDistortionPipeline`(가산 글로우 패스), `tonemapResolve.hlsl`(굴절 워프 흡수), `shader.hpp`
+`HeatDistortionShader`(`HeatSource`/`HeatParams`/`PerDrawcallData`).
+
+- **두 GPU 기여, 스크래치 RT 0개.** 두 경로가 `heatField.hlsli::evalHeatField`로 동일 heat-field를 평가해
+  글로우와 워프가 일치한다.
+  - **(A) 틴트 글로우** — `heatHaze.hlsl` 풀스크린 가산 패스가 render 순서 **6c**(SceneColorHDR=RENDER_TARGET,
+    bloom 이전)에서 `tint·radialFalloff·shimmer`를 SceneColorHDR에 가산 → bloom이 발광시킴. 출력은
+    bloom NaN 가드와 동일하게 finite/clamp.
+  - **(B) 굴절 워프** — 별도 패스/RT 없이 **tonemap resolve**(순서 9)의 `sampleBindless(idxSceneColor, uv)`
+    UV를 보스 영역에서 오프셋. heat source 0개면 워프=0 → 출력 무변화(비용 게이팅).
+- **깊이 인지(전경 차폐):** 두 패스 모두 GB4(linear view-Z, R32_FLOAT)를 샘플해 `pixelZ >= bossZ - margin`
+  또는 배경(GB4==0, 지오메트리 미기록=하늘/공기)인 픽셀만 효과 적용. 보스보다 카메라에 가까운 전경 prop은
+  왜곡/글로우에서 제외. (view-space Z는 양수 전방·LH; reversed-Z는 메인 depth 버퍼에만 적용되고 GB4는 선형)
+- **노이즈:** 절차적 value-noise fbm(텍스처 asset 없음). 상승 기류 도메인(시간에 따라 화면 -Y로 스크롤).
+- **game→gfx 데이터(단방향):** `GFX::addHeatSource(HeatSource)` + `setHeatGlobals(time, warpStrength, glowStrength)`
+  를 매 프레임 render() 전에 호출. gfx는 최대 `kMaxSources`(=4)개를 `HeatParams`로 모아 haze CB와 tonemap CB
+  양쪽에 업로드하고, 소비 후 `heatSources_`를 비운다. `HeatSource`={centerRadius(UV), zMarginIntensity(viewZ/
+  margin/intensity/shimmerSpeed), tint(rgb + warpAmp)}.
+- **Online 연결:** `Online::Game::submitBossHeatSources()`(renderInGame, `camera_.updateGFX` 직후)가
+  `bossNpcIds_`∩`idMonsterMap_` 생존 보스마다 `worldToScreen` 류 clip 계산으로 centerUV, `proj._11/_22`
+  해석적 투영으로 radiusUV(세로 타원 aspectY), 보스 pivot view-Z를 구해 `HeatSource`를 push. 보스별 틴트/강도/
+  반경은 `BossHeatState`(createGrandbaum/createIsys/createBoss에서 등록; FinalBoss=진홍-보라 최강, Grandbaum=
+  병든 에메랄드, Isys=차가운 보라-시안). 스폰 페이드 인(~0.8s)·사망 페이드 아웃(~1.2s, idMonsterMap_에서 사라진 뒤
+  마지막 위치에서 감쇠)을 intensity envelope로 적용하고, 다 사라지면 `bossHeatProfiles_`에서 erase.
+- **Standalone 디버그:** `StandAlone::Game`에서 **F9**로 `goblin_`에 디버그 heat source 토글(서버 없이 튜닝),
+  `[`/`]`=warp 강도, `-`/`=`=glow 강도 조절.
+- **디버그 뷰:** `gBufferDebugMode_≠0`이면 haze 패스 스킵 + resolve 워프 스킵(기존 bloom/tonemap 게이팅과 동일).
 
 #### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)
 

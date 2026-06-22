@@ -334,6 +334,7 @@ void GFX::init() {
 	shaders_.try_emplace("BloomPrefilterShader",            createBloomPrefilterShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BloomDownsampleShader",           createBloomDownsampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BloomUpsampleShader",             createBloomUpsampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("HeatHazeShader",                  createHeatHazeShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("MinimapFogBlurShader",            createMinimapFogBlurShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLIrradianceShader",             createIBLIrradianceShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("IBLPrefilterShader",              createIBLPrefilterShader(device_.Get(), defaultRootSig.get()));
@@ -536,6 +537,10 @@ void GFX::createSwapChain() {
 	// Tonemap resolve pass ----
 	resourcesTonemapPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(TonemapResolveShader::PerDrawcallData), 1u, backBuffers_.size(), "Tonemap_PerDrawcallData"
+	);
+	// Heat-distortion haze pass ----
+	resourcesHeatDistortion_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(HeatDistortionShader::PerDrawcallData), 1u, backBuffers_.size(), "HeatDistortion_PerDrawcallData"
 	);
 	// Bloom pass ---- one cbuffer element per bloom pass (prefilter + down/upsample chain)
 	resourcesBloomPipeline_.perDrawcallData = createConstantBufferArray(
@@ -1106,6 +1111,17 @@ void GFX::addCameraData( const EnergyOrbPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const EnergyOrbPipeline::FrameData& frameData ) {
 	frameDataEnergyOrbPipeline_ = frameData;
+}
+
+void GFX::addHeatSource( const HeatDistortionShader::HeatSource& source ) {
+	if (heatSources_.size() >= HeatDistortionShader::kMaxSources) return;
+	heatSources_.push_back( source );
+}
+
+void GFX::setHeatGlobals( float timeSec, float warpStrength, float glowStrength ) {
+	heatTimeSec_      = timeSec;
+	heatWarpStrength_ = warpStrength;
+	heatGlowStrength_ = glowStrength;
 }
 
 void GFX::addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent ) {
@@ -2024,6 +2040,21 @@ void GFX::render() {
 		? BindlessIndex{}
 		: SharedResources::SceneColor::sceneColorData[sceneColorRoomIdx].color.idxSrv;
 
+	// Heat-distortion (boss intimidation): assemble the shared heat block consumed by
+	// both the pre-bloom haze pass and the tonemap warp. Empty => sourceCount 0 => no-op.
+	HeatDistortionShader::HeatParams heatParams{};
+	heatParams.sourceCount = static_cast<u32t>(
+		std::min<std::size_t>(heatSources_.size(), HeatDistortionShader::kMaxSources));
+	for (u32t hi = 0u; hi < heatParams.sourceCount; ++hi) heatParams.sources[hi] = heatSources_[hi];
+	heatParams.time         = heatTimeSec_;
+	heatParams.warpStrength = heatWarpStrength_;
+	heatParams.glowStrength = heatGlowStrength_;
+	const BindlessIndex heatGB4 = SharedResources::GBuffer::gBufferData.empty()
+		? BindlessIndex{ -1, -1, -1, -1 }
+		: SharedResources::GBuffer::gBufferData[sceneColorRoomIdx].gb4.idxSrv;
+	// heatParams now owns a copy; both dispatchers copy from it at construction.
+	heatSources_.clear();
+
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -2053,7 +2084,8 @@ void GFX::render() {
 		sceneColorSrv, sceneColorRoomIdx,
 		tonemapExposure_, bloomIntensity_, gBufferDebugMode_,
 		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx),
-		&srvTex3DPool_, colorGradingLUTSrv
+		&srvTex3DPool_, colorGradingLUTSrv,
+		heatParams, heatGB4
 	);
 
 	// Bloom dispatcher (deferred path only; runs before the resolve composite reads mip 0).
@@ -2115,6 +2147,21 @@ void GFX::render() {
 		&cmdListPool_, std::move( drawEventsEnergyOrbPipeline_ ),
 		cameraDataEnergyOrbPipeline_, frameDataEnergyOrbPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// Heat-distortion glow: additive tinted halo into SceneColorHDR (before bloom, so
+	// the tint glows). Depth-gated via GB4; the matching refraction warp is folded into
+	// the tonemap resolve. Self-skips when there are no active heat sources.
+	auto heatDistortionDispatcher = HeatDistortionPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "HeatHazeShader" ),
+		cmdQ_, viewport, clRect,
+		energyOrbRtv,
+		&fenceToSignal, &resourcesHeatDistortion_, &cmdListPool_,
+		&srvTex3DPool_, heatParams, heatGB4,
+		sceneColorRoomIdx
 	);
 
 	// Path-guidance ribbons: additive trail into SceneColorHDR (before bloom, so it
@@ -2698,6 +2745,9 @@ void GFX::render() {
 			// Path-guidance ribbons glow: additive HDR trail into SceneColorHDR, before bloom.
 			trailHDRDispatcher.updateGPUDataSingleThreaded();
 			trailHDRDispatcher.drawSingleThreaded();
+			// Boss heat-distortion glow: additive tinted halo into SceneColorHDR, before bloom.
+			heatDistortionDispatcher.updateGPUDataSingleThreaded();
+			heatDistortionDispatcher.drawSingleThreaded();
 		}
 
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).

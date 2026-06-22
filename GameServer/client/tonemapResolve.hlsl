@@ -6,6 +6,7 @@
 // the lighting pass to this resolve pass is a no-op on final image appearance.
 
 #include "bindless.hlsli"
+#include "heatField.hlsli"
 
 struct VSOutput {
     float4 pos : SV_Position;
@@ -22,6 +23,15 @@ cbuffer PerDrawcallData : register(b0) {
     uint  debugMode;
     float _pad;
     int4  idxColorGradingLUT;     // 3D LUT bindless index; idxColorGradingLUT.x < 0 => no-op
+    // Heat distortion (boss intimidation). Refraction warp of the scene-color sample
+    // UV; the matching additive tint glow is written pre-bloom by heatHaze.hlsl.
+    // gHeatCount == 0 => warp is identically zero (output unchanged).
+    HeatSource gHeatSources[HEAT_MAX_SOURCES];
+    uint  gHeatCount;
+    float gHeatTime;
+    float gHeatWarp;
+    float gHeatGlow;
+    int4  idxGB4;                 // linear view-space Z SRV (R32_FLOAT)
 }
 
 // Fullscreen triangle — no vertex buffer needed.
@@ -51,16 +61,25 @@ float3 acesFilmic(float3 x) {
 }
 
 float4 PSMain(VSOutput input) : SV_TARGET {
-    float3 color = sampleBindless(idxSceneColor, input.uv).rgb;
-
     // GBuffer debug views are already display-encoded by the lighting pass.
-    // Pass them through untouched so they are not double tonemapped / gamma'd.
+    // Pass them through untouched so they are not double tonemapped / gamma'd
+    // (and never heat-warped).
     if (debugMode != 0u) {
-        return float4(color, 1.0f);
+        return float4(sampleBindless(idxSceneColor, input.uv).rgb, 1.0f);
     }
 
-    // Additive bloom. sampleBindless returns 0 for an invalid index, so this is a
-    // no-op until the bloom pass is wired (idxBloom valid, bloomIntensity > 0).
+    // Heat-distortion refraction: offset the scene-color sample UV inside each
+    // boss's depth-gated halo. gHeatCount == 0 => warp == 0 (no-op).
+    float  pixelZ = sampleBindless(idxGB4, input.uv).r;
+    float2 warp;
+    float3 glowUnused;
+    evalHeatField(input.uv, pixelZ, gHeatSources, gHeatCount,
+                  gHeatTime, gHeatWarp, gHeatGlow, warp, glowUnused);
+
+    float3 color = sampleBindless(idxSceneColor, input.uv + warp).rgb;
+
+    // Additive bloom (sampled at the unwarped UV). sampleBindless returns 0 for an
+    // invalid index, so this is a no-op until the bloom pass is wired.
     color += sampleBindless(idxBloom, input.uv).rgb * bloomIntensity;
 
     // Exposure -> ACES Filmic -> gamma.

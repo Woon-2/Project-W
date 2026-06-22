@@ -1,28 +1,28 @@
-#ifndef __TonemapPipeline_HPP
-#define __TonemapPipeline_HPP
+#ifndef __HeatDistortionPipeline_HPP
+#define __HeatDistortionPipeline_HPP
 
 #include "gfxUtil.hpp"
 #include "shader.hpp"
 
 class RootSig;
 
-namespace TonemapPipeline {
+namespace HeatDistortionPipeline {
 
-// GPU-side resources for the tonemap resolve pass.
-// Only a single per-drawcall constant buffer (b0) is needed: it carries the
-// bindless index of the HDR scene-color SRV to sample. Managed per-room via a
-// ConstantBufferArray with a single element so the Resources idiom matches the
-// other fullscreen pipelines.
+// GPU-side resources for the heat-haze glow pass. A single per-drawcall constant
+// buffer (b0) carries the HeatSource array + the GB4 (linear view-Z) bindless
+// index. Managed per-room via a single-element ConstantBufferArray, matching the
+// other fullscreen pipelines (TonemapPipeline idiom).
 struct Resources {
 	ConstantBufferArray perDrawcallData;   // b0
 };
 
-// Dispatcher for the tonemap resolve pass.
-// Draws a single fullscreen triangle that reads the HDR scene-color RT (bindless)
-// and writes the LDR backbuffer. There is no DrawEvent vector and no mesh — the
-// vertex shader synthesizes the triangle from SV_VertexID.
+// Dispatcher for the heat-haze glow pass.
+// Draws a single fullscreen triangle that additively writes a tinted, depth-gated
+// glow into the HDR scene-color RT (before bloom, so the tint glows). There is no
+// DrawEvent vector and no mesh — the VS synthesizes the triangle from SV_VertexID,
+// and the field is driven entirely by the b0 constant buffer.
 //
-// Mirrors the SkyboxPipeline::Dispatcher idiom (updateGPUDataSingleThreaded +
+// Mirrors the TonemapPipeline::Dispatcher idiom (updateGPUDataSingleThreaded +
 // drawSingleThreaded) so GFX can instantiate and drive it the same way.
 class Dispatcher {
 public:
@@ -37,25 +37,19 @@ public:
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect,
-		D3D12_CPU_DESCRIPTOR_HANDLE backBufferRtv,
+		D3D12_CPU_DESCRIPTOR_HANDLE sceneColorRtv,
 		Fence* pFence,
 		Resources* pResources,
 		CommandListPool* commandListPool,
-		const BindlessIndex& idxSceneColor,
-		std::size_t roomIdx,
-		float exposure,
-		float bloomIntensity,
-		u32t debugMode,
-		const BindlessIndex& idxBloom,
 		DescriptorPool* pTexPool3D,
-		const BindlessIndex& idxColorGradingLUT,
 		const HeatDistortionShader::HeatParams& heat,
-		const BindlessIndex& idxGB4
+		const BindlessIndex& idxGB4,
+		std::size_t roomIdx
 	);
 
-	// Stages the b0 constant buffer with the scene-color bindless index.
+	// Stages the b0 constant buffer with the heat parameters + GB4 index.
 	void updateGPUDataSingleThreaded();
-	// Records and submits the fullscreen-triangle draw to the backbuffer.
+	// Records and submits the fullscreen-triangle draw into the scene-color RT.
 	void drawSingleThreaded();
 
 private:
@@ -71,19 +65,13 @@ private:
 	ComPtr<ID3D12CommandQueue>  cmdQ_   = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT     scissorRect_{};
-	D3D12_CPU_DESCRIPTOR_HANDLE backBufferRtv_{};
+	D3D12_CPU_DESCRIPTOR_HANDLE sceneColorRtv_{};
 	Fence* pFence_ = nullptr;
 	Resources* pResources_ = nullptr;
 	CommandListPool* cmdListPool_ = nullptr;
-	BindlessIndex idxSceneColor_{};
-	std::size_t roomIdx_{};
-	float exposure_       = 1.0f;
-	float bloomIntensity_ = 0.0f;
-	u32t  debugMode_      = 0u;
-	BindlessIndex idxBloom_{ -1, -1, -1, -1 };
-	BindlessIndex idxColorGradingLUT_{ -1, -1, -1, -1 };
 	HeatDistortionShader::HeatParams heat_{};
 	BindlessIndex idxGB4_{ -1, -1, -1, -1 };
+	std::size_t roomIdx_{};
 
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxTexPool_{};
@@ -94,6 +82,6 @@ private:
 	UINT rootParamIdxTexPool3D_{};
 };
 
-}	// namespace TonemapPipeline
+}	// namespace HeatDistortionPipeline
 
-#endif	// __TonemapPipeline_HPP
+#endif	// __HeatDistortionPipeline_HPP

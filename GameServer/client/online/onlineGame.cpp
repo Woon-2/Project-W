@@ -2408,6 +2408,13 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 		skillObjectById_[id] = hobgoblin.get();
 	}
 
+	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
+	bossHeatProfiles_[hobgoblinInfo.objectId] = BossHeatState{
+		.tint = mu::Vec3(0.22f, 0.85f, 0.28f), .intensity = 0.56f,
+		.worldRadius = 1.8f, .heightBias = 1.f, .aspectY = 1.6f,
+		.warpAmp = 0.01f, .shimmerSpeed = 2.4f, .lastPos = hobgoblin->pos()
+	};
+
 	goblins_.push_back(hobgoblin);
 	idGoblinMap_[hobgoblinInfo.objectId]  = hobgoblin;
 	idMonsterMap_[hobgoblinInfo.objectId] = hobgoblin.get();
@@ -2630,6 +2637,12 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
+	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
+	bossHeatProfiles_[info.objectId] = BossHeatState{
+		.tint = mu::Vec3(0.36f, 0.16f, 0.08f), .intensity = 0.56f,
+		.worldRadius = 4.f, .heightBias = 2.4f, .aspectY = 1.8f,
+		.warpAmp = 0.01f, .shimmerSpeed = 2.4f, .lastPos = mu::Vec3(DirectX::XMLoadFloat3(&info.pos))
+	};
 }
 
 void Game::createIsys(const ObjectInfo& info) {
@@ -2638,6 +2651,12 @@ void Game::createIsys(const ObjectInfo& info) {
 	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
+	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
+	bossHeatProfiles_[info.objectId] = BossHeatState{
+		.tint = mu::Vec3(0.95f, 0.14f, 0.5f), .intensity = 0.56f,
+		.worldRadius = 2.1f, .heightBias = 1.2f, .aspectY = 1.5f,
+		.warpAmp = 0.01f, .shimmerSpeed = 2.4f, .lastPos = mu::Vec3(DirectX::XMLoadFloat3(&info.pos))
+	};
 }
 
 // Final boss: own 14-clip rig, dedicated MonsterKind::Boss container/corpse routing.
@@ -2647,6 +2666,12 @@ void Game::createBoss(const ObjectInfo& info) {
 	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
 	bosses_.push_back(boss);
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
+	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
+	bossHeatProfiles_[info.objectId] = BossHeatState{
+		.tint = mu::Vec3(0.4f, 0.2f, 0.6f), .intensity = 0.72f,
+		.worldRadius = 5.f, .heightBias = 4.2f, .aspectY = 2.f,
+		.warpAmp = 0.006f, .shimmerSpeed = 4.f, .lastPos = mu::Vec3(DirectX::XMLoadFloat3(&info.pos))
+	};
 }
 
 // === Client-authored corpse pipeline =======================================
@@ -4254,6 +4279,83 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	INet::ClientApp::send();
 }
 
+void Game::submitBossHeatSources() {
+	constexpr float kHeatFadeIn  = 0.8f;   // spawn ramp 0 -> 1 (seconds)
+	constexpr float kHeatFadeOut = 1.2f;   // death ramp 1 -> 0 (seconds)
+
+	static const auto heatT0 = std::chrono::steady_clock::now();
+	const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - heatT0).count();
+
+	++heatFrame_;
+
+	// Liveness: a boss still present in idMonsterMap_ is alive; refresh its pivot + stamps.
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (!obj) continue;
+		auto it = bossHeatProfiles_.find(id);
+		if (it == bossHeatProfiles_.end()) continue;
+		auto& st = it->second;
+		if (st.bornSec < 0.f) st.bornSec = now;
+		st.lastPos       = obj->pos();
+		st.lastSeenStamp = heatFrame_;
+		st.lastSeenSec   = now;
+	}
+
+	// Per-source amplitudes are encoded per boss; global multipliers stay at 1.0.
+	gfx_.setHeatGlobals(now, 1.0f, 1.0f);
+
+	const mu::Mat4x4 view = camera_.view();
+	const mu::Mat4x4 proj = camera_.proj();
+	const auto  pm  = proj.getXmf();
+	const float p00 = pm._11;   // 0.5 * worldRadius * p00 / viewZ -> horizontal UV radius
+	const float p11 = pm._22;   // ditto vertical
+
+	for (auto it = bossHeatProfiles_.begin(); it != bossHeatProfiles_.end(); ) {
+		auto& st = it->second;
+		const bool aliveNow = (st.lastSeenStamp == heatFrame_);
+
+		float env;
+		if (aliveNow) {
+			const float fadeIn = (st.bornSec < 0.f)
+				? 0.f : std::clamp((now - st.bornSec) / kHeatFadeIn, 0.f, 1.f);
+			env = st.intensity * fadeIn;
+		} else {
+			if (st.bornSec < 0.f) { it = bossHeatProfiles_.erase(it); continue; }   // never shown
+			const float deathAge = now - st.lastSeenSec;
+			if (deathAge >= kHeatFadeOut) { it = bossHeatProfiles_.erase(it); continue; }
+			env = st.intensity * (1.f - std::clamp(deathAge / kHeatFadeOut, 0.f, 1.f));
+		}
+		if (env <= 1e-3f) { ++it; continue; }
+
+		// Project the (raised) halo center to screen UV; reject when behind/way off-screen.
+		const mu::Vec3 center = st.lastPos + mu::Vec3(0.f, st.heightBias, 0.f);
+		const mu::Vec4 clip   = mu::Vec4(center, 1.f) * (view * proj);
+		if (clip.w() <= 0.05f) { ++it; continue; }
+		const float ndcX = clip.x() / clip.w();
+		const float ndcY = clip.y() / clip.w();
+		if (std::fabs(ndcX) > 1.8f || std::fabs(ndcY) > 1.8f) { ++it; continue; }
+		const float centerU = ndcX * 0.5f + 0.5f;
+		const float centerV = 0.5f - ndcY * 0.5f;
+
+		// Boss pivot linear view-space Z (matches GB4) for depth gating + radius projection.
+		const mu::Vec4 viewPos = mu::Vec4(st.lastPos, 1.f) * view;
+		const float viewZ = viewPos.z();
+		if (viewZ <= 0.1f) { ++it; continue; }
+		const float invZ = 1.f / viewZ;
+
+		const float rUx = 0.5f * st.worldRadius * p00 * invZ;
+		const float rUy = 0.5f * st.worldRadius * p11 * invZ * st.aspectY;
+		const float depthMargin = st.worldRadius;   // view-Z units
+
+		HeatDistortionShader::HeatSource s{};
+		s.centerRadius     = XMFLOAT4(centerU, centerV, rUx, rUy);
+		s.zMarginIntensity = XMFLOAT4(viewZ, depthMargin, env, st.shimmerSpeed);
+		s.tint             = XMFLOAT4(st.tint.x(), st.tint.y(), st.tint.z(), st.warpAmp);
+		gfx_.addHeatSource(s);
+
+		++it;
+	}
+}
+
 void Game::renderInGame() {
 	if (skipNextRender_) {
 		skipNextRender_ = false;
@@ -4295,6 +4397,7 @@ void Game::renderInGame() {
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	submitBossHeatSources();
 	renderBarrierMagicCircleQuads();
 
 	flameParticleSystem_.render(gfx_);

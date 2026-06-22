@@ -34,6 +34,7 @@ ComPtr<ID3D12PipelineState> createTonemapResolveShader(ID3D12Device* device, ID3
 ComPtr<ID3D12PipelineState> createBloomPrefilterShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBloomDownsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHeatHazeShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMinimapFogBlurShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -1128,12 +1129,45 @@ struct PerFrameData {
 
 }	// namespace PBRDeferredLightingShader
 
+// HeatDistortionShader — boss "heat distortion" intimidation effect.
+// Two GPU contributions share this data: heatHaze.hlsl writes an additive tint
+// glow into SceneColorHDR before bloom, and tonemapResolve.hlsl warps the
+// scene-color sample UV. The HLSL mirrors live in heatField.hlsli (struct
+// HeatSource) + heatHaze.hlsl / tonemapResolve.hlsl cbuffers.
+namespace HeatDistortionShader {
+
+constexpr u32t kMaxSources = 4u;
+
+// 48 bytes; matches `struct HeatSource` in heatField.hlsli.
+struct HeatSource {
+	XMFLOAT4 centerRadius;      // xy = center UV, zw = radius UV
+	XMFLOAT4 zMarginIntensity;  // x = boss view-Z, y = depth margin, z = intensity, w = shimmer speed
+	XMFLOAT4 tint;              // rgb = tint color (HDR), a = warp amplitude (UV)
+};
+
+// Shared heat block embedded at the tail of both the haze CB and the tonemap CB.
+// Layout must match the trailing fields of both HLSL cbuffers.
+struct HeatParams {
+	HeatSource sources[kMaxSources];   // 192B
+	u32t  sourceCount;
+	float time;
+	float warpStrength;                // global UV warp amplitude multiplier
+	float glowStrength;                // global glow multiplier (fills one 16B row)
+};
+
+// Haze pass b0. Matches cbuffer PerDrawcallData in heatHaze.hlsl.
+struct PerDrawcallData {
+	HeatParams    heat;
+	BindlessIndex idxGB4;              // linear view-space Z SRV (R32_FLOAT)
+};
+
+}	// namespace HeatDistortionShader
+
 // TonemapResolveShader — fullscreen triangle HDR -> LDR resolve pass.
 // Samples the HDR scene-color RT (bindless) and writes the LDR backbuffer.
 namespace TonemapResolveShader {
 
 // Matches cbuffer PerDrawcallData : register(b0) in tonemapResolve.hlsl.
-// 64 bytes.
 struct PerDrawcallData {
 	BindlessIndex idxSceneColor;        // HDR scene-color SRV
 	BindlessIndex idxBloom;             // bloom mip0 SRV (invalid => additive bloom is a no-op)
@@ -1142,6 +1176,8 @@ struct PerDrawcallData {
 	u32t          debugMode;            // GBuffer debug mode; !=0 => passthrough (skip tonemap)
 	float         _pad;
 	BindlessIndex idxColorGradingLUT;   // 3D LUT SRV (idxRange<0 => grading is a no-op)
+	HeatDistortionShader::HeatParams heat;   // boss heat-distortion warp (count 0 => no-op)
+	BindlessIndex idxGB4;               // linear view-space Z SRV (R32_FLOAT)
 };
 
 }	// namespace TonemapResolveShader

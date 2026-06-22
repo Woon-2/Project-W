@@ -2957,6 +2957,38 @@ void Game::render() {
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 
+	// Heat-distortion debug (F9): drive the boss effect standalone, attached to goblin_,
+	// so the screen-space refraction + tinted glow can be tuned without a server. The
+	// projection math mirrors Online::Game::submitBossHeatSources.
+	if (heatDebugEnabled_ && goblin_) {
+		static const auto heatT0 = std::chrono::steady_clock::now();
+		const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - heatT0).count();
+		gfx_.setHeatGlobals(now, heatDebugWarpScale_, heatDebugGlowScale_);
+
+		const mu::Mat4x4 view = camera_.view();
+		const mu::Mat4x4 proj = camera_.proj();
+		const auto  pm  = proj.getXmf();
+		const float p00 = pm._11;
+		const float p11 = pm._22;
+
+		constexpr float worldRadius = 2.4f, heightBias = 1.6f, aspectY = 1.8f;
+		const mu::Vec3 center  = goblin_->pos() + mu::Vec3(0.f, heightBias, 0.f);
+		const mu::Vec4 clip    = mu::Vec4(center, 1.f) * (view * proj);
+		const mu::Vec4 viewPos = mu::Vec4(goblin_->pos(), 1.f) * view;
+		const float viewZ = viewPos.z();
+		if (clip.w() > 0.05f && viewZ > 0.1f) {
+			const float ndcX = clip.x() / clip.w();
+			const float ndcY = clip.y() / clip.w();
+			const float invZ = 1.f / viewZ;
+			HeatDistortionShader::HeatSource s{};
+			s.centerRadius     = XMFLOAT4(ndcX * 0.5f + 0.5f, 0.5f - ndcY * 0.5f,
+				0.5f * worldRadius * p00 * invZ, 0.5f * worldRadius * p11 * invZ * aspectY);
+			s.zMarginIntensity = XMFLOAT4(viewZ, worldRadius, 1.3f, 0.17f);
+			s.tint             = XMFLOAT4(0.95f, 0.14f, 0.5f, 0.0085f);
+			gfx_.addHeatSource(s);
+		}
+	}
+
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
 	bloodEffect_.render( gfx_ );
@@ -3133,6 +3165,20 @@ void Game::processInput(Milliseconds deltaTime) {
 	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
 		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
 	}
+
+	// F9: toggle boss heat-distortion debug source (attached to goblin_).
+	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) ) {
+		heatDebugEnabled_ = !heatDebugEnabled_;
+	}
+	// J / K : adjust warp strength; - / = : adjust glow strength (debug tuning).
+	if ((keyboardStateCurr_['J'] & 0x80) && !(keyboardStatePrev_['J'] & 0x80))
+		heatDebugWarpScale_ = std::max(0.f, heatDebugWarpScale_ - 0.05f);
+	if ((keyboardStateCurr_['K'] & 0x80) && !(keyboardStatePrev_['K'] & 0x80))
+		heatDebugWarpScale_ += 0.05f;
+	if ( (keyboardStateCurr_[VK_OEM_MINUS] & 0x80) && !(keyboardStatePrev_[VK_OEM_MINUS] & 0x80) )
+		heatDebugGlowScale_ = std::max(0.f, heatDebugGlowScale_ - 0.05f);
+	if ( (keyboardStateCurr_[VK_OEM_PLUS] & 0x80) && !(keyboardStatePrev_[VK_OEM_PLUS] & 0x80) )
+		heatDebugGlowScale_ += 0.05f;
 
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {

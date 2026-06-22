@@ -588,8 +588,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `iblIrradiance.hlsl` / `iblPrefilter.hlsl` / `iblBRDFLUT.hlsl` | IBL 프리컴퓨트 컴퓨트 셰이더(코사인 컨볼루션 / GGX importance / split-sum LUT). `envIsLDR` 토글 |
 | `iblPrecomputePipeline.{hpp,cpp}` | `precomputeIBL()` — 로드 타임 1회(LoadFence), 스카이박스 큐브→IBL 맵 3종 생성 |
 | `pbrLighting.hlsli` | `computeIBL`/`fresnelSchlickRoughness`(상단 정의, split-sum). `#define IBL_ENABLED` 셰이더만 컴파일 |
-| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루 |
+| `tonemapResolve.hlsl` / `TonemapPipeline.{hpp,cpp}` | fullscreen resolve: SceneColorHDR(+bloom) → exposure → ACES Filmic → gamma → **3D LUT color grading** → backbuffer. debugMode≠0 패스스루. **보스 heat distortion 굴절 워프**도 여기서(SceneColorHDR 샘플 UV 오프셋, GB4 깊이 게이팅) |
 | `bloom.hlsl` / `BloomPipeline.{hpp,cpp}` | 픽셀 기반 bloom(VS 공유 + PSPrefilter/PSDownsample/PSUpsample). `Dispatcher::render()`가 전 패스를 단일 cmdlist에 기록 |
+| `heatHaze.hlsl` + `heatField.hlsli` / `HeatDistortionPipeline.{hpp,cpp}` | 보스 위압 heat distortion. 가산 글로우 패스(bloom 이전 SceneColorHDR, GB4 깊이 게이팅)+공유 `evalHeatField`(절차 noise, 굴절 워프는 tonemap이 소비). `HeatDistortionShader`(shader.hpp). 데이터: `GFX::addHeatSource`/`setHeatGlobals`. graphicsArchitecture.md "보스 Heat Distortion" 참조 |
+| `Online::Game::submitBossHeatSources()` (`online/onlineGame.cpp`) | 생존 보스→화면 `HeatSource` 투영(centerUV·해석적 radiusUV·view-Z), 보스별 `BossHeatState` 틴트, 스폰/사망 페이드. `StandAlone::Game` F9 디버그 소스(goblin_) |
 | `bindless.hlsli` | `gTex2Ds`/`gTex2DArrays`/`gTexCubes`/`gTex3Ds` bindless 배열(`IDX_RANGE_*`). `sampleBindless3D`: LUT half-texel 보정(`uvw = v*(N-1)/N + 0.5/N`, N은 `BindlessIndex.idxInArray`에 저장) |
 
 - IBL/HDR/Bloom 노브(`gfx.hpp`): `tonemapExposure_`(1.0), `bloomThreshold_`(1.0), `bloomIntensity_`(0.08), `iblIntensity`(lpfd/forward FrameData).
