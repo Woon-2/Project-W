@@ -81,7 +81,7 @@ public:
 	uint32 freeSize() const { return chunkSize_ - usedSize_; }
 
 private:
-	static const uint32 chunkSize_{8192u};
+	static const uint32 chunkSize_{65536u};
 	std::array<byte, chunkSize_> buffer_;
 	bool open_;
 	uint32 usedSize_;
