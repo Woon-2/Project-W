@@ -87,7 +87,7 @@ for w = 0, 9 do
 end
 
 local onHit = OnHit({
-    damage          = 8,
+    damage          = 80,
     vfxId           = 0,
     impulseStrength = 450.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)

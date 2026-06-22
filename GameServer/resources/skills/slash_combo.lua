@@ -44,7 +44,7 @@ skill:addEvent(750,  "PlaySound", { sound = "sword_slash_1" })
 skill:addEvent(1250, "PlaySound", { sound = "sword_slash_finish" })
 
 local onHit = OnHit({
-    damage          = 35,
+    damage          = 75
     vfxId           = 0,
     impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.1, 1.0)

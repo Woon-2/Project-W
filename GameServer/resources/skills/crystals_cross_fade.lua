@@ -39,7 +39,7 @@ skill:addEvent(150, "PlayVFX", {
 skill:addEvent(150, "PlaySound", { sound = "ice_crossfade" })
 
 local onHit = OnHit({
-    damage          = 48,
+    damage          = 98,
     vfxId           = 255,
     impulseStrength = 600.0,
     impulseDir      = Vec3(0.0, 0.7, 0.5)

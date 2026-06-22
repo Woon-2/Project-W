@@ -45,7 +45,7 @@ skill:addEvent(120, "PlayVFX", {
 skill:addEvent(120, "PlaySound", { sound = "arrow_default" })
 
 local onHit = OnHit({
-    damage          = 28,
+    damage          = 48,
     vfxId           = 255,
     impulseStrength = 400.0,
     impulseDir      = Vec3(0.0, 0.1, 1.0)
