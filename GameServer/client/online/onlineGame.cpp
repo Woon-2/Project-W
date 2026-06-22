@@ -258,7 +258,7 @@ void Game::setupStageVisual() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 0.f ) ) );
+	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
 	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
