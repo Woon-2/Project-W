@@ -371,8 +371,14 @@ private:
 	struct BarrierMagicCircleQuad {
 		mu::Mat4x4 world{};
 		mu::Mat4x4 rotation{};
-		mu::Vec4   tint{ 1.f, 1.f, 1.f, 1.f };
 		mu::Vec3   sortPos{};
+		// Color is decided per-frame from the LOCAL player's side of this wall, not the
+		// shared S_ZoneState alone: a one-way wall lets latecomers walk in, so a player
+		// still outside (passable) must see blue even while another player triggered the
+		// arena (state==1). wallCenter/wallOutward define the plane; zoneId picks the state.
+		mu::Vec3   wallCenter{};
+		mu::Vec3   wallOutward{};   // unit; player on interior side (can't exit) => blocked tint
+		uint16     zoneId{ 0 };
 	};
 	std::vector<BarrierMagicCircleQuad> barrierMagicCircleQuads_{};
 

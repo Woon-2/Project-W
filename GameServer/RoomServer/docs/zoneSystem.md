@@ -152,3 +152,29 @@ Grandbaum(`WallGrandbaum_0/1/2`)·Isys(`WallIsys_0/1/2`)에는 렌더링되지 �
 - **서버 변경 없음:** `Room.cpp`의 3개 아레나 핸들러가 이미 동일한 `S_ZoneState` 패턴을 broadcast.
 - **오프셋:** `barrierMagicLocalOffset`의 `"WallHobgoblin_0"` +12m Z 오프셋(코리도 2벽 구조 보정)은
   그대로 유지, Grandbaum/Isys(3벽 구조)는 기본값(오프셋 0)으로 시작 — 시각 확인 후 필요시 마커별 추가.
+
+## 15. As-Built — 마법진 색을 로컬 플레이어 기준으로 변경(2026-06)
+
+§14까지 마법진 색은 `blocked = (zoneStates_[zoneId] == 1)` 즉 **서버 권위 공유 상태**로만 결정됐다.
+그러나 일방향 벽(§13, `clampOneWayWall`)은 **안쪽으로는 통과를 허용**하므로, 한 플레이어가 아레나를
+트리거(`S_ZoneState(.,1)` 전원 broadcast)하면 **아직 밖에 있어 입장 가능한 다른 플레이어의 화면에도
+빨간(차단) 마법진이 보이는** 버그가 있었다(사용자 보고).
+
+- **수정 원칙:** 색은 (1) 서버 zone 상태 **그리고** (2) **로컬 예측 플레이어가 그 벽 평면의 안/바깥 어느
+  쪽인지**로 결정한다. `state==1`이라도 로컬 플레이어가 벽 **바깥**(outward 기준 부호거리 > eps)이면
+  아직 입장 가능 → 파란색. 안쪽이면 나갈 수 없음 → 빨간색. 충돌 벽과 **동일한 outward/center**
+  (`makeOneWayWall`, interior 기준점=Wall 마커 중점)를 써서 색과 실제 차단이 정확히 일치한다.
+- **per-wall 의미:** 판정은 벽(=마법진)마다 독립이다. 코리도(2벽)에서 입구 밖에 선 후발 주자는 입구
+  마법진=파랑(들어와도 됨)/반대편=빨강을 본다. 안으로 넘어가는 순간 입구 마법진이 빨강으로 바뀐다.
+- **구현(`client/online/onlineGame.{hpp,cpp}`):**
+  - `BarrierMagicCircleQuad`에서 정적 `tint` 필드를 제거하고 `wallCenter`/`wallOutward`/`zoneId`를 캐시.
+  - `rebuildBarrierMagicCircleQuads()`(존 상태 변경·셋업 때만 호출)는 **기하만** 빌드 — 각 아레나 Wall
+    마커 중점으로 `makeOneWayWall`을 돌려 벽 평면을 저장. 색은 정하지 않는다.
+  - `renderBarrierMagicCircleQuads()`(원래도 매 프레임 호출)가 quad당 `zoneStates_` 조회 1회 +
+    2D 내적 1회로 색을 매 프레임 결정. quad 총 6~9개(아레나 3 × 벽 2~3)라 비용 무시 가능.
+- **부하:** rebuild(행렬 빌드)는 여전히 이벤트 때만. 매 프레임 추가분은 가벼운 내적/맵조회뿐 — 새 순회
+  루프가 아니라 이미 매 프레임 돌던 렌더 루프에 얹은 것. 연속적으로 변하는 플레이어 위치에 색이 따라가야
+  하므로 이산 이벤트 래치 대신 매 프레임 재계산을 택했다(상태·코드 최소화).
+- **서버 변경 없음**, 신규 패킷 없음. `S_ZoneState`는 그대로(아레나 활성 여부만 전달), 색의 per-player
+  해석은 전적으로 클라가 담당.
+- **빌드:** client Debug x64 그린(2026-06, 오류 0).
