@@ -345,6 +345,9 @@
     <ClCompile Include="ui\dialogue\DialogueSystem.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\intro\TacticalZoneIntro.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="terrainDeferredPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -756,6 +759,9 @@
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\dialogue\DialogueSystem.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\intro\TacticalZoneIntro.hpp">
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\UITypes.hpp">
