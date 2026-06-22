@@ -34,8 +34,16 @@ public:
 	const Texture* heavyArrow() const { return &heavyArrow_; }
 	const Texture* uiLeftButton() const { return &uiLeftButton_; }
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
+	const Model* playerWeaponModel(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
+	const Texture* tacticalZoneTitleBanner() const { return &tacticalZoneTitleBanner_; }
+	const Texture* hobgoblinEmblem() const { return &hobgoblinEmblem_; }
+	const Texture* grandbaumEmblem() const { return &grandbaumEmblem_; }
+	const Texture* isysEmblem() const { return &isysEmblem_; }
+	const Texture* grandBamEmblem() const { return &grandBamEmblem_; }
+	const Texture* warningGlitchFragments() const { return &warningGlitchFragments_; }
+	const Texture* warningNoiseMask() const { return &warningNoiseMask_; }
 	// Skill dial icon resolved by compiled skill asset name (e.g. "SlashWave").
 	// Returns nullptr if the asset has no dial icon.
 	const Texture* skillIconByAssetName(std::string_view assetName) const;
@@ -125,6 +133,11 @@ private:
 	Model modelCube_{};
 	Model modelStronghold_{};
 	Model modelPlayer_{};
+	// 무기 모델 (오른손 소켓 장착용, PlayerWeaponType별 1:1).
+	Model modelKatana_{};
+	Model modelSpearHook_{};
+	Model modelCrystalWand_{};
+	Model modelHeavyArrow_{};
 	Model modelGoblin_{};
 	Model modelHobgoblin_{};
 	Model modelSnake_{};
@@ -154,6 +167,13 @@ private:
 	Texture uiLeftButton_{};
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
+	Texture tacticalZoneTitleBanner_{};
+	Texture hobgoblinEmblem_{};
+	Texture grandbaumEmblem_{};
+	Texture isysEmblem_{};
+	Texture grandBamEmblem_{};
+	Texture warningGlitchFragments_{};
+	Texture warningNoiseMask_{};
 	// Skill dial icons (12), one per selectable weapon skill.
 	Texture skillIconSlashWave_{};
 	Texture skillIconSlash7_{};

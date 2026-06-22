@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>프로젝트 기준 보스 입장 연출</title>
+  <style>
+    :root {
+      --red: #f02a24;
+      --accent: #e63326;
+      --ivory: #ede6d6;
+      --muted: #b8b3a8;
+      --warning-time: 1.4s;
+      --card-time: 4.25s;
+      --total-time: 5.65s;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #050607;
+      color: var(--ivory);
+      font-family: "Malgun Gothic", "Noto Sans KR", sans-serif;
+    }
+
+    body { display: grid; place-items: center; }
+
+    .scene {
+      position: relative;
+      width: min(100vw, 177.78vh);
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      isolation: isolate;
+      background: radial-gradient(circle at 66% 35%, #3c4545 0, #1a1e1f 30%, #080a0b 70%);
+    }
+
+    .battlefield {
+      position: absolute;
+      inset: -4%;
+      z-index: -5;
+      opacity: .5;
+      filter: saturate(.35) contrast(1.2) blur(1px);
+      background:
+        linear-gradient(145deg, transparent 0 48%, rgba(130,145,140,.1) 49% 51%, transparent 52%),
+        repeating-linear-gradient(112deg, transparent 0 7%, rgba(255,255,255,.025) 7.2% 7.5%),
+        linear-gradient(25deg, #111516, #3a4543 45%, #15191a 70%);
+    }
+
+    .vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse, transparent 27%, rgba(0,0,0,.18) 64%, rgba(0,0,0,.76) 100%),
+        linear-gradient(90deg, rgba(0,0,0,.38), transparent 25%, transparent 75%, rgba(0,0,0,.38));
+    }
+
+    /* 최종 보스에만 추가되는 1.4초 WARNING */
+    .warning-phase {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,.82);
+      animation: warning-phase var(--total-time) steps(1) both;
+    }
+
+    .warning {
+      position: relative;
+      margin: 0;
+      color: var(--red);
+      font-family: "Arial Black", "Impact", sans-serif;
+      font-size: clamp(68px, 11vw, 190px);
+      line-height: 1;
+      letter-spacing: .13em;
+      text-indent: .13em;
+      text-shadow: 0 0 10px rgba(240,42,36,.9), 0 0 34px rgba(240,42,36,.42);
+      animation: warning-glitch var(--warning-time) steps(1) both;
+    }
+
+    .warning::before,
+    .warning::after {
+      content: "WARNING";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .warning::before {
+      color: #38d8dc;
+      opacity: .68;
+      transform: translateX(-8px);
+      clip-path: inset(14% 0 62% 0);
+      animation: warning-ghost-a .14s steps(2) infinite;
+    }
+
+    .warning::after {
+      color: white;
+      opacity: .56;
+      transform: translateX(9px);
+      clip-path: inset(64% 0 10% 0);
+      animation: warning-ghost-b .11s steps(2) infinite;
+    }
+
+    .warning-scan {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(180deg, rgba(255,255,255,.04) 0 1px, transparent 1px 4px);
+      animation: warning-noise var(--warning-time) steps(1) both;
+    }
+
+    /* WARNING 종료 후 현재 C++ 전술 구역 카드와 동일한 구조 */
+    .entry-card {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      animation: card-visibility var(--total-time) steps(1) both;
+    }
+
+    .scrim {
+      position: absolute;
+      left: -20%;
+      right: -20%;
+      top: 50%;
+      height: 270px;
+      transform: translateY(-50%);
+      background: rgb(3, 3, 4);
+      opacity: 0;
+      animation: card-fade var(--card-time) ease both var(--warning-time);
+    }
+
+    /* title_banner_mask.dds 영역: 980×327 */
+    .banner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 980px;
+      max-width: 95.7%;
+      height: 327px;
+      opacity: 0;
+      transform: translate(-50%, -50%) scaleX(.776);
+      background:
+        radial-gradient(ellipse, rgba(4,5,6,.98) 0 51%, rgba(4,5,6,.88) 64%, transparent 79%),
+        linear-gradient(90deg, transparent, rgba(5,6,7,.97) 14% 86%, transparent);
+      filter: drop-shadow(0 0 11px rgba(0,0,0,.8));
+      animation: banner-in var(--card-time) cubic-bezier(.2,.75,.25,1) both var(--warning-time);
+    }
+
+    /* 실제 프로젝트 위치: 중앙 기준 X -285, 268→248px */
+    .emblem {
+      position: absolute;
+      left: calc(50% - 285px);
+      top: 50%;
+      width: 268px;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      display: grid;
+      place-items: center;
+      color: #ff9c78;
+      opacity: 0;
+      animation: emblem-in var(--card-time) cubic-bezier(.18,.75,.22,1) both var(--warning-time);
+    }
+
+    /* 보스 엠블럼 이미지가 준비되면 이 도형만 이미지로 교체 */
+    .emblem-mark {
+      position: relative;
+      width: 72%;
+      aspect-ratio: 1;
+      border: 7px solid currentColor;
+      transform: rotate(45deg);
+      filter: drop-shadow(0 0 12px rgba(230,51,38,.35));
+    }
+
+    .emblem-mark::before,
+    .emblem-mark::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      background: currentColor;
+      transform: translateX(-50%);
+    }
+
+    .emblem-mark::before { top: 13%; width: 16%; height: 54%; }
+    .emblem-mark::after { bottom: 13%; width: 16%; aspect-ratio: 1; border-radius: 50%; }
+
+    .accent-line {
+      position: absolute;
+      top: calc(50% - 70px);
+      width: 92px;
+      height: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(230,51,38,.42);
+      opacity: 0;
+      transform: scaleX(0);
+      animation: line-in var(--card-time) ease both var(--warning-time);
+    }
+
+    .accent-line.left { left: calc(50% - 187px); }
+    .accent-line.right { left: calc(50% + 235px); }
+
+    /* 실제 프로젝트 위치: 중앙 기준 X +70, Y -70, 300×44 */
+    .category {
+      position: absolute;
+      left: calc(50% + 70px);
+      top: calc(50% - 70px);
+      width: 300px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 22px;
+      opacity: 0;
+      animation: category-in var(--card-time) ease both var(--warning-time);
+    }
+
+    /* 실제 프로젝트 위치: 중앙 기준 X +30, 최종 Y -2, 440×96 */
+    .boss-name {
+      position: absolute;
+      left: calc(50% + 30px);
+      top: calc(50% - 2px);
+      width: 440px;
+      height: 96px;
+      transform: translate(-50%, -50%);
+      display: grid;
+      place-items: center;
+      margin: 0;
+      color: var(--ivory);
+      font-size: 56px;
+      font-weight: 400;
+      line-height: 1;
+      text-shadow: 0 3px 18px rgba(0,0,0,.9);
+      opacity: 0;
+      animation: title-in var(--card-time) cubic-bezier(.18,.75,.22,1) both var(--warning-time);
+    }
+
+    .replay {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 40;
+      padding: 9px 13px;
+      border: 1px solid rgba(230,51,38,.45);
+      background: rgba(5,6,7,.75);
+      color: rgba(237,230,214,.8);
+      font: 12px/1 "Malgun Gothic", sans-serif;
+      cursor: pointer;
+    }
+
+    .replay:hover { color: white; border-color: var(--accent); }
+
+    @keyframes warning-phase {
+      0%, 24.7% { opacity: 1; visibility: visible; }
+      24.8%, 100% { opacity: 0; visibility: hidden; }
+    }
+
+    @keyframes warning-glitch {
+      0%, 8% { opacity: 0; transform: scale(1.16); filter: blur(8px); }
+      12% { opacity: 1; transform: translateX(-15px) scale(1.05); filter: none; }
+      18% { opacity: .18; transform: translateX(12px); }
+      24%, 57% { opacity: 1; transform: translateX(0); }
+      61% { opacity: .25; transform: translateX(-8px); }
+      67%, 82% { opacity: 1; transform: translateX(3px); }
+      100% { opacity: 0; transform: scale(.98); }
+    }
+
+    @keyframes warning-noise {
+      0%, 7% { opacity: 0; }
+      8%, 16% { opacity: .4; }
+      17%, 55% { opacity: .12; }
+      56%, 67% { opacity: .5; }
+      68%, 100% { opacity: .08; }
+    }
+
+    @keyframes warning-ghost-a {
+      0% { transform: translate(-8px, 0); }
+      50% { transform: translate(4px, 1px); }
+    }
+
+    @keyframes warning-ghost-b {
+      0% { transform: translate(9px, 0); }
+      50% { transform: translate(-3px, -1px); }
+    }
+
+    @keyframes card-visibility {
+      0%, 24.7% { opacity: 0; visibility: hidden; }
+      24.8%, 100% { opacity: 1; visibility: visible; }
+    }
+
+    /* updateTacticalZoneIntro()의 4.25초 타이밍 반영 */
+    @keyframes card-fade {
+      0% { opacity: 0; }
+      9.9%, 74.1% { opacity: .76; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes banner-in {
+      0% { opacity: 0; transform: translate(-50%, -50%) scaleX(.776); }
+      11.3%, 74.1% { opacity: .94; transform: translate(-50%, -50%) scaleX(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scaleX(1); }
+    }
+
+    @keyframes emblem-in {
+      0%, 2.8% { opacity: 0; width: 268px; }
+      14.6%, 74.1% { opacity: .62; width: 248px; }
+      100% { opacity: 0; width: 248px; }
+    }
+
+    @keyframes line-in {
+      0%, 1.8% { opacity: 0; transform: scaleX(0); }
+      12.2%, 74.1% { opacity: .9; transform: scaleX(1); }
+      100% { opacity: 0; transform: scaleX(1); }
+    }
+
+    @keyframes category-in {
+      0%, 4.2% { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
+      14.6%, 74.1% { opacity: 1; transform: translate(-50%, -50%); }
+      100% { opacity: 0; transform: translate(-50%, -50%); }
+    }
+
+    @keyframes title-in {
+      0%, 8.9% { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); }
+      20.7%, 74.1% { opacity: 1; transform: translate(-50%, -50%); }
+      100% { opacity: 0; transform: translate(-50%, -50%); }
+    }
+
+    @media (max-width: 900px) {
+      .emblem { left: 22%; }
+      .category { left: 59%; font-size: 16px; }
+      .boss-name { left: 55%; font-size: 40px; }
+      .accent-line { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="scene" id="scene" aria-label="보스 전투 구역 그랜드 밤 입장 연출">
+    <div class="battlefield"></div>
+
+    <section class="warning-phase">
+      <h1 class="warning">WARNING</h1>
+      <div class="warning-scan"></div>
+    </section>
+
+    <section class="entry-card">
+      <div class="scrim"></div>
+      <div class="banner"></div>
+      <div class="emblem" aria-label="보스 엠블럼 자리"><div class="emblem-mark"></div></div>
+      <div class="accent-line left"></div>
+      <div class="accent-line right"></div>
+      <div class="category">보스 전투 구역</div>
+      <h2 class="boss-name">그랜드 밤</h2>
+    </section>
+
+    <div class="vignette"></div>
+  </main>
+
+  <button class="replay" type="button" id="replay">연출 다시 보기</button>
+
+  <script>
+    document.querySelector("#replay").addEventListener("click", () => {
+      const oldScene = document.querySelector("#scene");
+      const newScene = oldScene.cloneNode(true);
+      oldScene.replaceWith(newScene);
+    });
+  </script>
+</body>
+</html>

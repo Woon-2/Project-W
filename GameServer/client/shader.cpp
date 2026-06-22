@@ -1603,6 +1603,196 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 	return ret;
 }
 
+// Lightweight diffuse-only terrain pass for the minimap background cache.
+// 2-slot input layout: Position (slot 0), UV (slot 1). No depth test/write — minimap
+// chunks never overlap in XZ, and the cache RT has no depth buffer.
+ComPtr<ID3D12PipelineState> createMinimapTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("minimapTerrain.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("minimapTerrain.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = false,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u},
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "MinimapTerrainShader");
+
+	return ret;
+}
+
+// Top-down albedo bake of scatter props into the minimap cache. 2-slot input layout
+// (Position slot 0, UV slot 1). CULL_NONE for two-sided foliage; no depth; blend off
+// (alpha-cutout discards leaf gaps so terrain shows through).
+ComPtr<ID3D12PipelineState> createMinimapPropShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("minimapProp.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("minimapProp.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = false,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u},
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "MinimapPropShader");
+
+	return ret;
+}
+
 ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
@@ -1811,8 +2001,8 @@ ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* dev
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;  // Albedo.rgb + AO.a
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;    // NormalV oct-encoded
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // LightAccum.rgb + Roughness.a
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;        // Metallic
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
@@ -3788,8 +3978,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device,
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB0
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;     // GB1
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;  // GB2
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;         // GB3
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;        // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -3871,8 +4061,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredIndirectGBufferShader(ID3D12Device*
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -3954,8 +4144,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedIndirectGBufferShader(ID3D12
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -4036,8 +4226,8 @@ ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* 
 	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-	psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8_UNORM;
+	psoDesc.RTVFormats[2] = DXGI_FORMAT_R11G11B10_FLOAT; // GB2: Emissive.rgb (HDR)
+	psoDesc.RTVFormats[3] = DXGI_FORMAT_R8G8_UNORM;      // GB3: Metallic.r + Roughness.g
 	psoDesc.RTVFormats[4] = DXGI_FORMAT_R32_FLOAT;       // GB4: linear view-space Z
 	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
@@ -4262,6 +4452,70 @@ ComPtr<ID3D12PipelineState> createBloomDownsampleShader(ID3D12Device* device, ID
 }
 ComPtr<ID3D12PipelineState> createBloomUpsampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	return createBloomShaderImpl(device, rootSig, "PSUpsample", true, "BloomUpsampleShader");
+}
+
+// Fullscreen-triangle PSO for MinimapFogBlurPipeline's 2-pass separable blur.
+// One PSO serves both passes — direction is a runtime branch on PerDrawcallData.horizontal.
+ComPtr<ID3D12PipelineState> createMinimapFogBlurShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("minimapFogBlur.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("minimapFogBlur.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{ .pInputElementDescs = nullptr, .NumElements = 0u };
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{ .AlphaToCoverageEnable = false, .IndependentBlendEnable = false },
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode              = D3D12_FILL_MODE_SOLID,
+			.CullMode              = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias             = 0,
+			.DepthBiasClamp        = 0.f,
+			.SlopeScaledDepthBias  = 0.f,
+			.DepthClipEnable       = true,
+			.MultisampleEnable     = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount     = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable      = false,
+			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_ALWAYS,
+			.StencilEnable    = false,
+			.StencilReadMask  = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace        = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace         = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout           = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc            = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask              = 0u,
+		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable           = false;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+	setD3DName(ret.Get(), "MinimapFogBlurShader");
+	return ret;
 }
 
 // Builds the PSO used by TrailPipeline. No vertex buffer is bound — the VS

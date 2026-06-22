@@ -548,6 +548,10 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         // spawn, ground collision) wherever it ends up being played.
         fx->setGroundSampler(ctx.ground);
 
+        // Horizontal mirror (e.g. reverse a slash arc to match the swing direction).
+        // Set explicitly each play so a shared effect is never left flipped.
+        fx->setFlipX((p.flags & kPlayVFXFlagFlipX) != 0);
+
         // Skill-driven particle ground behaviour (packed in flags bits 3-6). Drives
         // the effect's particles (fall-and-die, conform-to-slope) from the Lua, so
         // the Unity-exported effect JSON needs no ground keys.

@@ -285,6 +285,7 @@ void Game::setupLobbyCharacters() {
 	}
 
 	updateLobbyCharacterTransforms();
+	syncLobbyCharacterWeapons();
 }
 
 void Game::updateLobbyCharacterTransforms() {
@@ -428,22 +429,8 @@ void Game::setupStage() {
 	killCountWidget_->setTextures(assetManager_.digitAtlasTex(), assetManager_.killIconTex());
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
-
-	hiZStatsLabel_ = static_cast<UI::Label*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Label>())
-	);
-	hiZStatsLabel_->name    = "hiZStatsLabel";
-	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
-	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
-	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
-	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
-	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
-	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
-	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
-	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
-	hiZStatsLabel_->setFontSize(18.0f);
-	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
-	hiZStatsLabel_->setText(L"HiZ: OFF");
+	tacticalZoneIntro_.init(uiManager_, assetManager_);
+	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
@@ -498,6 +485,46 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 	}
 
 	return L"player";
+}
+
+void Game::equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType) {
+	// 무기 모델은 단일 SocketOffset만 가지며, 그 SocketType(오른손/왼손)으로
+	// 어느 손에 부착할지 데이터 주도로 결정한다(현재 Bow=왼손, 나머지=오른손).
+	const Model* weaponModel = assetManager_.playerWeaponModel(weaponType);
+	auto socketType = Bone::SocketType::RightHand;
+	if (weaponModel && !weaponModel->socketOffsets.empty()) {
+		socketType = weaponModel->socketOffsets.begin()->first;
+	}
+
+	// 무기 전환 시 이전 손의 무기도 확실히 제거한다.
+	obj.disequip(Bone::SocketType::RightHand);
+	obj.disequip(Bone::SocketType::LeftHand);
+
+	Equipment eq{};
+	eq.socketType = socketType;
+	eq.object = std::make_unique<Object>();
+	eq.object->setModel(weaponModel);
+	obj.equip(std::move(eq));
+
+	// 장착 캐릭터의 애니메이션 블렌더에 무기 종류를 알려 클립 세트를 맞춘다.
+	if (auto* playerBlender = dynamic_cast<AnimBlenderPlayer*>(obj.animBlender())) {
+		playerBlender->setWeaponType(weaponType);
+	}
+}
+
+void Game::syncLobbyCharacterWeapons() {
+	if (lobbyChars_.empty()) return;
+
+	for (std::size_t i = 0u; i < lobbyChars_.size(); ++i) {
+		if (!lobbyChars_[i]) continue;
+		if (i < lobbyPlayers_.size()) {
+			equipPlayerWeapon(*lobbyChars_[i], lobbyPlayers_[i].weaponType);
+		}
+		else {
+			lobbyChars_[i]->disequip(Bone::SocketType::RightHand);
+			lobbyChars_[i]->disequip(Bone::SocketType::LeftHand);
+		}
+	}
 }
 
 void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
@@ -2052,6 +2079,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*player_, playerInfo.weaponType);
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
@@ -2157,6 +2185,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
 		                                    static_cast<int>(skillVfxById_.size()));
 	}
+
+	// Local player has finished spawning in-game (server S_Enter): show the
+	// authored intro/monologue once. No-op if dialogues.json lacks the event.
+	dialogueSystem_.show("sample_intro");
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -2180,6 +2212,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2225,6 +2258,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2608,6 +2642,7 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 	auto grandbaum = std::make_shared<Grandbaum>();
 	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 void Game::createIsys(const ObjectInfo& info) {
@@ -2615,6 +2650,16 @@ void Game::createIsys(const ObjectInfo& info) {
 	auto isys = std::make_shared<Isys>();
 	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
+}
+
+// Final boss: own 14-clip rig, dedicated MonsterKind::Boss container/corpse routing.
+void Game::createBoss(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto boss = std::make_shared<Boss>();
+	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
+	bosses_.push_back(boss);
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 // === Client-authored corpse pipeline =======================================
@@ -2693,6 +2738,10 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		grabBar(treantHpBars_);
 		std::erase(treants_, std::static_pointer_cast<Treant>(obj));
 		break;
+	case MonsterKind::Boss:
+		grabBar(bossHpBars_);
+		std::erase(bosses_, std::static_pointer_cast<Boss>(obj));
+		break;
 	}
 	idMonsterMap_.erase(npcId);
 	if (static_cast<size_t>(npcId) < skillObjectById_.size())
@@ -2724,6 +2773,7 @@ void Game::returnMonsterToPool(Corpse& corpse) {
 	case MonsterKind::Birdy:    birdyPool_.push_back(std::move(pm));    break;
 	case MonsterKind::Slime:    slimePool_.push_back(std::move(pm));    break;
 	case MonsterKind::Treant:   treantPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Boss:     bossPool_.push_back(std::move(pm));     break;
 	}
 }
 
@@ -2742,6 +2792,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	case MonsterKind::Birdy:    pool = &birdyPool_;    break;
 	case MonsterKind::Slime:    pool = &slimePool_;    break;
 	case MonsterKind::Treant:   pool = &treantPool_;   break;
+	case MonsterKind::Boss:     pool = &bossPool_;     break;
 	}
 	if (!pool || pool->empty()) return false;
 
@@ -2812,6 +2863,12 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 		auto t = std::static_pointer_cast<Treant>(obj);
 		treants_.push_back(t);
 		if (bar) treantHpBars_[npcId] = { t.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Boss: {
+		auto b = std::static_pointer_cast<Boss>(obj);
+		bosses_.push_back(b);
+		if (bar) bossHpBars_[npcId] = { b.get(), bar, 2.5f };
 		break;
 	}
 	}
@@ -2946,10 +3003,41 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 // 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
 // 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
 void Game::bindZoneHandlers() {
-	// 예시: 특정 구역 진입/이탈 시 BGM을 전환한다. Unity 태그가 정의되면 아래처럼 1줄로 연결한다.
-	// (카탈로그에 해당 트랙을 추가해야 소리난다. 미정의 태그는 로컬 판정에서 no-op.)
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [](Zone&){ INet::ClientApp::sound().playBgm("forest"); });
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
+	struct ArenaPresentation {
+		std::string_view tag;
+		std::string_view wallPrefix;
+		std::string_view bgm;
+	};
+	static constexpr ArenaPresentation kArenas[] = {
+		{ "Arena_Hobgoblin", "WallHobgoblin", "hobgoblin_arena" },
+		{ "Arena_Grandbaum",  "WallGrandbaum",  "grandbaum_arena" },
+		{ "Arena_Isys",       "WallIsys",       "isys_arena" },
+		{ "Arena_Boss",       "WallBoss",       "boss_arena" },
+	};
+
+	for (const ArenaPresentation& arena : kArenas) {
+		clientZoneSystem_.on(std::string(arena.tag), ZoneEvent::Enter,
+			[this, wallPrefix = arena.wallPrefix, bgm = arena.bgm](Zone& zone) {
+				// ZoneSystem is updated only with player_->pos(), so this callback
+				// belongs exclusively to the player controlled by this client.
+				if (completedArenaZoneIds_.contains(zone.id())) {
+					return;
+				}
+				if (!localPresentedArenaZoneIds_.insert(zone.id()).second) {
+					return;
+				}
+				localArenaPresentationZoneId_ = zone.id();
+				tacticalZoneIntro_.trigger(wallPrefix);
+
+				constexpr float kArenaBgmFadeOutMs = 1100.f;
+				constexpr float kArenaBgmFadeInMs = 3400.f;
+				constexpr float kArenaBgmFadeInDelayMs = 800.f;
+				INet::ClientApp::sound().playBgm(bgm,
+					kArenaBgmFadeOutMs,
+					kArenaBgmFadeInMs,
+					kArenaBgmFadeInDelayMs);
+			});
+	}
 }
 
 // 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
@@ -3011,8 +3099,50 @@ void Game::renderBarrierMagicCircleQuads() {
 // 일방향 슬랩을 빌드한다(zone tag로 Wall prefix 도출, 두 벽 중점이 interior 기준점). state==0이면
 // 해제. 물리 벽은 만들지 않는다 — 후퇴 차단은 resolveArenaWallLeash의 위치 클램프가 담당한다.
 void Game::onZoneState( uint16 zoneId, uint8 state ) {
+	std::string prefix;
+	for ( const auto& z : chunkManager_.zones() ) {
+		if ( z.id != static_cast<int>( zoneId ) ) continue;
+		prefix = arenaWallPrefix( z );
+		break;
+	}
+
+	const auto previousIt = zoneStates_.find(zoneId);
+	const uint8 previousState = previousIt != zoneStates_.end() ? previousIt->second : 0;
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
+
+	// S_ZoneState is shared gameplay state and must not start client presentation.
+	// A completed arena stays presentation-locked. Only a later genuine 0 -> 1
+	// transition rearms it for a new encounter; merely revisiting its trigger
+	// after state==0 must not replay the intro or arena BGM.
+	const int localZoneId = static_cast<int>(zoneId);
+	if (previousState == 0 && state == 1
+		&& completedArenaZoneIds_.erase(localZoneId) > 0) {
+		localPresentedArenaZoneIds_.erase(localZoneId);
+	}
+
+	if (previousState == 1 && state == 0) {
+		const bool firstClear = completedArenaZoneIds_.insert(localZoneId).second;
+
+		if (localArenaPresentationZoneId_ == localZoneId) {
+			constexpr float kArenaBgmFadeOutMs = 1100.f;
+			constexpr float kArenaBgmFadeInMs = 3400.f;
+			constexpr float kArenaBgmFadeInDelayMs = 800.f;
+			INet::ClientApp::sound().playBgm("ingame",
+				kArenaBgmFadeOutMs,
+				kArenaBgmFadeInMs,
+				kArenaBgmFadeInDelayMs);
+			localArenaPresentationZoneId_ = -1;
+		}
+
+		// First clear of the Hobgoblin tactical zone (server-authoritative wall
+		// removal, 1 -> 0): show the follow-up monologue once. firstClear comes
+		// from completedArenaZoneIds_, kept in sync on every client via
+		// S_ZoneState, so each client shows it exactly once per clear cycle.
+		if (firstClear && prefix == "WallHobgoblin") {
+			dialogueSystem_.show("sample_context");
+		}
+	}
 
 	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
 
@@ -3020,12 +3150,6 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	if ( state == 1 ) {
 		// zone id로 tag를 찾아 Wall prefix("Wall"+<Arena_ 뒷부분>)를 도출 → 해당 Wall 마커들로
 		// 양끝 일방향 슬랩을 빌드. interior 기준점 = 그 마커들의 중점(두 벽 사이).
-		std::string prefix;
-		for ( const auto& z : chunkManager_.zones() ) {
-			if ( z.id != static_cast<int>( zoneId ) ) continue;
-			prefix = arenaWallPrefix( z );   // "Arena_Hobgoblin" -> "WallHobgoblin"
-			break;
-		}
 		if ( !prefix.empty() ) {
 			std::vector<const MarkerDef*> wallMarkers;
 			mu::Vec3 wallSum{};
@@ -3431,7 +3555,7 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
-void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
+void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId, uint8 hitAnimIndex ) {
 	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(모든 몬스터·거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
@@ -3456,7 +3580,7 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 	if ( newHp <= 0 )
 		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
-		holdEvent( eventList_, EvHit( targetId, newHp ) );
+		holdEvent( eventList_, EvHit( targetId, newHp, hitAnimIndex ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
@@ -3508,6 +3632,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	case MonsterKind::Birdy:    createBirdy(info);    break;
 	case MonsterKind::Slime:    createSlime(info);    break;
 	case MonsterKind::Treant:   createTreant(info);   break;
+	case MonsterKind::Boss:     createBoss(info);     break;
 	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
@@ -3526,14 +3651,14 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
 
-void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
+void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex ) {
 	// Store hit velocity on any monster before applyHit so ragdoll activation can use it.
 	if (newHp <= 0) {
 		if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end()) {
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
-	applyHit(targetId, newHp, attackerId);
+	applyHit(targetId, newHp, attackerId, hitAnimIndex);
 
 	// 피격 VFX(blood 등)는 클라 로컬 hit 검출(SkillSystem::processHitResults)이
 	// narrow phase 충돌점에 직접 재생한다. 여기서 target->pos()(발밑)에 재생하면
@@ -3709,6 +3834,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& b : birdys_)    b->rebuildBodyBVH();
 	for (auto& s : slimes_)    s->rebuildBodyBVH();
 	for (auto& t : treants_)   t->rebuildBodyBVH();
+	for (auto& b : bosses_)    b->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3842,6 +3968,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(birdys_);
 	updateMonstersNet(slimes_);
 	updateMonstersNet(treants_);
+	updateMonstersNet(bosses_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3945,6 +4072,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& birdy    : birdys_)    activateAndCollect(birdy,    MonsterKind::Birdy);
 		for (auto& slime    : slimes_)    activateAndCollect(slime,    MonsterKind::Slime);
 		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
+		for (auto& boss     : bosses_)    activateAndCollect(boss,     MonsterKind::Boss);
 
 		for (auto& [objPtr, kind] : justDied)
 			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
@@ -4102,17 +4230,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		}
 
-		if (hiZStatsLabel_) {
-			if (gfx_.isHiZCullEnabled()) {
-				const auto stats = gfx_.getHiZStats();
-				wchar_t buf[64];
-				swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
-				hiZStatsLabel_->setText(buf);
-			} else {
-				hiZStatsLabel_->setText(L"HiZ: OFF");
-			}
-		}
-
+		tacticalZoneIntro_.update(dtSec);
+		dialogueSystem_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4246,6 +4365,7 @@ void Game::renderInGame() {
 	for (auto& birdy    : birdys_)    birdy->render(gfx_);
 	for (auto& slime    : slimes_)    slime->render(gfx_);
 	for (auto& treant   : treants_)   treant->render(gfx_);
+	for (auto& boss     : bosses_)    boss->render(gfx_);
 
 	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
 	// (orb phase is drawn by orbSystem_.submitDrawEvents).
@@ -4315,6 +4435,37 @@ void Game::renderInGame() {
 		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+
+		// Minimap background cache. The texture covers a fixed kMinimapCoverageWorld-sized
+		// square centered on the player; the HUD scrolls it via a per-frame UV sub-rect. It is
+		// a single shared RT, re-baked only when needed: on a chunk load/unload (new terrain),
+		// or when the player drifts > kMinimapRebakeMoveThreshold from the baked center (so the
+		// view never reaches the texture edge). Coverage is sized to the view (not the 200m
+		// chunk) to keep enough px/m for splat + prop detail.
+		{
+			const mu::Vec3 p = player_->pos();
+			const float dx = p.x() - minimapBakedCenter_.x();
+			const float dz = p.z() - minimapBakedCenter_.z();
+			const bool moved = (dx * dx + dz * dz) >
+				(GFX::kMinimapRebakeMoveThreshold * GFX::kMinimapRebakeMoveThreshold);
+			const bool firstBake = (minimapBakedCoverage_ <= 0.f);
+			if (chunkManager_.minimapDirty() || moved || firstBake) {
+				chunkManager_.clearMinimapDirty();
+				minimapBakedCenter_   = mu::Vec3(p.x(), 0.f, p.z());
+				minimapBakedCoverage_ = GFX::kMinimapCoverageWorld;
+
+				gfx_.requestMinimapRebake();
+				chunkManager_.submitMinimapDrawEvents(gfx_);
+				chunkManager_.submitMinimapPropDrawEvents(gfx_, minimapBakedCenter_, minimapBakedCoverage_);
+				const float H = minimapBakedCoverage_ * 0.5f;
+				gfx_.setMinimapCamera(MinimapTerrainPipeline::CameraData{
+					.view = mu::lookAt(
+						minimapBakedCenter_ + mu::Vec3(0.f, minimapBakedCoverage_ * 4.f, 0.f),
+						minimapBakedCenter_, mu::NVec3(0.f, 0.f, 1.f)),
+					.proj = mu::ortho(-H, H, -H, H, 0.1f, minimapBakedCoverage_ * 8.f)
+				});
+			}
+		}
 	}
 
 	// Floating damage numbers: drawn just before the HUD so they share the UI pass
@@ -4326,6 +4477,25 @@ void Game::renderInGame() {
 	// so submit the dial first; uiManager_.render() (below) then draws the panel's
 	// scrim/popup on top when it is open.
 	skillDial_.render(gfx_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top));
+
+	// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
+	// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
+	minimapIcons_.clear();
+	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
+	for (const auto& [id, p] : idPlayerMap_) {
+		if (id == myId_ || !p) continue;
+		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
+	}
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (!obj) continue;
+		const bool isBossLike = bossNpcIds_.count(id) != 0;
+		minimapIcons_.push_back(MinimapEntityIcon{
+			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
+		});
+	}
+	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 
@@ -4367,6 +4537,9 @@ void Game::enterLobby() {
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -4571,6 +4744,7 @@ void Game::refreshLobbyUI() {
 		});
 	}
 	lobbyUI_.refresh(vs);
+	syncLobbyCharacterWeapons();
 
 	// 메인 메뉴를 벗어나면 설정창은 닫는다(기존 동작 보존).
 	if (!vs.inMainMenu) settingsPanel_.close();
@@ -4846,6 +5020,9 @@ void Game::renderWaitingRoom() {
 
 void Game::enterInGame() {
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	lobbyUI_.setLoadingVisible(false);
 	lobbyUI_.setRootVisible(false);
@@ -5066,6 +5243,12 @@ void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, c
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	// Dialogue input has priority: Enter / left-click advance pages and are
+	// consumed here before any gameplay or UI handling sees them.
+	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+		return 0;
+	}
+
 	switch (msg) {
 		// WM_INPUT 메시지
 		// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
@@ -5354,6 +5537,17 @@ void Game::processInput(Milliseconds deltaTime) {
 		return;
 	}
 
+	// Dialogue input has priority over gameplay: while a dialogue/monologue
+	// window is open (including its fade-out, where active() is still true),
+	// suppress movement/camera/attack/skill. Enter and left-click are consumed
+	// by handleWndMsg to advance pages; here we drop accumulated look delta so
+	// the camera doesn't drift, then skip gameplay until the window hides.
+	if (dialogueSystem_.active()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	processInputGame(deltaTime);
 }
 
@@ -5448,6 +5642,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Grandbaum" );
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
 		debugTeleportToArena( "Arena_Isys" );
+	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) )
+		debugTeleportToArena( "Arena_Boss" );
 
 	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
 	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
@@ -5531,6 +5727,13 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		std::chrono::steady_clock::now().time_since_epoch()).count();
 
 	if (!playerDead_ && !uiManager_.needsCursor()) {
+		// Shift+wheel zooms the minimap; plain wheel selects a skill slot.
+		// (WM_MOUSEWHEEL carries no MK_SHIFT here, so read the keyboard snapshot.)
+		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		if (shiftHeld) {
+			while (wheelAccum_ >= WHEEL_DELTA) { wheelAccum_ -= WHEEL_DELTA; minimap_.zoomIn(); }
+			while (wheelAccum_ <= -WHEEL_DELTA) { wheelAccum_ += WHEEL_DELTA; minimap_.zoomOut(); }
+		} else {
 		// Wheel selection (one notch = one slot). Up = prev, down = next.
 		while (wheelAccum_ >= WHEEL_DELTA) {
 			wheelAccum_ -= WHEEL_DELTA;
@@ -5542,24 +5745,25 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			skillDial_.selectNext();
 			sendSelectSkillPacket(static_cast<uint8>(skillDial_.selected()));
 		}
-
-		// Wheel click (middle button): use the selected skill if it has a stack and
-		// is off (predicted) cooldown. Instant cast; the server re-validates.
-		if ((keyboardStateCurr_[VK_MBUTTON] & 0x80) && !(keyboardStatePrev_[VK_MBUTTON] & 0x80)) {
-			const int slot = skillDial_.selected();
-			if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
-				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
-					castSkillByName(a->name);
-					skillDial_.notePredictedUse(slot, nowSec);
-				}
-			}
 		}
 
-		// Left click: basic attack (ungated weapon skill).
-		if ((keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		    && basicSkillAssetId_ >= 0) {
-			if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
-				castSkillByName(a->name);
+		if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80) ) {
+			// Shift + Left click : use the selected skill if it has a stack and
+			// is off (predicted) cooldown. Instant cast; the server re-validates.
+			if (keyboardStateCurr_[VK_SHIFT] & 0x80) {
+				const int slot = skillDial_.selected();
+				if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
+					if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
+						castSkillByName(a->name);
+						skillDial_.notePredictedUse(slot, nowSec);
+					}
+				}
+			}
+			// Normal Left click: basic attack (ungated weapon skill).
+			else if ( basicSkillAssetId_ >= 0 ) {
+				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
+					castSkillByName(a->name);
+			}
 		}
 	} else {
 		wheelAccum_ = 0;   // discard notches while a cursor UI is open or the player is dead
@@ -5569,7 +5773,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
 	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
-	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
+	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size() + bosses_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
@@ -5578,6 +5782,7 @@ void Game::cullObjects() {
 	std::ranges::copy(birdys_,       std::back_inserter(entities));
 	std::ranges::copy(slimes_,       std::back_inserter(entities));
 	std::ranges::copy(treants_,      std::back_inserter(entities));
+	std::ranges::copy(bosses_,       std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -5665,6 +5870,7 @@ void Game::feedbackCullResultToAnim() {
 		for (auto& b : birdys_)    resetHiZ(b);
 		for (auto& s : slimes_)    resetHiZ(s);
 		for (auto& t : treants_)   resetHiZ(t);
+		for (auto& b : bosses_)    resetHiZ(b);
 		return;
 	}
 
@@ -5681,6 +5887,7 @@ void Game::feedbackCullResultToAnim() {
 	for (auto& b : birdys_)    applyToEntity(b);
 	for (auto& s : slimes_)    applyToEntity(s);
 	for (auto& t : treants_)   applyToEntity(t);
+	for (auto& b : bosses_)    applyToEntity(b);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 

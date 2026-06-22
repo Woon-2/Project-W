@@ -37,7 +37,7 @@
 
 - `build(markers)` — PathPt 그룹화·정렬·등호장 리샘플(기본 0.5m). XZ만 확정, Y는 매 프레임 conform.
 - `update(dt, playerPos, terrain)` — 가장 가까운 path 선택(`activateRadius` 내) → 플레이어를 폴리라인에
-  투영(`sPlayer`) → **가시 윈도우**(뒤 `windowBehind`, 앞 `windowAhead`)만 `heightAtWorld`로 Y conform
+  투영(`sPlayer`) → **가시 윈도우**(`leadGap`만큼 앞에서 시작 ~ `windowAhead`까지, 뒤로는 그리지 않음)만 `heightAtWorld`로 Y conform
   → 위습 전진(ease) → `flowTime_ += dt`.
 - `submitDrawEvents(gfx, ribbonTex, orbProxy)` — 리본을 `≤31정점 + 1정점 오버랩`으로 세그먼트 체이닝하여
   `addHDRTrailDrawEvent`, 위습 1개를 `addDrawEvent(EnergyOrbPipeline::DrawEvent)`.
@@ -58,9 +58,13 @@
 
 ### trail.hlsl 하위호환 확장
 
-`PerDrawcallData`의 말단 `float2 pad0` → `float flowSpeed; uint alignMode;`(크기 불변).
+`PerDrawcallData`의 말단에 필드 추가(`flowSpeed`/`alignMode` → 144B, `premultiplyAlpha`+pad → 160B).
 - **흐름**: Tile 모드 V = `cumulativeDist/tileLength − currentSystemTime*flowSpeed`.
 - **지면정렬**: `alignMode==1`이면 `sideDir = cross(tangent, worldUp)`(평지 가정), 아니면 기존 카메라-페이싱.
+- **알파 프리멀티플라이**: 가산(One/One) 블렌딩은 알파 채널을 블렌딩 연산에서 아예 무시하므로,
+  정점별 `age` 기반 페이드(알파)가 화면에 전혀 반영되지 않는 버그가 있었음(경로 리본이 끝까지 불투명하게
+  보이던 원인). `premultiplyAlpha==1`이면 `PSMain`에서 `rgb *= alpha`를 적용해 가산 블렌딩에서도
+  페이드가 보이도록 함. 경로 리본(HDR 채널, 항상 additive)만 1로 설정.
 - 기본값 0 → **기존 파티클 트레일 동작 불변**(회귀 없음).
 
 ### 위습 = EnergyOrb free-orb 일반화
@@ -86,7 +90,7 @@
 
 ## 5. 튜닝 (`PathGuideSystem::Config`)
 
-리본: `sampleSpacing/windowAhead/windowBehind/ribbonWidth/ribbonYOffset/flowSpeed/tileLength/endFade/ribbonColor`.
+리본: `sampleSpacing/windowAhead/leadGap/ribbonWidth/ribbonYOffset/flowSpeed/tileLength/endFade/ribbonColor`.
 위습: `wispLead/wispEaseRate/wispHoverY/wispBobAmp/wispBobFreq/wispRadius/wispPointSize/wispColor`.
 활성: `activateRadius`. 색은 HDR(>1)로 두어 블룸을 유도. 리본 텍스처는 `AssetManager::trail62Tex()` 재사용.
 

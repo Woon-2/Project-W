@@ -7,6 +7,7 @@
 #include "event.hpp"
 #include "rigidBody.hpp"
 #include "ragdoll.hpp"
+#include "protocol.hpp"   // PlayerWeaponType (무기별 애니메이션 세트 선택)
 
 class AssetManager;
 class Object;
@@ -28,28 +29,47 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	// 장착 무기에 따라 idle/hit/4방향 run/공격 클립 세트를 재구성한다.
+	// (장착 시점에 Object의 anim blender로부터 호출됨)
+	void setWeaponType(PlayerWeaponType weaponType);
+
 	Seconds runAnimTime() const { return animTimeRun_; }
-	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
+	Seconds runDuration() const { return targetClip(clipRunForward_)->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
 
-	Seconds accMotionless_ = 0s;
+	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
+	// 무기별로 해석된 클립 이름(setWeaponType에서 갱신). death는 전 무기 공용 상수.
+	std::string clipIdle_{};
+	std::string clipHit_{};
+	std::string clipRunForward_{};
+	std::string clipRunBackward_{};
+	std::string clipRunRight_{};
+	std::string clipRunLeft_{};
+	static constexpr const char* kClipDeath = "Death";
+	// 무기별 공격 클립 순서 목록(EvAttack.attackIndex로 인덱싱, 스킬 PlayAnimation에서 전파).
+	// 콤보/반복은 스킬 타임라인이 서로 다른 시각의 PlayAnimation으로 구동한다.
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};   // 현재 선택된 공격 클립(비면 공격 없음)
+
+	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
 	Milliseconds cooldownDeath_ = 0ms;
-	Seconds animTimeIdle0_ = 0s;
-	Seconds animTimeIdle1_ = 0s;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	Seconds animTimeDeath_ = 0s;
-	float tIdle0_ = 0.f;
-	float tIdle1_ = 0.f;
+	float tIdle_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
 	float tRunRight_ = 0.f;
+	// 공격 오버레이 비율. idle/run 블렌딩 위에 선택된 공격 클립을 얹는다.
+	float tAttack_ = 0.f;
 	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
 	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
@@ -331,8 +351,10 @@ private:
 	std::string currentAttackClip_{};
 };
 
-// Temporary boss caster blender: the current boss resource only provides
-// Boss_Idle / Boss_Walk / Boss_Attack, so this intentionally ignores Hit/Death.
+// Final-boss caster blender. Full 14-clip rig: 4-directional walk + speed-based
+// run (player-style blend space), multi-attack (Swings/Combo/BackAttack/Smite via
+// attackIndex), two hit-reaction clips (Hit1/Hit2 chosen by the server), Death,
+// and Rage (registered only; its trigger is wired when the boss BehaviorTree lands).
 class AnimBlenderBoss : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -351,13 +373,33 @@ private:
 	EventBus eventBus_{};
 
 	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
 	Seconds animTimeIdle_ = 0s;
-	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeWalk_ = 0s;   // shared by the 4 directional walk clips
+	Seconds animTimeRun_ = 0s;
 	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
 	float tIdle_ = 0.f;
-	float tWalk_ = 0.f;
+	float tWalkForward_ = 0.f;
+	float tWalkBackward_ = 0.f;
+	float tWalkLeft_ = 0.f;
+	float tWalkRight_ = 0.f;
+	float tRun_ = 0.f;
 	float tAttack_ = 0.f;
-	std::string currentAttackClip_{ "Boss_Attack" };
+	// hit/death blend ratios follow the Player/Goblin convention (death highest,
+	// then hit up to 0.75, lerped in after the locomotion sum).
+	float tHit_ = 0.f;
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+
+	// Multi-attack clips, populated by init from whatever loaded (order = lua attackIndex).
+	std::vector<std::string> attackClips_{};
+	std::string currentAttackClip_{};
+	// Hit-reaction clips (Boss_Hit1/Boss_Hit2). EvHit.hitAnimIndex selects one.
+	std::vector<std::string> hitClips_{};
+	std::string currentHitClip_{};
 };
 
 // 물체의 렌더링과 관련된 상태
@@ -421,6 +463,11 @@ public:
 	// 스킨드 메시 draw event를 포워드 PBRSkinnedPipeline 포트레이트 채널(slot)로 제출한다.
 	// 컬링 플래그(메인 카메라 기준)는 무시하고 항상 그린다.
 	void MU_CALLCONV renderPortrait(GFX& gfx, u32t slot);
+
+	// renderPortrait()의 부속 객체(장착 무기 등) 전용 렌더. 무기 메시는 항상
+	// non-skinned 정적 메시이므로 PBRPipeline 포트레이트 채널로 제출한다.
+	// worldXform은 호출자가 소켓 본 변환까지 합성해 전달하는 최종 월드 행렬이다.
+	void MU_CALLCONV renderPortraitEquipment(GFX& gfx, u32t slot, mu::Mat4x4 worldXform);
 
 	virtual void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {}
 
@@ -903,6 +950,17 @@ class Isys : public Birdy {
 public:
 	Isys() = default;
 	Isys(Object&& base) : Birdy(std::move(base)) {}
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
+};
+
+// Final boss. Distinct 14-clip rig (modelBoss/AnimBlenderBoss), but the game-state
+// EventBus (Hit/Death/ragdoll) is species-agnostic, so it inherits Goblin's EventBus
+// and ragdoll plumbing (same reuse rationale as Hobgoblin) and only swaps the blender.
+class Boss : public Goblin {
+public:
+	Boss() = default;
+	Boss(Object&& base) : Goblin(std::move(base)) {}
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override;
 };

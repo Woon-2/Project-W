@@ -13,8 +13,9 @@ skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(15, "effects/piercing.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_1H_Attack02",
+    attackIndex = 1,
+    blendTime   = 0.1
 })
 
 skill:addEvent(100, "PlayVFX", {

@@ -130,25 +130,29 @@ bool DialogueSystem::init(UIManager& uiManager, const std::filesystem::path& jso
     uiManager_ = &uiManager;
     jsonPath_ = jsonPath;
 
-    panel_ = static_cast<Panel*>(
-        uiManager.root()->addChild(std::make_unique<Panel>())
-    );
-    panel_->name = "DialogueWindow";
-    panel_->anchor = Anchors::TopLeft;
-    panel_->pivot = Pivots::TopLeft;
-    panel_->zOrder = 10000;
-    panel_->visible = false;
-    panel_->interactive = false;
-    panel_->drawSolidBackground = true;
+    // Build the widget tree once. A re-init (e.g. re-entering in-game in online
+    // mode) reuses the existing widgets and just refreshes the JSON definitions.
+    if (!panel_) {
+        panel_ = static_cast<Panel*>(
+            uiManager.root()->addChild(std::make_unique<Panel>())
+        );
+        panel_->name = "DialogueWindow";
+        panel_->anchor = Anchors::TopLeft;
+        panel_->pivot = Pivots::TopLeft;
+        panel_->zOrder = 10000;
+        panel_->visible = false;
+        panel_->interactive = false;
+        panel_->drawSolidBackground = true;
 
-    label_ = static_cast<Label*>(
-        panel_->addChild(std::make_unique<Label>())
-    );
-    label_->name = "DialogueText";
-    label_->anchor = Anchors::TopLeft;
-    label_->pivot = Pivots::TopLeft;
-    label_->setTextHAlign(TextHAlign::Leading);
-    label_->setTextVAlign(TextVAlign::Top);
+        label_ = static_cast<Label*>(
+            panel_->addChild(std::make_unique<Label>())
+        );
+        label_->name = "DialogueText";
+        label_->anchor = Anchors::TopLeft;
+        label_->pivot = Pivots::TopLeft;
+        label_->setTextHAlign(TextHAlign::Leading);
+        label_->setTextVAlign(TextVAlign::Top);
+    }
 
     return loadDefinitions();
 }

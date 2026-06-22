@@ -5,24 +5,26 @@ local skill = Skill()
 skill.name             = "SwordSlash"
 skill.weapon           = "sword"
 skill.isBasic          = true
-skill.totalDurationMs  = 400
+skill.totalDurationMs  = 700
 skill.interruptible    = true
 
 skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(1, "effects/sword_slash_1.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_2H_Attack",
+    attackIndex = 0,
+    blendTime   = 0.1
 })
 
-skill:addEvent(100, "PlayVFX", {
+skill:addEvent(250, "PlayVFX", {
     vfxId  = 1,
-    offset = Vec3(0.0, 0.8, 1.0)
+    offset = Vec3(0.0, 0.8, 1.0),
+    flipX  = true   -- mirror the slash arc to match the right-to-left swing
 })
 
 -- Swing SFX, on the slash.
-skill:addEvent(100, "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(450, "PlaySound", { sound = "sword_slash_1" })
 
 local onHitDefBase = OnHit({
     damage          = 200,
@@ -50,30 +52,30 @@ local hitboxBase = {
     onHit              = onHitDefBase
 }
 
--- Left backward sweep segment
-skill:addEvent(100, "SpawnHitbox", {
+-- Right backward sweep segment
+skill:addEvent(320, "SpawnHitbox", {
     slot      = 0,
-    localOBBs = { OBB(0.3, -0.25, -1.45, 0.15, 1.1, 0.8, 0, 77, 0) },
+    localOBBs = { OBB(0.3, -0.25, 1.45, 0.15, 1.1, 0.8, 0, -77, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
     hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
-    onHit               = onHitLB
+    onHit               = onHitRB
 })
 
--- Left forward sweep segment
-skill:addEvent(120, "SpawnHitbox", {
+-- Right forward sweep segment
+skill:addEvent(340, "SpawnHitbox", {
     slot      = 1,
-    localOBBs = { OBB(0.3, -1.4, -0.75, 0.15, 1.3, 1.2, 0, 48, 0) },
+    localOBBs = { OBB(0.3, -1.4, 0.75, 0.15, 1.3, 1.2, 0, -48, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
     hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
-    onHit               = onHitLF
+    onHit               = onHitRF
 })
 
 -- forward sweep segment
-skill:addEvent(140, "SpawnHitbox", {
+skill:addEvent(360, "SpawnHitbox", {
     slot      = 2,
     localOBBs = { OBB(0.3, -1.6, 0.0, 0.15, 1.55, 1.0, 0, 0, 0) },
     attach              = hitboxBase.attach,
@@ -83,32 +85,32 @@ skill:addEvent(140, "SpawnHitbox", {
     onHit               = onHitF
 })
 
--- Right forward sweep segment
-skill:addEvent(160, "SpawnHitbox", {
+-- Left forward sweep segment
+skill:addEvent(380, "SpawnHitbox", {
     slot      = 3,
-    localOBBs = { OBB(0.3, -1.4, 0.75, 0.15, 1.3, 1.2, 0, -48, 0) },
+    localOBBs = { OBB(0.3, -1.4, -0.75, 0.15, 1.3, 1.2, 0, 48, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
     hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
-    onHit               = onHitRF
+    onHit               = onHitLF
 })
 
--- Right backward sweep segment
-skill:addEvent(180, "SpawnHitbox", {
+-- Left backward sweep segment
+skill:addEvent(400, "SpawnHitbox", {
     slot      = 4,
-    localOBBs = { OBB(0.3, -0.25, 1.45, 0.15, 1.1, 0.8, 0, -77, 0) },
+    localOBBs = { OBB(0.3, -0.25, -1.45, 0.15, 1.1, 0.8, 0, 77, 0) },
     attach              = hitboxBase.attach,
     applyAttachRotation = hitboxBase.applyAttachRotation,
     hitGroup            = hitboxBase.hitGroup,
     hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
-    onHit               = onHitRB
+    onHit               = onHitLB
 })
 
-skill:addEvent(300, "DestroyHitbox", { slot = 0 })
-skill:addEvent(320, "DestroyHitbox", { slot = 1 })
-skill:addEvent(340, "DestroyHitbox", { slot = 2 })
-skill:addEvent(360, "DestroyHitbox", { slot = 3 })
-skill:addEvent(380, "DestroyHitbox", { slot = 4 })
+skill:addEvent(560, "DestroyHitbox", { slot = 0 })
+skill:addEvent(680, "DestroyHitbox", { slot = 1 })
+skill:addEvent(600, "DestroyHitbox", { slot = 2 })
+skill:addEvent(620, "DestroyHitbox", { slot = 3 })
+skill:addEvent(640, "DestroyHitbox", { slot = 4 })
 
 return skill

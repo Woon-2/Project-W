@@ -110,6 +110,7 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 | `groundAlign` | false | 지면 노멀로 정렬(yaw 보존). `groundSnap`과 함께 사용 |
 | `particleCollision` | (없음) | 이펙트 **파티클**의 지면 충돌: `"GroundStop"`/`"GroundKill"`/`"GroundBounce"`. GroundKill은 착탄 시 Death 서브이미터로 임팩트 버스트(JSON 무수정, sub-emitter 제외 top-level에만 적용) |
 | `particleConform` | (없음) | 이펙트 **파티클**의 스폰 지면 컨폼: `"SnapY"`/`"SnapAndAlign"`(면적 emitter가 슬로프 따라 안착) |
+| `flipX` | false | **메시 이펙트를 좌우 반전**(시전자 right축을 rest 프레임에서 반사). 베기 호(arc) 방향을 캐릭터 스윙 방향에 맞출 때. 메시의 author된 로컬 축과 무관하게 플레이어 기준 수평으로 뒤집힘. 메시 파이프라인이 양면(CULL_NONE)이라 반사 winding도 렌더됨. 서버는 코스메틱이라 무시 |
 | `attach` | 루트 | `BoneAttach(name)`; 생략 시 시전자 루트 |
 
 > **형상 크기(원형 반지름 M, 부채꼴 반지름 R·각도 A)는 PlayVFX가 아니라 이펙트 프리팹 `.json`의

@@ -52,10 +52,11 @@ end
 skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(18, "effects/PS_VFX_Piercing_ParticleSystems.json", { systems = pmSystems })
 
-skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
-})
+-- 다단 찌르기: 공격 클립(Combat_1H_Attack02)을 짧은 간격으로 반복 재생해 연속 스탭을 표현한다.
+skill:addEvent(0,   "PlayAnimation", { clipName = "Combat_1H_Attack02", attackIndex = 1, blendTime = 0.1 })
+skill:addEvent(250, "PlayAnimation", { clipName = "Combat_1H_Attack02", attackIndex = 1, blendTime = 0.05 })
+skill:addEvent(500, "PlayAnimation", { clipName = "Combat_1H_Attack02", attackIndex = 1, blendTime = 0.05 })
+skill:addEvent(750, "PlayAnimation", { clipName = "Combat_1H_Attack02", attackIndex = 1, blendTime = 0.05 })
 
 skill:addEvent(100, "PlayVFX", {
     vfxId  = 18,

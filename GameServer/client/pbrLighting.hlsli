@@ -477,10 +477,14 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
         ao = material.cAOStrength * sampleBindless(material.idxAmbientOcclusion, tex).r;
     }
 
+    // Unity semantics: emission = emissionColor * emissionMap (the HDR intensity rides
+    // on the color). Multiply (not replace) so map+color materials keep their intensity.
+    // pow(2.2) matches the albedo path's sRGB->linear treatment.
     float3 emmisive = material.cEmmisive;
     if (material.idxEmmisive.x >= 0) {
-        emmisive = sampleBindless(material.idxEmmisive, tex).rgb;
+        emmisive *= sampleBindless(material.idxEmmisive, tex).rgb;
     }
+    emmisive = pow(abs(emmisive), 2.2f);
 
     float3 posVNormalized = normalize(posV);
 
@@ -539,10 +543,14 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
         ao = material.cAOStrength * sampleBindless(material.idxAmbientOcclusion, tex).r;
     }
 
+    // Unity semantics: emission = emissionColor * emissionMap (the HDR intensity rides
+    // on the color). Multiply (not replace) so map+color materials keep their intensity.
+    // pow(2.2) matches the albedo path's sRGB->linear treatment.
     float3 emmisive = material.cEmmisive;
     if (material.idxEmmisive.x >= 0) {
-        emmisive = sampleBindless(material.idxEmmisive, tex).rgb;
+        emmisive *= sampleBindless(material.idxEmmisive, tex).rgb;
     }
+    emmisive = pow(abs(emmisive), 2.2f);
 
     float3 posVNormalized = normalize(posV);
 

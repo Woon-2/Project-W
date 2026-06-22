@@ -31,8 +31,10 @@ public:
     struct Config {
         // Ribbon
         float    sampleSpacing = 0.5f;   // polyline resample spacing (m)
-        float    windowAhead   = 25.f;   // ribbon length ahead of the player (m)
-        float    windowBehind  = 2.f;    // ribbon length behind the projected player point (m)
+        float    windowAhead   = 25.f;   // ribbon far end, ahead of the player (m)
+        float    leadGap       = 3.f;    // gap ahead of the player before the ribbon starts
+                                          // fading in (m) -- nothing is drawn under/behind the
+                                          // player, so the ribbon reads as starting ahead of them
         float    ribbonWidth   = 0.8f;   // ribbon width (m)
         float    ribbonYOffset = 0.10f;  // lift above terrain to avoid z-fighting (m)
         float    flowSpeed     = 0.5f;   // Tile-UV scroll toward the goal (tiles/sec)
@@ -41,7 +43,9 @@ public:
         mu::Vec3 ribbonColor   = { 0.5f, 1.8f, 2.6f };  // HDR cyan (bloom)
 
         // Wisp
-        float    wispLead      = 6.0f;   // arc-length ahead of the player (m)
+        float    wispLead      = 22.0f;  // arc-length ahead of the player (m) -- kept near the
+                                          // ribbon's far end (windowAhead - endFade) so it reads
+                                          // as guiding toward the path's tip, not the midpoint
         float    wispEaseRate  = 2.5f;   // follow smoothing (1/sec)
         float    wispHoverY    = 1.1f;   // height above terrain (m)
         float    wispBobAmp    = 0.18f;  // vertical bob amplitude (m)

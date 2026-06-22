@@ -14,9 +14,21 @@ skill.interruptible    = true
 skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(3, "effects/slash_combo.json")
   
+-- 3단 콤보: 히트 웨이브(≈150 / 550 / 1250ms)에 맞춰 공격 클립을 순차 전환한다.
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_2H_Attack",
+    attackIndex = 0,
+    blendTime   = 0.1
+})
+skill:addEvent(500, "PlayAnimation", {
+    clipName    = "Combat_2H_Attack01",
+    attackIndex = 1,
+    blendTime   = 0.1
+})
+skill:addEvent(1100, "PlayAnimation", {
+    clipName    = "Combat_2H_AttackSpecial",
+    attackIndex = 2,
+    blendTime   = 0.1
 })
 
 skill:addEvent(100, "PlayVFX", {

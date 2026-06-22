@@ -90,6 +90,7 @@ enum class ObjectType : uint16 {
 	Treant,
 	Grandbaum,   // named variant of Treant (shares Treant anims, different model)
 	Isys,        // named variant of Birdy  (shares Birdy anims, different model)
+	Boss,        // final boss: 1:1 combat (NOT tactical), own 14-clip rig
 };
 
 enum class PlayerWeaponType : uint8 {
@@ -338,6 +339,7 @@ struct SSkillHitPacket : public PacketHeader {
 	int32               newHp;
 	uint32              skillAssetId;
 	DirectX::XMFLOAT3  targetVelocity;  // target's linear velocity at hit time; used for ragdoll impulse on kill
+	uint8               hitAnimIndex;   // which hit-reaction clip the target should play (server-chosen; multi-hit rigs like Boss). 0 for single-hit monsters.
 };
 
 // --- Stack-charge skill system ---

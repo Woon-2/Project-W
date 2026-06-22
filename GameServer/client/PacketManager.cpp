@@ -208,6 +208,10 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createIsys(objInfo);
 			break;
 
+		case ObjectType::Boss:
+			game->createBoss(objInfo);
+			break;
+
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
 			break;
@@ -319,6 +323,10 @@ void PacketManager::handleSNpcSpawnBatchPacket(byte* buffer, int32 len) {
 			game->createIsys(objInfo);
 			break;
 
+		case ObjectType::Boss:
+			game->createBoss(objInfo);
+			break;
+
 		default:
 			std::cout << "S_NpcSpawnBatch: unsupported object type " << static_cast<uint16>(objInfo.type) << '\n';
 			break;
@@ -386,7 +394,7 @@ void PacketManager::handleSTimeSyncPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillHitPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId, pkt->targetVelocity );
+	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId, pkt->targetVelocity, pkt->hitAnimIndex );
 }
 
 void PacketManager::handleSSkillChargePacket( byte* buffer, int32 len ) {

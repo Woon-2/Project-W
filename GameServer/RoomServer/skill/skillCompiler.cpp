@@ -379,6 +379,8 @@ SkillAsset ServerSkillCompiler::tableToAsset(const sol::table& tbl) {
                     p.flags |= kPlayVFXFlagGroundSnap;
                 if (evTbl.get_or("groundAlign", false))
                     p.flags |= kPlayVFXFlagGroundAlign;
+                if (evTbl.get_or("flipX", false))  // client-only visual; parsed for parity
+                    p.flags |= kPlayVFXFlagFlipX;
 
                 {
                     const u8t col = parseParticleCollisionMode(

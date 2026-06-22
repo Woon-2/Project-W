@@ -1,9 +1,20 @@
 ﻿#include "pch.hpp"
 #include "jointConstraint.hpp"
+#include <cmath>   // std::isfinite ([SAFETY 5] joint NaN self-heal)
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+// [SAFETY 5] NaN self-heal (see client/docs/ragdollSafety.md): a single non-finite
+// warm-start accumulator, once produced, is re-applied every prepare() and propagates
+// through the whole joint chain (the integrator zeroes body velocity but cannot reach
+// these joint caches). Sanitising the persistent accumulators at the top of prepare()
+// lets a joint recover on the next step instead of staying broken.
+static inline float finite0(float v)        { return std::isfinite(v) ? v : 0.f; }
+static inline mu::Vec3 finite0(mu::Vec3 v)  {
+    return mu::Vec3(finite0(v.x()), finite0(v.y()), finite0(v.z()));
+}
 
 // Under-relaxation factor for angular constraint impulses.
 // Branching joint structures (e.g. Chest with 3 child joints) can create
@@ -190,6 +201,8 @@ void BallSocketJoint::resetAnchors()
 
 void BallSocketJoint::prepare(Seconds dt)
 {
+    cache_.accImpulse = finite0(cache_.accImpulse);   // [SAFETY 5] NaN self-heal
+
     const float dtf   = dt.count();
     const float invDt = (dtf > 0.f) ? (1.f / dtf) : 0.f;
 
@@ -259,6 +272,12 @@ void HingeJoint::resetAnchors()
 
 void HingeJoint::prepare(Seconds dt)
 {
+    // [SAFETY 5] NaN self-heal: drop any non-finite warm-start so it can't persist.
+    cache_.linAccImp    = finite0(cache_.linAccImp);
+    cache_.angAccImp[0] = finite0(cache_.angAccImp[0]);
+    cache_.angAccImp[1] = finite0(cache_.angAccImp[1]);
+    cache_.limitAccImp  = finite0(cache_.limitAccImp);
+
     const float dtf   = dt.count();
     const float invDt = (dtf > 0.f) ? (1.f / dtf) : 0.f;
 
@@ -441,10 +460,24 @@ void ConeTwistJoint::resetAnchors()
 {
     const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
     anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
+
+    // [SAFETY 3] Rebake the angular rest reference to the current (seeded) pose so the
+    // cone/twist limits are measured relative to where the ragdoll is ACTIVATED, not the
+    // build-time bind pose (see client/docs/ragdollSafety.md). Without this, a rig whose
+    // activation pose differs from bind (idle arms-down vs T-pose) starts with a large
+    // swing/twist violation that the solver fights -> jitter on tight-limit rigs.
+    // qRest := current relative orientation makes qRel = identity at activation.
+    refOrientA_ = bodyA_->orient();
+    refOrientB_ = bodyB_->orient();
 }
 
 void ConeTwistJoint::prepare(Seconds dt)
 {
+    // [SAFETY 5] NaN self-heal: drop any non-finite warm-start so it can't persist.
+    cache_.linAccImp   = finite0(cache_.linAccImp);
+    cache_.coneAccImp  = finite0(cache_.coneAccImp);
+    cache_.twistAccImp = finite0(cache_.twistAccImp);
+
     const float dtf   = dt.count();
     const float invDt = (dtf > 0.f) ? (1.f / dtf) : 0.f;
 

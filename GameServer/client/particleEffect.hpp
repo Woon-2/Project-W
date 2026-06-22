@@ -72,6 +72,13 @@ public:
     void setGroundBehavior(ps::ParticleCollisionModule::Mode collision,
                            ps::ShapeModule::GroundConform     conform);
 
+    // Horizontal mirror for mesh-mode systems: reflects the caster-right axis in the
+    // effect's rest frame so a mesh arc (e.g. a sword slash) sweeps the opposite way
+    // to match the player's swing direction. Set before play()/setOrigin(); rebuilt
+    // each call so it is deterministic whether or not a cast wants the flip. Mesh
+    // pipelines are two-sided (CULL_NONE) so the reflected winding still renders.
+    void setFlipX(bool flip) { flipX_ = flip; }
+
     // Per-cast deterministic seed (set by the skill system before play()).
     // Forwarded to each non-sub-emitter system as mixSeed(seed, systemIndex);
     // systems without a gameplay config ignore it. The server derives the
@@ -116,6 +123,7 @@ private:
     std::function<void(int childIdx, const mu::Vec3& pos)> onChildSpawn_;  // optional spawn hook
     std::mt19937                        rng_{ std::random_device{}() };
     mu::Vec3                            advanceForward_ = { 0.f, 0.f, 1.f };
+    bool                                flipX_ = false;     // mirror mesh systems horizontally on next play()
     const GroundSampler*                ground_ = nullptr;  // non-owning terrain query (optional)
 };
 

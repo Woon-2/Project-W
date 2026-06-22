@@ -1155,7 +1155,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 금속성 상수
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
-                material.constantRoughness = 1.f - metallic;
+                material.constantMetallic = metallic;
                 readTailTag(ifs, "cMetallic");
             }
             // 주변광 차폐 적용 강도 상수

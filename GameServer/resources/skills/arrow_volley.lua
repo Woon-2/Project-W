@@ -31,8 +31,9 @@ end
 skill:addVFX(11, "effects/arrow_volley.json", { systems = volleySystems })
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_Bow_Attack",
+    attackIndex = 0,
+    blendTime   = 0.1
 })
 
 skill:addEvent(120, "PlayVFX", {

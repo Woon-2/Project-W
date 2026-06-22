@@ -98,15 +98,15 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // --- Sample GBuffer ---
     float4 gb0 = sampleBindless(idxGB0, uv);         // albedo.rgb + ao
     float2 gb1 = sampleBindless(idxGB1, uv).rg;      // oct-encoded normalV
-    float4 gb2 = sampleBindless(idxGB2, uv);         // lightAccum.rgb + roughness
-    float  gb3 = sampleBindless(idxGB3, uv).r;       // metallic
+    float4 gb2 = sampleBindless(idxGB2, uv);         // emissive.rgb (HDR)
+    float2 gb3 = sampleBindless(idxGB3, uv).rg;      // metallic.r + roughness.g
     float  rawDepth = sampleBindless(idxDepth, uv).r; // NDC depth [0,1]
 
     float3 albedo      = gb0.rgb;
     float  ao          = gb0.a;
-    float3 precompLight = gb2.rgb;  // ambient + emissive (pre-computed in geometry pass)
-    float  roughness   = gb2.a;
-    float  metallic    = gb3;
+    float3 precompLight = gb2.rgb;  // emissive (pre-computed in geometry pass, HDR)
+    float  metallic    = gb3.r;
+    float  roughness   = gb3.g;
 
     // --- Decode view-space normal ---
     float3 normalV = octDecode(gb1);

@@ -80,7 +80,11 @@ void ContactConstraint::prepare(Seconds dt)
         // Terrain contacts skip the Baumgarte term: it would inject a small upward velocity each
         // step that causes the body to briefly leave the terrain, producing visible vibration.
         // Terrain penetration is recovered solely by Split Impulse.
-        const float penetration  = std::max(0.f, cp.depth - kSlop);
+        // [SAFETY 6] Cap the corrected depth (see client/docs/ragdollSafety.md): an
+        // uncapped deep overlap makes bias = beta*invDt*depth explode to Inf -> NaN.
+        // Deep penetration is then resolved gradually over several steps instead of in
+        // one violent push. Standard technique (Box2D b2_maxLinearCorrection / Bullet).
+        const float penetration  = std::min(std::max(0.f, cp.depth - kSlop), kMaxCorrectionDepth);
         const float extVelProj   = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
         const float extComp      = std::max(0.f, -extVelProj);
         const float baumgarteBeta = isTerrainContact_ ? 0.f : kBaumgarteBeta;

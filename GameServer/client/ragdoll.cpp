@@ -137,7 +137,21 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         const mu::Vec3 scaledCenter = bd.center * modelScale;
         auto body = std::make_unique<RigidBody>(MotionType::Kinematic);
         body->setMass(bd.mass);
-        body->setInertia(computeBoxInertia(bd.mass, scaledHalf));
+
+        // [SAFETY 4] Inertia floor (see client/docs/ragdollSafety.md): a box with two
+        // ~zero half-extents has a zero principal moment -> setInertia inverts to Inf
+        // invInertia -> 0*Inf=NaN in the angular impulse, which the joint graph spreads
+        // through the whole ragdoll in one solve sweep. Floor each inertia half-extent to
+        // a fraction of the largest. Only the INERTIA box is floored; rb.halfExtents
+        // (collision shape, set below) keep the authored dimensions.
+        mu::Vec3 inertiaHalf = scaledHalf;
+        {
+            const float maxH   = std::max({ inertiaHalf.x(), inertiaHalf.y(), inertiaHalf.z() });
+            const float floorH = maxH * 0.05f;
+            auto cl = [&](float h) { return h < floorH ? floorH : h; };
+            inertiaHalf = mu::Vec3(cl(inertiaHalf.x()), cl(inertiaHalf.y()), cl(inertiaHalf.z()));
+        }
+        body->setInertia(computeBoxInertia(bd.mass, inertiaHalf));
         body->setLinearDamping(bd.linearDamping);
         body->setAngularDamping(bd.angularDamping);
         body->setFriction(bd.friction);
@@ -395,6 +409,32 @@ void Ragdoll::activate(PhysicsWorld& world)
             for (int i = 0; i < n; ++i)
                 for (int j = i + 1; j < n; ++j)
                     pending.insert(normPair(neighbors[i], neighbors[j]));
+        }
+
+        // [SAFETY 2] Auto-ignore pairs whose collision boxes already overlap at the
+        // seeded pose (see client/docs/ragdollSafety.md). Ragdoll defs commonly have
+        // boxes that interpenetrate at rest (clavicle vs chest/neck, etc.); left
+        // colliding they fire large contact impulses the instant the bodies turn
+        // Dynamic -- a ragdoll-explosion source that scales with the model. 1/2-hop
+        // neighbours are already covered above.
+        {
+            auto boneOBB = [](const RagdollBone& rb) {
+                OBB o;
+                o.center      = rb.body->pos();
+                o.halfExtents = rb.halfExtents;
+                o.orient      = rb.body->orient();
+                return o;
+            };
+            for (size_t i = 0; i < bones_.size(); ++i) {
+                if (!bones_[i].body) continue;
+                for (size_t j = i + 1; j < bones_.size(); ++j) {
+                    if (!bones_[j].body) continue;
+                    const auto key = normPair(bones_[i].body, bones_[j].body);
+                    if (pending.count(key)) continue;
+                    if (collides(boneOBB(bones_[i]), boneOBB(bones_[j])).hit)
+                        pending.insert(key);
+                }
+            }
         }
 
         for (const auto& p : pending) {
