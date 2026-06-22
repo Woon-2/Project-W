@@ -109,6 +109,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSPlayerKnockbackPacket( buffer, len );
 		break;
 
+	case PacketType::S_TimeSync:
+		handleSTimeSyncPacket( buffer, len );
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -154,6 +158,7 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 	}
 	game->prepareInGamePartyRoster(playerInfo.playerId, existingPlayerIds);
 	game->setupPlayer(playerInfo);
+	game->beginServerTimeSync();
 	
 	for (int32 i = 0; i < objList.count(); ++i) {
 		const auto& objInfo = objList[i];
@@ -339,7 +344,8 @@ void PacketManager::handleSNpcBarrierPacket(byte* buffer, int32 len) {
 		ids.push_back(list[i].npcId);
 	}
 
-	INet::ClientApp::onlineGame()->setNpcBarrier(pkt->active != 0, ids);
+	INet::ClientApp::onlineGame()->setNpcBarrier(
+		pkt->active != 0, ids, pkt->impulseOnlyNpcId);
 }
 
 void PacketManager::handleSNpcHidePacket(byte* buffer, int32 len) {
@@ -378,6 +384,12 @@ void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed );
+}
+
+void PacketManager::handleSTimeSyncPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<STimeSyncPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onServerTimeSync(
+		pkt->clientSendMs, pkt->serverReceiveMs, pkt->serverSendMs);
 }
 
 void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
@@ -472,13 +484,13 @@ void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
+std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<CSkillStartPacket>();
 	pkt->skillAssetId = skillAssetId;
-	pkt->clientMs     = clientMs;
+	pkt->actionServerMs = actionServerMs;
 	pkt->skillSeed    = skillSeed;
 
 	pkt->size = bw.writeSize();
@@ -502,15 +514,28 @@ std::shared_ptr<SendBuffer> PacketManager::makeCSelectSkillPacket(uint8 slot) {
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 clientMs) {
+std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 actionServerMs) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CAttackPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cAtkPkt = bw.reserve<CAttackPacket>();
-	cAtkPkt->clientMs = clientMs;
+	cAtkPkt->actionServerMs = actionServerMs;
 
 	cAtkPkt->size = bw.writeSize();
 	cAtkPkt->type = PacketType::C_Attack;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCTimeSyncPacket(uint64 clientSendMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CTimeSyncPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CTimeSyncPacket>();
+	pkt->clientSendMs = clientSendMs;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_TimeSync;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

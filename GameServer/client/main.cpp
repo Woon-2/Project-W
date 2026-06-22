@@ -74,9 +74,22 @@ void applyDisplayMode(bool fullscreen, int windowedW, int windowedH, int* outCli
 
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
+	NetworkConfig networkConfig;
+	std::filesystem::path networkConfigPath;
+	std::string networkConfigError;
+	if (!loadNetworkConfig(networkConfig, networkConfigPath, networkConfigError)) {
+		const std::string message = "[NetworkConfig] " + networkConfigError;
+		std::cerr << message << '\n';
+		MessageBoxA(nullptr, message.c_str(), "Network configuration error", MB_OK | MB_ICONERROR);
+		return 1;
+	}
+	std::cout << "[NetworkConfig] " << networkConfigPath.string() << '\n'
+		<< "  Lobby: " << networkConfig.lobby.ip << ':' << networkConfig.lobby.port << '\n'
+		<< "  Room: " << networkConfig.room.ip << ':' << networkConfig.room.port << '\n';
+
 	SocketUtils::init( );
 	MemoryManager::init();
-	INet::ClientApp::init();
+	INet::ClientApp::init(networkConfig.lobby);
 
 	std::locale::global( std::locale( "ko-KR" ) );
 

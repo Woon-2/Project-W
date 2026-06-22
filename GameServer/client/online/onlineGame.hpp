@@ -103,9 +103,9 @@ public:
 
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
-	// 서버가 전술 차단벽(barrier)을 토글. active NPC들을 클라에서 '플레이어를 막는 벽'으로
-	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
-	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
+	// 서버가 전술 차단벽(barrier)을 토글. npcIds는 플레이어 차단+impulse 면역,
+	// impulseOnlyNpcId는 차단벽 등록 없이 impulse 면역만 설정한다.
+	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId);
 
 	// 서버가 지정한 NPC들을 즉시 숨김(비표시) 처리. 사망과 달리 시체/래그돌 없이 화면에서 제거하며,
 	// 복귀는 onNpcRespawn이 hidden을 해제한다. PacketManager가 S_NpcHide 수신 시 호출.
@@ -129,6 +129,8 @@ public:
 	void onPlayerHp( uint16 playerId, int32 newHp );
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
+	void beginServerTimeSync();
+	void onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -162,6 +164,12 @@ private:
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
+	void updateServerTimeSync();
+	void requestServerTimeSync();
+	uint64 estimatedServerTimeMs() const;
+	int64  serverClockOffsetMs_{ 0 };
+	uint64 nextTimeSyncClientMs_{ 0 };
+	bool   serverClockSynchronized_{ false };
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
 	// 오른손 소켓에 weaponType에 해당하는 무기를 (재)장착한다. 인게임/로비 포트레이트 공용.
@@ -703,7 +711,7 @@ private:
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
 	uint16                   hostId_ = 0;
-	uint16                   myId_   = 0;
+	uint16                   myLobbyId_ = 0;
 	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 

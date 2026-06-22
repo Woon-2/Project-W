@@ -21,7 +21,34 @@ static mu::Vec3 norm3( mu::Vec3 v ) {
 }
 
 void MidBossTacticBase::onLeaderDead( Room& room, PlatoonLeader& leader ) {
+    // Once the boss falls, every surviving trooper must be cleanly finishable
+    // regardless of the protection profile that was active at the time.
+    setEncounterDamageProfile( room, leader, 1.f, 1.f );
     leader.pushConfusedToSquads( room );
+}
+
+bool MidBossTacticBase::hasLiveSquadMembers( const PlatoonLeader& leader ) const {
+    for ( const TacticalSquad* squad : leader.getSquads() ) {
+        if ( squad && !squad->isEmpty() ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MidBossTacticBase::setEncounterDamageProfile(
+    Room& room, PlatoonLeader& leader, float leaderMultiplier, float memberMultiplier ) const {
+    leader.setDamageTakenMultiplier( leaderMultiplier );
+    for ( TacticalSquad* squad : leader.getSquads() ) {
+        if ( !squad ) {
+            continue;
+        }
+        for ( uint32 memberId : squad->getMembers() ) {
+            if ( TacticalNpc* npc = room.findTacticalNpcById( memberId ); npc && npc->hp() > 0 ) {
+                npc->setDamageTakenMultiplier( memberMultiplier );
+            }
+        }
+    }
 }
 
 std::vector<TacticalSquad*> MidBossTacticBase::collectLiveSquads( PlatoonLeader& leader ) const {

@@ -366,6 +366,9 @@
     <ClCompile Include="..\common\simpleJson.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\networkConfig.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="twoSidesPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -783,6 +786,9 @@
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\simpleJson.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\networkConfig.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\particleGameplay.hpp">

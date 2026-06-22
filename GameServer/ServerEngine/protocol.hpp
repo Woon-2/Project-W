@@ -5,10 +5,6 @@
 #include "types.hpp"
 #include "../common/mathUtil.hpp"
 
-constexpr const char* serverIp = "127.0.0.1";
-constexpr uint16 lobbyServerPort = 8888;
-constexpr uint16 roomServerPort  = 9000;
-
 enum class PacketType : uint16 {
 	C_Enter,
 	S_Enter,
@@ -69,6 +65,10 @@ enum class PacketType : uint16 {
 	S_LobbyWeaponSelected,
 	C_GameStart,
 	S_GameStart,
+
+	// Append-only: room-server monotonic clock synchronization.
+	C_TimeSync,
+	S_TimeSync,
 };
 
 enum class ObjectType : uint16 {
@@ -260,7 +260,10 @@ struct SNpcBarrierInfo {
 };
 
 struct SNpcBarrierPacket : public PacketHeader {
+	static constexpr uint16 INVALID_NPC_ID = 0xFFFFu;
+
 	uint8  active;       // 1 = 벽 켜기, 0 = 끄기
+	uint16 impulseOnlyNpcId; // 실제 barrier에는 포함하지 않고 피격 impulse만 차단할 NPC
 	uint16 dataOffset;
 	uint16 npcCount;
 
@@ -272,7 +275,7 @@ struct SNpcBarrierPacket : public PacketHeader {
 };
 
 struct CAttackPacket : public PacketHeader {
-	uint64 clientMs;
+	uint64 actionServerMs;   // client-estimated server monotonic time; server validates before use
 };
 
 struct SNpcAttackPacket : public PacketHeader {
@@ -315,7 +318,7 @@ struct SNpcHidePacket : public PacketHeader {
 
 struct CSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
-	uint64 clientMs;
+	uint64 actionServerMs;   // client-estimated server monotonic time; server validates before use
 	uint32 skillSeed;   // caster-generated per-cast seed (deterministic particle hitboxes)
 };
 
@@ -467,6 +470,19 @@ struct SGameStartPacket : public PacketHeader {
 	char   roomServerIp[16];
 	uint16 roomServerPort;
 	char   lobbyCode[7];
+};
+
+// Four-timestamp clock synchronization. The client owns t0/t3 and the room
+// server returns t1/t2, allowing an NTP-style offset estimate without assuming
+// that steady_clock has the same epoch on different PCs.
+struct CTimeSyncPacket : public PacketHeader {
+	uint64 clientSendMs;      // t0
+};
+
+struct STimeSyncPacket : public PacketHeader {
+	uint64 clientSendMs;      // t0 (echo)
+	uint64 serverReceiveMs;   // t1
+	uint64 serverSendMs;      // t2
 };
 
 #pragma pack(pop)

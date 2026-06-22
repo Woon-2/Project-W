@@ -144,9 +144,7 @@ void GrandbaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& lead
 }
 
 void GrandbaumMidBossTactic::onLeaderDead( Room& room, PlatoonLeader& leader ) {
-    // 보스 사망: 잔여(혼란 상태) 슬라임의 받는 피해 경감을 영구 해제 → 깔끔히 정리 가능.
-    setAllSlimeDamageMultiplier( room, leader, 1.f );
-    leader.setDamageTakenMultiplier( 1.f );
+    // The shared death path releases every surviving squad member's protection.
     room.clearShieldWallBlockers();
     MidBossTacticBase::onLeaderDead( room, leader );   // pushConfusedToSquads
 }
@@ -197,17 +195,17 @@ void GrandbaumMidBossTactic::setAllSlimeDamageMultiplier( Room& room, PlatoonLea
     }
 }
 
-// 평상시: 보스 취약(1.0) / 슬라임 단단(0.1) + 블로커 해제.
+// 평상시: 보스 취약(1.0) / 슬라임 무적(0.0) + 블로커 해제.
 void GrandbaumMidBossTactic::applyNormalDamageProfile( Room& room, PlatoonLeader& leader ) {
     leader.setDamageTakenMultiplier( 1.f );
     setAllSlimeDamageMultiplier( room, leader, SLIME_NORMAL_DAMAGE_MULT );
     room.clearShieldWallBlockers();
 }
 
-// ShieldWall 발동 중: 보스 보호(0.1) / 슬라임 취약(1.0) + 살아있는 슬라임을 하드 블로커로.
+// ShieldWall 발동 중: 보스 보호(0.1) / 슬라임 반감(0.5) + 살아있는 슬라임을 하드 블로커로.
 void GrandbaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeader& leader ) {
     leader.setDamageTakenMultiplier( SHIELDWALL_BOSS_DAMAGE_MULT );
-    setAllSlimeDamageMultiplier( room, leader, 1.f );
+    setAllSlimeDamageMultiplier( room, leader, SHIELDWALL_SLIME_DAMAGE_MULT );
 
     std::vector<uint32> blockerIds;
     for ( TacticalSquad* sq : leader.getSquads() ) {
@@ -221,7 +219,7 @@ void GrandbaumMidBossTactic::applyShieldWallProtection( Room& room, PlatoonLeade
             }
         }
     }
-    room.setShieldWallBlockers( blockerIds );
+    room.setShieldWallBlockers( blockerIds, leader.getId() );
 }
 
 /*------------------------------------------------------------
@@ -489,7 +487,7 @@ bool GrandbaumMidBossTactic::tryConsumePendingShieldWall( Room& room, PlatoonLea
     shieldWallSlimeCountAtForm_ = liveSlimes;
     shieldWallRingRadius_ = calcShieldWallRadius( liveSlimes, countLiveSlimeSquads( room, leader ) );
     enterPhase( Phase::ShieldWall, leader );
-    applyShieldWallProtection( room, leader );   // 보스 보호(0.1) + 슬라임 취약(1.0) + 하드 블로커
+    applyShieldWallProtection( room, leader );   // 보스 보호(0.1) + 슬라임 반감(0.5) + 하드 블로커
     issueShieldWall( room, leader );             // 넉백 + 슬라임 링(RingGuard) 발령(1회)
     return true;
 }

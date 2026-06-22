@@ -26,6 +26,32 @@
 #include "treant.hpp"
 #include <span>
 
+namespace {
+constexpr uint64 kMaxLagCompensationMs = 250;
+
+uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+struct ValidatedActionTime {
+	uint64 timestampMs;
+	uint16 ageMs;
+	bool valid;
+};
+
+ValidatedActionTime validateActionTime(uint64 actionServerMs, uint64 serverNowMs) {
+	if (actionServerMs == 0 || actionServerMs > serverNowMs)
+		return { serverNowMs, 0, false };
+
+	const uint64 ageMs = serverNowMs - actionServerMs;
+	if (ageMs > kMaxLagCompensationMs)
+		return { serverNowMs, 0, false };
+
+	return { actionServerMs, static_cast<uint16>(ageMs), true };
+}
+}
+
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
 	if (id >= static_cast<int>(objectById_.size()))
@@ -891,11 +917,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 
 	rebuildAggroCount();
 
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
+	const uint64 serverNow = networkNowMs();
 
 	// Angular velocity 고정 (물리 solver 누적 방지)
 	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
@@ -1486,7 +1508,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		if (!tgt) continue;
 
 		const int32 prevHp = tgt->hp();
-		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
+		// 전술 phase가 관리하는 대상별 무적/피해 경감 배율을 최종 피해에 적용한다.
 		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		const int32 newHp = std::max(prevHp - dmg, 0);
 		tgt->setHp(newHp);
@@ -1524,9 +1546,11 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
-	if (sessionIt == idSessionMap_.end()) return;
+	if (sessionIt == idSessionMap_.end()) {
+		return;
+	}
 
 	auto* player = sessionIt->second->player();
 	if (player->hp() <= 0) return;
@@ -1554,14 +1578,12 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 			static_cast<uint16>(player->getId()), static_cast<uint8>(slot), player->skillCharge(slot)));
 	}
 
-	// Compute elapsed time for lag compensation (same pattern as attack())
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
-	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
-	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
+	// The client reports an estimate in the server's monotonic clock domain.
+	// Treat it only as a bounded lag-compensation hint; invalid/future/stale values
+	// fall back to receive time so a client can never force an unbounded fast-forward.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint16 elapsedMs = actionTime.ageMs;
 
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic
@@ -1623,7 +1645,7 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 		skillSeed));
 }
 
-void Room::attack(int32 sessionId, uint64 clientMs) {
+void Room::attack(int32 sessionId, uint64 actionServerMs) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 
 	if (sessionIt == idSessionMap_.end()) {
@@ -1647,8 +1669,11 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		player->pos(), player->forward(), kHalfExtent, kOffsetFwd
 	);
 
-	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
-	uint64 targetMs = clientMs;
+	// Rewind only within the server-validated 250 ms window. Unsynchronized,
+	// future, or stale timestamps use the current server receive time.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint64 targetMs = actionTime.timestampMs;
 
 	// Legacy player melee (lag-comp rewind). New monster pools are damageable via the
 	// skill system (objectById_), so they are not added to this vestigial path.
@@ -1676,7 +1701,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
 			const int32 prevHp = o->hp();
-			// 받는 피해 배율 적용(스킬 히트와 동일; Grandbaum 평상시 슬라임/ShieldWall 중 보스 0.1).
+			// 스킬 히트와 동일한 대상별 무적/피해 경감 배율을 적용한다.
 			const int32 dmg    = static_cast<int32>(kDamage * o->damageTakenMultiplier());
 			const int32 newHp  = std::max(prevHp - dmg, 0);
 			o->setHp(newHp);
@@ -1707,6 +1732,7 @@ const SkillAsset* Room::findSkillAsset(uint32 id) const {
 }
 
 void Room::noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp) {
+	if (newHp >= prevHp) return;   // invulnerable/fully mitigated hits grant no contribution
 	if (!target || target->killChargeReward() <= 0.f) return;   // not a chargeable monster
 	Object* atk = (attackerObjId >= 0 && attackerObjId < static_cast<int32>(objectById_.size()))
 		? objectById_[attackerObjId] : nullptr;
@@ -2234,9 +2260,8 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
 			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
-			// 평상시 슬라임은 받는 피해 90% 경감(단단) → 플레이어가 보스를 공격하도록 유도.
-			// ShieldWall 중에는 GrandbaumMidBossTactic이 1.0으로 풀어 취약하게, 종료 시 0.1로 복귀.
-			npc->setDamageTakenMultiplier(0.1f);
+			// 평상시 슬라임은 무적. ShieldWall 중에만 0.5로 풀려 파훼 대상이 된다.
+			npc->setDamageTakenMultiplier(0.f);
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -2360,10 +2385,20 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 // ShieldWall 중 슬라임을 "차단벽"으로 클라에 통지한다. 플레이어 차단은 클라 권위
 // (resolveBarrierSeparation)가 전담하고, 서버에서는 형성 중 바깥 링이 안쪽 링의 진입을 막지 않도록
 // 방패벽 슬라임끼리만 물리 충돌을 끈다. Player/Boss 통과와 지형 충돌은 기존 설정을 유지한다.
-void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
+void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds, uint32_t impulseOnlyNpcId) {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
 	constexpr uint32_t SHIELD_WALL_SLIME_MASK =
 		~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
+
+	// 이전 impulse-only 대상이 바뀌면 면역을 먼저 원복한다.
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ != impulseOnlyNpcId
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* previous = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			previous->setHitImpulseImmune(false);
+		}
+	}
 
 	// 살아있는 blocker가 갱신 목록에서 빠진 경우 ShieldWall 설정을 즉시 원복한다.
 	// 죽은 NPC는 이미 물리 월드에서 빠졌지만 같은 처리는 무해하다.
@@ -2374,6 +2409,7 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
 		}
 	}
 
@@ -2383,31 +2419,52 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(CollisionLayer::Slime);
 			npc->body().setCollisionMask(SHIELD_WALL_SLIME_MASK);
+			npc->setHitImpulseImmune(true);
+		}
+	}
+
+	// 보스는 플레이어 차단벽에는 포함하지 않고 스킬 피격 impulse만 차단한다.
+	if (impulseOnlyNpcId != INVALID_NPC_ID && impulseOnlyNpcId < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[impulseOnlyNpcId]) {
+			protectedNpc->setHitImpulseImmune(true);
 		}
 	}
 
 	shieldWallBlockerIds_ = blockerIds;
+	shieldWallImpulseOnlyNpcId_ = impulseOnlyNpcId;
 	// on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
 	if (!shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			true, blockerIds, static_cast<uint16>(impulseOnlyNpcId)));
 		shieldWallBarrierOn_ = true;
 	}
 }
 
 void Room::clearShieldWallBlockers() {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
 	for (uint32_t id : shieldWallBlockerIds_) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
+		}
+	}
+
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			protectedNpc->setHitImpulseImmune(false);
 		}
 	}
 
 	if (shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			false, shieldWallBlockerIds_, static_cast<uint16>(shieldWallImpulseOnlyNpcId_)));
 		shieldWallBarrierOn_ = false;
 	}
 	shieldWallBlockerIds_.clear();
+	shieldWallImpulseOnlyNpcId_ = INVALID_NPC_ID;
 }
 
 // ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────

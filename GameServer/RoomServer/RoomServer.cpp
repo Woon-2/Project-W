@@ -47,7 +47,8 @@ void RoomServer::start() {
 	}
 
 	std::cout << "Room Server started. IOCP: " << iocpThreadCnt
-		<< ", Room Update: 1, Execute Job: " << jobThreadCnt << '\n';
+		<< ", Room Update: 1, Execute Job: " << jobThreadCnt
+		<< ", Port: " << listener_->listenPort() << '\n';
 
 	// 메인	스레드는 IOCP를 담당
 	DoIocp(reactor_);

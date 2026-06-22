@@ -22,7 +22,7 @@ UI를 **전용 컴포넌트 클래스**로 추출하되 2D UI 레이어만 분�
 ## 경계와 데이터 흐름
 
 - **LobbyUI**는 위젯/텍스처/로딩오버레이를 소유. Game은 `build(uiManager, Callbacks)`로 1회 구성하고, 상태 변화 시 `refresh(ViewState)` 스냅샷을 넘긴다. 버튼 액션은 `Callbacks`(create/join/leave/start/copy/openSettings/quit)로 Game에 역호출. 로딩 진행률은 Game의 `loadProgress01()` 결과 float만 `updateLoading()`에 전달 → **로드 atomic은 경계를 넘지 않음**.
-- **세션 상태**(`roomCode_`/`lobbyPlayers_`/`isHost_`/`hostId_`/`myId_`)와 **씬 상태**(`scene_`/`lobbyState_`)는 네트워킹이 소유하므로 Game에 잔류. `refreshLobbyUI()`는 이들로 `LobbyUI::ViewState`를 만들어 위임하는 얇은 래퍼가 됐다.
+- **세션 상태**(`roomCode_`/`lobbyPlayers_`/`isHost_`/`hostId_`/`myLobbyId_`)와 **씬 상태**(`scene_`/`lobbyState_`)는 네트워킹이 소유하므로 Game에 잔류. `refreshLobbyUI()`는 이들로 `LobbyUI::ViewState`를 만들어 위임하는 얇은 래퍼가 됐다.
 - **SettingsPanel**은 `uiManager_.root()` 직속(zOrder 50)에 빌드돼 로비·인게임 어느 씬 위에도 뜬다. `open()/close()/toggle()`로 토글. 값은 `GameSettings&`에 write-through하므로 로비/인게임/게임플레이가 같은 값 하나를 공유한다.
 
 ### 동시성

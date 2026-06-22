@@ -1,6 +1,7 @@
 ﻿#ifndef lobby_room_hpp
 #define lobby_room_hpp
 
+#include "networkConfig.hpp"
 #include "protocol.hpp"
 
 class GameSession;
@@ -8,7 +9,9 @@ class SendBuffer;
 
 class LobbyRoom {
 public:
-	LobbyRoom( const std::string& code ) : code_( code ), hostId_( 0u ), players_(), mutex_() {}
+	LobbyRoom( const std::string& code, const NetworkEndpoint& roomServerEndpoint )
+		: code_( code ), hostId_( 0u ), players_(), mutex_(),
+		  roomServerEndpoint_( roomServerEndpoint ) {}
 
 	// 입장 - 방이 꽉 찼으면 false 반환. 방이 멤버를 공동 소유하도록 shared_ptr로 보관한다.
 	bool enter( const std::shared_ptr<GameSession>& session );
@@ -35,6 +38,7 @@ private:
 	std::vector<std::shared_ptr<GameSession>> players_;
 	bool closed_ = false;   // 비어서 삭제 예정인 방. true면 enter 거부(삭제 경쟁 차단).
 	mutable std::mutex mutex_;
+	NetworkEndpoint roomServerEndpoint_;
 };
 
 #endif // lobby_room_hpp

@@ -66,6 +66,13 @@ static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerF
 static constexpr int     kMaxPhysicsScaleK    = 4;
 static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
+static constexpr uint64  kTimeSyncIntervalMs  = 10000;
+static constexpr int64   kMaxAcceptedSyncRttMs = 2000;
+
+static uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
@@ -2883,6 +2890,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 			std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj.get()),
 			barrierObjects_.end());
 	}
+	obj->setHitImpulseImmune(false);
 
 	const u32t cid = c.corpseId;
 	corpses_.push_back(std::move(c));
@@ -2933,6 +2941,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	obj->setHidden(false);
 	obj->setHiddenByOrb(false);
 	obj->setDead(false);                    // reused corpse: clear death state up front
+	obj->setHitImpulseImmune(false);        // 전술 면역 상태를 새 네트워크 객체가 물려받지 않게 한다.
 	obj->body().setLinearVel(mu::Vec3{});   // drop any stale death-frame velocity
 	obj->netInterpAcc_ = 0s;                // start network interpolation fresh
 	// Keep the pooled object's renderObjectId (stable per object) — do NOT allocate a fresh
@@ -3474,7 +3483,7 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 }
 
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
-void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
+void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId) {
 	for (uint16 id : npcIds) {
 		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
 		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
@@ -3482,6 +3491,7 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 		if (it == idMonsterMap_.end() || !it->second) continue;
 
 		Object* obj = it->second;
+		obj->setHitImpulseImmune(active);
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);
@@ -3491,6 +3501,14 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 			barrierObjects_.erase(
 				std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj),
 				barrierObjects_.end());
+		}
+	}
+
+	// 보스는 실제 barrier 목록에는 넣지 않고 로컬 스킬 impulse만 차단한다.
+	if (impulseOnlyNpcId != SNpcBarrierPacket::INVALID_NPC_ID) {
+		auto it = idMonsterMap_.find(impulseOnlyNpcId);
+		if (it != idMonsterMap_.end() && it->second) {
+			it->second->setHitImpulseImmune(active);
 		}
 	}
 }
@@ -3639,7 +3657,10 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 
 void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs ) {
 	// 로컬 플레이어만 처리한다(다른 플레이어의 넉백은 그쪽 클라가 실행해 S_Move로 위치가 동기화됨).
-	if ( playerId != myId_ || player_ == nullptr ) {
+	// 서버는 RoomServer의 session->id()를 대상 ID로 보내므로, 인게임 정식 ID인
+	// player_->getId()(== S_Enter의 playerId)와 비교해야 한다. myLobbyId_(로비 sessionId)는
+	// RoomServer ID와 체계가 달라 여기서 쓰면 일부 플레이어가 자기 넉백을 놓친다.
+	if ( player_ == nullptr || playerId != static_cast<uint16>( player_->getId() ) ) {
 		return;
 	}
 	knockbackDir_           = mu::Vec3( dirX, 0.f, dirZ );
@@ -3742,6 +3763,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
 		Object* npc = it->second;
 		npc->setHp( newHp );
+		npc->setHitImpulseImmune( false );
 		npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 		npc->setHiddenByOrb( false );
 		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
@@ -3876,6 +3898,7 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
+	updateServerTimeSync();
 
 	if (player_ == nullptr) {
 		return;
@@ -4030,7 +4053,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				const int dmg = (pEv->type == EventType::Hit)
 					? prevHp - static_cast<const EvHit*>(pEv)->hp
 					: prevHp;   // Death: remaining HP is the killing-blow damage
-				if (dmg > 0) {
+				// A confirmed non-lethal hit may legitimately deal zero damage (for
+				// example, against a tactically invulnerable NPC). Negative deltas are
+				// stale/out-of-order HP updates and remain hidden.
+				const bool shouldShowDamage = (pEv->type == EventType::Hit)
+					? dmg >= 0
+					: dmg > 0;
+				if (shouldShowDamage) {
 					const uint16 targetId = static_cast<uint16>(routeId);
 					DamageKind kind = DamageKind::EnemyHit;
 					if (idPlayerMap_.find(targetId) != idPlayerMap_.end())
@@ -4712,7 +4741,7 @@ void Game::renderInGame() {
 	minimapIcons_.clear();
 	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
 	for (const auto& [id, p] : idPlayerMap_) {
-		if (id == myId_ || !p) continue;
+		if (id == static_cast<uint16>(player_->getId()) || !p) continue;
 		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
 	}
 	for (const auto& [id, obj] : idMonsterMap_) {
@@ -4967,7 +4996,7 @@ void Game::refreshLobbyUI() {
 		vs.players.push_back(LobbyUI::PlayerSlot{
 			p.name,
 			p.sessionId == hostId_,
-			p.sessionId == myId_,
+			p.sessionId == myLobbyId_,
 			p.weaponType
 		});
 	}
@@ -5277,7 +5306,7 @@ void Game::enterInGame() {
 }
 
 std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		return L"나";
 	}
 	return L"Player_" + std::to_wstring(sessionId);
@@ -5319,7 +5348,7 @@ void Game::lobbyLeaveRoom() {
 	roomCode_.clear();
 	isHost_ = false;
 	hostId_ = 0;
-	myId_   = 0;
+	myLobbyId_   = 0;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
@@ -5355,7 +5384,7 @@ void Game::lobbyStartGame() {
 }
 
 void Game::lobbySelectWeapon(int direction) {
-	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myLobbyId_ == 0) {
 		return;
 	}
 
@@ -5364,7 +5393,7 @@ void Game::lobbySelectWeapon(int direction) {
 	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
 
 	for (auto& p : lobbyPlayers_) {
-		if (p.sessionId == myId_) {
+		if (p.sessionId == myLobbyId_) {
 			p.weaponType = selectedLobbyWeapon_;
 			break;
 		}
@@ -5379,7 +5408,7 @@ void Game::lobbySelectWeapon(int direction) {
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
@@ -5398,7 +5427,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 		return;
 	}
 
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
@@ -5407,7 +5436,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	lobbyPlayers_.clear();
 	for (const LobbyPlayerInfo& info : playerInfos) {
 		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
-		if (info.sessionId == myId_) {
+		if (info.sessionId == myLobbyId_) {
 			selectedLobbyWeapon_ = info.weaponType;
 		}
 	}
@@ -5434,7 +5463,7 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 	// 호스트가 떠났으면 서버 규칙과 동일하게 남은 목록의 front를 새 호스트로 본다.
 	if (sessionId == hostId_ && !lobbyPlayers_.empty()) {
 		hostId_ = lobbyPlayers_.front().sessionId;
-		isHost_ = (myId_ == hostId_);
+		isHost_ = (myLobbyId_ == hostId_);
 	}
 
 	refreshLobbyUI();
@@ -5453,7 +5482,7 @@ void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) 
 			break;
 		}
 	}
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		selectedLobbyWeapon_ = weaponType;
 	}
 	refreshLobbyUI();
@@ -5603,19 +5632,53 @@ void Game::sendMouseMovePacket() {
 }
 
 void Game::sendAttackPacket() {
-	uint64 clientMs = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count());
-	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
+	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(estimatedServerTimeMs()));
 }
 
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
-	uint64 clientMs = static_cast<uint64>(
-		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count()));
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+	const uint64 actionServerMs = estimatedServerTimeMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
+}
+
+void Game::beginServerTimeSync() {
+	serverClockSynchronized_ = false;
+	serverClockOffsetMs_ = 0;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = networkNowMs() + kTimeSyncIntervalMs;
+}
+
+void Game::updateServerTimeSync() {
+	if (nextTimeSyncClientMs_ == 0) return;
+	const uint64 now = networkNowMs();
+	if (now < nextTimeSyncClientMs_) return;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = now + kTimeSyncIntervalMs;
+}
+
+void Game::requestServerTimeSync() {
+	const uint64 clientSendMs = networkNowMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCTimeSyncPacket(clientSendMs));
+}
+
+void Game::onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs) {
+	const uint64 clientReceiveMs = networkNowMs();
+	if (clientReceiveMs < clientSendMs || serverSendMs < serverReceiveMs) return;
+
+	const int64 t0 = static_cast<int64>(clientSendMs);
+	const int64 t1 = static_cast<int64>(serverReceiveMs);
+	const int64 t2 = static_cast<int64>(serverSendMs);
+	const int64 t3 = static_cast<int64>(clientReceiveMs);
+	const int64 rttMs = (t3 - t0) - (t2 - t1);
+	if (rttMs < 0 || rttMs > kMaxAcceptedSyncRttMs) return;
+
+	serverClockOffsetMs_ = ((t1 - t0) + (t2 - t3)) / 2;
+	serverClockSynchronized_ = true;
+}
+
+uint64 Game::estimatedServerTimeMs() const {
+	if (!serverClockSynchronized_) return 0;
+	const int64 estimated = static_cast<int64>(networkNowMs()) + serverClockOffsetMs_;
+	return estimated > 0 ? static_cast<uint64>(estimated) : 0;
 }
 
 void Game::castSkillByName(std::string_view name) {

@@ -53,6 +53,13 @@ NPC는 일정 거리 전진하기 전까지 재예약하지 않으므로 chase�
 - `issueDivideEngage()` (`reset=true`). 기존 `selectReplacementTarget(divideTargetPlayerIds_)`
   단일 타깃 추격은 전 플레이어 대상 균형 배정으로 대체됨.
 
+## 5. 홉고블린 전술 준비 무적 / 부대 전멸 폴백
+
+- 평상시와 최초 `BoxAdvance`는 보스·부대원 모두 피해 배율 1.0.
+- 전술 해금 후 `TacticalRetreat → BoxAdvance` 준비 구간은 전체 0.0(HP 피해만 무효).
+- `Encircle`/`DivideAndConquer` 시작, 전술 실패, Cooldown에서는 전체 1.0으로 복구.
+- 부대가 먼저 전멸하면 즉시 `BossSolo`, 보스가 먼저 사망하면 생존 부대원 전체 1.0 + Confused.
+
 ## 스케일 결정
 
 양쪽 기본 스케일 동일(`moveSpeed=4.0`, `attackRange=2.8`). 시뮬레이터가 2D 가독성용으로 키운

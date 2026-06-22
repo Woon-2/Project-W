@@ -3,6 +3,10 @@
 #include "LobbyRoom.hpp"
 #include "ObjectPool.hpp"
 
+void LobbyManager::configureRoomEndpoint(const NetworkEndpoint& endpoint) {
+	roomServerEndpoint_ = endpoint;
+}
+
 std::shared_ptr<LobbyRoom> LobbyManager::createRoom() {
 	std::unique_lock lock( mutex_ );
 
@@ -11,7 +15,7 @@ std::shared_ptr<LobbyRoom> LobbyManager::createRoom() {
 		code = generateCode();
 	} while ( rooms_.count( code ) );
 
-	auto room = ObjectPool<LobbyRoom>::makeShared( code );
+	auto room = ObjectPool<LobbyRoom>::makeShared( code, roomServerEndpoint_ );
 	rooms_[ code ] = room;
 
 	return room;
@@ -33,3 +37,4 @@ void LobbyManager::removeRoom( const std::string& code ) {
 
 std::shared_mutex LobbyManager::mutex_;
 std::unordered_map<std::string, std::shared_ptr<LobbyRoom>> LobbyManager::rooms_;
+NetworkEndpoint LobbyManager::roomServerEndpoint_{};

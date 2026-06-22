@@ -1,6 +1,8 @@
 ﻿#ifndef lobby_manager_hpp
 #define lobby_manager_hpp
 
+#include "networkConfig.hpp"
+
 #include <shared_mutex>
 #include <random>
 
@@ -8,6 +10,7 @@ class LobbyRoom;
 
 class LobbyManager {
 public:
+	static void configureRoomEndpoint(const NetworkEndpoint& endpoint);
 	static std::shared_ptr<LobbyRoom> createRoom();
 	static std::shared_ptr<LobbyRoom> findRoom( const std::string& code );
 	static void removeRoom( const std::string& code );
@@ -28,6 +31,7 @@ public:
 private:
 	static std::shared_mutex mutex_;
 	static std::unordered_map<std::string, std::shared_ptr<LobbyRoom>> rooms_;
+	static NetworkEndpoint roomServerEndpoint_;
 };
 
 #endif // lobby_manager_hpp

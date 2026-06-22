@@ -86,7 +86,8 @@ void LobbyRoom::leave( GameSession* session ) {
 
 void LobbyRoom::startGame() {
 	std::lock_guard lock( mutex_ );
-	broadcast( PacketManager::makeSGameStartPacket( serverIp, roomServerPort, code_ ) );
+	broadcast( PacketManager::makeSGameStartPacket(
+		roomServerEndpoint_.ip, roomServerEndpoint_.port, code_ ) );
 }
 
 uint16 LobbyRoom::hostId() const {

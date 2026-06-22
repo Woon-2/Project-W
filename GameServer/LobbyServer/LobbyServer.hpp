@@ -6,7 +6,8 @@
 
 class LobbyServer {
 public:
-	LobbyServer() : reactor_(), listener_( std::make_shared<Listener>( reactor_.iocpHandle() ) ) {}
+	explicit LobbyServer(uint16 listenPort)
+		: reactor_(), listener_( std::make_shared<Listener>( reactor_.iocpHandle(), listenPort ) ) {}
 
 	void start();
 	IocpReactor& reactor() { return reactor_; }

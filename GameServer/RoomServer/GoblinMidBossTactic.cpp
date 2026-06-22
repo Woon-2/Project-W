@@ -53,13 +53,14 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 
     if ( !hasLiveSquad && leaderPhase_ != LeaderPhase::BossSolo ) {
         tacticCooldown_ = 0s;
-        enterPhase( LeaderPhase::BossSolo );
+        enterPhase( LeaderPhase::BossSolo, room, leader );
     }
 
     if ( leaderPhase_ == LeaderPhase::Cooldown ) {
         tacticCooldown_ -= dt;
         if ( tacticCooldown_ <= 0s ) {
-            enterPhase( tacticsUnlocked_ ? LeaderPhase::TacticalRetreat : LeaderPhase::BoxAdvance );
+            enterPhase( tacticsUnlocked_ ? LeaderPhase::TacticalRetreat : LeaderPhase::BoxAdvance,
+                        room, leader );
         }
     }
     else if ( leaderPhase_ == LeaderPhase::Encircle ) {
@@ -83,7 +84,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
             issueStableEngage( room, collectLiveSquads( leader ), /*resetAssignments=*/true );
 
             tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
-            enterPhase( LeaderPhase::Cooldown );
+            enterPhase( LeaderPhase::Cooldown, room, leader );
         }
     }
     else if ( leaderPhase_ == LeaderPhase::DivideAndConquer ) {
@@ -99,7 +100,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         && primary && checkTacticsConditions( leader )
     ) {
         tacticsUnlocked_ = true;
-        enterPhase( LeaderPhase::TacticalRetreat );
+        enterPhase( LeaderPhase::TacticalRetreat, room, leader );
     }
 
     if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary ) {
@@ -112,7 +113,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 
         if ( formationReady( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
             if ( !tacticsUnlocked_ ) {
-                enterPhase( LeaderPhase::Engage );
+                enterPhase( LeaderPhase::Engage, room, leader );
                 // 박스 대형 완성 → squad별 균형 재배정으로 일반 교전 전환(전면 재배정).
                 issueStableEngage( room, collectLiveSquads( leader ), /*resetAssignments=*/true );
             }
@@ -121,7 +122,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
                 auto liveSquads = collectLiveSquads( leader );
 
                 if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
-                    enterPhase( LeaderPhase::Encircle );
+                    enterPhase( LeaderPhase::Encircle, room, leader );
                 }
                 else if ( clusters.size() == 1 ) {
                     enterTacticFailCooldown( room, leader );
@@ -129,7 +130,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
                 else {
                     // 박스에서 클러스터 ≥2 → 경계 단계 없이 곧장 쐐기. 쐐기 명령 발행 시
                     // 클러스터를 다시 검사해 ≤1이면 포위/실패로 폴백하므로 재판단은 보존된다.
-                    enterPhase( LeaderPhase::DivideAndConquer );
+                    enterPhase( LeaderPhase::DivideAndConquer, room, leader );
                 }
             }
         }
@@ -141,7 +142,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     ) {
         phaseHoldTimer_ += dt;   // 후퇴 집결 완료 → 잠시 유지 후 박스 대형 전환
         if ( phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
-            enterPhase( LeaderPhase::BoxAdvance );
+            enterPhase( LeaderPhase::BoxAdvance, room, leader );
         }
     }
     else if ( leaderPhase_ == LeaderPhase::TacticalRetreat ) {
@@ -200,7 +201,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     updateBossPersonalCombat( dt, room, leader );
 }
 
-void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
+void GoblinMidBossTactic::enterPhase( LeaderPhase next, Room& room, PlatoonLeader& leader ) {
     leaderPhase_ = next;
     phaseOrderIssued_ = false;
     phaseHoldTimer_ = 0s;
@@ -224,6 +225,11 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
          next == LeaderPhase::BossSolo ) {
         engageTargetBySquad_.clear();
     }
+
+    const bool invulnerablePreparation = tacticsUnlocked_ &&
+        ( next == LeaderPhase::TacticalRetreat || next == LeaderPhase::BoxAdvance );
+    const float multiplier = invulnerablePreparation ? 0.f : 1.f;
+    setEncounterDamageProfile( room, leader, multiplier, multiplier );
 }
 
 void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& leader ) {
@@ -232,7 +238,7 @@ void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& le
     clearDivideBarriers( room );   // 쐐기 전술이 차단벽을 켜뒀다면 해제(타 전술 경로에선 no-op)
 
     tacticCooldown_ = TACTIC_FAIL_COOLDOWN_DURATION;
-    enterPhase( LeaderPhase::Cooldown );
+    enterPhase( LeaderPhase::Cooldown, room, leader );
 
     std::vector<TacticalSquad*> liveSquads;
     for ( TacticalSquad* sq : leader.getSquads() ) {
@@ -380,7 +386,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         auto clusters = buildPlayerClusters( room, leader );
         if ( clusters.size() <= 1 ) {
             if ( !clusters.empty() && canStartEncircle( liveSquads, clusters.front() ) ) {
-                enterPhase( LeaderPhase::Encircle );
+                enterPhase( LeaderPhase::Encircle, room, leader );
             }
             else {
                 enterTacticFailCooldown( room, leader );
@@ -796,7 +802,7 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
     if ( divideEngageTimer_ <= 0s ) {
         clearDivideBarriers( room );   // 안전망(보통 돌진 완료 시 이미 해제됨)
         tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
-        enterPhase( LeaderPhase::Cooldown );
+        enterPhase( LeaderPhase::Cooldown, room, leader );
     }
 }
 

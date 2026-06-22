@@ -76,13 +76,17 @@ int DamageNumberSystem::oldestIndex() const {
 }
 
 void DamageNumberSystem::spawn(mu::Vec3 worldPos, int amount, DamageKind kind, std::uint16_t targetId) {
-    if (amount <= 0 || pool_.empty()) return;
+    if (amount < 0 || pool_.empty()) return;
 
     // Accumulate: if this target already has a recent number, merge into it and
     // re-pop so the player sees "hit again" without spawning a new glyph stack.
+    // Zero-damage hits only merge with other zeroes; otherwise an invulnerable hit
+    // could incorrectly re-pop a previous positive damage value.
     for (int i = 0; i < activeCount_; ++i) {
         DamageNumber& dn = pool_[i];
-        if (dn.targetId == targetId && dn.kind == kind && dn.popAge <= tuning_.mergeWindow) {
+        const bool sameZeroClass = (dn.value == 0) == (amount == 0);
+        if (dn.targetId == targetId && dn.kind == kind && sameZeroClass
+            && dn.popAge <= tuning_.mergeWindow) {
             dn.value += amount;
             dn.popAge = 0.f;            // re-pop only; keep age so it keeps floating
             dn.worldAnchor = worldPos;  // follow the latest hit point
