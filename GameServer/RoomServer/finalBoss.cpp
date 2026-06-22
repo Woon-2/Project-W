@@ -2,6 +2,7 @@
 #include "finalBoss.hpp"
 #include "Room.hpp"
 #include "GameSession.hpp"
+#include <algorithm>
 #include <limits>
 #include <random>
 #include <cmath>
@@ -204,20 +205,45 @@ void FinalBoss::evaluateTarget(Seconds dt, Room& room) {
         return;
     targetEvalTimer_ = TARGET_EVAL_INTERVAL;
 
+    // 위협 목록을 평가당 1회만 수집해 후보 루프에 공유한다(보스는 chargeable이라
+    // 피격 시 noteDamager로 damager가 채워진다 -- Room::noteAndMaybeReward).
+    std::vector<int32> threats;
+    collectRecentDamagers(room.getElapsedMs(), TARGET_THREAT_WINDOW, threats);
+
     GameSession* best     = nullptr;
     float        bestScore = -std::numeric_limits<float>::max();
     for (GameSession* s : room.getLivingPlayers()) {
-        const float sc = scoreTarget(s, room);
+        float sc = scoreTarget(s, threats);
+        // 히스테리시스: 현재 타깃에 가산점을 줘서 비슷한 점수에서 매 평가마다 튀는 것을 막는다.
+        if (static_cast<int32>(s->id()) == targetId_)
+            sc += TARGET_STICKY_BONUS;
         if (sc > bestScore) { bestScore = sc; best = s; }
     }
     targetId_ = best ? static_cast<int32>(best->id()) : -1;
 }
 
-float FinalBoss::scoreTarget(GameSession* s, Room& /*room*/) const {
-    // Nearest-first. Threat / low-HP weighting can be folded in here later.
-    mu::Vec3 d = s->player()->pos() - pos();
+float FinalBoss::scoreTarget(GameSession* s, const std::vector<int32>& recentDamagers) const {
+    const Player* p = s->player();
+
+    // 1) 근접: 가까울수록 1에 근접 (0,1]
+    mu::Vec3 d = p->pos() - pos();
     const float dist = mu::Vec3(d.x(), 0.f, d.z()).len();
-    return 100.f / (dist + 1.f);
+    const float prox = 1.f / (dist + 1.f);
+
+    // 2) 저HP: 약할수록 1에 근접 [0,1] (마무리 유도)
+    const float hpFrac = std::clamp(
+        static_cast<float>(p->hp()) / static_cast<float>(kPlayerMaxHp), 0.f, 1.f);
+    const float lowHp = 1.f - hpFrac;
+
+    // 3) 위협: 최근 보스를 때린 플레이어면 1
+    bool isThreat = false;
+    for (int32 id : recentDamagers)
+        if (id == static_cast<int32>(s->id())) { isThreat = true; break; }
+    const float threat = isThreat ? 1.f : 0.f;
+
+    return TARGET_W_PROXIMITY * prox
+         + TARGET_W_LOWHP     * lowHp
+         + TARGET_W_THREAT    * threat;
 }
 
 void MU_CALLCONV FinalBoss::moveToward(mu::Vec3 dest, float speedMult) {
