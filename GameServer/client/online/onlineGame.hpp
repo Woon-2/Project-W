@@ -41,6 +41,7 @@
 #include "../ui/skillDialHUD.hpp"
 #include "../ui/minimapHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
+#include "../ui/dialogue/DialogueSystem.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -345,6 +346,15 @@ private:
 	// the predicted local player. zoneStates_ caches server-driven S_ZoneState.
 	ZoneSystem clientZoneSystem_{};
 	std::unordered_map<uint16, uint8> zoneStates_{};
+	// Presentation ownership is client-local. Only a local ZoneSystem::Enter
+	// may select an arena here; replicated S_ZoneState packets never start UI/BGM.
+	int localArenaPresentationZoneId_{ -1 };
+	// One-shot latch per arena encounter. Crossing the small authored trigger
+	// volume again must not replay the entry presentation during the encounter.
+	std::unordered_set<int> localPresentedArenaZoneIds_{};
+	// Arenas whose active encounter has ended. Their local trigger remains
+	// disabled until the server reports a genuine new 0 -> 1 encounter cycle.
+	std::unordered_set<int> completedArenaZoneIds_{};
 	void bindZoneHandlers();
 	void rebuildBarrierMagicCircleQuads();
 	void renderBarrierMagicCircleQuads();
@@ -500,6 +510,10 @@ private:
 	// Tactical arena entry title card (self-contained overlay module; the boss
 	// arena adds a WARNING phase). onlineGame only owns it and delegates.
 	UI::TacticalZoneIntro tacticalZoneIntro_{};
+
+	// Event-driven dialogue/monologue windows (loaded from dialogues.json).
+	// Shown when the local player finishes spawning in-game (sample_intro).
+	UI::DialogueSystem dialogueSystem_{};
 
 	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
 	GameSettings         settings_{};

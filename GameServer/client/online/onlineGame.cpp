@@ -423,6 +423,7 @@ void Game::setupStage() {
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
+	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
@@ -2161,6 +2162,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
 		                                    static_cast<int>(skillVfxById_.size()));
 	}
+
+	// Local player has finished spawning in-game (server S_Enter): show the
+	// authored intro/monologue once. No-op if dialogues.json lacks the event.
+	dialogueSystem_.show("sample_intro");
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -2973,10 +2978,41 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 // 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
 // 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
 void Game::bindZoneHandlers() {
-	// 예시: 특정 구역 진입/이탈 시 BGM을 전환한다. Unity 태그가 정의되면 아래처럼 1줄로 연결한다.
-	// (카탈로그에 해당 트랙을 추가해야 소리난다. 미정의 태그는 로컬 판정에서 no-op.)
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [](Zone&){ INet::ClientApp::sound().playBgm("forest"); });
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
+	struct ArenaPresentation {
+		std::string_view tag;
+		std::string_view wallPrefix;
+		std::string_view bgm;
+	};
+	static constexpr ArenaPresentation kArenas[] = {
+		{ "Arena_Hobgoblin", "WallHobgoblin", "hobgoblin_arena" },
+		{ "Arena_Grandbaum",  "WallGrandbaum",  "grandbaum_arena" },
+		{ "Arena_Isys",       "WallIsys",       "isys_arena" },
+		{ "Arena_Boss",       "WallBoss",       "boss_arena" },
+	};
+
+	for (const ArenaPresentation& arena : kArenas) {
+		clientZoneSystem_.on(std::string(arena.tag), ZoneEvent::Enter,
+			[this, wallPrefix = arena.wallPrefix, bgm = arena.bgm](Zone& zone) {
+				// ZoneSystem is updated only with player_->pos(), so this callback
+				// belongs exclusively to the player controlled by this client.
+				if (completedArenaZoneIds_.contains(zone.id())) {
+					return;
+				}
+				if (!localPresentedArenaZoneIds_.insert(zone.id()).second) {
+					return;
+				}
+				localArenaPresentationZoneId_ = zone.id();
+				tacticalZoneIntro_.trigger(wallPrefix);
+
+				constexpr float kArenaBgmFadeOutMs = 1100.f;
+				constexpr float kArenaBgmFadeInMs = 3400.f;
+				constexpr float kArenaBgmFadeInDelayMs = 800.f;
+				INet::ClientApp::sound().playBgm(bgm,
+					kArenaBgmFadeOutMs,
+					kArenaBgmFadeInMs,
+					kArenaBgmFadeInDelayMs);
+			});
+	}
 }
 
 // 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
@@ -3050,29 +3086,29 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
 
-	if (previousState != 1 && state == 1
-		&& (prefix == "WallHobgoblin" || prefix == "WallGrandbaum"
-			|| prefix == "WallIsys" || prefix == "WallBoss")) {
-		tacticalZoneIntro_.trigger(prefix);
+	// S_ZoneState is shared gameplay state and must not start client presentation.
+	// A completed arena stays presentation-locked. Only a later genuine 0 -> 1
+	// transition rearms it for a new encounter; merely revisiting its trigger
+	// after state==0 must not replay the intro or arena BGM.
+	const int localZoneId = static_cast<int>(zoneId);
+	if (previousState == 0 && state == 1
+		&& completedArenaZoneIds_.erase(localZoneId) > 0) {
+		localPresentedArenaZoneIds_.erase(localZoneId);
 	}
 
-	// 아레나별 서버 권위 차단 상태와 전용 BGM을 동기화한다. state==1은 해당 Wall이 통과 불가가
-	// 되는 시점이다. 기존 곡을 빠르게 낮춘 뒤 짧은 지연을 두고 전용곡을 천천히 올리며,
-	// state==0(전투 종료/벽 해제)이면 같은 방식으로 기본 전투곡에 복귀한다.
-	std::string_view arenaBgm;
-	if ( prefix == "WallHobgoblin" ) arenaBgm = "hobgoblin_arena";
-	else if ( prefix == "WallGrandbaum" ) arenaBgm = "grandbaum_arena";
-	else if ( prefix == "WallIsys" ) arenaBgm = "isys_arena";
-	else if ( prefix == "WallBoss" ) arenaBgm = "boss_arena";
+	if (previousState == 1 && state == 0) {
+		completedArenaZoneIds_.insert(localZoneId);
 
-	if ( !arenaBgm.empty() ) {
-		constexpr float kArenaBgmFadeOutMs = 1100.f;
-		constexpr float kArenaBgmFadeInMs = 3400.f;
-		constexpr float kArenaBgmFadeInDelayMs = 800.f;
-		INet::ClientApp::sound().playBgm( state == 1 ? arenaBgm : std::string_view{ "ingame" },
-		                                  kArenaBgmFadeOutMs,
-		                                  kArenaBgmFadeInMs,
-		                                  kArenaBgmFadeInDelayMs );
+		if (localArenaPresentationZoneId_ == localZoneId) {
+			constexpr float kArenaBgmFadeOutMs = 1100.f;
+			constexpr float kArenaBgmFadeInMs = 3400.f;
+			constexpr float kArenaBgmFadeInDelayMs = 800.f;
+			INet::ClientApp::sound().playBgm("ingame",
+				kArenaBgmFadeOutMs,
+				kArenaBgmFadeInMs,
+				kArenaBgmFadeInDelayMs);
+			localArenaPresentationZoneId_ = -1;
+		}
 	}
 
 	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
@@ -4148,6 +4184,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		tacticalZoneIntro_.update(dtSec);
+		dialogueSystem_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4453,6 +4490,9 @@ void Game::enterLobby() {
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -4933,6 +4973,9 @@ void Game::renderWaitingRoom() {
 
 void Game::enterInGame() {
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	lobbyUI_.setLoadingVisible(false);
 	lobbyUI_.setRootVisible(false);
@@ -5153,6 +5196,12 @@ void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, c
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	// Dialogue input has priority: Enter / left-click advance pages and are
+	// consumed here before any gameplay or UI handling sees them.
+	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+		return 0;
+	}
+
 	switch (msg) {
 		// WM_INPUT 메시지
 		// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
@@ -5402,6 +5451,17 @@ void Game::processInput(Milliseconds deltaTime) {
 	// 설정창이 열려 있는 동안에는 인게임 입력을 차단한다(카메라/이동/공격/스킬/커서 토글).
 	// 누적된 마우스 델타도 비워 닫은 직후 카메라가 튀지 않게 한다.
 	if (settingsOpen) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
+	// Dialogue input has priority over gameplay: while a dialogue/monologue
+	// window is open (including its fade-out, where active() is still true),
+	// suppress movement/camera/attack/skill. Enter and left-click are consumed
+	// by handleWndMsg to advance pages; here we drop accumulated look delta so
+	// the camera doesn't drift, then skip gameplay until the window hides.
+	if (dialogueSystem_.active()) {
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
 		return;
