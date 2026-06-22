@@ -408,9 +408,14 @@ void AnimSystem::update(Seconds timeSlice) {
 		const auto iteration = std::min(jobSize_, visibleCount - cntProcessed);
 
 		for (std::size_t i = 0; i < iteration; ++i) {
-			const auto pLast = std::prev(visibleEnd, i);
-			std::pop_heap(blenders_.begin(), pLast);
-			auto& blender = *std::prev(pLast);
+			// 힙의 끝은 "이번 프레임에 지금까지 뽑아낸 총 개수"만큼 줄어들어 있어야 한다.
+			// (batch 경계를 넘을 때 i가 0으로 리셋되므로 cntProcessed를 더해야 한다.)
+			// 이 누적을 빼먹으면 두 번째 batch부터 이미 처리한 상위 priority 블렌더를
+			// 다시 pop_heap 범위에 포함시켜, 동일 블렌더를 중복 처리하고 하위 블렌더는
+			// 영영 갱신하지 못한다(거리상 멀지 않은데도 툭툭 끊기는 원인).
+			const auto pHeapEnd = std::prev(visibleEnd, cntProcessed + i);
+			std::pop_heap(blenders_.begin(), pHeapEnd);
+			auto& blender = *std::prev(pHeapEnd);
 
 			blender->onCalcLocal({});
 			blender->setStage({}, AnimBlender::Stage::committedLocal);

@@ -33,7 +33,7 @@ public:
 		const ComPtr<ID3D12PipelineState>& prefilterShader,
 		const ComPtr<ID3D12PipelineState>& downsampleShader,
 		const ComPtr<ID3D12PipelineState>& upsampleShader,
-		const ComPtr<ID3D12CommandQueue>& cmdQ,
+		RenderSubmitter* submitter,
 		Fence* pFence,
 		Resources* pResources,
 		CommandListPool* commandListPool,
@@ -56,7 +56,7 @@ private:
 	ComPtr<ID3D12PipelineState> prefilterShader_  = nullptr;
 	ComPtr<ID3D12PipelineState> downsampleShader_ = nullptr;
 	ComPtr<ID3D12PipelineState> upsampleShader_   = nullptr;
-	ComPtr<ID3D12CommandQueue>  cmdQ_ = nullptr;
+	RenderSubmitter* submitter_ = nullptr;
 	Fence* pFence_ = nullptr;
 	Resources* pResources_ = nullptr;
 	CommandListPool* cmdListPool_ = nullptr;

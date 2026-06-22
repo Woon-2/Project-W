@@ -15,7 +15,7 @@ Dispatcher::Dispatcher(
 	const ComPtr<ID3D12PipelineState>& prefilterShader,
 	const ComPtr<ID3D12PipelineState>& downsampleShader,
 	const ComPtr<ID3D12PipelineState>& upsampleShader,
-	const ComPtr<ID3D12CommandQueue>& cmdQ,
+	RenderSubmitter* submitter,
 	Fence* pFence,
 	Resources* pResources,
 	CommandListPool* commandListPool,
@@ -27,7 +27,7 @@ Dispatcher::Dispatcher(
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
 	rootSig_(rootSig),
 	prefilterShader_(prefilterShader), downsampleShader_(downsampleShader), upsampleShader_(upsampleShader),
-	cmdQ_(cmdQ), pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
+	submitter_(submitter), pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
 	sceneColorSrv_(sceneColorSrv), roomIdx_(roomIdx), threshold_(threshold),
 	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
 	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
@@ -138,7 +138,7 @@ void Dispatcher::render() {
 	}
 
 	ID3D12CommandList* staged[] = { cmdList };
-	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+	DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 

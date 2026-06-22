@@ -25,9 +25,19 @@ void GFX::setMaxRenderObjectId(u32t maxId) {
 // GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 GFX::~GFX() {
 	drainGpu();
+	// Join the submission thread after the GPU is idle and the queue is drained.
+	if (submitter_) {
+		submitter_->stop();
+	}
 }
 
 void GFX::drainGpu() {
+	// Make sure every queued ExecuteCommandLists / Present / Signal has actually been
+	// issued to the queue before we wait on the GPU fences below; otherwise the fence
+	// values they target would never be reached.
+	if (submitter_) {
+		submitter_->flushBlocking();
+	}
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		waitOnFence("FrameFence"s + std::to_string(i));
 	}
@@ -148,6 +158,12 @@ void GFX::init() {
 		true
 	);
 	setD3DName(cmdQ_.Get(), "CommandQueue");
+
+	// 제출 스레드 바인딩. 렌더 루프 진입(첫 render 호출) 전까지는 inline 모드로 동작해
+	// 초기화 단계의 일회성 GPU 작업(폰트/IBL/리소스 로드)이 메인 스레드에서 그대로 실행된다.
+	// 첫 render()에서 goAsync()로 전용 스레드를 띄운다.
+	submitter_ = std::make_unique<RenderSubmitter>();
+	submitter_->start(cmdQ_.Get(), /*async=*/false);
 
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
 	// RenderingSlave 용량 = 한 프레임에 동시에 빌려가는 command list 총수의 상한
@@ -1511,7 +1527,7 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 	// 공용 리소스 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
 	ID3D12CommandList* sharedCmdLists[] = { cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, sharedCmdLists), false);
+	DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, sharedCmdLists), false);
 
 	// 펜스 동기화
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
@@ -1650,7 +1666,7 @@ void GFX::loadRequestedAssets() {
 
 	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
 
-	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
+	DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, tmpCmdLists), false);
 
 	// 펜스 동기화
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
@@ -1674,7 +1690,7 @@ void GFX::loadRequestedAssets() {
 			{ srvCbvUavHeap_.heap, samHeap_.heap },
 			srvTexPool_, srvTexArrayPool_, srvTexCubePool_, samPool_, cmpSamPool_,
 			iblParamsCBs_,
-			cmdQ_.Get(), cmdListPool_, fences_.at("LoadFence"),
+			submitter_.get(), cmdListPool_, fences_.at("LoadFence"),
 			// envIsLDR=false: 현재 환경맵이 LDR이지만 역Reinhard(c/(1-c))가 하늘의 1.0 근처
 			// 채널을 폭발적으로 증폭해 과도한 파란 틴트를 유발하므로, 원본 LDR 값을 그대로 쓴다.
 			// (진짜 HDR HDRI 확보 시 자연스럽게 HDR 레인지 확보 → 이 플래그 무관.)
@@ -1715,7 +1731,7 @@ void GFX::recordTerrainResourceLoad(
 
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
 	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
+	DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, tmpCmdLists), false);
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
 	signalFence("LoadFence");
@@ -1728,11 +1744,9 @@ void GFX::resize(u32t width, u32t height) {
 	}
 
 	// 1. GPU가 모든 인플라이트 프레임 작업을 끝낼 때까지 대기(소멸자와 동일한 idle 패턴).
-	//    이후 해상도 의존 리소스를 안전하게 해제/재생성할 수 있다.
-	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
-		waitOnFence("FrameFence"s + std::to_string(i));
-	}
-	waitOnFence("LoadFence");
+	//    drainGpu()는 제출 스레드 큐를 먼저 flush해 대기 중인 Present/Signal을 모두 발행한 뒤
+	//    Fence를 대기한다. 이후 해상도 의존 리소스를 안전하게 해제/재생성할 수 있다.
+	drainGpu();
 
 	// 2. 해상도 의존 리소스 해제 + 디스크립터 풀 슬롯 반납.
 	//    (포트레이트 RT는 셀 고정 크기라 해상도와 무관 → 건드리지 않는다.)
@@ -1763,6 +1777,13 @@ void GFX::resize(u32t width, u32t height) {
 	);
 	scd_.Width  = width;
 	scd_.Height = height;
+
+	// ResizeBuffers는 flip-model 스왑체인의 current back buffer 인덱스를 0으로 리셋한다.
+	// backbufIdx를 frameIdx_ % N으로 결정론적으로 계산하므로, 다음 프레임의 인덱스가 0이
+	// 되도록 frameIdx_를 N의 배수로 올림 정렬해 스왑체인 상태와 다시 동기화한다.
+	// (GPU는 위에서 idle 상태이므로 모든 Fence가 완료되어 재정렬이 안전하다.)
+	const auto n = backBuffers_.size();
+	frameIdx_ = ((frameIdx_ + n - 1u) / n) * n;
 
 	// 4. 백버퍼 + RTV 재생성 (createSwapChain과 동일한 절차).
 	backBuffers_.resize(3u);
@@ -1823,7 +1844,7 @@ void GFX::render() {
 	DISPLAY_ERROR_STR(device_, "[GFX Error] GFX::render: 장치 초기화가 이루어지지 않았습니다. "
 		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] GFX::render: 명령 큐가 활성화되지 않았습니다. "
+	DISPLAY_ERROR_STR(submitter_.get(), "[GFX Error] GFX::render: 명령 큐가 활성화되지 않았습니다. "
 		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
 	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] GFX::render: 스왑 체인이 활성화되지 않았습니다. "
@@ -1832,6 +1853,10 @@ void GFX::render() {
 	if (!curAdapter_ || !device_ || !cmdQ_ || !swapChain_) {
 		return;
 	}
+
+	// 초기화 단계가 끝나고 첫 프레임에 진입했으므로 제출 스레드를 가동한다(이후 no-op).
+	// 이 시점 이후의 모든 ExecuteCommandLists/Present/Signal은 제출 스레드에서 비동기로 처리된다.
+	submitter_->goAsync();
 
 	// 펜스 동기화
 	// 렌더링할 수 있는 백버퍼가 있다면,
@@ -1868,7 +1893,13 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdListClear->Reset(cmdAllocClear, nullptr), false );
 
 	// 클리어 명령 기록 시작
-	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
+	// back buffer 인덱스는 결정론적으로 계산한다. GetCurrentBackBufferIndex()는 호출된
+	// Present 횟수에 따라 갱신되는데, Present가 제출 스레드에서 비동기로 일어나므로 메인 스레드가
+	// 이를 질의하면 stale 값을 받아(아직 직전 프레임 Present 미처리) 잘못된 back buffer에 기록 →
+	// WRONGSWAPCHAINBUFFERREFERENCE/디바이스 제거가 발생한다. flip-model에서 매 프레임 정확히
+	// 1회 Present하므로 current back buffer == (Present 횟수) % N == frameIdx_ % N 이며,
+	// 이는 render() 전체에서 쓰는 roomIdx와 동일하다.
+	const auto backbufIdx = frameIdx_ % backBuffers_.size();
 
 	// 메인 렌더 타겟에 대한 클리어
 	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
@@ -1955,7 +1986,7 @@ void GFX::render() {
 	ID3D12CommandList* clearCmdLists[] = { cmdListClear };
 
 	// 클리어 명령 리스트 실행
-	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
+	DISPLAY_ERROR_DX_VOID( submitter_->submit(1u, clearCmdLists), false );
 
 	// 디스크립터 힙 바인딩 명령을 위한 gpu-visible 디스크립터 힙 모음,
 	// Dispatcher들에 전달한다.
@@ -1968,7 +1999,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("SampleShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSamplePipeline_, threadPool_,
 		&cmdListPool_, std::move(drawEventsSamplePipeline_),
@@ -2006,7 +2037,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
 		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRShaderCSMDebug") : shaders_.at("PBRShader"),
-		shaders_.at("ShadowMapCSMShader"), cmdQ_, viewport, clRect,
+		shaders_.at("ShadowMapCSMShader"), submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
@@ -2019,7 +2050,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
 		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRSkinnedShaderCSMDebug") : shaders_.at("PBRSkinnedShader"),
-		shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, viewport, clRect,
+		shaders_.at("ShadowMapSkinnedCSMShader"), submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRSkinnedPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRSkinnedPipeline_), std::move(lightDataPBRSkinnedPipeline_),
@@ -2072,7 +2103,7 @@ void GFX::render() {
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"),
 		shaders_.at(skyboxToHDR ? "SkyboxShaderHDR" : "SkyboxShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		skyboxRtv, depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
 		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
@@ -2090,7 +2121,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("TonemapResolveShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx],
 		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
 		sceneColorSrv, sceneColorRoomIdx,
@@ -2107,7 +2138,7 @@ void GFX::render() {
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BloomPrefilterShader"), shaders_.at("BloomDownsampleShader"), shaders_.at("BloomUpsampleShader"),
-		cmdQ_,
+		submitter_.get(),
 		&fenceToSignal, &resourcesBloomPipeline_, &cmdListPool_,
 		sceneColorSrv, sceneColorRoomIdx, bloomThreshold_
 	);
@@ -2123,7 +2154,7 @@ void GFX::render() {
 			shaders_.at( "BillboardShaderMultiply" ),   // BlendMode::Multiply = 2
 			shaders_.at( "BillboardShaderPremultiplied" ) // BlendMode::PremultipliedAlpha = 3
 		},
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsBillboardPipeline_ ),
@@ -2136,7 +2167,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "MeshParticleShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesMeshParticlePipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsMeshParticlePipeline_ ),
@@ -2153,7 +2184,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "EnergyOrbShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		energyOrbRtv, depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesEnergyOrbPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsEnergyOrbPipeline_ ),
@@ -2169,7 +2200,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "HeatHazeShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		energyOrbRtv,
 		&fenceToSignal, &resourcesHeatDistortion_, &cmdListPool_,
 		&srvTex3DPool_, heatParams, heatGB4,
@@ -2186,7 +2217,7 @@ void GFX::render() {
 		rootSigs_.at( "DefaultRootSignature" ),
 		shaders_.at( "TrailShaderHDR" ),
 		shaders_.at( "TrailShaderHDR" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		energyOrbRtv, depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTrailPipelineHDR_, threadPool_,
 		&cmdListPool_, std::move( drawEventsTrailPipelineHDR_ ),
@@ -2199,7 +2230,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "WindRingShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesWindRingPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsWindRingPipeline_ ),
@@ -2212,7 +2243,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "SmokeBlendCGShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSmokeBlendCGPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsSmokeBlendCGPipeline_ ),
@@ -2225,7 +2256,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "BlendCGMeshShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesBlendCGMeshPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsBlendCGMeshPipeline_ ),
@@ -2238,7 +2269,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "PiercingMeshShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPiercingMeshPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsPiercingMeshPipeline_ ),
@@ -2251,7 +2282,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "PiercingSlashMeshShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPiercingSlashMeshPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsPiercingSlashMeshPipeline_ ),
@@ -2264,7 +2295,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "SwordSlashShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSwordSlashPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsSwordSlashPipeline_ ),
@@ -2277,7 +2308,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "TwoSidesShader" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTwoSidesPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsTwoSidesPipeline_ ),
@@ -2292,7 +2323,7 @@ void GFX::render() {
 		rootSigs_.at( "DefaultRootSignature" ),
 		shaders_.at( "TrailShader" ),
 		shaders_.at( "TrailShaderAdditive" ),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTrailPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsTrailPipeline_ ),
@@ -2302,7 +2333,7 @@ void GFX::render() {
 
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
-		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
+		shaders_.at("BVShader"), submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesBVPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsBVPipeline_), cameraDataBVPipeline_,
@@ -2317,7 +2348,7 @@ void GFX::render() {
 		csmDebugVisualization_ ? shaders_.at("TerrainShaderCSMDebug") : shaders_.at("TerrainShader"),
 		shaders_.at("TerrainShadowMapCSMShader"),
 		&dsvPool_,
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTerrainPipeline_,
 		threadPool_, &cmdListPool_, std::move(drawEventsTerrainPipeline_),
@@ -2336,7 +2367,7 @@ void GFX::render() {
 		shaders_.at("TerrainShadowMapCSMShader"),
 		shaders_.at("TerrainDeferredGBufferShader"),
 		&dsvPool_,
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		&fenceToSignal, &resourcesTerrainDeferredPipeline_,
 		threadPool_, &cmdListPool_,
 		std::move(drawEventsTerrainDeferredPipeline_),
@@ -2361,7 +2392,7 @@ void GFX::render() {
 		shaders_.at("PBRDeferredIndirectGBufferShader"),
 		shaders_.at("ShadowMapCSMShader"),
 		shaders_.at("ShadowMapCSMMaskedShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRDeferredPipeline_), std::move(occluderInfosPBRDeferred_),
 		std::move(lightDataPBRDeferredPipeline_),
@@ -2383,7 +2414,7 @@ void GFX::render() {
 		shaders_.at("HiZCommandShader"),
 		hiZCullEnabled_ ? shaders_.at("PBRDeferredSkinnedIndirectGBufferShader") : shaders_.at("PBRDeferredSkinnedGBufferShader"),
 		shaders_.at("ShadowMapSkinnedCSMShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredSkinnedPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRDeferredSkinnedPipeline_), std::move(lightDataPBRDeferredSkinnedPipeline_),
 		mainDirectionalLightPBRDeferredSkinnedPipeline_, cameraDataPBRDeferredSkinnedPipeline_,
@@ -2398,7 +2429,7 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("UIShader"),
-		cmdQ_, viewport, clRect,
+		submitter_.get(), viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesUIPipeline_, threadPool_,
 		&cmdListPool_, std::move(drawEventsUIPipeline_),
@@ -2438,11 +2469,11 @@ void GFX::render() {
 			SharedResources::ShadowMap::clearCSMAllShadowMaps(
 				std::string(SharedResources::ShadowMap::kDefaultKey), roomIdx, cmdCtxBarrier.cmdList.Get()
 			);
-			SharedResources::HiZMap::clearHiZMap(roomIdx, cmdListPool_, cmdQ_.Get(), fenceToSignal);
+			SharedResources::HiZMap::clearHiZMap(roomIdx, cmdListPool_, submitter_.get(), fenceToSignal);
 
 			DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdList->Close(), false);
 			ID3D12CommandList* barrierCmds[] = { cmdCtxBarrier.cmdList.Get() };
-			DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, barrierCmds), false);
+			DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, barrierCmds), false);
 			fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxBarrier));
 		}
 
@@ -2541,7 +2572,7 @@ void GFX::render() {
 				// === 명령 기록 끝, 제출 및 실행 ===
 				DISPLAY_ERROR_DX_HR(cmdList->Close(), false);
 				ID3D12CommandList* cmds[] = { cmdList };
-				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, cmds), false);
+				DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, cmds), false);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxHiZ));
 
 				pbrDeferredSkinnedDispatcher.hiZPass();
@@ -2599,7 +2630,7 @@ void GFX::render() {
 
 				DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdList->Close(), false);
 				ID3D12CommandList* barrierCmds[] = { cmdCtxBarrier.cmdList.Get() };
-				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, barrierCmds), false);
+				DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, barrierCmds), false);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxBarrier));
 			}
 		}
@@ -2724,7 +2755,7 @@ void GFX::render() {
 
 				if (hrClose >= 0) {
 					ID3D12CommandList* staged[] = { cl };
-					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+					DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
 				}
 
 				DISPLAY_ERROR_DX_HR(cmdCtxCopy.cmdAlloc->Reset(), false);
@@ -2742,7 +2773,7 @@ void GFX::render() {
 
 				if (hrClose2 >= 0) {
 					ID3D12CommandList* staged[] = { cmdCtxCopy.cmdList.Get() };
-					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+					DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, staged), false);
 				}
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxLight));
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxCopy));
@@ -2778,7 +2809,7 @@ void GFX::render() {
 				SharedResources::SceneColor::transitionToRead(roomIdx, cmdCtxResolveBarrier.cmdList.Get());
 				DISPLAY_ERROR_DX_HR(cmdCtxResolveBarrier.cmdList->Close(), false);
 				ID3D12CommandList* resolveBarrierCmds[] = { cmdCtxResolveBarrier.cmdList.Get() };
-				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, resolveBarrierCmds), false);
+				DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, resolveBarrierCmds), false);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxResolveBarrier));
 			}
 			// Bloom: reads SceneColorHDR (now PIXEL_SHADER_RESOURCE), writes the bloom mip
@@ -2852,11 +2883,11 @@ void GFX::render() {
 			SharedResources::ShadowMap::clearCSMAllShadowMaps(
 				std::string(SharedResources::ShadowMap::kDefaultKey), roomIdx, cmdCtxBarrier.cmdList.Get()
 			);
-			SharedResources::HiZMap::clearHiZMap(roomIdx, cmdListPool_, cmdQ_.Get(), fenceToSignal);
+			SharedResources::HiZMap::clearHiZMap(roomIdx, cmdListPool_, submitter_.get(), fenceToSignal);
 
 			DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdList->Close(), false);
 			ID3D12CommandList* barrierCmds[] = { cmdCtxBarrier.cmdList.Get() };
-			DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, barrierCmds), false);
+			DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, barrierCmds), false);
 			fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxBarrier));
 		}
 
@@ -2883,7 +2914,7 @@ void GFX::render() {
 
 			// == 메인 패스들 ==
 			SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
-				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, submitter_.get(), fenceToSignal
 			);
 
 			pbrPipelineDispatcher.mainPass();
@@ -2954,7 +2985,7 @@ void GFX::render() {
 
 			// == 메인 패스들 ==
 			SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
-				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, submitter_.get(), fenceToSignal
 			);
 
 			pbrPipelineDispatcher.mainPassMT();
@@ -3023,7 +3054,7 @@ void GFX::render() {
 				SharedResources::Portrait::clearPortraitRT(roomIdx, cc.cmdList.Get());
 				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
 				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
-				cmdQ_->ExecuteCommandLists(1u, cls);
+				submitter_->submit(1u, cls);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
 			}
 		}
@@ -3054,7 +3085,7 @@ void GFX::render() {
 					&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 					&samPool_, &cmpSamPool_, &dsvPool_,
 					rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
-					shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, cellViewport, cellScissor,
+					shaders_.at("ShadowMapSkinnedCSMShader"), submitter_.get(), cellViewport, cellScissor,
 					pData.rtv, pData.dsv,
 					&fenceToSignal, &resourcesLobbyPortrait_[s], threadPool_, &cmdListPool_,
 					std::move(drawEventsLobbyPortrait_[s]),
@@ -3099,7 +3130,7 @@ void GFX::render() {
 					&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 					&samPool_, &cmpSamPool_, &dsvPool_,
 					rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
-					shaders_.at("ShadowMapCSMShader"), cmdQ_, cellViewport, cellScissor,
+					shaders_.at("ShadowMapCSMShader"), submitter_.get(), cellViewport, cellScissor,
 					pData.rtv, pData.dsv,
 					&fenceToSignal, &resourcesLobbyPortraitStatic_[s], threadPool_, &cmdListPool_,
 					std::move(drawEventsLobbyPortraitStatic_[s]),
@@ -3122,7 +3153,7 @@ void GFX::render() {
 				SharedResources::Portrait::transitionToRead(roomIdx, cc.cmdList.Get());
 				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
 				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
-				cmdQ_->ExecuteCommandLists(1u, cls);
+				submitter_->submit(1u, cls);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
 			}
 		}
@@ -3153,7 +3184,7 @@ void GFX::render() {
 				SharedResources::Minimap::clearMinimapRT(/*useA=*/true, cc.cmdList.Get());
 				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
 				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
-				cmdQ_->ExecuteCommandLists(1u, cls);
+				submitter_->submit(1u, cls);
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
 			}
 		}
@@ -3165,7 +3196,7 @@ void GFX::render() {
 				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 				&samPool_, &cmpSamPool_,
 				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapTerrainShader"),
-				cmdQ_, vp, sc, m.rtvA,
+				submitter_.get(), vp, sc, m.rtvA,
 				&fenceToSignal, &resourcesMinimapTerrain_, &cmdListPool_,
 				std::move(drawEventsMinimap_), cameraDataMinimap_, roomIdx
 			);
@@ -3180,7 +3211,7 @@ void GFX::render() {
 				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 				&samPool_, &cmpSamPool_,
 				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapPropShader"),
-				cmdQ_, vp, sc, m.rtvA,
+				submitter_.get(), vp, sc, m.rtvA,
 				&fenceToSignal, &resourcesMinimapProp_, &cmdListPool_,
 				std::move(drawEventsMinimapProp_),
 				cameraDataMinimap_.view * cameraDataMinimap_.proj, roomIdx
@@ -3196,7 +3227,7 @@ void GFX::render() {
 				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 				&samPool_, &cmpSamPool_,
 				rootSigs_.at("DefaultRootSignature"), shaders_.at("MinimapFogBlurShader"),
-				cmdQ_, &fenceToSignal, &resourcesMinimapFogBlur_, &cmdListPool_,
+				submitter_.get(), &fenceToSignal, &resourcesMinimapFogBlur_, &cmdListPool_,
 				roomIdx, kMinimapFogBlurRadiusTexels
 			);
 			minimapFogBlurDispatcher.render();
@@ -3248,10 +3279,10 @@ void GFX::render() {
 
 	// 출력 명령 리스트 실행
 	ID3D12CommandList* presentCmdLists[] = { cmdListPresent };
-	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, presentCmdLists), false );
+	DISPLAY_ERROR_DX_VOID( submitter_->submit(1u, presentCmdLists), false );
 
 	
-	DISPLAY_ERROR_DX_VOID( swapChain_->Present(vsyncEnabled_ ? 1u : 0u, 0), false );
+	DISPLAY_ERROR_DX_VOID( submitter_->present(swapChain_.Get(), vsyncEnabled_ ? 1u : 0u), false );
 
 	
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
@@ -3445,11 +3476,9 @@ void GFX::signalFence(const std::string& fenceName) {
 	}
 
 	auto& fence = fences_.at(fenceName);
+	// desiredValue는 메인 스레드 전용(증가/대기). 제출 스레드는 전달받은 값으로 Signal만 한다.
 	++fence.desiredValue;
-	DISPLAY_ERROR_DX_HR(
-		cmdQ_->Signal(fence.fence.Get(), fence.desiredValue),
-		false
-	);
+	submitter_->signal(fence.fence.Get(), fence.desiredValue);
 }
 
 // fenceName을 갖는 Fence에 대해서 wait하고,

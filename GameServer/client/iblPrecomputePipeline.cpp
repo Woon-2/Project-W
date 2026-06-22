@@ -30,7 +30,7 @@ void precomputeIBL(
 	DescriptorPool& samPool,
 	DescriptorPool& cmpSamPool,
 	ConstantBufferArray& iblParamsCBs,
-	ID3D12CommandQueue* cmdQ,
+	RenderSubmitter* submitter,
 	CommandListPool& cmdListPool,
 	Fence& loadFence,
 	bool envIsLDR
@@ -212,10 +212,10 @@ void precomputeIBL(
 	}
 
 	ID3D12CommandList* staged[] = { cmdList };
-	DISPLAY_ERROR_DX_VOID(cmdQ->ExecuteCommandLists(1u, staged), false);
+	submitter->submit(1u, staged);
 
 	++loadFence.desiredValue;
-	DISPLAY_ERROR_DX_HR(cmdQ->Signal(loadFence.fence.Get(), loadFence.desiredValue), false);
+	submitter->signal(loadFence.fence.Get(), loadFence.desiredValue);
 	if (loadFence.fence->GetCompletedValue() != loadFence.desiredValue) {
 		loadFence.fence->SetEventOnCompletion(loadFence.desiredValue, nullptr);
 	}

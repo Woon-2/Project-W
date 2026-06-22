@@ -13,7 +13,7 @@ Dispatcher::Dispatcher(
     DescriptorPool* pCmpSamPool,
     const std::shared_ptr<RootSig>& rootSig,
     const ComPtr<ID3D12PipelineState>& shader,
-    const ComPtr<ID3D12CommandQueue>& cmdQ,
+    RenderSubmitter* submitter,
     const D3D12_VIEWPORT& viewport,
     const D3D12_RECT& scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv,
@@ -29,7 +29,7 @@ Dispatcher::Dispatcher(
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-    rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
+    rootSig_(rootSig), shader_(shader), submitter_(submitter),
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool),
     cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
@@ -193,7 +193,7 @@ void Dispatcher::drawSingleThreaded() {
     }
 
     ID3D12CommandList* stagedCmdLists[] = { cmdList };
-    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, stagedCmdLists), false);
+    DISPLAY_ERROR_DX_VOID(submitter_->submit(1u, stagedCmdLists), false);
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }

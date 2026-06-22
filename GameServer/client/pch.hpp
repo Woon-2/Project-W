@@ -115,6 +115,7 @@
 #include "mathUtil.hpp"
 #include "function.hpp"
 #include "threadPool.hpp"
+#include "renderSubmitter.hpp"
 #include "log.hpp"
 #include "pool.hpp"
 

@@ -267,7 +267,7 @@ void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3D12Gra
 	}
 }
 
-void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsDepthWrite: \""s
 		+ key + "\" 키의 그림자 맵이 존재하지 않습니다.", false
 	);
@@ -309,7 +309,7 @@ void getReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandLi
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListTransition };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, clearCmdLists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, clearCmdLists), false );
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxTransition));
 }
@@ -334,7 +334,7 @@ void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, ID3D1
 	}
 }
 
-void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsShaderResource: \""s
 		+ key + "\" 키의 그림자 맵이 존재하지 않습니다.", false
 	);
@@ -376,7 +376,7 @@ void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, Comma
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListTransition };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, clearCmdLists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, clearCmdLists), false );
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxTransition));
 }
@@ -448,7 +448,7 @@ void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3
 	}
 }
 
-void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite: \""s
 		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
 	);
@@ -487,11 +487,11 @@ void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, Com
 
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
 	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, lists), false );
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
-void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsShaderResource: \""s
 		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
 	);
@@ -528,7 +528,7 @@ void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx,
 
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
 	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, lists), false );
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -574,7 +574,7 @@ void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, ID3D12Gr
 	}
 }
 
-void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: \""s
 		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
 	);
@@ -603,7 +603,7 @@ void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandL
 
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
 	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, lists), false );
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 
@@ -1349,7 +1349,7 @@ void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	);
 }
 
-void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, RenderSubmitter* submitter, Fence& fence) {
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtx),
 		"[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: 사용 가능한 명령 리스트가 없습니다.", false
@@ -1367,7 +1367,7 @@ void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12Comman
 
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
 	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
-	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	DISPLAY_ERROR_DX_VOID( submitter->submit(1u, lists), false );
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
 }
 

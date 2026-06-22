@@ -327,7 +327,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
 | `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.cpp #300` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리 |
+| `AnimSystem::update()` | `animation.cpp #386` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
@@ -443,11 +443,18 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RWStructuredBuffer` class | `gfxUtil.hpp #283` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback`. **offset 오버로드**: `bindCompute(...,byteOffset)` / `copyToReadback(...,dstByteOffset,srcByteOffset)` / `readbackPtr<T>(roomIdx,byteOffset)` — 단일 리소스 내 다중 슬롯(Hi-Z visibility 2-slot ring) 표현용 |
 | `ConstantBufferArray` struct | `gfxUtil.hpp #356` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
 
+**파일:** `client/renderSubmitter.hpp` / `client/renderSubmitter.cpp`
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `RenderSubmitter` class | `renderSubmitter.hpp` | 전용 제출 스레드. 모든 ECL/Present/Signal을 순서 보장 FIFO로 받아 단일 스레드에서 `cmdQ_`에 제출 → 메인 스레드 임계 경로에서 ECL 비용 제거. `start`(inline 바인딩)/`goAsync`(스레드 가동, 첫 render에서)/`submit`/`present`/`signal`/`flushBlocking`/`stop`. 자세한 설계는 `graphicsArchitecture.md` 제출 스레드 절 |
+
 **파일:** `client/gfx.hpp` / `client/gfx.cpp`
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `GFX` class | `gfx.hpp #63` | DX12 렌더링 총괄 |
+| `GFX::submitter_` | `gfx.hpp` | `RenderSubmitter` 소유(`cmdQ_` 뒤 선언 → 큐보다 먼저 파괴). 디스패처/헬퍼/로딩 경로가 `cmdQ_` 대신 이 핸들로 제출 |
 | `GFX::setupDXGI()` | `gfx.hpp #77` | DXGI Factory + Adapter 열거 |
 | `GFX::init()` | `gfx.hpp #84` | Device, CmdQ, DescriptorHeap, PSO 생성 |
 | `GFX::createSwapChain()` | `gfx.hpp #90` | SwapChain + BackBuffer + FrameFence |
