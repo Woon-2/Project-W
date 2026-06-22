@@ -120,8 +120,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
             }
         }
         if ( !wedgeForceStartIssued_ && phaseTimer_ >= WEDGE_PREP_FORCE_TIMEOUT ) {
-            forceActiveWedgeCharges();
-            wedgeForceStartIssued_ = true;
+            wedgeForceStartIssued_ = forceActiveWedgeCharges( room );
         }
         updateActiveStrikeEngage( room, leader, /*forceAll=*/false );
         bool timeout = phaseTimer_ >= PINCER_TIMEOUT;
@@ -165,8 +164,7 @@ void IsysMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& leader ) 
             pincerIssued_ = true;
         }
         if ( !wedgeForceStartIssued_ && phaseTimer_ >= WEDGE_PREP_FORCE_TIMEOUT ) {
-            forceActiveWedgeCharges();
-            wedgeForceStartIssued_ = true;
+            wedgeForceStartIssued_ = forceActiveWedgeCharges( room );
         }
         syncBossBuddyWedgeChargeStart( leader );
         updateBossBuddyWedgeJoin( dt, leader );
@@ -1049,12 +1047,14 @@ void IsysMidBossTactic::updateActiveStrikeEngage( Room& room, PlatoonLeader& lea
     }
 }
 
-void IsysMidBossTactic::forceActiveWedgeCharges() {
+bool IsysMidBossTactic::forceActiveWedgeCharges( Room& room ) {
+    bool allStarted = true;
     for ( TacticalSquad* squad : activeStrikeSquads_ ) {
         if ( squad && !squad->isEmpty() ) {
-            squad->forceStartWedgeCharge();
+            allStarted = squad->forceStartWedgeCharge( room ) && allStarted;
         }
     }
+    return allStarted;
 }
 
 /*-------------------------------

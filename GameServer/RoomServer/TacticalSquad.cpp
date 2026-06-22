@@ -52,6 +52,7 @@ void TacticalSquad::receiveOrder( const SquadOrder& order ) {
     wedgeExitSlots_.clear();
     activeWedgeChargeId_ = 0;
     wedgeChargeReleased_ = !order.waitForChargeRelease;
+    wedgeChargeCommandIssued_ = false;
 }
 
 void MU_CALLCONV TacticalSquad::updateBoxLeaderPos( mu::Vec3 pos ) {
@@ -88,9 +89,10 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
 
     if ( currentOrder_.type == SquadOrderType::WedgeCharge && !wedgePrepared_ && areMembersAtSlots() ) {
         wedgePrepared_ = true;
-        if ( wedgeChargeReleased_ ) {
-            pushCommandsToMembers( room );
-        }
+    }
+    if ( currentOrder_.type == SquadOrderType::WedgeCharge && wedgePrepared_ &&
+         wedgeChargeReleased_ && !wedgeChargeCommandIssued_ ) {
+        startWedgeCharge( room );
     }
     if ( currentOrder_.type == SquadOrderType::WedgeCharge && wedgePrepared_ && activeWedgeChargeId_ != 0 && areChargeMembersComplete() ) {
         room.endWedgeCharge( activeWedgeChargeId_ );
@@ -123,10 +125,12 @@ void TacticalSquad::updateLeaderlessBrawl( Seconds dt, Room& room ) {
     orderDirty_ = false;
     wedgePrepared_ = false;
     wedgeMemberIds_.clear();
+    wedgeMemberCache_.clear();
     wedgePrepareSlots_.clear();
     wedgeExitSlots_.clear();
     activeWedgeChargeId_ = 0;
     wedgeChargeReleased_ = true;
+    wedgeChargeCommandIssued_ = false;
 
     pushCommandsToMembers( room );
 }
@@ -270,6 +274,10 @@ bool TacticalSquad::areMembersSettledAtSlots() const {
 }
 
 bool TacticalSquad::areChargeMembersComplete() const {
+    if ( !wedgeChargeCommandIssued_ ) {
+        return false;
+    }
+
     int32 aliveCount = 0;
     int32 completeCount = 0;
 
@@ -353,13 +361,26 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcEncircleSlots( mu::Vec3 tar
     return slots;
 }
 
-void TacticalSquad::forceStartWedgeCharge() {
-    if ( currentOrder_.type != SquadOrderType::WedgeCharge || wedgePrepared_ || wedgeMemberCache_.empty() ) {
-        return;
+bool TacticalSquad::forceStartWedgeCharge( Room& room ) {
+    if ( currentOrder_.type != SquadOrderType::WedgeCharge ) {
+        return false;
     }
+    if ( wedgeChargeCommandIssued_ ) {
+        return true;
+    }
+
+    if ( wedgeMemberCache_.empty() || wedgeMemberCache_.size() != wedgeExitSlots_.size() ) {
+        wedgePrepared_ = false;
+        pushCommandsToMembers( room );
+    }
+    if ( wedgeMemberCache_.empty() || wedgeMemberCache_.size() != wedgeExitSlots_.size() ) {
+        return false;
+    }
+
     wedgePrepared_ = true;
     wedgeChargeReleased_ = true;
-    orderDirty_ = true;
+    orderDirty_ = false;
+    return startWedgeCharge( room );
 }
 
 std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcRingSlots(
@@ -594,8 +615,8 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
     }
 
     case SquadOrderType::WedgeCharge: {
-        GameSession* targetSession = room.findLivingSessionByPlayerId( static_cast<int32>(ord.targetId) );
-        if ( !targetSession ) {
+        uint32 targetId = resolveWedgeTargetId( room );
+        if ( targetId == 0 ) {
             return;
         }
 
@@ -682,7 +703,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
 
                 auto cmd = TacticalCommand{
 					.type = TacticalCommandType::HoldSlot,
-					.targetId = ord.targetId,
+					.targetId = targetId,
 					.slotOffset = prepareSlot
                 };
                 tnpc->receiveCommand( cmd );
@@ -690,40 +711,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
             return;
         }
 
-        if ( activeWedgeChargeId_ == 0 ) {
-            activeWedgeChargeId_ = room.beginWedgeCharge();
-        }
-
-        for ( int32 i = 0; i < static_cast<int32>( wedgeMemberCache_.size() ); ++i ) {
-            TacticalNpc* tnpc = wedgeMemberCache_[ i ];
-            if ( !tnpc || tnpc->hp() <= 0 ) {
-                continue;
-            }
-
-            TacticalNpcState st = tnpc->getState();
-            if ( st == TacticalNpcState::AttackWindup ||
-                st == TacticalNpcState::AttackRecover ||
-                st == TacticalNpcState::ChargeThrough 
-            ) {
-                continue;
-            }
-
-            auto cmd = TacticalCommand{
-                .type = TacticalCommandType::ChargeThrough,
-                .targetId = ord.targetId,
-                .slotOffset = wedgeExitSlots_[ i ],
-                .speedMult = (ord.chargeSpeedMult > 0.f) ? ord.chargeSpeedMult : WEDGE_SPEED_MULT,
-                .targetIds = ord.targetIds,
-                .chargeId = activeWedgeChargeId_,
-                .chargeDir = forward,
-                .chargeCenter = targetCenter,
-                .impactRadius = std::max( WEDGE_IMPACT_RADIUS, memberAttackRange_ ),
-					.impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f) ,
-					.passDistance = WEDGE_PASS_DISTANCE,
-					.chargeAcceleration = ord.chargeAcceleration
-            };
-            tnpc->receiveCommand( cmd );
-        }
+        startWedgeCharge( room );
         break;
     }
 
@@ -973,6 +961,87 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
     }
 }
 
+uint32 TacticalSquad::resolveWedgeTargetId( Room& room ) const {
+    if ( currentOrder_.targetId != 0 &&
+         room.findLivingSessionByPlayerId( static_cast<int32>( currentOrder_.targetId ) ) ) {
+        return currentOrder_.targetId;
+    }
+
+    for ( uint32 targetId : currentOrder_.targetIds ) {
+        if ( targetId != 0 && room.findLivingSessionByPlayerId( static_cast<int32>( targetId ) ) ) {
+            return targetId;
+        }
+    }
+
+    return selectNearestPlayerToSquad( room );
+}
+
+bool TacticalSquad::startWedgeCharge( Room& room ) {
+    if ( currentOrder_.type != SquadOrderType::WedgeCharge || !wedgePrepared_ ||
+         !wedgeChargeReleased_ || wedgeChargeCommandIssued_ || wedgeMemberCache_.empty() ||
+         wedgeMemberCache_.size() != wedgeExitSlots_.size() ) {
+        return wedgeChargeCommandIssued_;
+    }
+
+    uint32 targetId = resolveWedgeTargetId( room );
+    if ( targetId == 0 ) {
+        return false;
+    }
+
+    bool hasLivingMember = false;
+    for ( TacticalNpc* tnpc : wedgeMemberCache_ ) {
+        if ( tnpc && tnpc->hp() > 0 ) {
+            hasLivingMember = true;
+            break;
+        }
+    }
+    if ( !hasLivingMember ) {
+        return false;
+    }
+
+    if ( activeWedgeChargeId_ == 0 ) {
+        activeWedgeChargeId_ = room.beginWedgeCharge();
+    }
+
+    const SquadOrder& ord = currentOrder_;
+    mu::Vec3 targetCenter = ord.tacticCenter;
+    mu::Vec3 forward = targetCenter - calcCentroid();
+    float flen = forward.len();
+    forward = (flen > 0.01f) ? forward * (1.f / flen) : mu::Vec3( 1.f, 0.f, 0.f );
+
+    int32 issuedCount = 0;
+    for ( int32 i = 0; i < static_cast<int32>( wedgeMemberCache_.size() ); ++i ) {
+        TacticalNpc* tnpc = wedgeMemberCache_[ i ];
+        if ( !tnpc || tnpc->hp() <= 0 ) {
+            continue;
+        }
+
+        auto cmd = TacticalCommand{
+            .type = TacticalCommandType::ChargeThrough,
+            .targetId = targetId,
+            .slotOffset = wedgeExitSlots_[ i ],
+            .speedMult = (ord.chargeSpeedMult > 0.f) ? ord.chargeSpeedMult : WEDGE_SPEED_MULT,
+            .targetIds = ord.targetIds,
+            .chargeId = activeWedgeChargeId_,
+            .chargeDir = forward,
+            .chargeCenter = targetCenter,
+            .impactRadius = std::max( WEDGE_IMPACT_RADIUS, memberAttackRange_ ),
+            .impactDamage = WEDGE_CHARGE_DAMAGE * ((ord.wedgeDamageMult > 0.f) ? ord.wedgeDamageMult : 1.f),
+            .passDistance = WEDGE_PASS_DISTANCE,
+            .chargeAcceleration = ord.chargeAcceleration
+        };
+        tnpc->receiveCommand( cmd );
+        ++issuedCount;
+    }
+
+    wedgeChargeCommandIssued_ = issuedCount > 0;
+    if ( !wedgeChargeCommandIssued_ ) {
+        room.endWedgeCharge( activeWedgeChargeId_ );
+        activeWedgeChargeId_ = 0;
+    }
+    return wedgeChargeCommandIssued_;
+}
+
 // ─── pushConfusedToMembers ────────────────────────────────────────────────────
 
 void TacticalSquad::pushConfusedToMembers( Room& room ) {
@@ -985,6 +1054,8 @@ void TacticalSquad::pushConfusedToMembers( Room& room ) {
     wedgeMemberCache_.clear();
     wedgePrepareSlots_.clear();
     wedgeExitSlots_.clear();
+    wedgeChargeReleased_     = true;
+    wedgeChargeCommandIssued_ = false;
     leaderlessBrawlEnabled_  = true;
     leaderlessBrawlTimer_    = LEADERLESS_CONFUSED_DURATION;
     leaderlessRetargetTimer_ = 0s;

@@ -101,7 +101,7 @@ public:
     bool     isWedgePrepared() const { return wedgePrepared_; }
     void     endActiveWedgeCharge( Room& room );
     void     releaseWedgeCharge();
-    void     forceStartWedgeCharge();
+    bool     forceStartWedgeCharge( Room& room );
     float    estimateWedgeHalfWidth( float spacingMult = 1.f, bool reserveApex = false ) const;
     static std::vector<mu::Vec3> MU_CALLCONV calcRingSlots( mu::Vec3 center, float sectorAngle,
         float sectorSpan, float outerRadius, int32 count, float minSlotSpacing, float laneSpacing,
@@ -109,6 +109,8 @@ public:
 
 private:
     void     pushCommandsToMembers( Room& room );
+    bool     startWedgeCharge( Room& room );
+    uint32   resolveWedgeTargetId( Room& room ) const;
     void     updateLeaderlessBrawl( Seconds dt, Room& room );
     uint32   selectNearestPlayerToSquad( Room& room ) const;
 
@@ -131,6 +133,7 @@ private:
     std::vector<mu::Vec3>     wedgeExitSlots_{};
     uint32                    activeWedgeChargeId_{ 0 };
     bool                      wedgeChargeReleased_{ true };
+    bool                      wedgeChargeCommandIssued_{ false };
     bool                      leaderlessBrawlEnabled_{ false };
     Seconds                   leaderlessBrawlTimer_{};
     Seconds                   leaderlessRetargetTimer_{};

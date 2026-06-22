@@ -79,7 +79,7 @@ private:
     GameSession* selectPrimaryTarget( Room& room, const PlatoonLeader& leader ) const;
     uint32  selectStrikeEngageTarget( Room& room, const PlatoonLeader& leader, const StrikeTask& task ) const;
     void    updateActiveStrikeEngage( Room& room, PlatoonLeader& leader, bool forceAll );
-    void    forceActiveWedgeCharges();
+    bool    forceActiveWedgeCharges( Room& room );
     Seconds rollCooldown();
     bool    hasLiveBomberSquad( const PlatoonLeader& leader ) const;
     bool    hasLiveBuddySquad( const PlatoonLeader& leader ) const;
