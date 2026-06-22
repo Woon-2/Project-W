@@ -4,9 +4,21 @@
 #include "AssetManager.hpp"
 #include "RoomManager.hpp"
 #include "JobTimer.hpp"
+#include "networkConfig.hpp"
 
 int main()
 {
+	NetworkConfig networkConfig;
+	std::filesystem::path networkConfigPath;
+	std::string networkConfigError;
+	if (!loadNetworkConfig(networkConfig, networkConfigPath, networkConfigError)) {
+		std::cerr << "[NetworkConfig] " << networkConfigError << '\n';
+		return 1;
+	}
+	std::cout << "[NetworkConfig] " << networkConfigPath.string() << '\n'
+		<< "  Lobby: " << networkConfig.lobby.ip << ':' << networkConfig.lobby.port << '\n'
+		<< "  Room: " << networkConfig.room.ip << ':' << networkConfig.room.port << '\n';
+
 	pushLoggerA("standard", &std::cout);
 	pushLoggerW("standard", &std::wcout);
 	
@@ -24,7 +36,7 @@ int main()
 	IdPool::init();
 	RoomIdPool::init();
 
-	RoomServer server;
+	RoomServer server(networkConfig.room.port);
 	server.start();
 
 	JobTimer::clear();

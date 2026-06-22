@@ -4,5 +4,5 @@
 void LobbyServer::start() {
 	reactor_.registerHandle( listener_->getHandle() );
 	listener_->startAccept();
-	std::cout << "Lobby Server started on port " << lobbyServerPort << '\n';
+	std::cout << "Lobby Server started on port " << listener_->listenPort() << '\n';
 }

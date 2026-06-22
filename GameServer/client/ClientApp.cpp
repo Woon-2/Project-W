@@ -8,12 +8,12 @@ extern bool gClose;
 
 namespace INet {
 
-void ClientApp::init() {
+void ClientApp::init(const NetworkEndpoint& lobbyEndpoint) {
 	// 프로세스 전역 오디오 엔진을 1회 연다. 실패해도 객체는 유지되어 모든 호출이 안전한 no-op이 된다.
 	sound_ = std::make_unique<SoundManager>();
 	sound_->init();
 
-	serverSession_ = std::make_unique<ServerSession>(::serverIp, lobbyServerPort);
+	serverSession_ = std::make_unique<ServerSession>(lobbyEndpoint.ip, lobbyEndpoint.port);
 
 	// std::exit() 경로 보호. 에러 매크로 등이 프레임 도중 std::exit를 부르면 정적
 	// 소멸자들이 임의 순서로 돌면서, ~ServerSession이 보유한 SendBuffer를 이미

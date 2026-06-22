@@ -5,10 +5,6 @@
 #include "types.hpp"
 #include "../common/mathUtil.hpp"
 
-constexpr const char* serverIp = "192.168.76.164";
-constexpr uint16 lobbyServerPort = 8888;
-constexpr uint16 roomServerPort  = 9000;
-
 enum class PacketType : uint16 {
 	C_Enter,
 	S_Enter,

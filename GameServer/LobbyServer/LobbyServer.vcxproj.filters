@@ -51,6 +51,12 @@
     <ClCompile Include="LobbyRoom.cpp">
       <Filter>contents</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\networkConfig.cpp">
+      <Filter>default</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\simpleJson.cpp">
+      <Filter>default</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -76,6 +82,12 @@
     </ClInclude>
     <ClInclude Include="LobbyManager.hpp">
       <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\networkConfig.hpp">
+      <Filter>default</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\simpleJson.hpp">
+      <Filter>default</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

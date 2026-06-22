@@ -247,6 +247,12 @@
     <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="sharedResources.cpp" />
+    <ClCompile Include="..\common\networkConfig.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\common\simpleJson.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
@@ -397,6 +403,7 @@
     <ClInclude Include="ServerSession.hpp" />
     <ClInclude Include="shader.hpp" />
     <ClInclude Include="sharedResources.hpp" />
+    <ClInclude Include="..\common\networkConfig.hpp" />
     <ClInclude Include="..\common\simpleJson.hpp" />
     <ClInclude Include="..\common\particleGameplay.hpp" />
     <ClInclude Include="skybox.hpp" />
