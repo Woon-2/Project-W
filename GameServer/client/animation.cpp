@@ -408,7 +408,9 @@ void AnimSystem::update(Seconds timeSlice) {
 		const auto iteration = std::min(jobSize_, visibleCount - cntProcessed);
 
 		for (std::size_t i = 0; i < iteration; ++i) {
-			auto& blender = blenders_.front();
+			const auto pLast = std::prev(visibleEnd, i);
+			std::pop_heap(blenders_.begin(), pLast);
+			auto& blender = *std::prev(pLast);
 
 			blender->onCalcLocal({});
 			blender->setStage({}, AnimBlender::Stage::committedLocal);
@@ -418,7 +420,6 @@ void AnimSystem::update(Seconds timeSlice) {
 
 			blender->onCalcFinal({});
 			blender->setStage({}, AnimBlender::Stage::committedFinal);
-			std::pop_heap(blenders_.begin(), std::prev(visibleEnd, i));
 		}
 
 		cntProcessed += iteration;
