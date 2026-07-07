@@ -1,4 +1,4 @@
-#ifndef final_boss_hpp
+﻿#ifndef final_boss_hpp
 #define final_boss_hpp
 
 #include "Npc.hpp"
