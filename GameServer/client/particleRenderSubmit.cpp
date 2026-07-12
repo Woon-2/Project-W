@@ -46,6 +46,8 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
             .pSubMesh = geometry->pSubMesh,
             .pTex = mat.mainTex,
             .tint = tint,
+            .uvOffset = uv.offset,
+            .uvScale = uv.scale,
             .renderOrder = rend.renderOrder,
         });
     }

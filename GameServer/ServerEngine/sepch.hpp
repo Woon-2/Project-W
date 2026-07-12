@@ -54,7 +54,7 @@ using Seconds = std::chrono::duration<float>;
 using SystemClock = std::chrono::system_clock;
 using HighResolutionClock = std::chrono::high_resolution_clock;
 
-using SystemClockTimePoint = std::chrono::time_point<HighResolutionClock, Nanoseconds>;
+using SystemClockTimePoint = std::chrono::time_point<SystemClock, Nanoseconds>;
 using HighResolutionClockTimePoint = std::chrono::time_point<HighResolutionClock, Nanoseconds>;
 
 size_t numberOfPhysicalCores() noexcept;

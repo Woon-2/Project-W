@@ -770,6 +770,7 @@ void Game::setupStage() {
 		static_cast<float>(gClientRect.bottom - gClientRect.top)
 	);
 	uiManager_.requestDebugResources(gfx_);
+	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 	// 기존 standalone HUD(도움말 라벨/플레이어 HP바/HiZ 라벨)는 에디터 UI와 겹쳐 제거했다.
 	// 조작법·상태·편집 패널은 EditorController가 별도로 구성한다.
 
@@ -805,6 +806,7 @@ void Game::setupStage() {
 		// vfxId 1..18 bind 1:1 to each built ParticleEffect, mirroring the skill
 		// foundation .lua files (each PlayVFX vfxId indexes this array directly).
 		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
 		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
@@ -987,6 +989,27 @@ void Game::setParticle()
 		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
 		return cfg;
 	};
+
+	// ── Blood hit effect (칼/창/완드 공통 피격 혈흔, vfxId 0) ──────────────────
+	// Alpha Blend(MatUnlit) + Plane 곡면 메시 + 3x3 스프라이트 시트 플립북.
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/blood_hit.json",
+			"Particle System (4)"
+		);
+		cfg.renderer.pMesh = assetManager_.meshBloodPlane();
+		cfg.renderer.pSubMesh = assetManager_.meshBloodPlane()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshBloodPlane()->subMeshes[0];
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.bloodTex(),
+			.blend   = ps::BlendMode::Alpha,
+		};
+		// 피격 위치에 고정되도록 World 시뮬레이션으로 강제(Unity 원본은 Local).
+		cfg.main.simulationSpace = ps::MainModule::SimulationSpace::World;
+		cfg.renderer.renderOrder = 2;
+		bloodEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
 
 	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
 	{
@@ -2735,6 +2758,7 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	uiManager_.layout();
+	dialogueSystem_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
@@ -2782,10 +2806,10 @@ void Game::update(Milliseconds deltaTime) {
 			}
 		};
 
-		auto syncRagdollToAnim = [&](Goblin& g) {
-			Ragdoll& rd = *g.ragdoll();
-			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
-			rd.syncToFinalXforms(
+		auto syncRagdollToAnim = [&](Object& g) {
+			Ragdoll* prd = g.ragdoll();
+			if (!prd || !prd->isActive() || !g.animBlender() || !g.model()) return;
+			prd->syncToFinalXforms(
 				g.animBlender()->finalXformData(),
 				g.model()->skeleton,
 				g.renderState().world
@@ -2795,6 +2819,10 @@ void Game::update(Milliseconds deltaTime) {
 
 		activateRagdollIfPending(*goblin_);
 		syncRagdollToAnim(*goblin_);
+		// The controlled caster (K toggle) may be the player, which the goblin_ sync above
+		// doesn't cover. Sync it too when its ragdoll is active.
+		if (auto c = editor_.controlledObject(); c && c.get() != goblin_.get())
+			syncRagdollToAnim(*c);
 	}
 
 	// 발 흙먼지 방출
@@ -2857,6 +2885,7 @@ void Game::update(Milliseconds deltaTime) {
 	dustParticleSystem_.update( deltaTime );
 	// 스킬 VFX 이펙트는 시뮬레이션 계열이므로 simDt(에디터 timeScale 적용)로 구동한다.
 	// 일시정지 시 함께 멈춰야 VFXParticleAttach 히트박스가 파티클을 따라 계속 움직이지 않는다.
+	bloodEffect_.update( simDt );
 	swordSlash1Effect_.update( simDt );
 	swordSlash7Effect_.update( simDt );
 	swordSlashComboEffect_.update( simDt );
@@ -2930,6 +2959,7 @@ void Game::render() {
 
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
+	bloodEffect_.render( gfx_ );
 	swordSlash1Effect_.render( gfx_ );
 	swordSlash7Effect_.render( gfx_ );
 	swordSlashComboEffect_.render( gfx_ );
@@ -2975,6 +3005,10 @@ void Game::render() {
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+		return 0;
+	}
+
 	switch (msg) {
 	// WM_INPUT 메시지
 	// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
@@ -3069,15 +3103,18 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 모든 게임플레이/카메라 입력은 EditorController에 위임한다
-	// (캐스터 이동, 카메라 follow/free, 히트박스 피킹, 필드 넛지, 스킬 재생 등).
-	editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
-		mouseDeltaX_, mouseDeltaY_, deltaTime);
+	// Dialogue input has priority over gameplay/editor controls.
+	if (!dialogueSystem_.active()) {
+		editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
+			mouseDeltaX_, mouseDeltaY_, deltaTime);
+	}
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 
 	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
-	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
+	if ( !dialogueSystem_.active()
+		&& (keyboardStateCurr_[VK_RETURN] & 0x80)
+		&& !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
 		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
 		if (cursorCaptureEnabled_) {
 			captureCursor();
@@ -3085,6 +3122,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			releaseCursor();
 		}
+	}
+
+	// F8: replay the sample dialogue event authored in dialogues.json.
+	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
+		dialogueSystem_.show("sample_intro");
 	}
 
 	// H key: toggle Hi-Z occlusion culling
@@ -3120,6 +3162,49 @@ void Game::processInput(Milliseconds deltaTime) {
 		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
 	}
 
+	// K 키: 현재 컨트롤 중인 객체(에디터 캐스터)를 래그돌화/되돌리기 토글 (디버그).
+	if ( (keyboardStateCurr_['K'] & 0x80) && !(keyboardStatePrev_['K'] & 0x80) ) {
+		toggleCasterRagdoll();
+	}
+
+}
+
+void Game::toggleCasterRagdoll() {
+	auto obj = editor_.controlledObject();
+	if (!obj) return;
+	Ragdoll* prd = obj->ragdoll();
+	if (!prd) return;
+	Ragdoll& rd = *prd;
+
+	// Already ragdolled -> revert to animated control. Deactivate + destroy the ragdoll
+	// and re-register the (still-at-activation-pos) main body so it resumes normal control.
+	if (rd.isActive()) {
+		rd.deactivate(physicsWorld_);
+		rd.destroy(physicsWorld_);
+		physicsWorld_.registerBody(&obj->body(), [p = obj.get()]() { p->rebuildBodyBVH(); });
+		obj->body().snapToCurrent();
+		return;
+	}
+
+	if (!obj->model() || !obj->model()->ragdollDef || !obj->animBlender()) return;
+
+	// Build the ragdoll for the CURRENT model. The editor caster rig is hot-swappable
+	// (e.g. to Boss), and setMonsterCaster does not rebuild the ragdoll, so rebuild here.
+	if (rd.isBuilt()) rd.destroy(physicsWorld_);
+	rd.build(obj->model()->skeleton, *obj->model()->ragdollDef, physicsWorld_, obj->body().scale());
+	rd.seedFromFinalXforms(obj->animBlender()->finalXformData(), obj->model()->skeleton, obj->renderState().world);
+	rd.buildPassengers(obj->model()->skeleton, obj->animBlender()->finalXformData());
+	rd.activate(physicsWorld_);
+	physicsWorld_.unregisterBody(&obj->body());
+
+	// Per-bone random noise impulse so it visibly collapses even with gravity off
+	// (Z toggles gravity). Mirrors the death-ragdoll nudge.
+	for (const auto& rb : rd.bones()) {
+		if (rb.noiseImpulse <= 0.f || !rb.body) continue;
+		mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
+		if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 1.f, 0.f);
+		rb.body->applyImpulse(mu::Vec3(mu::NVec3(rnd)) * rb.noiseImpulse, rb.body->pos());
+	}
 }
 
 void Game::cullObjects() {

@@ -14,8 +14,12 @@ using Bus = SoundManager::Bus;
 // system picks them up. Missing files just warn at play time (no crash).
 constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	// --- Background music (streamed, looped) ---
-	{ "lobby",     "../resources/audio/bgm/lobby.wav",   Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
-	{ "ingame",    "../resources/audio/bgm/Action 5 (Loop).wav",  Bus::Bgm, /*loop*/true,  /*stream*/true,  1.0f },
+	{ "lobby",             "../resources/audio/bgm/lobby.wav",                    Bus::Bgm, /*loop*/true, /*stream*/true, 1.0f },
+	{ "ingame",            "../resources/audio/bgm/Action 5 (Loop).wav",           Bus::Bgm, /*loop*/true, /*stream*/true, 1.0f },
+	{ "hobgoblin_arena",   "../resources/audio/bgm/Boss of the Abyss (Loop).mp3", Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
+	{ "grandbaum_arena",   "../resources/audio/bgm/Boss Domain (Grandbaum).mp3",   Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
+	{ "isys_arena",        "../resources/audio/bgm/Quiet Omen (Isys).mp3",         Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
+	{ "boss_arena",        "../resources/audio/bgm/Whispering Vale.mp3",           Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
 
 	// --- UI ---
 	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 1.0f },

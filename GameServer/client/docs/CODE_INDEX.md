@@ -256,6 +256,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
+| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. `Online::Game::equipPlayerWeapon()`이 **무기 모델의 단일 SocketOffset 키(SocketType)를 읽어 해당 손에 장착**(Bow=왼손, 나머지=오른손; 하드코딩 RightHand 제거) + 캐릭터 `AnimBlenderPlayer::setWeaponType` 호출로 무기별 클립 세트 적용(onlineGame.{hpp,cpp}) |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
 | 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
@@ -275,10 +276,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `EventList` alias | `event.hpp #62` | `std::list<char*>` |
 | `EventType` enum | `event.hpp #67-78` | Hit, Blood, Death, Attack, Respawn, SkillHit, CameraShake, VFXSpawn |
 | `BasicEvent` struct | `event.hpp #84-86` | 공통 base (type 필드) |
-| `EvHit` struct | `event.hpp #88-95` | targetId, hp |
+| `EvHit` struct | `event.hpp #88-100` | targetId, hp, `hitAnimIndex`(u8): 서버 권위 선택 피격 리액션 클립 인덱스(다중 hit 리그 Boss=Hit1/Hit2). 단일 hit 몬스터는 무시. `S_SkillHit`→`onSkillHit`→`applyHit`→`EvHit` 전파 |
 | `EvBlood` struct | `event.hpp #96-101` | victimId |
 | `EvDeath` struct | `event.hpp #102-107` | victimId |
-| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case) |
+| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case). 플레이어도 무기별 `attackClips_`에 동일 적용 |
+| `PlayAnimation` 이벤트 | `skill/skillTypes.hpp` | `clipName[32]`(클·서버 미러; 서버가 플레이어 공격 클립을 이 이름으로 `switchClip`)+`blendTime`+`attackIndex`. 클라는 attackIndex로, 서버는 clipName으로 클립 선택. 서버 핸들러는 owner가 `isPlayer()`일 때만 동작(몬스터는 AI 구동, no-op) — `RoomServer/skill/skillSystem.cpp` |
 | `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
 | `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
 | `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
@@ -331,10 +333,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #16` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `AnimBlenderPlayer` | `object.hpp #16` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive` |
 | `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
 | `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
 | `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #336`/`object.cpp #788` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
@@ -378,6 +381,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
+| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1483,#1491,#1509` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(Online::Game::equipPlayerWeapon, onlineGame.cpp) |
+| `Object::render()` 부속 객체 루프 | `object.cpp #1277` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
+| `Object::renderPortrait()` | `object.cpp #1310` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
+| `Object::renderPortraitEquipment()` | `object.cpp #1348` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
 | `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
 | `Object::render()` | `object.cpp #843` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
@@ -483,6 +490,25 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`. **Scatter**(나무/디테일/풀): `loadScatterAssets`(prop `.bin`→`propModels_`+빌보드 cross-quad/머티리얼+`resolvedProtos_`)/`resolveChunkScatter`(인스턴스 world·AABB 상주)/`submitScatterDrawEvents`(PBR 자동 인스턴싱 + **BVH 기준 컬링**: 비-BVH=거리컬 `kDetailCullRadius`(80m), BVH=메인카메라 `frustum_` VFC와 `Light::shadowVisible` **그림자 컬링을 독립 평가**→ `viewFrustumCulled`/`shadowCulled` 분리 설정(화면 밖 나무도 그림자 유지), 둘 다 안 보이면 skip; Hi-Z occludee/occluder는 메인 가시 시에만)/`setCullCamera(Frustum,eye)`, `buildCrossQuadMesh`(양면 빌보드). **`submitDrawEvents(GFX&, const Light&)`**: chunk 메시도 `shadowVisible(AABB, expand=3)`로 그림자 컬링(`TerrainObject::setShadowCulled`→DrawEvent `shadowCulled`, terrain shadowDraw 루프에서 skip; gbuffer는 무영향). 인스턴스 버퍼 용량은 `gfx.cpp` perInstanceData(PBRDeferred 32768/forward 16384, 정적 Hi-Z 65536) |
 | `docs/scatterSystem.md` | Scatter 시스템 설계: 포맷 v3(per-instance Rot 쿼터니언·Align To Ground 베이크), 이름 매핑(ModelExtractor targetName), 자동 인스턴싱, 알파 컷아웃(+albedo 맵 누락 클리핑 함정), 빌보드, 충돌(ScatterCollider 구현) |
 | `docs/scatterAuthoringGuide.md` | 지형에 Tree/Rock/Flower/Bush/Plant 띄우는 실전 작성 가이드(ModelExtractor→TerrainExtractor→DDS 변환→배치→실행, 트러블슈팅) |
+
+**미니맵 (top-down, North-up; 월드 고정 베이크 + 매 프레임 UV 스크롤):**
+
+> 캐시 텍스처는 **플레이어 중심의 고정 크기(`kMinimapCoverageWorld`=360m) 월드 영역**에 베이크되고, HUD가 매 프레임 플레이어 위치 기준 **UV sub-rect**로 스크롤한다(플레이어 중앙 고정, 지형이 반대로 흐름). **단일 RT**(per-room 아님; 직렬 큐라 해저드 없음, 깜빡임 근본 해소). 재굽기는 청크 로드/언로드 **또는 플레이어가 베이크 중심에서 50m(`kMinimapRebakeMoveThreshold`) 이상 이동** 시 1프레임으로 수행. 커버리지는 청크 크기(200m)와 무관하게 시야 기준이라 splat·prop이 또렷(1024px). 미로드 영역은 검정→fog-of-war 블러.
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `TerrainChunkManager::minimapDirty()`/`clearMinimapDirty()`/`markMinimapDirty()` | `terrainChunkManager.hpp` | 청크 로드/언로드 시 세팅되는 dirty 플래그(폴링 트리거) |
+| `TerrainChunkManager::submitMinimapDrawEvents()` | `terrainChunkManager.cpp` | 컬링 없이 Ready/Expiring 청크 전부를 `MinimapTerrainPipeline::DrawEvent`로 제출(베이크 center/coverage는 onlineGame이 player pos + `GFX::kMinimapCoverageWorld`로 계산) |
+| `MinimapTerrainPipeline` | `minimapTerrainPipeline.hpp/.cpp` + `minimapTerrain.hlsl` | splat-blend diffuse 지형 패스. PS alpha=1 고정(로드 영역 마스크) |
+| `MinimapPropPipeline` | `minimapPropPipeline.hpp/.cpp` + `minimapProp.hlsl` | scatter prop(나무/바위 등 **BVH prop만**) top-down albedo + alpha-cutout 베이크(지형 texA 위에 겹쳐 그림). 풀(grass/flowers, 비-BVH)은 미니맵 도배 방지로 제외. 텍스처 위에 그려 fog 마스크(alpha=1)에도 기여 |
+| `TerrainChunkManager::submitMinimapPropDrawEvents()` | `terrainChunkManager.cpp` | Ready 청크의 collidable(BVH) scatter 인스턴스 part를 `MinimapPropPipeline::DrawEvent`로 제출 |
+| `MinimapFogBlurPipeline` | `minimapFogBlurPipeline.hpp/.cpp` + `minimapFogBlur.hlsl` | 2-pass separable로 **alpha(커버리지 마스크)만** 블러하고 **RGB는 중심 탭으로 선명 통과**, `finalRGB = sharpRGB × blurredAlpha`로 합성. fog는 가장자리만 페이드(지형 색은 안 뭉갬). ※RGB까지 블러하던 버그로 미니맵 전체가 흐렸던 것 수정 |
+| `SharedResources::Minimap` | `sharedResources.hpp/.cpp` | **단일** texA/texB ping-pong RT(R8G8B8A8, `created` 플래그). 초기 상태 PIXEL_SHADER_RESOURCE(첫 베이크 전 샘플 시 상태 불일치 방지) |
+| `GFX::requestMinimapRebake/addMinimapDrawEvent/addMinimapPropDrawEvent/setMinimapCamera/minimapTextureForThisFrame` | `gfx.hpp/.cpp` | 요청 프레임에 단일 RT를 1프레임으로 베이크(지형→prop→fog블러) |
+| `GFX::kMinimapRTSize/kMinimapCoverageWorld/kMinimapRebakeMoveThreshold/kMinimapWorldRadius/kMinimapFogBlurRadiusTexels` | `gfx.hpp` | 캐시 해상도(1024)/커버리지(360m)/이동 재굽기 임계(50m)/기본 시야 반경(60m, 줌 base)/페이드 폭(48텍셀) |
+| `MinimapHUD` | `client/ui/minimapHUD.hpp/.cpp` | **우상단**(제거된 Hi-Z 디버그 프린트 자리) 위젯: 프레임+배경(UV 스크롤 sub-rect)+아이콘. 크기·위치 해상도 상대화(`uiScale=min(sw/1024,sh/768)`), 줌(`zoomIn/zoomOut`, Shift+휠), 아이콘 크기 축소(몬스터 3.5/파티 5/본인 6.5/보스 8 px×uiScale) |
+| `MinimapEntityIcon` | `client/ui/minimapHUD.hpp` | `{worldPos, Kind}` — Self(초록)/Party(파랑)/Monster(빨강)/Boss(주황) |
+| `Online::Game::minimap_`/`minimapIcons_`/`minimapBakedCenter_`/`minimapBakedCoverage_`/`bossNpcIds_` | `online/onlineGame.hpp/.cpp` | 아이콘 수집(`idPlayerMap_`/`idMonsterMap_`), 재굽기 트리거(청크 dirty 또는 50m 이동), Shift+휠 줌(`processInputGame`). 보스 판별은 스폰 시 채운 `bossNpcIds_` 집합(서버 ObjectType 권위, RTTI 무의존) |
 | `unityScripts/TerrainExtractor.cs` | 지형+산포 추출(Export All Chunks). chunks_index v3 작성, `ScanPrototypes`(이름=매핑키), `GatherScatter`(트리=treeInstances·디테일=`ComputeDetailInstanceTransforms`), per-instance `Rot` 쿼터니언에 Align To Ground 틸트 베이크 |
 | `unityScripts/ModelExtractor.cs` | 프롭/캐릭터 `.bin` 추출. LODGroup이면 **LOD0만**(`CollectLODRenderers`/`IsRendererUsable`), `FindAlbedoTexture`(셰이더 TexEnv 폴백으로 albedo 견고 추출), `cAlbedo` 흰색 기본값 |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
@@ -531,6 +557,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
 | `energyOrbPipeline.hpp` / `.cpp` + `energyOrb.hlsl` | **몬스터 사망 에너지 오브 렌더 파이프라인**. MeshParticle 복제 + GS quad. 죽은 서브메시 정점을 사망 포즈로 스키닝(boneData t2) → 해시 구체로 모핑(`morphT`) → 카메라향 quad point-sprite, **SceneColorHDR에 가산(bloom 이전)**. PS: 서브메시 albedo→HDR 색 `lerp(_, _, morphT)` × radial falloff. `DrawEvent{world,pMesh,pSubMesh,pAlbedo,boneXforms,sphereCenter,sphereRadius,colorHDR,morphT,pointSize,vertexCount}` |
 | `energyOrbSystem.hpp` / `.cpp` | **에너지 오브 라이프사이클**(모드 비종속). `Orb` 상태머신 Forming→Tracking→Absorbing→Dead. `spawnFromMonster(model,finalXforms,objWorld,totalCharge,slot,corpseId)`=서브메시당 1오브(첫 정점 LBS 스키닝을 구체 중심으로), 플레이어 추적+가속, 근접 시 `onAbsorb`. **응축 스케일**(`renderScale`: 접근 시 월드크기 축소로 원근 팽창/bloom 블롭 억제). `hasActiveOrbs(corpseId)`/`update(dt,playerPos)`/`submitDrawEvents`. 노브: kForming 0.85s, kMaxSpeed 13, kSphereRadius 0.32, kPointSize 0.04, HDR 강도 2.0~3.8, kCondenseMinScale 0.5 |
+| `pathGuideSystem.hpp` / `.cpp` | **경로 안내 연출**(클라 전용, 게임 스레드 단독). `build(markers)`=`PathPt` 마커(`name="<pathId>_<index>"`) 그룹화·정렬·등호장 리샘플. `update(dt,playerPos,terrain)`=가장 가까운 path 선택→플레이어 폴리라인 투영→**가시 윈도우만 매 프레임 `heightAtWorld` Y conform**→위습 전진(ease)+bob. `submitDrawEvents(gfx,ribbonTex,orbProxy)`=리본을 ≤31정점+1오버랩 세그먼트로 `addHDRTrailDrawEvent`(흐름+지면정렬), 위습 1개 `addDrawEvent(EnergyOrb)`(free-orb morphT=1). 노브=`Config`. 상세: `docs/pathGuidance.md` |
+| `mesh.cpp` `buildOrbProxyMesh(device,cmdList,fence,pointCount=128)` | free-orb(위습)용 N-포인트 프록시 메시. EnergyOrbPipeline 4-VB 슬롯(Position/BoneIndices/BoneWeights/UV, 모두 더미)+인덱스[0..N-1]+1 SubMesh. `morphT=1`에서 정점 개수만 의미(시작 pos/본 무관). `onlineGame`이 `recordTerrainResourceLoad`로 1회 생성→`orbProxyMesh_` |
+| `onlineGame.cpp` 경로 안내 훅 | `pathGuide_`(멤버)+`orbProxyMesh_`. build: `setupStageVisual`의 zone 빌드 직후 `pathGuide_.build(chunkManager_.markers())`+프록시 메시 생성. update: `orbSystem_.update` 직후 `pathGuide_.update(dt,player_->pos(),chunkManager_)`. submit: `orbSystem_.submitDrawEvents` 직후 `pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_)` |
 | `object.cpp/.hpp` `Object::addBodyRipple`/`BodyRipple`/`bodyRipples_` | 흡수 물결 앵커(M5). 오브 흡수 시 `onlineGame` onAbsorb가 호출 → 본체 위치 기준 오프셋으로 저장(매 프레임 live pos에 재앵커→몸 추적), `update`에서 노화(`kBodyRippleLife=1.0s`, HLSL `RIPPLE_LIFE`와 일치), deferred-skinned DrawEvent의 `ripplePosAge/rippleColorIntensity/rippleCount`로 주입 |
 | `onlineGame.cpp` 시체/풀 (`migrateToCorpse`/`updateCorpses`/`reinitFromPool`/`returnMonsterToPool`) | 사망 연출 게임 레벨 라이프사이클(client-authored Corpse). Live→Corpse 이관(맵/컨테이너/`barrierObjects_` 제거, body `snapToCurrent`, `kDetachedCorpseId` 고정 id, `corpseId=renderObjectId`), 래그돌 2.5s→오브 전환, 흡수 완료 시 per-kind 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`/`bomberPool_`/`birdyPool_`/`slimePool_`/`treantPool_`) 반환·재사용. **신규 몬스터(Bomber/Birdy/Slime/Treant)**: goblins_/snakes_/mushrooms_처럼 타입별 벡터(`bombers_`/`birdys_`/`slimes_`/`treants_`)+타입별 HP바 맵으로 처리 — `justDied`/render/cull/HiZ/HP바 모두 타입별 개별 루프, migrate/return/reinit switch도 타입별 case. 공용 셋업은 `configureNetMonster`(HP바 맵 인자), 각 createX가 타입 벡터에 push. Grandbaum→treants_(Treant kind), Isys→birdys_(Birdy kind). 오브 연출은 kind-무관 자동. **renderObjectId 객체당 1회 발급·평생 유지**(범람 방지, `setMaxRenderObjectId(10000)`). **중복 스폰 ghost 가드**: `create{Goblin,Hobgoblin,Snake,Mushroom,Bomber,Birdy,Slime,Treant}`이 `idMonsterMap_`에 이미 있으면 스킵(S_Enter/S_NpcSpawnBatch 중복 대응). 상세: `gameArchitecture.md` "에너지 오브 사망 연출" |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
@@ -542,8 +571,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
-| GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (정적·스킨드·지형 모두 emissive 전용; ambient/IBL는 lighting 패스) + Roughness.a |
-| GB3 | R8_UNORM | Metallic |
+| GB2 | R11G11B10_FLOAT | **Emissive.rgb (HDR)** (정적·스킨드·지형 모두 emissive 전용; intensity>1 보존) |
+| GB3 | R8G8_UNORM | Metallic.r + Roughness.g |
 | GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원에서 NDC 깊이 양자화 회피용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
@@ -643,7 +672,9 @@ Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된
 |------|------|
 | `trailPipeline.hpp` | DrawEvent (`std::vector<TrailVertexCPU>` + per-trail constants), Resources (system-wide perInstanceData pool + per-drawcall PDD), Dispatcher (alpha/additive 2 PSO) |
 | `trailPipeline.cpp` | updateGPUDataSingleThreaded: 모든 trail vertex를 한 StructuredBuffer에 패킹 + trailStartOffsets 기록. drawSingleThreaded: VB/IB 없이 `DrawInstanced((N-1)*6, 1, 0, 0)` |
-| `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime) |
+| `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime). **하위호환 확장**: `PerDrawcallData.flowSpeed`(Tile V 시간 스크롤 `−currentSystemTime*flowSpeed`) + `alignMode`(0=카메라-페이싱[기존], 1=지면정렬 `cross(tangent, worldUp)`). 둘 다 기본 0 → 기존 파티클 트레일 불변 (구 `pad0` 재사용) |
+
+**TrailPipeline (HDR / 프리블룸 채널):** 경로 안내 리본 발광용. 기존 트레일은 톤매핑 resolve 이후 LDR 백버퍼에 그려져 블룸이 안 먹으므로, 별도 채널을 **에너지 오브 직후(SceneColorHDR, 블룸 전)** 에 draw. `gfx.hpp/cpp`: `drawEventsTrailPipelineHDR_` + `resourcesTrailPipelineHDR_`(별도 리소스셋 — StructuredBuffer 클로버 방지, per-backbuffer) + `addHDRTrailDrawEvent`. PSO: `createTrailShaderHDR`(`shader.cpp`, RTV=`R16G16B16A16_FLOAT`, additive). 카메라/프레임 데이터는 기존 `cameraDataTrailPipeline_` 재사용.
 
 **WindRingPipeline:**
 
@@ -710,7 +741,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 - `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
   - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
   - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
-- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate). Billboard와 동일하게 `TextureSheetAnimationModule` 프레임 UV(`uvOffset/uvScale`)를 적용 — `PerInstanceData.uvScaleOffset`로 per-particle 전달, `meshParticle.hlsl`에서 `uv = uv*scale+offset`. 기본 (1,1,0,0)=전체 텍스처. bloodEffect(3x3 시트)가 이 경로 사용
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 - `Mesh` + `MatWindRing` — `WindRingPipeline::DrawEvent` 제출 (NORMAL 입력 + Fresnel edge fade)
 - `Mesh` + `MatPiercing` — `PiercingMeshPipeline::DrawEvent` 제출 (Custom1.xy→uv2.z/.w dissolve, 3중 노이즈 + distortion)
@@ -774,7 +805,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::lobbyCreateRoom/JoinRoom/LeaveRoom/StartGame()` | `onlineGame.cpp` (UI 버튼 콜백) | LobbyServer로 요청 패킷 전송(C_CreateRoom/C_JoinRoom/C_LeaveRoom/C_GameStart). 상태 변경은 응답 핸들러에서 수행 |
 | `Game::onLobbyCreated/onLobbyJoined/onLobbyPlayerJoined/onLobbyPlayerLeft/onGameStart()` | `onlineGame.cpp` (lobby 액션 직후, public) | LobbyServer 응답 처리. `PacketManager`가 `LobbyScene`의 `SleepEx(1,true)` alertable 대기에서 호출. 룸 상태/슬롯/호스트 갱신 후 `refreshLobbyUI()`. `onGameStart`는 현재 로그만(RoomServer 핸드오프 후속) |
 | `Game::createStronghold/onStrongholdState/applyHit` | `onlineGame.cpp` | 거점은 `Stronghold`(Object+EventBus, AnimBlender 없음; `object.hpp`) 클래스. enter의 hp/maxHp로 생성. `applyHit`은 EvHit/EvDeath 발행만(거점/고블린 공통), 디스패치 루프 `resolveObject`가 `strongholdHpBars_`로 거점 해소 → 데미지 넘버 생성. `onStrongholdState`: 파괴(state=1)는 setHp 없이 EvDeath, 재건(state=0)은 setHp(full)+EvRespawn. 파괴상태=`isDead()`. 상세: `RoomServer/docs/strongholdSystem.md` §10 |
-| `Game::lobbyDisplayName(uint16)` | `onlineGame.cpp` | sessionId → 표시 이름(본인 `myId_`=`"나"`, 그 외 `"Player_<id>"`) |
+| `Game::lobbyDisplayName(uint16)` | `onlineGame.cpp` | sessionId → 표시 이름(본인 `myLobbyId_`=`"나"`, 그 외 `"Player_<id>"`) |
 | `Game::LobbyScene()` 진입부 | `onlineGame.cpp` | `SleepEx(1,true)` + `ClientApp::send()`로 로비 네트워크 펌핑(InGameScene와 동일 패턴) |
 
 **Game 멤버 변수 (game.hpp #81-135):**
@@ -1100,7 +1131,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 **이펙트↔스킬 1:1 기반:** 기존 이펙트 드롭다운 18종 ParticleEffect와 1:1로 짝지은 기본 스킬 lua를
 `resources/skills/`에 추가(`SkillCompiler::compileAll`이 디렉터리 스캔→자동 등록). VFX는 경로가
 아니라 lua `PlayVFX{vfxId}`→`StandAlone::Game::skillVfxById_[vfxId]`(`ParticleEffect*` 배열) 인덱스
-바인딩(`standalone/game.cpp`, 0=hit/blood 예약 nullptr, 1~18=각 Effect). 스킬명은
+바인딩(`standalone/game.cpp` + `online/onlineGame.cpp`, 0=`bloodEffect_`(칼/창/완드 피격 혈흔, `blood_hit.json`+Plane 곡면 메시+3x3 시트), 1~18=각 Effect). 칼=sword_slash·창=piercing·완드=spikes lua의 `onHit{vfxId=0}`이 피격 시 재생(활/arrow 제외). 스킬명은
 `kCharacterSkillMap` Player에 등록. vfxId↔Effect↔skill/lua 매핑표는 `docs/skillEditor.md`.
 
 | 항목 | 위치 | 설명 |
@@ -1207,3 +1238,29 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 - `docs/physicsArchitecture.md` — PhysicSystem::step 단계, BVH 변환 체인
 - `docs/gameArchitecture.md` — 게임 루프, 이벤트 시스템, CombatSystem 구조
 - `CLAUDE.md` — 파일 인코딩, 빌드 방법, 아키텍처 문서 링크
+
+---
+
+## Dialogue / Monologue UI
+
+| Item | Location | Description |
+|------|----------|-------------|
+| `UI::DialogueSystem` | `ui/dialogue/DialogueSystem.hpp/.cpp` | Loads event-to-window definitions, advances pages, and fades completed windows |
+| `DialogueSystem::show` | `ui/dialogue/DialogueSystem.cpp` | Opens a dialogue by JSON `eventId` |
+| Dialogue JSON | `../resources/UI/dialogues/dialogues.json` | Shared 1024x768 authoring data used by HTML preview and game |
+| HTML authoring preview | `docs/dialogue_preview/index.html` | Live position, size, color, opacity, font, pages, and fade editor |
+| Preview launcher | `docs/dialogue_preview/preview.ps1` | Serves the repository locally and opens the preview |
+| Standalone integration | `standalone/game.cpp` | Input priority, per-frame fade update, and F8 sample trigger |
+| Online integration | `online/onlineGame.cpp` | `init` in `setupStage`; `sample_intro` shown in `setupPlayer` (local player spawn complete); `sample_context` shown in `onZoneState` on first Hobgoblin clear (`WallHobgoblin`, state 1->0, gated by `completedArenaZoneIds_` insert result); per-frame `update` in `InGameScene`, `handleWndMsg` first in `receiveWndMsg`, gameplay input gated while `active()` |
+
+---
+
+## Tactical Zone Intro (arena entry title card)
+
+| Item | Location | Description |
+|------|----------|-------------|
+| `UI::TacticalZoneIntro` | `ui/intro/TacticalZoneIntro.hpp/.cpp` | Self-contained overlay module: builds its own UI subtree, animates banner/emblem/title reveal; boss arena adds a glitchy WARNING phase |
+| `TacticalZoneIntro::init` | `ui/intro/TacticalZoneIntro.cpp` | Builds the hidden widget tree under `UIManager::root`; textures from `AssetManager` |
+| `TacticalZoneIntro::trigger` | `ui/intro/TacticalZoneIntro.cpp` | Starts the intro for an arena wall prefix (`WallHobgoblin`/`WallGrandbaum`/`WallIsys`/`WallBoss`); unknown prefixes return false |
+| `TacticalZoneIntro::update` | `ui/intro/TacticalZoneIntro.cpp` | Per-frame alpha/offset/size animation; hides itself when finished |
+| Online integration | `online/onlineGame.cpp` | `setupStage` init, local `ZoneSystem::Enter` triggers arena intro/BGM from `player_->pos()`, per-frame update in `InGameScene`; shared `onZoneState` never starts presentation |

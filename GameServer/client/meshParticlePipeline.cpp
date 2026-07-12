@@ -49,8 +49,10 @@ void Dispatcher::updateGPUDataSingleThreaded() {
     std::ranges::transform(drawEvents_, perInstanceData.begin(),
         [](const DrawEvent& e) {
             return MeshParticleShader::PerInstanceData{
-                .world = mu::transpose(e.world).getXmf(),
-                .tint  = e.tint.getXmf(),
+                .world         = mu::transpose(e.world).getXmf(),
+                .tint          = e.tint.getXmf(),
+                .uvScaleOffset = XMFLOAT4{ e.uvScale.x(), e.uvScale.y(),
+                                          e.uvOffset.x(), e.uvOffset.y() },
             };
         }
     );

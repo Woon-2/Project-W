@@ -48,10 +48,11 @@ public:
     int systemCount() const { return static_cast<int>(systems_.size()); }
 
     // Sets shape.position on all sub-systems and triggers each per its PlayMode.
-    void play(const mu::Vec3& pos);
+    // sizeScale: 이 재생의 Emit 파티클 크기 배율(피격 VFX hit별 연출). 기본 1.0.
+    void play(const mu::Vec3& pos, float sizeScale = 1.f);
     void play(const mu::Vec3& pos, mu::NQuat orient);
     void play(const mu::Vec3& pos, mu::Mat4x4 orientXform);
-    void play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward);
+    void play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward, float sizeScale = 1.f);
 
     // Updates emission origin for all sub-systems without restarting emission.
     // Call each frame while a continuous effect is in flight.
@@ -70,6 +71,13 @@ public:
     // Mode::None / GroundConform::None leave the respective behaviour unchanged.
     void setGroundBehavior(ps::ParticleCollisionModule::Mode collision,
                            ps::ShapeModule::GroundConform     conform);
+
+    // Horizontal mirror for mesh-mode systems: reflects the caster-right axis in the
+    // effect's rest frame so a mesh arc (e.g. a sword slash) sweeps the opposite way
+    // to match the player's swing direction. Set before play()/setOrigin(); rebuilt
+    // each call so it is deterministic whether or not a cast wants the flip. Mesh
+    // pipelines are two-sided (CULL_NONE) so the reflected winding still renders.
+    void setFlipX(bool flip) { flipX_ = flip; }
 
     // Per-cast deterministic seed (set by the skill system before play()).
     // Forwarded to each non-sub-emitter system as mixSeed(seed, systemIndex);
@@ -115,6 +123,7 @@ private:
     std::function<void(int childIdx, const mu::Vec3& pos)> onChildSpawn_;  // optional spawn hook
     std::mt19937                        rng_{ std::random_device{}() };
     mu::Vec3                            advanceForward_ = { 0.f, 0.f, 1.f };
+    bool                                flipX_ = false;     // mirror mesh systems horizontally on next play()
     const GroundSampler*                ground_ = nullptr;  // non-owning terrain query (optional)
 };
 

@@ -15,7 +15,7 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 0.15, 0.3, 0.3, 0.45, 0, 0, 0) },
+    localOBBs           = { OBB(0.0, 0.0, 0.15, 0.5, 0.5, 0.6, 0, 0, 0) },
     attach              = BoneAttach("head_jnt"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,

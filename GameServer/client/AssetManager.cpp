@@ -39,6 +39,21 @@ const Texture* AssetManager::playerWeaponIcon(PlayerWeaponType weaponType) const
 	}
 }
 
+const Model* AssetManager::playerWeaponModel(PlayerWeaponType weaponType) const {
+	switch (weaponType) {
+	case PlayerWeaponType::Katana:
+		return &modelKatana_;
+	case PlayerWeaponType::SpearHook:
+		return &modelSpearHook_;
+	case PlayerWeaponType::CrystalWand:
+		return &modelCrystalWand_;
+	case PlayerWeaponType::HeavyArrow:
+		return &modelHeavyArrow_;
+	default:
+		return &modelKatana_;
+	}
+}
+
 const Texture* AssetManager::skillIconByAssetName(std::string_view n) const {
 	if (n == "SlashWave")            return &skillIconSlashWave_;
 	if (n == "Slash7")               return &skillIconSlash7_;
@@ -82,6 +97,28 @@ void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) 
 		.modelPath = "../resources/models/player/player.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
+	} );
+
+	// 무기 모델. 로비 포트레이트에서도 즉시 보여야 하므로 Phase 1에서 로드한다.
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/sword/sword.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelKatana_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/spear/spear.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelSpearHook_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/wand/wand.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelCrystalWand_
+	} );
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bow/bow.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelHeavyArrow_
 	} );
 
 	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
@@ -197,6 +234,16 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.needsUploadInfo = false
 	} );
 
+	// 피격 혈흔 이펙트(bloodEffect). 3x3 스프라이트 시트 + Plane 곡면 메시.
+	// smoke 와 동일하게 기본 샘플러(Repeat) 사용 — 머테리얼 BLOOD wrapMode=Repeat.
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name           = "BloodTex",
+		.texturePath    = "../resources/Textures/Blood.dds",
+		.pDest          = &bloodTex_,
+		.pTexHashMap    = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	// Combat feedback UI: damage-number digit atlas + kill-count skull icon.
 	// Clamp sampler avoids UV bleed across atlas cell borders.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -271,6 +318,69 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.sampler         = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "TacticalZoneTitleBanner",
+		.texturePath     = "../resources/UI/title_banner_mask.dds",
+		.pDest           = &tacticalZoneTitleBanner_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "HobgoblinEmblem",
+		.texturePath     = "../resources/UI/Hobgoblin_emblem.dds",
+		.pDest           = &hobgoblinEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "GrandbaumEmblem",
+		.texturePath     = "../resources/UI/Grandbaum_emblem.dds",
+		.pDest           = &grandbaumEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "IsysEmblem",
+		.texturePath     = "../resources/UI/Isys_emblem.dds",
+		.pDest           = &isysEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "GrandBamEmblem",
+		.texturePath     = "../resources/UI/GrandBam_emblem.dds",
+		.pDest           = &grandBamEmblem_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WarningGlitchFragments",
+		.texturePath     = "../resources/UI/warning_glitch_fragments.dds",
+		.pDest           = &warningGlitchFragments_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WarningNoiseMask",
+		.texturePath     = "../resources/UI/warning_noise_mask.dds",
+		.pDest           = &warningNoiseMask_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
 	// Skill dial icons (12) — one per selectable weapon skill.
 	auto loadSkillIcon = [&]( const char* name, const char* file, Texture* dest ) {
 		gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -294,6 +404,13 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	loadSkillIcon( "SkillIconPiercingSlash",       "../resources/UI/piercing_slash.dds",        &skillIconPiercingSlash_ );
 	loadSkillIcon( "SkillIconPiercingCircle",      "../resources/UI/piercing_circle_slash.dds", &skillIconPiercingCircle_ );
 	loadSkillIcon( "SkillIconPiercingMulti",       "../resources/UI/piercing_multi.dds",        &skillIconPiercingMulti_ );
+
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/Plane.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshBloodPlane_,
+		.pDestTex    = nullptr
+	} );
 
 	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
 		.meshPath    = "../resources/effects/Slash3.meshbin",

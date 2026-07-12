@@ -66,6 +66,13 @@ static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerF
 static constexpr int     kMaxPhysicsScaleK    = 4;
 static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
+static constexpr uint64  kTimeSyncIntervalMs  = 10000;
+static constexpr int64   kMaxAcceptedSyncRttMs = 2000;
+
+static uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
 static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
@@ -76,18 +83,53 @@ static constexpr float    kBarrierMagicMinDiameter = 8.f;
 static constexpr float    kBarrierMagicMaxDiameter = 24.f;
 static constexpr int      kBarrierMagicRenderOrder = 4;
 static const mu::Mat4x4   kBarrierMagicQuadPlaneFix = mu::rotateYH(mu::Degree(-90.f));
-static constexpr float    kBarrierMagicWall0RightOffset = 12.f;
 
 static float barrierMagicDiameter(const MarkerDef& m) {
 	const float wallHeight = std::fabs(m.scale.y());
 	return std::clamp(wallHeight * 0.82f, kBarrierMagicMinDiameter, kBarrierMagicMaxDiameter);
 }
 
-static mu::Vec3 barrierMagicLocalOffset(const MarkerDef& m) {
-	if (m.name == "WallHobgoblin_0") {
-		return mu::Vec3{ 0.f, 0.f, kBarrierMagicWall0RightOffset };
-	}
-	return mu::Vec3{};
+// 입장 표시 마법진(magic circle)의 지역별 위치/회전 보정 테이블.
+//
+// Wall 마커 하나가 ① 물리 일방향 벽(makeOneWayWall, 실제 벽 슬랩 위)과 ② 입장 표시 마법진
+// (실제 통과 길목 중앙)을 겸한다. 벽 슬랩이 길목보다 넓거나 한쪽으로 치우치면 둘이 어긋나
+// 마법진이 길목에서 벗어나고(위치), 마커 방향에 따라 비뚤게 보일 수도 있다(회전). 그 차이를
+// 마커 이름별 로컬 오프셋 + 추가 회전으로 보정한다.
+//
+// offset    : 마커 로컬 위치 오프셋(circlePos에서 m.orient.rotate 적용). 보통 벽 폭(span) 축으로
+//             밀어 길목 중앙에 맞춘다. y=높이, z/x=수평 슬라이드.
+// rotateDeg : 마커 로컬 축 기준 추가 회전(도). x/y/z = 마커 로컬 X/Y/Z축 회전. planeFix와
+//             markerOrient 사이에 적용되어 벽 방향을 기준으로 돈다. 원하는 각이 나올 때까지
+//             축을 바꿔가며 조절. 둘 다 0이면 보정 없음(현재 동작 그대로).
+struct BarrierMagicAdjust {
+	mu::Vec3 offset{};      // 마커 로컬 위치 오프셋
+	mu::Vec3 rotateDeg{};   // 마커 로컬 추가 회전(도, x/y/z축)
+};
+
+static const std::unordered_map<std::string, BarrierMagicAdjust>& barrierMagicAdjustTable() {
+	// chunks_index.bin의 모든 Wall 마커. { offset(x,y,z), rotateDeg(x,y,z) }. 표에 없으면 보정 없음.
+	static const std::unordered_map<std::string, BarrierMagicAdjust> kTable{
+		// 보스 아레나(Arena_Boss)
+		{ "WallBoss",         { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 그란바움 아레나(Arena_Grandbaum)
+		{ "WallGrandbaum_0",  { mu::Vec3{ 0.f,   0.f, -10.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_1",  { mu::Vec3{ 0.f,   0.f,  0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallGrandbaum_2",  { mu::Vec3{ 0.f,   0.f,  -5.0f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 홉고블린 아레나(Arena_Hobgoblin)
+		{ "WallHobgoblin_0",  { mu::Vec3{ 0.f,   0.f,  12.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },   // 길목 중앙으로 +12(기존 값)
+		{ "WallHobgoblin_1",  { mu::Vec3{ 0.f,  -5.f,   7.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		// 이시스 아레나(Arena_Isys)
+		{ "WallIsys_0",       { mu::Vec3{ 0.f, -10.f, -20.f }, mu::Vec3{ 0.f, 45.f, 0.f } } },
+		{ "WallIsys_1",       { mu::Vec3{ 0.f,  -5.f, -15.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+		{ "WallIsys_2",       { mu::Vec3{ 0.f,   0.f,   0.f }, mu::Vec3{ 0.f, 0.f, 0.f } } },
+	};
+	return kTable;
+}
+
+static BarrierMagicAdjust barrierMagicAdjust(const MarkerDef& m) {
+	const auto& table = barrierMagicAdjustTable();
+	if (auto it = table.find(m.name); it != table.end()) return it->second;
+	return {};
 }
 
 // "Arena_X" zone 태그 -> "WallX" 마커 prefix. 아레나 후방 Wall 일방향 벽(arenaWalls_)과 장식용
@@ -188,6 +230,18 @@ void Game::setupStageVisual() {
 	bindZoneHandlers();
 	rebuildBarrierMagicCircleQuads();
 
+	// Path guidance (cosmetic, client-only): build polylines from "PathPt" markers
+	// and create the shared free-orb proxy mesh used to render the guiding wisp.
+	pathGuide_.build(chunkManager_.markers());
+	if (orbProxyMesh_.subMeshes.empty()) {
+		gfx_.recordTerrainResourceLoad(
+			[this](ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, DescriptorPool&, Fence& fence) {
+				orbProxyMesh_ = buildOrbProxyMesh(device, cmdList, fence, 128u);
+			},
+			/*wait=*/ true
+		);
+	}
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -231,6 +285,7 @@ void Game::setupLobbyCharacters() {
 	}
 
 	updateLobbyCharacterTransforms();
+	syncLobbyCharacterWeapons();
 }
 
 void Game::updateLobbyCharacterTransforms() {
@@ -374,22 +429,8 @@ void Game::setupStage() {
 	killCountWidget_->setTextures(assetManager_.digitAtlasTex(), assetManager_.killIconTex());
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
-
-	hiZStatsLabel_ = static_cast<UI::Label*>(
-		uiManager_.root()->addChild(std::make_unique<UI::Label>())
-	);
-	hiZStatsLabel_->name    = "hiZStatsLabel";
-	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
-	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
-	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
-	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
-	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
-	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
-	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
-	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
-	hiZStatsLabel_->setFontSize(18.0f);
-	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
-	hiZStatsLabel_->setText(L"HiZ: OFF");
+	tacticalZoneIntro_.init(uiManager_, assetManager_);
+	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
 	// hi-z culling 대상 개수
@@ -444,6 +485,46 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 	}
 
 	return L"player";
+}
+
+void Game::equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType) {
+	// 무기 모델은 단일 SocketOffset만 가지며, 그 SocketType(오른손/왼손)으로
+	// 어느 손에 부착할지 데이터 주도로 결정한다(현재 Bow=왼손, 나머지=오른손).
+	const Model* weaponModel = assetManager_.playerWeaponModel(weaponType);
+	auto socketType = Bone::SocketType::RightHand;
+	if (weaponModel && !weaponModel->socketOffsets.empty()) {
+		socketType = weaponModel->socketOffsets.begin()->first;
+	}
+
+	// 무기 전환 시 이전 손의 무기도 확실히 제거한다.
+	obj.disequip(Bone::SocketType::RightHand);
+	obj.disequip(Bone::SocketType::LeftHand);
+
+	Equipment eq{};
+	eq.socketType = socketType;
+	eq.object = std::make_unique<Object>();
+	eq.object->setModel(weaponModel);
+	obj.equip(std::move(eq));
+
+	// 장착 캐릭터의 애니메이션 블렌더에 무기 종류를 알려 클립 세트를 맞춘다.
+	if (auto* playerBlender = dynamic_cast<AnimBlenderPlayer*>(obj.animBlender())) {
+		playerBlender->setWeaponType(weaponType);
+	}
+}
+
+void Game::syncLobbyCharacterWeapons() {
+	if (lobbyChars_.empty()) return;
+
+	for (std::size_t i = 0u; i < lobbyChars_.size(); ++i) {
+		if (!lobbyChars_[i]) continue;
+		if (i < lobbyPlayers_.size()) {
+			equipPlayerWeapon(*lobbyChars_[i], lobbyPlayers_[i].weaponType);
+		}
+		else {
+			lobbyChars_[i]->disequip(Bone::SocketType::RightHand);
+			lobbyChars_[i]->disequip(Bone::SocketType::LeftHand);
+		}
+	}
 }
 
 void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType) {
@@ -757,6 +838,28 @@ void Game::setParticle()
 		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
 		return cfg;
 	};
+
+	// ── Blood hit effect (칼/창/완드 공통 피격 혈흔, vfxId 0) ──────────────────
+	// Alpha Blend(MatUnlit) + Plane 곡면 메시 + 3x3 스프라이트 시트 플립북.
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/blood_hit.json",
+			"Particle System (4)"
+		);
+		cfg.renderer.pMesh = assetManager_.meshBloodPlane();
+		cfg.renderer.pSubMesh = assetManager_.meshBloodPlane()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshBloodPlane()->subMeshes[0];
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.bloodTex(),
+			.blend   = ps::BlendMode::Alpha,
+		};
+		// 피격 위치에 고정되도록 World 시뮬레이션으로 강제(Unity 원본은 Local).
+		// 공유 인스턴스를 연속 타격에 재사용해도 기존 혈흔이 끌려오지 않게 한다.
+		cfg.main.simulationSpace = ps::MainModule::SimulationSpace::World;
+		cfg.renderer.renderOrder = 2;
+		bloodEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
 
 	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
 	{
@@ -1976,6 +2079,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*player_, playerInfo.weaponType);
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
@@ -2035,6 +2139,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
 		// same skill .lua PlayVFX events resolve identically in online mode.
 		skillVfxById_.assign(19, nullptr);
+		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
 		skillVfxById_[3]  = &swordSlashComboEffect_;      // SlashCombo
@@ -2080,6 +2185,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillSystem_.bindVfxGameplayConfigs(skillVfxById_.data(),
 		                                    static_cast<int>(skillVfxById_.size()));
 	}
+
+	// Local player has finished spawning in-game (server S_Enter): show the
+	// authored intro/monologue once. No-op if dialogues.json lacks the event.
+	dialogueSystem_.show("sample_intro");
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -2103,6 +2212,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2148,6 +2258,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2531,6 +2642,7 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 	auto grandbaum = std::make_shared<Grandbaum>();
 	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 void Game::createIsys(const ObjectInfo& info) {
@@ -2538,6 +2650,16 @@ void Game::createIsys(const ObjectInfo& info) {
 	auto isys = std::make_shared<Isys>();
 	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
+}
+
+// Final boss: own 14-clip rig, dedicated MonsterKind::Boss container/corpse routing.
+void Game::createBoss(const ObjectInfo& info) {
+	if (idMonsterMap_.count(info.objectId)) return;
+	auto boss = std::make_shared<Boss>();
+	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
+	bosses_.push_back(boss);
+	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 }
 
 // === Client-authored corpse pipeline =======================================
@@ -2616,6 +2738,10 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		grabBar(treantHpBars_);
 		std::erase(treants_, std::static_pointer_cast<Treant>(obj));
 		break;
+	case MonsterKind::Boss:
+		grabBar(bossHpBars_);
+		std::erase(bosses_, std::static_pointer_cast<Boss>(obj));
+		break;
 	}
 	idMonsterMap_.erase(npcId);
 	if (static_cast<size_t>(npcId) < skillObjectById_.size())
@@ -2630,6 +2756,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 			std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj.get()),
 			barrierObjects_.end());
 	}
+	obj->setHitImpulseImmune(false);
 
 	const u32t cid = c.corpseId;
 	corpses_.push_back(std::move(c));
@@ -2646,6 +2773,7 @@ void Game::returnMonsterToPool(Corpse& corpse) {
 	case MonsterKind::Birdy:    birdyPool_.push_back(std::move(pm));    break;
 	case MonsterKind::Slime:    slimePool_.push_back(std::move(pm));    break;
 	case MonsterKind::Treant:   treantPool_.push_back(std::move(pm));   break;
+	case MonsterKind::Boss:     bossPool_.push_back(std::move(pm));     break;
 	}
 }
 
@@ -2664,6 +2792,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	case MonsterKind::Birdy:    pool = &birdyPool_;    break;
 	case MonsterKind::Slime:    pool = &slimePool_;    break;
 	case MonsterKind::Treant:   pool = &treantPool_;   break;
+	case MonsterKind::Boss:     pool = &bossPool_;     break;
 	}
 	if (!pool || pool->empty()) return false;
 
@@ -2678,6 +2807,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	obj->setHidden(false);
 	obj->setHiddenByOrb(false);
 	obj->setDead(false);                    // reused corpse: clear death state up front
+	obj->setHitImpulseImmune(false);        // 전술 면역 상태를 새 네트워크 객체가 물려받지 않게 한다.
 	obj->body().setLinearVel(mu::Vec3{});   // drop any stale death-frame velocity
 	obj->netInterpAcc_ = 0s;                // start network interpolation fresh
 	// Keep the pooled object's renderObjectId (stable per object) — do NOT allocate a fresh
@@ -2733,6 +2863,12 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 		auto t = std::static_pointer_cast<Treant>(obj);
 		treants_.push_back(t);
 		if (bar) treantHpBars_[npcId] = { t.get(), bar, 2.5f };
+		break;
+	}
+	case MonsterKind::Boss: {
+		auto b = std::static_pointer_cast<Boss>(obj);
+		bosses_.push_back(b);
+		if (bar) bossHpBars_[npcId] = { b.get(), bar, 2.5f };
 		break;
 	}
 	}
@@ -2867,10 +3003,41 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 // 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
 // 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
 void Game::bindZoneHandlers() {
-	// 예시: 특정 구역 진입/이탈 시 BGM을 전환한다. Unity 태그가 정의되면 아래처럼 1줄로 연결한다.
-	// (카탈로그에 해당 트랙을 추가해야 소리난다. 미정의 태그는 로컬 판정에서 no-op.)
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [](Zone&){ INet::ClientApp::sound().playBgm("forest"); });
-	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [](Zone&){ INet::ClientApp::sound().playBgm("ingame"); });
+	struct ArenaPresentation {
+		std::string_view tag;
+		std::string_view wallPrefix;
+		std::string_view bgm;
+	};
+	static constexpr ArenaPresentation kArenas[] = {
+		{ "Arena_Hobgoblin", "WallHobgoblin", "hobgoblin_arena" },
+		{ "Arena_Grandbaum",  "WallGrandbaum",  "grandbaum_arena" },
+		{ "Arena_Isys",       "WallIsys",       "isys_arena" },
+		{ "Arena_Boss",       "WallBoss",       "boss_arena" },
+	};
+
+	for (const ArenaPresentation& arena : kArenas) {
+		clientZoneSystem_.on(std::string(arena.tag), ZoneEvent::Enter,
+			[this, wallPrefix = arena.wallPrefix, bgm = arena.bgm](Zone& zone) {
+				// ZoneSystem is updated only with player_->pos(), so this callback
+				// belongs exclusively to the player controlled by this client.
+				if (completedArenaZoneIds_.contains(zone.id())) {
+					return;
+				}
+				if (!localPresentedArenaZoneIds_.insert(zone.id()).second) {
+					return;
+				}
+				localArenaPresentationZoneId_ = zone.id();
+				tacticalZoneIntro_.trigger(wallPrefix);
+
+				constexpr float kArenaBgmFadeOutMs = 1100.f;
+				constexpr float kArenaBgmFadeInMs = 3400.f;
+				constexpr float kArenaBgmFadeInDelayMs = 800.f;
+				INet::ClientApp::sound().playBgm(bgm,
+					kArenaBgmFadeOutMs,
+					kArenaBgmFadeInMs,
+					kArenaBgmFadeInDelayMs);
+			});
+	}
 }
 
 // 모든 "Arena_*" zone을 독립적으로 순회해 각자의 Wall prefix·상태로 마법진을 재구성한다(파란색=통과
@@ -2891,11 +3058,16 @@ void Game::rebuildBarrierMagicCircleQuads() {
 			if (m.type != "Wall" || m.name.rfind(prefix, 0) != 0) continue;
 
 			const float diameter = barrierMagicDiameter(m);
-			const mu::Vec3 circlePos = m.pos + m.orient.rotate(barrierMagicLocalOffset(m));
+			const BarrierMagicAdjust adj = barrierMagicAdjust(m);
+			const mu::Vec3 circlePos = m.pos + m.orient.rotate(adj.offset);
 			BarrierMagicCircleQuad quad{};
 			quad.world = mu::scaleH(mu::Vec3{ diameter, diameter, 1.f })
 			           * mu::translate(circlePos);
-			quad.rotation = kBarrierMagicQuadPlaneFix * mu::Mat4x4(m.orient);
+			// 추가 회전은 planeFix와 markerOrient 사이에 끼워 마커 로컬축 기준으로 적용(rotateDeg=0이면 항등).
+			const mu::Mat4x4 extraRot = mu::rotateXH(mu::Degree(adj.rotateDeg.x()))
+			                          * mu::rotateYH(mu::Degree(adj.rotateDeg.y()))
+			                          * mu::rotateZH(mu::Degree(adj.rotateDeg.z()));
+			quad.rotation = kBarrierMagicQuadPlaneFix * extraRot * mu::Mat4x4(m.orient);
 			quad.tint = blocked ? kBarrierMagicBlockedColor : kBarrierMagicPassableColor;
 			quad.sortPos = circlePos;
 			barrierMagicCircleQuads_.push_back(quad);
@@ -2927,8 +3099,50 @@ void Game::renderBarrierMagicCircleQuads() {
 // 일방향 슬랩을 빌드한다(zone tag로 Wall prefix 도출, 두 벽 중점이 interior 기준점). state==0이면
 // 해제. 물리 벽은 만들지 않는다 — 후퇴 차단은 resolveArenaWallLeash의 위치 클램프가 담당한다.
 void Game::onZoneState( uint16 zoneId, uint8 state ) {
+	std::string prefix;
+	for ( const auto& z : chunkManager_.zones() ) {
+		if ( z.id != static_cast<int>( zoneId ) ) continue;
+		prefix = arenaWallPrefix( z );
+		break;
+	}
+
+	const auto previousIt = zoneStates_.find(zoneId);
+	const uint8 previousState = previousIt != zoneStates_.end() ? previousIt->second : 0;
 	zoneStates_[zoneId] = state;
 	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
+
+	// S_ZoneState is shared gameplay state and must not start client presentation.
+	// A completed arena stays presentation-locked. Only a later genuine 0 -> 1
+	// transition rearms it for a new encounter; merely revisiting its trigger
+	// after state==0 must not replay the intro or arena BGM.
+	const int localZoneId = static_cast<int>(zoneId);
+	if (previousState == 0 && state == 1
+		&& completedArenaZoneIds_.erase(localZoneId) > 0) {
+		localPresentedArenaZoneIds_.erase(localZoneId);
+	}
+
+	if (previousState == 1 && state == 0) {
+		const bool firstClear = completedArenaZoneIds_.insert(localZoneId).second;
+
+		if (localArenaPresentationZoneId_ == localZoneId) {
+			constexpr float kArenaBgmFadeOutMs = 1100.f;
+			constexpr float kArenaBgmFadeInMs = 3400.f;
+			constexpr float kArenaBgmFadeInDelayMs = 800.f;
+			INet::ClientApp::sound().playBgm("ingame",
+				kArenaBgmFadeOutMs,
+				kArenaBgmFadeInMs,
+				kArenaBgmFadeInDelayMs);
+			localArenaPresentationZoneId_ = -1;
+		}
+
+		// First clear of the Hobgoblin tactical zone (server-authoritative wall
+		// removal, 1 -> 0): show the follow-up monologue once. firstClear comes
+		// from completedArenaZoneIds_, kept in sync on every client via
+		// S_ZoneState, so each client shows it exactly once per clear cycle.
+		if (firstClear && prefix == "WallHobgoblin") {
+			dialogueSystem_.show("sample_context");
+		}
+	}
 
 	rebuildBarrierMagicCircleQuads();   // 장식용 마법진(전 아레나, 마커 기반, 충돌과 무관)
 
@@ -2936,12 +3150,6 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	if ( state == 1 ) {
 		// zone id로 tag를 찾아 Wall prefix("Wall"+<Arena_ 뒷부분>)를 도출 → 해당 Wall 마커들로
 		// 양끝 일방향 슬랩을 빌드. interior 기준점 = 그 마커들의 중점(두 벽 사이).
-		std::string prefix;
-		for ( const auto& z : chunkManager_.zones() ) {
-			if ( z.id != static_cast<int>( zoneId ) ) continue;
-			prefix = arenaWallPrefix( z );   // "Arena_Hobgoblin" -> "WallHobgoblin"
-			break;
-		}
 		if ( !prefix.empty() ) {
 			std::vector<const MarkerDef*> wallMarkers;
 			mu::Vec3 wallSum{};
@@ -3104,7 +3312,7 @@ void Game::resolvePlayerSeparation(Seconds dt) {
 }
 
 // 서버가 S_NpcBarrier로 차단벽 토글 → 대상 NPC의 barrier 플래그 갱신 + 활성 목록 관리.
-void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
+void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId) {
 	for (uint16 id : npcIds) {
 		// 전 몬스터(슬라임 포함) id→Object* 맵에서 조회. idGoblinMap_는 goblin/hobgoblin 전용이라
 		// 슬라임이 빠져 그랜드밤 ShieldWall barrier가 아예 등록 안 되던 버그를 수정한다(barrier엔 Object*면 충분).
@@ -3112,6 +3320,7 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 		if (it == idMonsterMap_.end() || !it->second) continue;
 
 		Object* obj = it->second;
+		obj->setHitImpulseImmune(active);
 		if (obj->isBarrierActive() == active) continue;  // 이미 같은 상태면 스킵
 
 		obj->setBarrierActive(active);
@@ -3121,6 +3330,14 @@ void Game::setNpcBarrier(bool active, const std::vector<uint16>& npcIds) {
 			barrierObjects_.erase(
 				std::remove(barrierObjects_.begin(), barrierObjects_.end(), obj),
 				barrierObjects_.end());
+		}
+	}
+
+	// 보스는 실제 barrier 목록에는 넣지 않고 로컬 스킬 impulse만 차단한다.
+	if (impulseOnlyNpcId != SNpcBarrierPacket::INVALID_NPC_ID) {
+		auto it = idMonsterMap_.find(impulseOnlyNpcId);
+		if (it != idMonsterMap_.end() && it->second) {
+			it->second->setHitImpulseImmune(active);
 		}
 	}
 }
@@ -3269,7 +3486,10 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 
 void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs ) {
 	// 로컬 플레이어만 처리한다(다른 플레이어의 넉백은 그쪽 클라가 실행해 S_Move로 위치가 동기화됨).
-	if ( playerId != myId_ || player_ == nullptr ) {
+	// 서버는 RoomServer의 session->id()를 대상 ID로 보내므로, 인게임 정식 ID인
+	// player_->getId()(== S_Enter의 playerId)와 비교해야 한다. myLobbyId_(로비 sessionId)는
+	// RoomServer ID와 체계가 달라 여기서 쓰면 일부 플레이어가 자기 넉백을 놓친다.
+	if ( player_ == nullptr || playerId != static_cast<uint16>( player_->getId() ) ) {
 		return;
 	}
 	knockbackDir_           = mu::Vec3( dirX, 0.f, dirZ );
@@ -3335,7 +3555,7 @@ void Game::onPlayerAttack( uint16 attackerId ) {
 	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
-void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
+void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId, uint8 hitAnimIndex ) {
 	// HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다(모든 몬스터·거점 공통).
 	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 		barIt->second.hpBarVisibleSeconds = 5.f;
@@ -3360,7 +3580,7 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId ) {
 	if ( newHp <= 0 )
 		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
-		holdEvent( eventList_, EvHit( targetId, newHp ) );
+		holdEvent( eventList_, EvHit( targetId, newHp, hitAnimIndex ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
@@ -3372,6 +3592,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
 		Object* npc = it->second;
 		npc->setHp( newHp );
+		npc->setHitImpulseImmune( false );
 		npc->setHidden( false );   // 숨김(S_NpcHide)으로 퇴장했던 NPC 복귀 시 재표시
 		npc->setHiddenByOrb( false );
 		// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
@@ -3411,6 +3632,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	case MonsterKind::Birdy:    createBirdy(info);    break;
 	case MonsterKind::Slime:    createSlime(info);    break;
 	case MonsterKind::Treant:   createTreant(info);   break;
+	case MonsterKind::Boss:     createBoss(info);     break;
 	}
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
@@ -3429,34 +3651,18 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
 
-void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
+void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex ) {
 	// Store hit velocity on any monster before applyHit so ragdoll activation can use it.
 	if (newHp <= 0) {
 		if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end()) {
 			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
 		}
 	}
-	applyHit(targetId, newHp, attackerId);
+	applyHit(targetId, newHp, attackerId, hitAnimIndex);
 
-	// Spawn impact VFX at the target's position.
-	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
-	if (asset && !asset->hitboxDefs.empty()) {
-		const u8t vfxId = asset->hitboxDefs[0].onHit.hitVfxId;
-		if (vfxId != 0xFF && vfxId < static_cast<u8t>(skillVfxById_.size())
-		    && skillVfxById_[vfxId])
-		{
-			Object* target = nullptr;
-			if (player_ && static_cast<uint16>(player_->getId()) == targetId)
-				target = player_.get();
-			else if (auto it = idPlayerMap_.find(targetId); it != idPlayerMap_.end())
-				target = it->second.get();
-			else if (auto it = idMonsterMap_.find(targetId); it != idMonsterMap_.end())
-				target = it->second;
-
-			if (target)
-				skillVfxById_[vfxId]->play(target->pos());
-		}
-	}
+	// 피격 VFX(blood 등)는 클라 로컬 hit 검출(SkillSystem::processHitResults)이
+	// narrow phase 충돌점에 직접 재생한다. 여기서 target->pos()(발밑)에 재생하면
+	// 위치가 부정확하고 예측 경로와 중복되므로 재생하지 않는다.
 }
 
 void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
@@ -3521,6 +3727,7 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
+	updateServerTimeSync();
 
 	if (player_ == nullptr) {
 		return;
@@ -3627,6 +3834,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& b : birdys_)    b->rebuildBodyBVH();
 	for (auto& s : slimes_)    s->rebuildBodyBVH();
 	for (auto& t : treants_)   t->rebuildBodyBVH();
+	for (auto& b : bosses_)    b->rebuildBodyBVH();
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
@@ -3674,7 +3882,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				const int dmg = (pEv->type == EventType::Hit)
 					? prevHp - static_cast<const EvHit*>(pEv)->hp
 					: prevHp;   // Death: remaining HP is the killing-blow damage
-				if (dmg > 0) {
+				// A confirmed non-lethal hit may legitimately deal zero damage (for
+				// example, against a tactically invulnerable NPC). Negative deltas are
+				// stale/out-of-order HP updates and remain hidden.
+				const bool shouldShowDamage = (pEv->type == EventType::Hit)
+					? dmg >= 0
+					: dmg > 0;
+				if (shouldShowDamage) {
 					const uint16 targetId = static_cast<uint16>(routeId);
 					DamageKind kind = DamageKind::EnemyHit;
 					if (idPlayerMap_.find(targetId) != idPlayerMap_.end())
@@ -3760,6 +3974,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(birdys_);
 	updateMonstersNet(slimes_);
 	updateMonstersNet(treants_);
+	updateMonstersNet(bosses_);
 
 	for (auto& sh : strongholds_) {
 		sh->update(deltaTime, tPhysicInterpolation);
@@ -3797,6 +4012,15 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// Energy orb death FX: advance orbs (tracking + absorption) toward the live player.
 	// Charge credits are matched to corpses in updateCorpses(); see below.
 	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
+
+	// DEBUG fallback: if no "PathPt" markers were authored, synthesize a winding sample
+	// path at the local player so the effect is visible online right away. Auto-disables
+	// as soon as a real path exists (build() from markers makes hasPaths() true).
+	if (!pathGuide_.hasPaths())
+		pathGuide_.buildSamplePath(player_->pos(), player_->forward());
+
+	// Path guidance: advance the ribbon window + guiding wisp (re-conforms to ground).
+	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
@@ -3854,6 +4078,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& birdy    : birdys_)    activateAndCollect(birdy,    MonsterKind::Birdy);
 		for (auto& slime    : slimes_)    activateAndCollect(slime,    MonsterKind::Slime);
 		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
+		for (auto& boss     : bosses_)    activateAndCollect(boss,     MonsterKind::Boss);
 
 		for (auto& [objPtr, kind] : justDied)
 			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
@@ -4011,17 +4236,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			}
 		}
 
-		if (hiZStatsLabel_) {
-			if (gfx_.isHiZCullEnabled()) {
-				const auto stats = gfx_.getHiZStats();
-				wchar_t buf[64];
-				swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
-				hiZStatsLabel_->setText(buf);
-			} else {
-				hiZStatsLabel_->setText(L"HiZ: OFF");
-			}
-		}
-
+		tacticalZoneIntro_.update(dtSec);
+		dialogueSystem_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4030,6 +4246,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_) {
 		flameParticleSystem_.update(deltaTime);
 		smokeParticleSystem_.update(deltaTime);
+		bloodEffect_.update(deltaTime);
 		swordSlash1Effect_.update(deltaTime);
 		swordSlash7Effect_.update(deltaTime);
 		swordSlashComboEffect_.update(deltaTime);
@@ -4154,6 +4371,7 @@ void Game::renderInGame() {
 	for (auto& birdy    : birdys_)    birdy->render(gfx_);
 	for (auto& slime    : slimes_)    slime->render(gfx_);
 	for (auto& treant   : treants_)   treant->render(gfx_);
+	for (auto& boss     : bosses_)    boss->render(gfx_);
 
 	// Client-authored corpses render their ragdoll mesh until they dissolve into orbs
 	// (orb phase is drawn by orbSystem_.submitDrawEvents).
@@ -4171,6 +4389,7 @@ void Game::renderInGame() {
 
 	flameParticleSystem_.render(gfx_);
 	smokeParticleSystem_.render(gfx_);
+	bloodEffect_.render(gfx_);
 	swordSlash1Effect_.render(gfx_);
 	swordSlash7Effect_.render(gfx_);
 	swordSlashComboEffect_.render(gfx_);
@@ -4195,6 +4414,9 @@ void Game::renderInGame() {
 	tornadoHitEffect_.render(gfx_);
 	dustParticleSystem_.render(gfx_);
 	orbSystem_.submitDrawEvents(gfx_);
+
+	// Path guidance: HDR ribbon (pre-bloom trail) + guiding wisp (free orb).
+	pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_);
 	debugBVView_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{
@@ -4219,6 +4441,37 @@ void Game::renderInGame() {
 		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+
+		// Minimap background cache. The texture covers a fixed kMinimapCoverageWorld-sized
+		// square centered on the player; the HUD scrolls it via a per-frame UV sub-rect. It is
+		// a single shared RT, re-baked only when needed: on a chunk load/unload (new terrain),
+		// or when the player drifts > kMinimapRebakeMoveThreshold from the baked center (so the
+		// view never reaches the texture edge). Coverage is sized to the view (not the 200m
+		// chunk) to keep enough px/m for splat + prop detail.
+		{
+			const mu::Vec3 p = player_->pos();
+			const float dx = p.x() - minimapBakedCenter_.x();
+			const float dz = p.z() - minimapBakedCenter_.z();
+			const bool moved = (dx * dx + dz * dz) >
+				(GFX::kMinimapRebakeMoveThreshold * GFX::kMinimapRebakeMoveThreshold);
+			const bool firstBake = (minimapBakedCoverage_ <= 0.f);
+			if (chunkManager_.minimapDirty() || moved || firstBake) {
+				chunkManager_.clearMinimapDirty();
+				minimapBakedCenter_   = mu::Vec3(p.x(), 0.f, p.z());
+				minimapBakedCoverage_ = GFX::kMinimapCoverageWorld;
+
+				gfx_.requestMinimapRebake();
+				chunkManager_.submitMinimapDrawEvents(gfx_);
+				chunkManager_.submitMinimapPropDrawEvents(gfx_, minimapBakedCenter_, minimapBakedCoverage_);
+				const float H = minimapBakedCoverage_ * 0.5f;
+				gfx_.setMinimapCamera(MinimapTerrainPipeline::CameraData{
+					.view = mu::lookAt(
+						minimapBakedCenter_ + mu::Vec3(0.f, minimapBakedCoverage_ * 4.f, 0.f),
+						minimapBakedCenter_, mu::NVec3(0.f, 0.f, 1.f)),
+					.proj = mu::ortho(-H, H, -H, H, 0.1f, minimapBakedCoverage_ * 8.f)
+				});
+			}
+		}
 	}
 
 	// Floating damage numbers: drawn just before the HUD so they share the UI pass
@@ -4230,6 +4483,25 @@ void Game::renderInGame() {
 	// so submit the dial first; uiManager_.render() (below) then draws the panel's
 	// scrim/popup on top when it is open.
 	skillDial_.render(gfx_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top));
+
+	// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
+	// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
+	minimapIcons_.clear();
+	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
+	for (const auto& [id, p] : idPlayerMap_) {
+		if (id == static_cast<uint16>(player_->getId()) || !p) continue;
+		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
+	}
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (!obj) continue;
+		const bool isBossLike = bossNpcIds_.count(id) != 0;
+		minimapIcons_.push_back(MinimapEntityIcon{
+			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
+		});
+	}
+	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 
@@ -4271,6 +4543,9 @@ void Game::enterLobby() {
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -4470,11 +4745,12 @@ void Game::refreshLobbyUI() {
 		vs.players.push_back(LobbyUI::PlayerSlot{
 			p.name,
 			p.sessionId == hostId_,
-			p.sessionId == myId_,
+			p.sessionId == myLobbyId_,
 			p.weaponType
 		});
 	}
 	lobbyUI_.refresh(vs);
+	syncLobbyCharacterWeapons();
 
 	// 메인 메뉴를 벗어나면 설정창은 닫는다(기존 동작 보존).
 	if (!vs.inMainMenu) settingsPanel_.close();
@@ -4750,6 +5026,9 @@ void Game::renderWaitingRoom() {
 
 void Game::enterInGame() {
 	pendingStart_ = false;
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
 	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	lobbyUI_.setLoadingVisible(false);
 	lobbyUI_.setRootVisible(false);
@@ -4775,7 +5054,7 @@ void Game::enterInGame() {
 }
 
 std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		return L"나";
 	}
 	return L"Player_" + std::to_wstring(sessionId);
@@ -4817,7 +5096,7 @@ void Game::lobbyLeaveRoom() {
 	roomCode_.clear();
 	isHost_ = false;
 	hostId_ = 0;
-	myId_   = 0;
+	myLobbyId_   = 0;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
 	lobbyState_ = LobbyState::MainMenu;
@@ -4853,7 +5132,7 @@ void Game::lobbyStartGame() {
 }
 
 void Game::lobbySelectWeapon(int direction) {
-	if (lobbyState_ != LobbyState::WaitingRoom || myId_ == 0) {
+	if (lobbyState_ != LobbyState::WaitingRoom || myLobbyId_ == 0) {
 		return;
 	}
 
@@ -4862,7 +5141,7 @@ void Game::lobbySelectWeapon(int direction) {
 	selectedLobbyWeapon_ = static_cast<PlayerWeaponType>(next);
 
 	for (auto& p : lobbyPlayers_) {
-		if (p.sessionId == myId_) {
+		if (p.sessionId == myLobbyId_) {
 			p.weaponType = selectedLobbyWeapon_;
 			break;
 		}
@@ -4877,7 +5156,7 @@ void Game::lobbySelectWeapon(int direction) {
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = myId;       // 생성자가 곧 호스트
 	isHost_   = true;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
@@ -4896,7 +5175,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 		return;
 	}
 
-	myId_     = myId;
+	myLobbyId_     = myId;
 	hostId_   = hostId;
 	roomCode_ = code;
 	isHost_   = (myId == hostId);
@@ -4905,7 +5184,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 	lobbyPlayers_.clear();
 	for (const LobbyPlayerInfo& info : playerInfos) {
 		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
-		if (info.sessionId == myId_) {
+		if (info.sessionId == myLobbyId_) {
 			selectedLobbyWeapon_ = info.weaponType;
 		}
 	}
@@ -4932,7 +5211,7 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 	// 호스트가 떠났으면 서버 규칙과 동일하게 남은 목록의 front를 새 호스트로 본다.
 	if (sessionId == hostId_ && !lobbyPlayers_.empty()) {
 		hostId_ = lobbyPlayers_.front().sessionId;
-		isHost_ = (myId_ == hostId_);
+		isHost_ = (myLobbyId_ == hostId_);
 	}
 
 	refreshLobbyUI();
@@ -4951,7 +5230,7 @@ void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) 
 			break;
 		}
 	}
-	if (sessionId == myId_) {
+	if (sessionId == myLobbyId_) {
 		selectedLobbyWeapon_ = weaponType;
 	}
 	refreshLobbyUI();
@@ -4970,6 +5249,12 @@ void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, c
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	// Dialogue input has priority: Enter / left-click advance pages and are
+	// consumed here before any gameplay or UI handling sees them.
+	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+		return 0;
+	}
+
 	switch (msg) {
 		// WM_INPUT 메시지
 		// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
@@ -5095,19 +5380,53 @@ void Game::sendMouseMovePacket() {
 }
 
 void Game::sendAttackPacket() {
-	uint64 clientMs = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count());
-	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
+	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(estimatedServerTimeMs()));
 }
 
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
-	uint64 clientMs = static_cast<uint64>(
-		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count()));
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs, skillSeed));
+	const uint64 actionServerMs = estimatedServerTimeMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
+}
+
+void Game::beginServerTimeSync() {
+	serverClockSynchronized_ = false;
+	serverClockOffsetMs_ = 0;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = networkNowMs() + kTimeSyncIntervalMs;
+}
+
+void Game::updateServerTimeSync() {
+	if (nextTimeSyncClientMs_ == 0) return;
+	const uint64 now = networkNowMs();
+	if (now < nextTimeSyncClientMs_) return;
+	requestServerTimeSync();
+	nextTimeSyncClientMs_ = now + kTimeSyncIntervalMs;
+}
+
+void Game::requestServerTimeSync() {
+	const uint64 clientSendMs = networkNowMs();
+	INet::ClientApp::addSendBuffer(PacketManager::makeCTimeSyncPacket(clientSendMs));
+}
+
+void Game::onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs) {
+	const uint64 clientReceiveMs = networkNowMs();
+	if (clientReceiveMs < clientSendMs || serverSendMs < serverReceiveMs) return;
+
+	const int64 t0 = static_cast<int64>(clientSendMs);
+	const int64 t1 = static_cast<int64>(serverReceiveMs);
+	const int64 t2 = static_cast<int64>(serverSendMs);
+	const int64 t3 = static_cast<int64>(clientReceiveMs);
+	const int64 rttMs = (t3 - t0) - (t2 - t1);
+	if (rttMs < 0 || rttMs > kMaxAcceptedSyncRttMs) return;
+
+	serverClockOffsetMs_ = ((t1 - t0) + (t2 - t3)) / 2;
+	serverClockSynchronized_ = true;
+}
+
+uint64 Game::estimatedServerTimeMs() const {
+	if (!serverClockSynchronized_) return 0;
+	const int64 estimated = static_cast<int64>(networkNowMs()) + serverClockOffsetMs_;
+	return estimated > 0 ? static_cast<uint64>(estimated) : 0;
 }
 
 void Game::castSkillByName(std::string_view name) {
@@ -5224,6 +5543,17 @@ void Game::processInput(Milliseconds deltaTime) {
 		return;
 	}
 
+	// Dialogue input has priority over gameplay: while a dialogue/monologue
+	// window is open (including its fade-out, where active() is still true),
+	// suppress movement/camera/attack/skill. Enter and left-click are consumed
+	// by handleWndMsg to advance pages; here we drop accumulated look delta so
+	// the camera doesn't drift, then skip gameplay until the window hides.
+	if (dialogueSystem_.active()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	processInputGame(deltaTime);
 }
 
@@ -5276,15 +5606,18 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		// (구버전은 전체 3D 속도를 kPlayerMaxSpeed로 클램프해, 이동 중 낙하 시
 		//  물리가 적분한 y속도까지 매 프레임 재스케일 → 물리 damping과 이중으로 감속됐다.
 		//  standalone Game::processInput과 동일하게 y를 보존한다.)
+		// [임시 디버그] F8 부스트 시 가속률과 속도 상한을 함께 배율로 키운다(평상시 배율=1).
+		const float dbgMaxSpeed = kPlayerMaxSpeed * debugSpeedMultiplier_;
+
 		const auto fullVel = player_->velocity();
-		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * debugSpeedMultiplier_ * Seconds(deltaTime).count());
 		float newX = fullVel.x() + accel.x();
 		float newZ = fullVel.z() + accel.z();
 
 		// x/z 속도만 클램프 (y는 건드리지 않음).
 		const float hSpd2 = newX * newX + newZ * newZ;
-		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+		if (hSpd2 > dbgMaxSpeed * dbgMaxSpeed) {
+			const float scale = dbgMaxSpeed / std::sqrt(hSpd2);
 			newX *= scale;
 			newZ *= scale;
 		}
@@ -5315,6 +5648,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Grandbaum" );
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) )
 		debugTeleportToArena( "Arena_Isys" );
+	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) )
+		debugTeleportToArena( "Arena_Boss" );
+
+	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
+	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
+		debugSpeedMultiplier_ = (debugSpeedMultiplier_ > 1.f) ? 1.f : 5.f;
+		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
+	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
@@ -5392,6 +5733,13 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		std::chrono::steady_clock::now().time_since_epoch()).count();
 
 	if (!playerDead_ && !uiManager_.needsCursor()) {
+		// Shift+wheel zooms the minimap; plain wheel selects a skill slot.
+		// (WM_MOUSEWHEEL carries no MK_SHIFT here, so read the keyboard snapshot.)
+		const bool shiftHeld = (keyboardStateCurr_[VK_SHIFT] & 0x80) != 0;
+		if (shiftHeld) {
+			while (wheelAccum_ >= WHEEL_DELTA) { wheelAccum_ -= WHEEL_DELTA; minimap_.zoomIn(); }
+			while (wheelAccum_ <= -WHEEL_DELTA) { wheelAccum_ += WHEEL_DELTA; minimap_.zoomOut(); }
+		} else {
 		// Wheel selection (one notch = one slot). Up = prev, down = next.
 		while (wheelAccum_ >= WHEEL_DELTA) {
 			wheelAccum_ -= WHEEL_DELTA;
@@ -5403,24 +5751,25 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			skillDial_.selectNext();
 			sendSelectSkillPacket(static_cast<uint8>(skillDial_.selected()));
 		}
-
-		// Wheel click (middle button): use the selected skill if it has a stack and
-		// is off (predicted) cooldown. Instant cast; the server re-validates.
-		if ((keyboardStateCurr_[VK_MBUTTON] & 0x80) && !(keyboardStatePrev_[VK_MBUTTON] & 0x80)) {
-			const int slot = skillDial_.selected();
-			if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
-				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
-					castSkillByName(a->name);
-					skillDial_.notePredictedUse(slot, nowSec);
-				}
-			}
 		}
 
-		// Left click: basic attack (ungated weapon skill).
-		if ((keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		    && basicSkillAssetId_ >= 0) {
-			if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
-				castSkillByName(a->name);
+		if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80) && !(keyboardStatePrev_[VK_LBUTTON] & 0x80) ) {
+			// Shift + Left click : use the selected skill if it has a stack and
+			// is off (predicted) cooldown. Instant cast; the server re-validates.
+			if (keyboardStateCurr_[VK_SHIFT] & 0x80) {
+				const int slot = skillDial_.selected();
+				if (skillDial_.canUse(slot, nowSec) && dialSlotAssetId_[slot] >= 0) {
+					if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(dialSlotAssetId_[slot]))) {
+						castSkillByName(a->name);
+						skillDial_.notePredictedUse(slot, nowSec);
+					}
+				}
+			}
+			// Normal Left click: basic attack (ungated weapon skill).
+			else if ( basicSkillAssetId_ >= 0 ) {
+				if (const SkillAsset* a = skillSystem_.findAsset(static_cast<u32t>(basicSkillAssetId_)))
+					castSkillByName(a->name);
+			}
 		}
 	} else {
 		wheelAccum_ = 0;   // discard notches while a cursor UI is open or the player is dead
@@ -5430,7 +5779,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 void Game::cullObjects() {
 	auto entities = std::vector< std::shared_ptr<Object> >();
 	entities.reserve(otherPlayers_.size() + goblins_.size() + snakes_.size() + mushrooms_.size()
-	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size());
+	                 + bombers_.size() + birdys_.size() + slimes_.size() + treants_.size() + bosses_.size());
 	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
 	std::ranges::copy(goblins_,      std::back_inserter(entities));
 	std::ranges::copy(snakes_,       std::back_inserter(entities));
@@ -5439,6 +5788,7 @@ void Game::cullObjects() {
 	std::ranges::copy(birdys_,       std::back_inserter(entities));
 	std::ranges::copy(slimes_,       std::back_inserter(entities));
 	std::ranges::copy(treants_,      std::back_inserter(entities));
+	std::ranges::copy(bosses_,       std::back_inserter(entities));
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -5526,6 +5876,7 @@ void Game::feedbackCullResultToAnim() {
 		for (auto& b : birdys_)    resetHiZ(b);
 		for (auto& s : slimes_)    resetHiZ(s);
 		for (auto& t : treants_)   resetHiZ(t);
+		for (auto& b : bosses_)    resetHiZ(b);
 		return;
 	}
 
@@ -5542,6 +5893,7 @@ void Game::feedbackCullResultToAnim() {
 	for (auto& b : birdys_)    applyToEntity(b);
 	for (auto& s : slimes_)    applyToEntity(s);
 	for (auto& t : treants_)   applyToEntity(t);
+	for (auto& b : bosses_)    applyToEntity(b);
 	for (auto& p : otherPlayers_) applyToEntity(p);
 }
 

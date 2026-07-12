@@ -331,7 +331,6 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         const int slot = def.slot;
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
-
         if (def.attach.type == AttachType::Bone) {
             int oldH = inst.getBoneHandle(slot);
             if (oldH >= 0) freeHitbox(oldH);
@@ -499,7 +498,13 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
     }
 
     case SkillEventType::PlayAnimation: {
-        // No-op on server (animation driven by Npc AI state machine, not skill events)
+        // 플레이어는 스킬이 공격 클립을 구동한다(서버가 뼈 부착 히트박스를 정확히 두려면
+        // 클라와 같은 공격 클립을 재생해야 함). 클립 이름으로 직접 전환하며, 미등록 키는
+        // switchClip 내부에서 무시된다. 몬스터는 AI 상태머신이 구동하므로 여기서 no-op.
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        if (owner && owner->isPlayer() && ev.payload.playAnimation.clipName[0] != '\0') {
+            owner->animController().switchClip(ev.payload.playAnimation.clipName);
+        }
         break;
     }
 
@@ -854,7 +859,8 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
     hitboxEntries_.clear();
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
-        if (!hb.active || hb.worldOBBs.empty()) continue;
+        if (!hb.active) continue;
+        if (hb.worldOBBs.empty()) continue;
         hitboxEntries_.push_back({ hb.worldAABB, hi, hb.targetMask });
     }
     if (hitboxEntries_.empty()) return;
@@ -941,7 +947,9 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (oh.impulseStrength > 0.f) {
             Object* tgt   = lookupObject(ctx, hr.targetObjectId);
             Object* owner = lookupObject(ctx, hb.ownerObjectId);
-            if (tgt && owner) {
+            // ShieldWall 대상은 피해/피격 이벤트를 그대로 받되 대형을 무너뜨리는
+            // OnHit impulse만 무시한다. AI velocity motor와 지형 반응은 계속 동작한다.
+            if (tgt && owner && !tgt->hitImpulseImmune()) {
                 mu::Mat4x4 orientMat(owner->orient());
                 mu::Vec3 impulseJ = mu::Vec3(mu::Vec4(oh.impulseDirLocal, 0.f) * orientMat)
                                     * oh.impulseStrength;

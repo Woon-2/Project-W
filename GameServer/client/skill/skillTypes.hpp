@@ -46,6 +46,7 @@ struct AttachTarget {
 struct OnHitDef {
     i32t     damage          = 0;
     u8t      hitVfxId        = 0xFF;  // 0xFF = no VFX
+    float    hitVfxScale     = 1.f;   // 피격 VFX 크기 배율(피니셔 등 hit별 연출)
     float    impulseStrength = 0.f;
     mu::Vec3 impulseDirLocal = { 0.f, 0.f, 1.f };  // attacker-local space
 };
@@ -102,6 +103,7 @@ static constexpr u8t kGroundAnchorFlagAlign = 0x01;  // tilt the anchor frame to
 //   bit2      : groundAlign  -- orient effect to the terrain normal (keeps yaw)
 //   bits3-4   : particle ground-collision mode (ps::ParticleCollisionModule::Mode ordinal)
 //   bits5-6   : particle ground-conform   mode (ps::ShapeModule::GroundConform ordinal)
+//   bit7      : flipX        -- mirror mesh VFX on its local X axis (reverse a slash arc)
 // The particle mode fields drive the *played effect's particles* (fall-and-die,
 // conform-to-slope) from the skill Lua, so the effect JSON needs no ground keys.
 static constexpr u8t kPlayVFXFlagYawOnly     = 0x01;
@@ -112,6 +114,12 @@ static constexpr u8t kPlayVFXParticleCollisionShift = 3;
 static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;  // bits 3-4
 static constexpr u8t kPlayVFXParticleConformShift   = 5;
 static constexpr u8t kPlayVFXParticleConformMask    = 0x60;  // bits 5-6
+
+// bit7: mirror the mesh VFX horizontally by reflecting the caster-right axis in the
+// effect's rest frame. The mesh pipelines are two-sided (CULL_NONE), so the reflected
+// winding still renders. Lets a skill reverse a slash arc to match the player's swing
+// direction without re-exporting the effect JSON.
+static constexpr u8t kPlayVFXFlagFlipX       = 0x80;
 
 // Fixed-size payload union. All members are trivially copyable (no std::string).
 // String data lives in SkillAsset::hitboxDefs / vfxNames, referenced by index.
@@ -125,7 +133,7 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char  clipName[24];  // null-terminated, max 23 chars (documentation / readability)
+        char  clipName[32];  // null-terminated, max 31 chars (e.g. "Combat_Defend_AttackSpecial" = 27)
         float blendTime;
         u8t   attackIndex;   // selects which attack clip the AnimBlender plays (index into attackClips_)
     } playAnimation;

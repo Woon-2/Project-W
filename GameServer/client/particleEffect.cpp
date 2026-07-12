@@ -58,9 +58,9 @@ void ParticleEffect::setGroundBehavior(ps::ParticleCollisionModule::Mode collisi
     }
 }
 
-void ParticleEffect::play(const mu::Vec3& pos)
+void ParticleEffect::play(const mu::Vec3& pos, float sizeScale)
 {
-    play(pos, mu::NQuat{});
+    play(pos, mu::Mat4x4(mu::NQuat{}), mu::Vec3(0.f, 0.f, 1.f), sizeScale);
 }
 
 void ParticleEffect::play(const mu::Vec3& pos, mu::NQuat orient)
@@ -76,9 +76,14 @@ void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform)
     play(pos, orientXform, advanceForward);
 }
 
-void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward)
+void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward, float sizeScale)
 {
     advanceForward_ = normalizedOr(advanceForward, { 0.f, 0.f, 1.f });
+    // Horizontal mirror: reflect the caster-right axis in the effect's rest frame
+    // (between the mesh base orientation and the caster orientation), so a mesh arc
+    // sweeps the opposite way regardless of its authored local axes. scaleH(-1,1,1)
+    // is the reflection matrix diag(-1,1,1).
+    const mu::Mat4x4 reflectX = mu::scaleH(mu::Vec3(-1.f, 1.f, 1.f));
     for (auto& e : systems_) {
         const auto rotatedBasePosition = mu::Vec3(
             mu::Vec4(e.shapeBasePosition.x(), e.shapeBasePosition.y(), e.shapeBasePosition.z(), 0.f)
@@ -86,10 +91,12 @@ void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 
         );
         e.ps.config().shape.position = pos + rotatedBasePosition;
         e.ps.config().shape.orientation = e.shapeBaseOrientation * orientXform;
-        e.ps.config().main.startRotation3D = e.meshBaseRotation * orientXform;
+        e.ps.config().main.startRotation3D = flipX_
+            ? e.meshBaseRotation * reflectX * orientXform
+            : e.meshBaseRotation * orientXform;
         if (e.isSubEmitter) continue;
         if (e.mode == PlayMode::Emit)
-            e.ps.emit(1);
+            e.ps.emit(1, sizeScale);
         else
             e.ps.startContinuous();
     }
@@ -102,6 +109,7 @@ void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::NQuat orient)
 
 void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform)
 {
+    const mu::Mat4x4 reflectX = mu::scaleH(mu::Vec3(-1.f, 1.f, 1.f));
     for (auto& e : systems_) {
         const auto rotatedBasePosition = mu::Vec3(
             mu::Vec4(e.shapeBasePosition.x(), e.shapeBasePosition.y(), e.shapeBasePosition.z(), 0.f)
@@ -109,7 +117,9 @@ void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform)
         );
         e.ps.config().shape.position       = pos + rotatedBasePosition;
         e.ps.config().shape.orientation    = e.shapeBaseOrientation * orientXform;
-        e.ps.config().main.startRotation3D = e.meshBaseRotation * orientXform;
+        e.ps.config().main.startRotation3D = flipX_
+            ? e.meshBaseRotation * reflectX * orientXform
+            : e.meshBaseRotation * orientXform;
     }
 }
 

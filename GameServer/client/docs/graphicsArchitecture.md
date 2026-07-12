@@ -219,14 +219,16 @@ Light::updateCSMCascades()
 |------|------|------|
 | GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
 | GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space), 클리어값 (0.5, 0.5) → (0,0,1) |
-| GB2 | R8G8B8A8_UNORM | **Emissive.rgb** (ambient/IBL는 lighting 패스로 이동) + Roughness.a |
-| GB3 | R8_UNORM | Metallic |
+| GB2 | R11G11B10_FLOAT | **Emissive.rgb (HDR)** — intensity>1 보존(Unity 발광·블룸) |
+| GB3 | R8G8_UNORM | Metallic.r + Roughness.g |
 | GB4 | R32_FLOAT | Linear view-space Z (posV.z) — deferred 복원이 NDC 깊이 양자화 대신 사용 |
 | Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
 
 > **주의:** GB2.rgb는 emissive 전용이다. `pbrDeferred.hlsl`·`pbrDeferredSkinned.hlsl`·`terrainDeferred.hlsl` 모두 `lightAccum = emissive`(지형/스킨드 모두)로 기록해야 한다. 과거 스킨드 셰이더만 `globalAmbient*albedo`를 굽던 버그가 있었고(이중 ambient: GB2 상수 ambient + lighting 패스 IBL), 셋 다 emissive-only로 통일했다.
 >
-> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. 단, **GB2는 UNORM이라 emissive가 [0,1]로 클램프**된다 — HDR 물결이 불가능하므로 트리거 측(`onlineGame` onAbsorb)에서 색을 정규화·탈채도·강도 하향해 부드러운 워시로 보정한다(아래 절 참조).
+> **GB2 HDR 전환(2026-06-22):** GB2는 과거 `R8G8B8A8_UNORM`이라 emissive intensity>1이 [0,1]로 클램프되어 Unity 같은 발광/블룸이 안 났다. `R11G11B10_FLOAT`로 바꿔 HDR을 보존한다. GB2의 alpha에 있던 **roughness는 GB3로 이전**(GB3를 `R8G8_UNORM` 2채널화: `.r=metallic`, `.g=roughness`). 셰이더 시맨틱도 Unity와 맞춰 `emission = emissionColor × emissionMap`(대입→곱) + `pow(2.2)` 선형화로 통일. GBuffer-writing 3종 + reading(`pbrDeferredLighting.hlsl`) + PSO RTV 5종(`shader.cpp`) + RT 생성(`sharedResources.cpp`)을 일괄 정합.
+>
+> **흡수 물결(absorption ripple):** `pbrDeferredSkinned.hlsl`의 PS는 `lightAccum`에 per-instance ripple emissive를 가산한다. GB2가 HDR(`R11G11B10_FLOAT`)이 되어 HDR 물결을 직접 블룸으로 표현할 수 있다(트리거 측 정규화·하향 보정은 연출 의도에 따라 선택).
 
 **Normal Oct Encoding (`pbrLighting.hlsli`):**
 - `octEncode(float3 n)` — view-space unit normal → float2 [0,1]
@@ -297,6 +299,14 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   추가, `illuminateCSM`/terrain ambient에 **가산**(기존 globalAmbient 유지 위). inline tonemap은 forward 유지.
 - **포트레이트 무회귀**: 로비 포트레이트는 `FrameData::iblIntensity=0`으로 스테이징(스튜디오 globalAmbient 유지, 환경광 미수신).
   메인 forward/deferred는 1.0.
+- **포트레이트 장착 무기(non-skinned) 듀얼 디스패처**: 로비 포트레이트 RT(`gfx.hpp`의 슬롯별 `cameraDataLobbyPortrait_`/
+  `lightDataLobbyPortrait_`/`frameDataLobbyPortrait_`)는 원래 캐릭터 본체용 `PBRSkinnedPipeline::Dispatcher` 1개만
+  썼는데, 장착 무기는 항상 non-skinned 정적 메시라 같은 슬롯에 `PBRPipeline::Dispatcher`를 병렬로 추가했다(메인
+  씬의 PBR/PBRSkinned 듀얼 디스패처 패턴과 동일, `gfx.cpp` 포트레이트 렌더 루프). 카메라/라이트/프레임 데이터는
+  `PBRPipeline`과 `PBRSkinnedPipeline`의 대응 구조체가 필드 구성이 동일해 디스패치 시점에 인라인 변환만 하고
+  별도 GFX 멤버는 늘리지 않았다. 제출 경로: `Object::renderPortrait()`가 본체(스킨드) 제출 후 `equipments_`를
+  순회해 `Object::renderPortraitEquipment()` → `GFX::addLobbyPortraitDrawEventStatic()`(`drawEventsLobbyPortraitStatic_`,
+  `resourcesLobbyPortraitStatic_`) 경로로 제출한다. shadowPass는 미수행(mainPass만).
 
 **4) Tonemap resolve (`tonemapResolve.hlsl`, `TonemapPipeline`)** — 단일 톤매핑 지점
 - fullscreen triangle: SceneColorHDR(+ bloom mip0 가산) → `color *= exposure` → **ACES Filmic(Narkowicz)** → gamma → **3D LUT color grading** → backbuffer.
@@ -368,9 +378,9 @@ return (kD*diffuse + specular) * (1-ao) * iblIntensity   // kD=(1-kS)(1-metallic
   `pow(음수, 2)`가 `exp(2·log(neg))=NaN`이 되어 bloom 검은 사각형을 유발하기 때문(아래 GGX NaN 절과 동일 함정).
 - 앵커는 월드 고정점이 아니라 **본체 위치 기준 오프셋**으로 저장(Object `BodyRipple`)해 매 프레임 live
   pos에 재앵커 → 플레이어가 이동/달려도 링이 몸을 따라간다. 수명 `kBodyRippleLife`(1.0s) == HLSL `RIPPLE_LIFE`.
-- **GB2 UNORM 클램프** 때문에 HDR 물결이 불가하므로, 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색
-  혼합(탈채도)+강도 하향(0.5)해 산만하지 않은 부드러운 워시로 보정한다. 진짜 HDR 물결을 원하면 오브처럼
-  별도 가산 HDR 패스로 분리해야 한다(미구현).
+- 트리거 측에서 오브 HDR 색을 정규화(peak=1)+흰색 혼합(탈채도)+강도 하향(0.5)해 산만하지 않은
+  부드러운 워시로 보정한다. (2026-06-22 GB2를 `R11G11B10_FLOAT` HDR로 전환한 뒤로는 클램프 제약이
+  사라져 HDR 물결을 직접 표현할 수 있다 — 위 보정은 연출 선택사항이 됨.)
 
 **커맨드 리스트 풀:** EnergyOrb 디스패처가 RenderingSlave cmdlist를 추가 소비하므로 `cmdListPool_`
 RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI 디스패처가 alloc 실패해 해당 패스가
@@ -546,3 +556,39 @@ Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin
 - **수정 (`AnimationExtractor.cs`):** `BuildBindposeMap()` 추가 — `Sample Target`(없으면 Target Skeleton) 아래 모든 `SkinnedMeshRenderer` 를 돌며 `bones[i] → sharedMesh.bindposes[i]`(평행 배열, first-wins) 매핑. `ProcessBoneHierarchy` 는 이 매핑을 우선 사용하고, 미스 시 기존 씬 rest 폴백(어떤 SMR 에도 안 묶인 헬퍼/루트 본은 정점 가중치가 없어 baked 행렬이 안 쓰이므로 무해).
 - **곁들인 수정 (sampleCnt):** `SampleMatrices` 의 `sampleCnt` 를 `clip.length·clip.frameRate` → `clip.length·fps`(=`bakedSampleRate`)로. 샘플 간격이 `1/fps` 인데 개수를 native `frameRate` 로 세면 클라가 인덱싱하는 프레임 수(`length·bakedSampleRate`)와 어긋나 — `frameRate < fps` 면 **애니가 중간에 멈추고** `>` 면 텍스처가 낭비된다.
 - **운영 제약 (중요):** 추출기는 Unity 에디터 C# 스크립트라 C++/런타임에서 검증 불가. 수정 후 **Unity 에서 Treant(및 씬 rest≠bind 인 모델) anim 을 재추출 + 반드시 리임포트** 해야 baked 샘플이 새 규약으로 다시 구워진다. (`Sample Target` 은 **메시(SMR)를 포함한 풀 모델**이어야 매핑이 채워진다 — 맨 스켈레톤 rig 면 전부 폴백으로 떨어져 fix 가 무효.) goblin 처럼 scene==bind 인 모델은 재추출해도 결과 동일(회귀 없음).
+
+---
+
+## 미니맵 (Minimap)
+
+우상단 top-down North-up 미니맵(제거된 Hi-Z 디버그 프린트 자리). 코드 위치는 `docs/CODE_INDEX.md` "미니맵" 섹션 참조. 핵심 설계 결정만 여기 정리한다.
+
+### 월드 고정 베이크 + 매 프레임 UV 스크롤 (스크롤의 핵심)
+
+미니맵 지형 배경은 **플레이어 청크 중심의 N×N 청크(`kMinimapCoverageChunks`=7) 월드 고정 정사각 영역**을 직교(ortho) 카메라로 캐시 RT에 굽는다(`MinimapTerrainPipeline`, diffuse-only, PS alpha=1=로드 마스크). 베이크는 **청크 로드/언로드(dirty) 시에만** 수행한다. 매 프레임은 다시 굽지 않고, `MinimapHUD`가 플레이어 현재 위치 기준 **UV sub-rect**로 텍스처를 샘플해 스크롤한다:
+
+- 베이크 카메라: `lookAt(C+(0,cov*4,0), C, up=(0,0,1))` + `ortho(-H,H,-H,H,...)`, `C`=청크 중심, `H=cov/2`. up=+Z라 **월드 +Z(북)→텍스처 위(V작음)**, +X(동)→텍스처 오른쪽(U큼).
+- 매 프레임 UV: `scaleU=scaleV=2·vr/cov`, `biasU=(px-vr-cx+H)/cov`, `biasV=((cz+H)-(pz+vr))/cov`. `vr`=줌 반영 시야 반경. `UIPipeline::DrawEvent.uvScaleBias`(uv'=uv·xy+zw)로 전달. 플레이어가 중앙에 고정되고 지형이 반대로 흐른다. 같은 청크 안 이동도 UV만으로 스크롤(재굽기 없음).
+- 줌(Shift+휠): `vr=clamp(baseViewRadius/zoom, 5, cov·0.45)`. 배경과 엔티티 아이콘이 동일 `vr`을 써 일관.
+- 미로드 청크 영역은 베이크 시 비어(검정)→ `MinimapFogBlurPipeline`(2-pass box blur + `lerp(black,srcRGB,blurredAlpha)` 합성)이 가장자리를 fog-of-war로 페이드. 스크롤 시 fog도 함께 이동.
+
+### 지형 splat + scatter prop 반영 (베이크 내용)
+
+미니맵은 "어차피 베이크"이므로 단순화하지 않고 씬 자산을 그대로 반영한다:
+- **지형**: `MinimapTerrainPipeline`이 splatMap 가중치로 diffuse 레이어를 블렌드(메인 terrain과 동일). 풀숲/길/흙이 매크로 색으로 구분된다.
+- **prop**: `MinimapPropPipeline`이 scatter prop의 **BVH prop(나무/바위/메시 랜드마크)만** top-down albedo + alpha-cutout으로 지형 위(texA)에 겹쳐 굽는다(나무 캐노피가 잎 모양 blob으로 보임). 풀/꽃(비-BVH)은 다수라 미니맵을 도배하므로 제외. 패스 순서: 지형(2)→prop(2b)→fog 블러(3). prop도 alpha=1을 써 fog 커버리지에 기여. 인스턴스는 per-draw(캡 `kMaxDrawEvents`=4096, 베이크 영역 밖은 컬링) — 베이크가 드물어 허용.
+- **fog 블러는 alpha만**: `MinimapFogBlurPipeline`은 커버리지 alpha만 2-pass 블러하고 **RGB는 중심 탭으로 선명 통과**, `finalRGB = sharpRGB × blurredAlpha`로 합성한다. RGB까지 블러하면 미니맵 전체가 흐려진다(초기 버그) — 반드시 alpha만 블러할 것.
+
+### 단일 RT (per-room 아님) — 깜빡임 방지 + 해상도
+
+캐시 RT는 GBuffer/SceneColor/Portrait처럼 per-room으로 두지 **않고 단일 인스턴스**다(IBL과 동일). 이유: 미니맵은 매 프레임 GPU가 쓰는 게 아니라 **재굽기 시에만 쓰고 매 프레임 읽는다**. 모든 명령은 단일 direct 큐(`cmdQ_`)에 제출 순서대로 **직렬 실행**되므로 같은 큐에서의 GPU-write→GPU-read는 프레임 간에도 해저드가 없다. per-room으로 두면 dirty 1회당 한 room만 갱신돼 나머지 room이 빈(검정) 채로 남아 `frameIdx_%N` 순환 시 **검정↔정상 깜빡임**이 났다(v2 초기 버그) — 단일 RT로 근본 해소. 재굽기도 1프레임으로 끝난다(N프레임 분산 불필요). per-draw 상수버퍼만 per-room cyclic(`frameIdx_%N`)으로 재사용.
+
+### 커버리지 = 시야 기준(청크 크기와 무관) + 이동 재굽기
+
+청크 변(邊)은 200m라 "N청크 커버리지"(7×200=1400m)를 512px에 구우면 0.37px/m로 시야(120m)가 ~44px만 샘플 → splat·prop이 뭉개져 균일하게 보였다(v2 초기 버그). 해법: 커버리지를 **청크와 무관하게 시야에 맞춰** `kMinimapCoverageWorld`(360m)로 작게 잡아 해상도(1024px → 2.84px/m)를 확보하고, 재굽기는 청크 로드/언로드 **또는 플레이어가 베이크 중심에서 `kMinimapRebakeMoveThreshold`(50m) 이상 이동** 시 수행한다(시야가 텍스처 가장자리에 닿기 전에 재중심). prop은 베이크 영역(±커버리지/2) 밖이면 컬링해 재굽기당 드로우를 제한.
+
+미니맵 RT 초기 상태는 `PIXEL_SHADER_RESOURCE`(첫 재굽기 전 UI가 샘플해도 상태 불일치 디버그 에러 방지).
+
+### 엔티티 아이콘 / 보스 식별
+
+아이콘은 3D 렌더 없이 UI 레이어에서 world XZ→플레이어 상대 오프셋(`(e-p)/vr`)을 픽셀로 선형 변환한 단색 quad(`solidColorTex()`+`colorMul`). 보스/중간보스(주황)는 RTTI/`dynamic_cast`가 아니라, 스폰 시(서버 `ObjectType` 권위) `Online::Game::bossNpcIds_` 집합에 npcId를 넣어 판정한다(`dynamic_cast`는 스폰 경로/RTTI 가정에 취약해 폐기). 크기·위치는 `SkillDialHUD`와 같은 `uiScale=min(sw/1024,sh/768)` 해상도 상대화. 몬스터 아이콘은 다수 시뮬레이션을 고려해 작게(3.5px×uiScale).

@@ -6,6 +6,7 @@
 #include "GameSession.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
+#include "finalBoss.hpp"
 #include "snake.hpp"
 #include "mushroom.hpp"
 #include "bomber.hpp"
@@ -76,6 +77,12 @@ public:
 		for (const auto& b : barriers_) {
 			if (b) physicsWorld_.unregisterBody(&b->body());
 		}
+
+		// Final boss (runtime-spawned): unregister its body before the unique_ptr dies.
+		if (finalBoss_) {
+			physicsWorld_.unregisterBody(&finalBoss_->body());
+			IdPool::push(finalBoss_->getId());
+		}
 	}
 
 	void init(const Level* levelData);
@@ -87,8 +94,8 @@ public:
 	// 디버그 전용: 안티치트 클램프를 우회해 플레이어를 pos로 즉시 이동(아레나 zone 트리거 테스트).
 	void debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
-	void attack(int32 sessionId, uint64 clientMs);
-	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
+	void attack(int32 sessionId, uint64 actionServerMs);
+	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
@@ -188,7 +195,7 @@ public:
 	// 링 형성 순간 안쪽 플레이어를 바깥으로 넉백(클라 권한 이동잠금: S_PlayerKnockback).
 	void MU_CALLCONV knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius);
 	// 슬라임을 플레이어가 통과 못 하는 하드 블로커로 전환/해제(콜리전 마스크 토글).
-	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
+	void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds, uint32_t impulseOnlyNpcId);
 	void clearShieldWallBlockers();
 
 private:
@@ -209,10 +216,12 @@ private:
 	void setupSlime    (Slime&     s, const Level& level);
 	void setupTreant   (Treant&    t, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
+	void setupFinalBoss(FinalBoss& b);   // model/anims/clips/skills/body/BT for the final boss (uses assetManager_)
 	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
 	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
 	void onArenaGrandbaumEnter(Zone& zone, uint32 playerId);
 	void onArenaIsysEnter(Zone& zone, uint32 playerId);
+	void onArenaBossEnter(Zone& zone, uint32 playerId);   // ArenaZone enter -> spawn boss at BossSpawner marker
 	// 전술 NPC 바디 셋업(type별 모델/애니/클립 선택) + 물리/objectById_ 등록. type이 클라 렌더 모델을 결정.
 	void registerTacticalNpcBody(TacticalNpc& obj, ObjectType type);
 	// 현재 인카운터(tacticalNpcs_ + platoonLeader_)를 S_NpcSpawnBatch로 통지. NPC별 objType()으로 모델 라우팅.
@@ -258,6 +267,9 @@ private:
 	std::vector<Birdy>    birdys_;
 	std::vector<Slime>    slimes_;
 	std::vector<Treant>   treants_;
+	// Final boss: runtime-spawned (on ArenaZone enter), single 1:1 combatant. unique_ptr
+	// keeps a stable address; nullptr until spawned. Not part of the init monster pools.
+	std::unique_ptr<FinalBoss> finalBoss_;
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;
@@ -300,6 +312,7 @@ private:
 	// GrandBaum/Isis는 전용 모델 추가 전까지 Goblin placeholder.
 	ObjectType                                  platoonLeaderObjType_{ ObjectType::Goblin };
 	std::vector<uint32_t>                       shieldWallBlockerIds_;   // GrandBaum ShieldWall 중 하드 블로커로 전환된 슬라임 id
+	uint32_t                                    shieldWallImpulseOnlyNpcId_{ SNpcBarrierPacket::INVALID_NPC_ID }; // barrier는 아니지만 impulse 면역인 보스
 	bool                                        shieldWallBarrierOn_{ false };   // 클라 S_NpcBarrier on 통지 여부(매 틱 중복 송신 방지)
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;

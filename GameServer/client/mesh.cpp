@@ -504,6 +504,69 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
+Mesh buildOrbProxyMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate, u32t pointCount
+) {
+	const u32t n = (pointCount < 1u) ? 1u : pointCount;
+
+	// Dummy attributes: only the vertex count matters at morphT=1. BoneWeights is
+	// (1,0,0,0) so the (identity) palette bone 0 is selected if the orb is ever drawn
+	// at morphT<1.
+	std::vector<XMFLOAT3> positions(n, XMFLOAT3{ 0.f, 0.f, 0.f });
+	std::vector<XMINT4>   boneIndices(n, XMINT4{ 0, 0, 0, 0 });
+	std::vector<XMFLOAT4> boneWeights(n, XMFLOAT4{ 1.f, 0.f, 0.f, 0.f });
+	std::vector<XMFLOAT2> uvs(n, XMFLOAT2{ 0.f, 0.f });
+
+	std::vector<u16t> indices(n);
+	for (u32t i = 0u; i < n; ++i) indices[i] = static_cast<u16t>(i);
+
+	auto makeVB = [&](const void* data, std::size_t bytes, const char* name) {
+		auto def = createBufferResource(device, nullptr, bytes, BufferCreationType::VertexBuffer);
+		setD3DName(def.Get(), name);
+		auto upl = createBufferResource(device, data, bytes, BufferCreationType::UploadBuffer);
+		copyResource(cmdList, upl.Get(), def.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+		fenceToAssociate.associatedResources_.push_back(std::move(upl));
+		return def;
+	};
+
+	auto vbPosition    = makeVB(positions.data(),   positions.size()   * sizeof(XMFLOAT3), "OrbProxyMesh_VB_Position");
+	auto vbBoneIndices = makeVB(boneIndices.data(), boneIndices.size() * sizeof(XMINT4),   "OrbProxyMesh_VB_BoneIndices");
+	auto vbBoneWeights = makeVB(boneWeights.data(), boneWeights.size() * sizeof(XMFLOAT4), "OrbProxyMesh_VB_BoneWeights");
+	auto vbUV          = makeVB(uvs.data(),         uvs.size()         * sizeof(XMFLOAT2), "OrbProxyMesh_VB_UV");
+
+	auto ib  = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
+	setD3DName(ib.Get(), "OrbProxyMesh_IB");
+	auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
+	copyResource(cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+	fenceToAssociate.associatedResources_.push_back(std::move(ibu));
+
+	auto mesh = Mesh{ .name = "OrbProxyMesh" };
+
+	mesh.vbViews.emplace_back(vbPosition->GetGPUVirtualAddress(),    static_cast<UINT>(positions.size()   * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+	mesh.vbViews.emplace_back(vbBoneIndices->GetGPUVirtualAddress(), static_cast<UINT>(boneIndices.size() * sizeof(XMINT4)),   static_cast<UINT>(sizeof(XMINT4)));
+	mesh.vbViews.emplace_back(vbBoneWeights->GetGPUVirtualAddress(), static_cast<UINT>(boneWeights.size() * sizeof(XMFLOAT4)), static_cast<UINT>(sizeof(XMFLOAT4)));
+	mesh.vbViews.emplace_back(vbUV->GetGPUVirtualAddress(),          static_cast<UINT>(uvs.size()         * sizeof(XMFLOAT2)), static_cast<UINT>(sizeof(XMFLOAT2)));
+
+	mesh.subMeshes.emplace_back(
+		/* .name = */ "OrbProxyMesh_SubMesh",
+		/* .ibView = */ D3D12_INDEX_BUFFER_VIEW{
+			.BufferLocation = ib->GetGPUVirtualAddress(),
+			.SizeInBytes    = static_cast<UINT>(indices.size() * sizeof(u16t)),
+			.Format         = DXGI_FORMAT_R16_UINT
+		}
+	);
+
+	mesh.vbs.push_back(std::move(vbPosition));    mesh.vbIdxMap.try_emplace("OrbProxyMesh_VB_Position",    0u);
+	mesh.vbs.push_back(std::move(vbBoneIndices)); mesh.vbIdxMap.try_emplace("OrbProxyMesh_VB_BoneIndices", 1u);
+	mesh.vbs.push_back(std::move(vbBoneWeights)); mesh.vbIdxMap.try_emplace("OrbProxyMesh_VB_BoneWeights", 2u);
+	mesh.vbs.push_back(std::move(vbUV));          mesh.vbIdxMap.try_emplace("OrbProxyMesh_VB_UV",          3u);
+	mesh.ibs.push_back(std::move(ib));
+
+	return mesh;
+}
+
 // 바이너리 파일의 Bone Socket Type을 나타내는 문자열로부터
 // 실제 열거형 값을 얻어낸다.
 Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr) {
@@ -1092,7 +1155,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 금속성 상수
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
-                material.constantRoughness = 1.f - metallic;
+                material.constantMetallic = metallic;
                 readTailTag(ifs, "cMetallic");
             }
             // 주변광 차폐 적용 강도 상수

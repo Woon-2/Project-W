@@ -548,6 +548,10 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         // spawn, ground collision) wherever it ends up being played.
         fx->setGroundSampler(ctx.ground);
 
+        // Horizontal mirror (e.g. reverse a slash arc to match the swing direction).
+        // Set explicitly each play so a shared effect is never left flipped.
+        fx->setFlipX((p.flags & kPlayVFXFlagFlipX) != 0);
+
         // Skill-driven particle ground behaviour (packed in flags bits 3-6). Drives
         // the effect's particles (fall-and-die, conform-to-slope) from the Lua, so
         // the Unity-exported effect JSON needs no ground keys.
@@ -927,12 +931,14 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
 
         const BVH& bvh = target->worldBVH();
         bool hit = false;
+        mu::Vec3 contactPoint{};
         for (const OBB& obb : hb.worldOBBs) {
-            if (collides(bvh, obb).hit) { hit = true; break; }
+            const CollisionResult res = collides(bvh, obb);
+            if (res.hit) { hit = true; contactPoint = res.contactPoint; break; }
         }
 
         if (hit) {
-            pendingHits_.push_back({ c.hitboxIdx, targetId });
+            pendingHits_.push_back({ c.hitboxIdx, targetId, contactPoint });
             if (hb.instanceIdx >= 0 && hb.instanceIdx < poolSize) {
                 SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
                 inst.hitGroups[hb.hitGroup].lastHitByTarget[targetId] = inst.elapsed;
@@ -961,14 +967,18 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (oh.hitVfxId != 0xFF && ctx.vfxById &&
             oh.hitVfxId < static_cast<u8t>(ctx.vfxByIdSize)) {
             ParticleEffect* fx = ctx.vfxById[oh.hitVfxId];
-            Object* target = lookupObject(ctx, hr.targetObjectId);
-            if (fx && target) fx->play(target->pos());
+            // 검(히트박스)과 적(BVH)이 충돌한 지점에 피격 VFX를 재생한다.
+            // target->pos()(발밑/오브젝트 원점) 대신 narrow phase contact point 사용.
+            // hitVfxScale로 hit별 크기 연출(피니셔 타격 큰 혈흔 등).
+            if (fx) fx->play(hr.contactPoint, oh.hitVfxScale);
         }
 
         if (oh.impulseStrength > 0.f) {
             Object* target = lookupObject(ctx, hr.targetObjectId);
             Object* owner  = lookupObject(ctx, hb.ownerObjectId);
-            if (target && owner) {
+            // 온라인 방패벽 대상은 서버 권위 위치와 동일하게 로컬 예측 impulse도
+            // 생략한다. 피격 VFX와 서버 피해 처리는 위 경로에서 그대로 유지된다.
+            if (target && owner && !target->hitImpulseImmune()) {
                 mu::Vec3 impulseJ =
                     mu::Vec3(mu::Vec4(oh.impulseDirLocal, 0.f) * owner->renderState().world)
                     * oh.impulseStrength;

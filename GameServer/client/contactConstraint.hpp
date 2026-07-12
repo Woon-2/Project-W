@@ -87,6 +87,13 @@ private:
     static constexpr float kSplitImpulseBeta = 0.3f;
     // Penetration slop: small overlaps below this threshold are ignored.
     static constexpr float kSlop             = 0.005f;
+    // Max penetration depth (m) fed into the Baumgarte/split correction per step.
+    // Correction velocity = beta * invDt * depth, so an uncapped deep overlap (e.g. a
+    // 4x-scaled ragdoll limb sunk into the torso) produces an enormous separating
+    // velocity that overflows to Inf -> NaN inside the velocity iterations. Capping the
+    // depth bounds the per-step correction (deep penetration just resolves over several
+    // steps). Matches the staticDepenetration clamp philosophy (kMaxCorrect=0.2m).
+    static constexpr float kMaxCorrectionDepth = 0.2f;
 
     // External-force (gravity) compensation is shared across BOTH the velocity bias
     // and the split-impulse pseudoBias (see prepare()). The two shares must total

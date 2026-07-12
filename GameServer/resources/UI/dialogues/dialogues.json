@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "canvas": {
+    "width": 1024,
+    "height": 768
+  },
+  "dialogues": [
+    {
+      "eventId": "sample_intro",
+      "rect": {
+        "x": 128,
+        "y": 504,
+        "width": 768,
+        "height": 176
+      },
+      "background": [0.03, 0.05, 0.08, 0.82],
+      "textColor": [0.96, 0.98, 1.0, 1.0],
+      "padding": 24,
+      "fontFamily": "Malgun Gothic",
+      "fontSize": 24,
+      "fadeOutSeconds": 0.45,
+      "pages": [
+        "이 앞에 보이는 석상... 적들을 끊임없이 소환하고 있어.",
+        "석상을 파괴하면 적들의 공세를 조금 늦출 수 있을 것 같아.",
+        "좌클릭 - 공격, SHIFT+좌클릭 - 스킬\n(눈 앞의 적들을 쓰러트리자)"
+      ]
+    },
+    {
+      "eventId": "sample_context",
+      "rect": {
+        "x": 128,
+        "y": 504,
+        "width": 768,
+        "height": 176
+      },
+      "background": [0.03, 0.05, 0.08, 0.82],
+      "textColor": [0.96, 0.98, 1.0, 1.0],
+      "padding": 24,
+      "fontFamily": "Malgun Gothic",
+      "fontSize": 24,
+      "fadeOutSeconds": 0.45,
+      "pages": [
+        "이 녀석들 우두머리가 있는 모양이야.",
+        "시간의 돌을 되찾으려면 계속 나아가야 할 것 같아."
+      ]
+    }
+  ]
+}

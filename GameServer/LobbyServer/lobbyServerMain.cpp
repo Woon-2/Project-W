@@ -1,13 +1,27 @@
 ﻿#include "lspch.hpp"
 #include "LobbyServer.hpp"
+#include "LobbyManager.hpp"
 #include "SendBuffer.hpp"
+#include "networkConfig.hpp"
 
 int main() {
+	NetworkConfig networkConfig;
+	std::filesystem::path networkConfigPath;
+	std::string networkConfigError;
+	if (!loadNetworkConfig(networkConfig, networkConfigPath, networkConfigError)) {
+		std::cerr << "[NetworkConfig] " << networkConfigError << '\n';
+		return 1;
+	}
+	std::cout << "[NetworkConfig] " << networkConfigPath.string() << '\n'
+		<< "  Lobby: " << networkConfig.lobby.ip << ':' << networkConfig.lobby.port << '\n'
+		<< "  Room: " << networkConfig.room.ip << ':' << networkConfig.room.port << '\n';
+
 	SocketUtils::init();
 	MemoryManager::init();
 	IdPool::init();
 
-	LobbyServer server;
+	LobbyManager::configureRoomEndpoint(networkConfig.room);
+	LobbyServer server(networkConfig.lobby.port);
 	server.start();
 
 	const auto coreCnt = numberOfPhysicalCores() - 1;

@@ -57,6 +57,18 @@
 - **한계**: Snake/Bomber/Slime은 공격 lua가 1개뿐이라 다양화 불가(콘텐츠 추가 필요). 보스는 전용 스킬 없이 기본
   몬스터 로스터 재사용(전용 보스 스킬은 lua 저작 + objType별 로스터 분기 필요).
 
+## 처치 시 스킬 차지 지급 (필드 몬스터 패리티)
+
+이전엔 tactical NPC(부대원·보스) 처치 시 플레이어가 스킬 차지를 못 얻었다 — 일반 몬스터는
+`setupX`에서 `setKillChargeReward`를 호출하지만 tactical 경로(`registerTacticalNpcBody`)가
+이 값을 설정하지 않아 `killChargeReward_`가 0이었고, `Room::noteAndMaybeReward`가 `<=0`이면
+조기 반환하기 때문이다. `registerTacticalNpcBody`에 `obj.setKillChargeReward(chargeConfig().monsterCharge(type))`
+한 줄을 추가해 트루퍼·보스(PlatoonLeader도 TacticalNpc 파생)를 한 경로로 일괄 커버한다. 차지는
+objType 기준이라 변종별로 해당 몬스터 값을 쓴다. 보스 objType(Hobgoblin/Grandbaum/Isys)은
+`chargeConfig.lua`의 `monsters`에 항목을 추가(트루퍼 10 대비 50, 재빌드 없이 튜닝). 분배는
+기존 플레이어 스킬 히트 경로(`EvSkillHit → noteAndMaybeReward → distributeKillCharge`)를 그대로
+재사용하므로 별도 배선 없음(플레이어 데미저만 적립, HP 0 전이 1회만 분배).
+
 ## 전용 보스 모델 (Grandbaum / Isys)
 
 - 서버: `assetManager_->modelGrandbaum()`(GrandbaumServer.bin) / `modelIsys()`(IsysServer.bin) 사용,

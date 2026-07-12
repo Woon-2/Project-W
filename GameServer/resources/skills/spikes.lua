@@ -11,11 +11,13 @@ skill.isBasic          = true
 skill.totalDurationMs  = 800
 skill.interruptible    = true
 
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(5, "effects/spikes.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_CastAttack",
+    attackIndex = 0,
+    blendTime   = 0.1
 })
 
 skill:addEvent(150, "PlayVFX", {
@@ -29,7 +31,7 @@ skill:addEvent(150, "PlaySound", { sound = "quake" })
 
 local onHitBase = OnHit({
     damage          = 20,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 1000.0,
     impulseDir      = Vec3(0.0, 0.3, 1.0)
 })

@@ -57,8 +57,8 @@ struct VSOutput {
 struct GBufferOutput {
     float4 gb0 : SV_TARGET0;  // Albedo.rgb (linear) + AO.a        | R8G8B8A8_UNORM
     float2 gb1 : SV_TARGET1;  // NormalV oct-encoded (view-space)   | R16G16_FLOAT
-    float4 gb2 : SV_TARGET2;  // LightAccum.rgb + Roughness.a       | R8G8B8A8_UNORM
-    float  gb3 : SV_TARGET3;  // Metallic                           | R8_UNORM
+    float4 gb2 : SV_TARGET2;  // Emissive.rgb (HDR)                  | R11G11B10_FLOAT
+    float2 gb3 : SV_TARGET3;  // Metallic.r + Roughness.g            | R8G8_UNORM
     float  gb4 : SV_TARGET4;  // Linear view-space Z (posV.z)       | R32_FLOAT
 };
 
@@ -237,12 +237,15 @@ GBufferOutput PSMain(VSOutput input) {
     }
 
     // --- Emissive ---
+    // Unity semantics: emission = emissionColor * emissionMap (HDR intensity rides on the
+    // color). Multiply (not replace) and pow(2.2) to mirror the albedo sRGB->linear path.
     float3 emissive = material.cEmmisive;
     if (material.idxEmmisive.x >= 0) {
-        emissive = sampleBindless(material.idxEmmisive, input.uv).rgb;
+        emissive *= sampleBindless(material.idxEmmisive, input.uv).rgb;
     }
+    emissive = pow(abs(emissive), 2.2f);
 
-    // --- Pre-compute emissive (stored in GB2.rgb) ---
+    // --- Pre-compute emissive (stored in GB2.rgb, HDR) ---
     // GB2.rgb holds emissive only; ambient/IBL is computed in the deferred lighting
     // pass (matches pbrDeferred.hlsl). Baking globalAmbient here too would double the
     // ambient on skinned meshes (constant ambient in GB2 + IBL added by the lighting pass).
@@ -251,8 +254,7 @@ GBufferOutput PSMain(VSOutput input) {
     // --- Energy-orb absorption ripple (additive emissive ring across the body) ---
     // Each absorbed orb spawns an expanding ring of its HDR color. Only the local
     // player carries ripples (rippleCount>0); everything else skips the loop. Stored
-    // in GB2 emissive -> the deferred lighting pass promotes it to HDR and bloom
-    // picks it up. GB2 is UNORM so the ring peak saturates to a bright hue.
+    // in GB2 emissive (R11G11B10_FLOAT, HDR) -> bloom picks the ring peak up directly.
     uint rippleCount = gInstances[input.instIdx].rippleCount;
     [loop]
     for (uint ri = 0u; ri < rippleCount; ++ri) {
@@ -270,8 +272,8 @@ GBufferOutput PSMain(VSOutput input) {
     GBufferOutput o;
     o.gb0 = float4(albedo.rgb, ao);
     o.gb1 = octEncode(input.normalV);
-    o.gb2 = float4(lightAccum, roughness);
-    o.gb3 = metallic;
+    o.gb2 = float4(lightAccum, 0.0f);          // rgb=emissive (HDR), a unused
+    o.gb3 = float2(metallic, roughness);       // r=metallic, g=roughness
     o.gb4 = input.posV.z;  // exact linear view-space depth (deferred reconstruction)
     return o;
 }

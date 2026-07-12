@@ -14,7 +14,12 @@ return {
         Bomber = 10,
         Birdy = 10,
         Slime = 10,
-        Treant = 10
+        Treant = 10,
+        -- Tactical mid-boss leaders. Worth more than a single trooper since they
+        -- cap a tactical encounter. Tunable here without a rebuild.
+        Hobgoblin = 50,
+        Grandbaum = 50,
+        Isys      = 50
     },
 
     -- A player must have dealt damage to the monster within this window (ms)

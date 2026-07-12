@@ -26,6 +26,32 @@
 #include "treant.hpp"
 #include <span>
 
+namespace {
+constexpr uint64 kMaxLagCompensationMs = 250;
+
+uint64 networkNowMs() {
+	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+struct ValidatedActionTime {
+	uint64 timestampMs;
+	uint16 ageMs;
+	bool valid;
+};
+
+ValidatedActionTime validateActionTime(uint64 actionServerMs, uint64 serverNowMs) {
+	if (actionServerMs == 0 || actionServerMs > serverNowMs)
+		return { serverNowMs, 0, false };
+
+	const uint64 ageMs = serverNowMs - actionServerMs;
+	if (ageMs > kMaxLagCompensationMs)
+		return { serverNowMs, 0, false };
+
+	return { actionServerMs, static_cast<uint16>(ageMs), true };
+}
+}
+
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
 	if (id >= static_cast<int>(objectById_.size()))
@@ -268,6 +294,48 @@ void Room::setupTreant(Treant& t, const Level& level) {
 	t.body().enableMotor(true);
 }
 
+// Final boss: standalone field NPC (1:1 combat). Registers the full 14-clip rig and
+// the four skill-based attacks; the AI picks one at random per swing (Npc::pickAttack).
+// Uses assetManager_ directly (runtime-spawned outside the init Level scope).
+void Room::setupFinalBoss(FinalBoss& b) {
+	const auto& anims = assetManager_->bossAnimations();
+	b.setModel(assetManager_->modelBoss());
+	b.animController().registerClip("Idle",       findServerAnimClip(anims, "Boss_Idle"));
+	b.animController().registerClip("Walk",       findServerAnimClip(anims, "Boss_Walk_Forward"));
+	b.animController().registerClip("Run",        findServerAnimClip(anims, "Boss_Run"));
+	// Attack clips: key order matches addAttack below; the lua attackIndex (0..3) drives
+	// the client clip selection, so server keys only need to map skillId -> server anim.
+	b.animController().registerClip("Swings",     findServerAnimClip(anims, "Boss_Swings"));
+	b.animController().registerClip("Combo",      findServerAnimClip(anims, "Boss_Combo"));
+	b.animController().registerClip("BackAttack", findServerAnimClip(anims, "Boss_BackAttack"));
+	b.animController().registerClip("Smite",      findServerAnimClip(anims, "Boss_Smite"));
+	b.animController().registerClip("Attack",     findServerAnimClip(anims, "Boss_Swings")); // legacy default
+	// Hit/Rage registered for completeness (Rage trigger wired with the boss BehaviorTree).
+	b.animController().registerClip("Hit1",       findServerAnimClip(anims, "Boss_Hit1"));
+	b.animController().registerClip("Hit2",       findServerAnimClip(anims, "Boss_Hit2"));
+	b.animController().registerClip("Rage",       findServerAnimClip(anims, "Boss_Rage"));
+	b.animController().registerClip("Die",        findServerAnimClip(anims, "Boss_Death"));
+	b.animController().switchClip("Idle");
+	b.setFaction(Faction::Monsters);   // player skills (hostile to Monsters) can damage it
+	b.applyBossConfig();
+	b.addAttack(skillIdByName("Boss_Swings"),     "Swings");
+	b.addAttack(skillIdByName("Boss_Combo"),      "Combo");
+	b.addAttack(skillIdByName("Boss_BackAttack"), "BackAttack");
+	b.addAttack(skillIdByName("Boss_Smite"),      "Smite");
+	b.setCanReceiveDamage(true);
+	b.setKillChargeReward(assetManager_->chargeConfig().monsterCharge(ObjectType::Boss));
+	b.body().setMotionType(MotionType::Dynamic);
+	b.body().setMass(200.f);
+	b.body().setLinearDamping(0.1f);
+	b.body().setAngularDamping(25.f);
+	b.body().setRestitution(0.0f);
+	b.body().setUprightStiffness(4000.f);
+	b.body().enableMotor(true);
+	// Build the BehaviorTree AFTER addAttack so the BT attack leaves can resolve
+	// their skill ids/clip keys by index (0=Swings,1=Combo,2=BackAttack,3=Smite).
+	b.buildBehaviorTree();
+}
+
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
 	sh.setModel(level.assetManager->modelStronghold());   // placeholder mesh (cube) -> BVH hit target
 	sh.setFaction(Faction::Monsters);     // player skills (hostile to Monsters) can damage it
@@ -475,6 +543,13 @@ void Room::bindZoneHandlers() {
 	zoneSystem_.on("Arena_Isys", ZoneEvent::Enter,
 		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
 			room.onArenaIsysEnter(zone, playerId);
+		});
+
+	// Final boss arena: entering spawns the 1:1 boss at the "BossSpawner" marker.
+	// Not a tactical encounter (no platoon/walls) -- just the boss.
+	zoneSystem_.on("Arena_Boss", ZoneEvent::Enter,
+		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
+			room.onArenaBossEnter(zone, playerId);
 		});
 }
 
@@ -695,6 +770,101 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	zone.setArmed(false);   // one-shot trigger
 }
 
+// Triggered once when a player enters the final-boss arena ("ArenaZone"). Spawns a
+// single boss at the "BossSpawner" marker (fallback: the triggering player's position)
+// and notifies clients via S_NpcSpawnBatch. Not a tactical encounter -- no platoon,
+// no walls. One-shot (zone disarmed); the boss BehaviorTree AI lands separately.
+void Room::onArenaBossEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Boss)\n";
+
+	if (!assetManager_) return;
+	if (finalBoss_) return;   // already spawned (one-shot guard)
+
+	// Wall 마커: 후퇴 차단은 양끝 Wall 일방향 슬랩이 담당(물리 벽 미생성). 마커를 모아 중점을
+	// interior 기준점(+스폰 fallback)으로 쓰고, 각 마커를 일방향 슬랩으로 만들어 둔다.
+	std::vector<const MarkerDef*> wallMarkers;
+	mu::Vec3 wallSum{};
+	int      wallCount = 0;
+	for (const auto& m : worldTerrain_->markers()) {
+		if (m.type != "Wall") continue;
+		if (m.name != "WallBoss") continue;
+		wallMarkers.push_back(&m);
+		wallSum += m.pos;
+		++wallCount;
+		std::cout << "[Zone] wall marker: '" << m.name << "' at ("
+		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+	if (wallCount > 0) {
+		const mu::Vec3 mid = wallSum / static_cast<float>(wallCount);
+		for (const MarkerDef* wm : wallMarkers) {
+			OneWayWall w = makeOneWayWall(*wm, mid);
+			arenaWalls_.push_back(w);
+			std::cout << "[Zone] one-way wall '" << wm->name << "' outward=("
+			          << w.outward.x() << ", " << w.outward.z() << ") halfWidth=" << w.halfWidth << '\n';
+		}
+	}
+
+	mu::Vec3 spawnPos{};
+	bool     haveSpawnPos = false;
+	if (worldTerrain_) {
+		for (const auto& m : worldTerrain_->markers()) {
+			if (m.type != "BossSpawner") continue;
+			spawnPos     = m.pos;
+			haveSpawnPos = true;
+			std::cout << "[Zone] Boss spawn point '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+			break;
+		}
+	}
+	if (!haveSpawnPos) {
+		// Fallback: spawn on the triggering player so the encounter still works if the
+		// level has no BossSpawner marker authored yet.
+		if (GameSession* s = findLivingSessionByPlayerId(static_cast<int32>(playerId))) {
+			spawnPos     = s->player()->pos();
+			haveSpawnPos = true;
+		}
+	}
+	if (!haveSpawnPos) {
+		std::cout << "[Zone] '" << zone.tag() << "' skipped - no BossSpawner marker and no player pos\n";
+		return;
+	}
+	spawnPos = mu::Vec3(spawnPos.x(), groundHeightAtWorld(spawnPos.x(), spawnPos.z()), spawnPos.z());
+
+	finalBoss_ = std::make_unique<FinalBoss>();
+	finalBoss_->setId(IdPool::pop());
+	finalBoss_->setPos(spawnPos);
+	setupFinalBoss(*finalBoss_);
+	// AI home: anchor the boss to its spawn with a wide activity zone (arena-sized) so
+	// it chases players across the arena instead of leashing back to the world origin.
+	finalBoss_->setSpawnPos(spawnPos);
+	finalBoss_->setActivityZone(spawnPos, 60.f);
+
+	FinalBoss* raw = finalBoss_.get();
+	raw->body().snapToCurrent();
+	physicsWorld_.registerBody(&raw->body(), [raw]() { raw->rebuildBodyBVH(); });
+	registerObject(raw);
+	npcBodyOwner_[&raw->body()] = raw;
+
+	std::vector<ObjectInfo> spawnInfos;
+	spawnInfos.push_back(ObjectInfo{
+		.type           = ObjectType::Boss,
+		.objectId       = static_cast<uint16>(raw->getId()),
+		.materialSetIdx = 0,
+		.hp             = raw->hp(),
+		.maxHp          = raw->maxHp(),
+		.pos            = raw->pos().getXmf(),
+		.orient         = raw->orient().getXmf(),
+		.scale          = raw->scale().getXmf(),
+	});
+	broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+
+	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
+	arenaWallsActive_  = true;
+
+	zone.setArmed(false);   // one-shot trigger
+}
+
 // Creates a Static cube collider matching a marker's world transform. Pure
 // collider: no object id, not registered in objectById_, not networked.
 void Room::spawnBarrierFromMarker(const MarkerDef& m) {
@@ -747,11 +917,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 
 	rebuildAggroCount();
 
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
+	const uint64 serverNow = networkNowMs();
 
 	// Angular velocity 고정 (물리 solver 누적 방지)
 	for (auto& g : goblins_)   g.body().setOmega(mu::Vec3{});
@@ -793,6 +959,31 @@ void Room::updateMonsterAI(Milliseconds dt) {
 	tickPool(slimes_);
 	tickPool(treants_);
 
+	// Final boss (runtime-spawned, single). Ticked inline: it is a FinalBoss (no
+	// posHistory lag-comp snapshot), so it does not go through tickPool.
+	if (finalBoss_) {
+		finalBoss_->body().setOmega(mu::Vec3{});
+		auto result = finalBoss_->update(dt, *this);
+		if (finalBoss_->hp() > 0) {
+			moveInfos.push_back({
+				static_cast<uint16>(finalBoss_->getId()),
+				finalBoss_->pos().getXmf(),
+				finalBoss_->orient().getXmf(),
+				finalBoss_->linearVel().getXmf()
+			});
+		}
+		if (result.hit) {
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(finalBoss_->getId())));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(finalBoss_->getId()), result.hit->targetId, result.hit->newHp));
+		}
+		// Final boss is not part of updateTacticalAI(), so its arena would otherwise
+		// never reach the tactical all-dead teardown path. Release WallBoss and send
+		// S_ZoneState(0) once the boss dies so clients restore the normal combat BGM.
+		if (arenaWallsActive_ && finalBoss_->hp() <= 0) {
+			teardownArenaWalls();
+		}
+	}
+
 	// ── Strongholds: structure destruction/rebuild + population maintenance ──
 	const Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
 	std::vector<uint32> revivedIds;
@@ -821,8 +1012,12 @@ void Room::updatePlayerAnimations(Milliseconds dt) {
 	static constexpr float kWalkThreshold = 0.3f;
 	for (auto* s : sessions_) {
 		auto* player = s->player();
-		const float speed = player->linearVel().len();
-		player->animController().switchClip(speed > kWalkThreshold ? "Run_Forward" : "Idle");
+		// 스킬 시전 중이면 스킬 PlayAnimation이 구동하는 공격 클립을 보존한다
+		// (idle/run으로 덮어쓰면 뼈 부착 히트박스 위치가 클라와 어긋난다).
+		if (!skillSystem_.hasActiveSkill(static_cast<i32t>(player->getId()))) {
+			const float speed = player->linearVel().len();
+			player->animController().switchClip(speed > kWalkThreshold ? "Run_Forward" : "Idle");
+		}
 		player->updateAnimBones(dt);
 	}
 }
@@ -936,6 +1131,50 @@ GameSession* Room::findLivingSessionByPlayerId(int32 playerId) const {
 	return (it->second->player()->hp() > 0) ? it->second : nullptr;
 }
 
+// 장착 무기에 맞춰 플레이어 AnimController에 클립을 등록한다(클라 AnimBlenderPlayer와 동일 매핑).
+// idle/run/hit/death는 의미 키로, 공격 클립은 실제 클립 이름을 키로 등록한다
+// (스킬 PlayAnimation이 clipName으로 직접 switchClip 하므로).
+static void registerPlayerAnimClips(Player& player, const std::vector<ServerAnimClip>& anims) {
+	const char* idle; const char* hit;
+	const char* runF; const char* runB; const char* runR; const char* runL;
+	std::vector<const char*> attacks;
+
+	switch (player.weaponType()) {
+	case PlayerWeaponType::Katana:       // 검(2H)
+		idle = "Combat_2H_Ready"; hit = "Combat_2H_Hit";
+		runF = "Run_2H_Forward"; runB = "Run_2H_Backwards"; runR = "Run_2H_Right"; runL = "Run_2H_Left";
+		attacks = { "Combat_2H_Attack", "Combat_2H_Attack01", "Combat_2H_AttackSpecial" };
+		break;
+	case PlayerWeaponType::SpearHook:    // 창(1H)
+		idle = "Combat_1H_Ready"; hit = "Combat_1H_Hit";
+		runF = "Run_1H_Forward"; runB = "Run_1H_Backwards"; runR = "Run_1H_Right"; runL = "Run_1H_Left";
+		attacks = { "Combat_1H_Attack", "Combat_1H_Attack02" };
+		break;
+	case PlayerWeaponType::CrystalWand:  // 완드(1H run 공용)
+		idle = "Combat_Cast_Ready"; hit = "Combat_Cast_Hit";
+		runF = "Run_1H_Forward"; runB = "Run_1H_Backwards"; runR = "Run_1H_Right"; runL = "Run_1H_Left";
+		attacks = { "Combat_CastAttack", "Combat_Cast_Attack02", "Combat_Defend_AttackSpecial", "Combat_Cast_SpellA_Start" };
+		break;
+	case PlayerWeaponType::HeavyArrow:   // 활
+	default:
+		idle = "Combat_Bow_Ready"; hit = "Combat_Bow_Hit";
+		runF = "Run_Bow_Forward"; runB = "Run_Bow_Backwards"; runR = "Run_Bow_Right"; runL = "Run_Bow_Left";
+		attacks = { "Combat_Bow_Attack", "Combat_Bow_Attack01", "Combat_Bow_AttackSpecial" };
+		break;
+	}
+
+	auto& ac = player.animController();
+	ac.registerClip("Idle",         findServerAnimClip(anims, idle));
+	ac.registerClip("Hit",          findServerAnimClip(anims, hit));
+	ac.registerClip("Run_Forward",  findServerAnimClip(anims, runF));
+	ac.registerClip("Run_Backward", findServerAnimClip(anims, runB));
+	ac.registerClip("Run_Right",    findServerAnimClip(anims, runR));
+	ac.registerClip("Run_Left",     findServerAnimClip(anims, runL));
+	ac.registerClip("Death",        findServerAnimClip(anims, "Death"));
+	for (const char* a : attacks)
+		ac.registerClip(a, findServerAnimClip(anims, a));
+}
+
 void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
@@ -957,11 +1196,7 @@ void Room::enter(GameSession* session) {
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
-		player->animController().registerClip("Idle",         findServerAnimClip(*anims, "Player_Idle0"));
-		player->animController().registerClip("Run_Forward",  findServerAnimClip(*anims, "Player_Run_Forward"));
-		player->animController().registerClip("Run_Backward", findServerAnimClip(*anims, "Player_Run_Backward"));
-		player->animController().registerClip("Run_Left",     findServerAnimClip(*anims, "Player_Run_Left"));
-		player->animController().registerClip("Run_Right",    findServerAnimClip(*anims, "Player_Run_Right"));
+		registerPlayerAnimClips(*player, *anims);
 		player->animController().switchClip("Idle");
 	}
 
@@ -1050,6 +1285,20 @@ void Room::enter(GameSession* session) {
 	pushMonsterInfo(birdys_,  ObjectType::Birdy);
 	pushMonsterInfo(slimes_,  ObjectType::Slime);
 	pushMonsterInfo(treants_, ObjectType::Treant);
+
+	// Final boss (runtime-spawned): include so a late joiner sees the ongoing fight.
+	if (finalBoss_ && finalBoss_->hp() > 0) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Boss,
+			.objectId = static_cast<uint16>(finalBoss_->getId()),
+			.materialSetIdx = 0,
+			.hp = finalBoss_->hp(),
+			.maxHp = finalBoss_->maxHp(),
+			.pos = finalBoss_->pos().getXmf(),
+			.orient = finalBoss_->orient().getXmf(),
+			.scale = finalBoss_->scale().getXmf(),
+		});
+	}
 
 	for (const auto& sh : strongholds_) {
 		objInfos.push_back(ObjectInfo{
@@ -1259,17 +1508,26 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		if (!tgt) continue;
 
 		const int32 prevHp = tgt->hp();
-		// 받는 피해 배율 적용(기본 1.0; Grandbaum 평상시 슬라임 0.1, ShieldWall 중 보스 0.1 → 90% 경감).
+		// 전술 phase가 관리하는 대상별 무적/피해 경감 배율을 최종 피해에 적용한다.
 		const int32 dmg   = static_cast<int32>(hit->damage * tgt->damageTakenMultiplier());
 		const int32 newHp = std::max(prevHp - dmg, 0);
 		tgt->setHp(newHp);
 		noteAndMaybeReward(hit->attackerId, tgt, prevHp, newHp);
+		// Hit-reaction clip: the boss has two (Boss_Hit1/Hit2); the server picks one so
+		// every client plays the same reaction (matches the authoritative hitbox timing).
+		// Single-hit monsters ignore the index (always 0).
+		uint8 hitAnimIndex = 0;
+		if (finalBoss_ && tgt == finalBoss_.get()) {
+			static thread_local std::mt19937 hitRng{ std::random_device{}() };
+			hitAnimIndex = static_cast<uint8>(hitRng() & 1u);
+		}
 		broadcast(PacketManager::makeSSkillHitPacket(
 			static_cast<uint16>(hit->attackerId),
 			static_cast<uint16>(hit->targetId),
 			newHp,
 			hit->skillAssetId,
-			tgt->linearVel().getXmf()
+			tgt->linearVel().getXmf(),
+			hitAnimIndex
 		));
 	}
 
@@ -1288,9 +1546,11 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uint32 skillSeed) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
 	auto sessionIt = idSessionMap_.find(sessionId);
-	if (sessionIt == idSessionMap_.end()) return;
+	if (sessionIt == idSessionMap_.end()) {
+		return;
+	}
 
 	auto* player = sessionIt->second->player();
 	if (player->hp() <= 0) return;
@@ -1318,14 +1578,12 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs, uin
 			static_cast<uint16>(player->getId()), static_cast<uint8>(slot), player->skillCharge(slot)));
 	}
 
-	// Compute elapsed time for lag compensation (same pattern as attack())
-	uint64 serverNow = static_cast<uint64>(
-		std::chrono::duration_cast<std::chrono::milliseconds>(
-			HighResolutionClock::now().time_since_epoch()
-		).count()
-	);
-	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
-	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
+	// The client reports an estimate in the server's monotonic clock domain.
+	// Treat it only as a bounded lag-compensation hint; invalid/future/stale values
+	// fall back to receive time so a client can never force an unbounded fast-forward.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint16 elapsedMs = actionTime.ageMs;
 
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic
@@ -1387,7 +1645,7 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 		skillSeed));
 }
 
-void Room::attack(int32 sessionId, uint64 clientMs) {
+void Room::attack(int32 sessionId, uint64 actionServerMs) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 
 	if (sessionIt == idSessionMap_.end()) {
@@ -1411,8 +1669,11 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		player->pos(), player->forward(), kHalfExtent, kOffsetFwd
 	);
 
-	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
-	uint64 targetMs = clientMs;
+	// Rewind only within the server-validated 250 ms window. Unsynchronized,
+	// future, or stale timestamps use the current server receive time.
+	const uint64 serverNow = networkNowMs();
+	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
+	const uint64 targetMs = actionTime.timestampMs;
 
 	// Legacy player melee (lag-comp rewind). New monster pools are damageable via the
 	// skill system (objectById_), so they are not added to this vestigial path.
@@ -1440,7 +1701,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
 		if (collides(hitbox, aabb).hit) {
 			const int32 prevHp = o->hp();
-			// 받는 피해 배율 적용(스킬 히트와 동일; Grandbaum 평상시 슬라임/ShieldWall 중 보스 0.1).
+			// 스킬 히트와 동일한 대상별 무적/피해 경감 배율을 적용한다.
 			const int32 dmg    = static_cast<int32>(kDamage * o->damageTakenMultiplier());
 			const int32 newHp  = std::max(prevHp - dmg, 0);
 			o->setHp(newHp);
@@ -1471,6 +1732,7 @@ const SkillAsset* Room::findSkillAsset(uint32 id) const {
 }
 
 void Room::noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp) {
+	if (newHp >= prevHp) return;   // invulnerable/fully mitigated hits grant no contribution
 	if (!target || target->killChargeReward() <= 0.f) return;   // not a chargeable monster
 	Object* atk = (attackerObjId >= 0 && attackerObjId < static_cast<int32>(objectById_.size()))
 		? objectById_[attackerObjId] : nullptr;
@@ -1998,9 +2260,8 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 			// 전술 trooper는 플레이어/보스를 물리적으로 통과(경로 차단 방지). ShieldWall 중 슬라임은
 			// setShieldWallBlockers가 Player 충돌을 다시 켜 하드 블로커로 전환한다.
 			npc->body().setCollisionMask(~(CollisionLayer::Player | CollisionLayer::Boss));
-			// 평상시 슬라임은 받는 피해 90% 경감(단단) → 플레이어가 보스를 공격하도록 유도.
-			// ShieldWall 중에는 GrandbaumMidBossTactic이 1.0으로 풀어 취약하게, 종료 시 0.1로 복귀.
-			npc->setDamageTakenMultiplier(0.1f);
+			// 평상시 슬라임은 무적. ShieldWall 중에만 0.5로 풀려 파훼 대상이 된다.
+			npc->setDamageTakenMultiplier(0.f);
 			npc->setSquadId(s);
 
 			squad->addMember(npc.get());
@@ -2124,10 +2385,20 @@ void Room::knockPlayersOutOfShieldWall(mu::Vec3 center, float ringRadius) {
 // ShieldWall 중 슬라임을 "차단벽"으로 클라에 통지한다. 플레이어 차단은 클라 권위
 // (resolveBarrierSeparation)가 전담하고, 서버에서는 형성 중 바깥 링이 안쪽 링의 진입을 막지 않도록
 // 방패벽 슬라임끼리만 물리 충돌을 끈다. Player/Boss 통과와 지형 충돌은 기존 설정을 유지한다.
-void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
+void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds, uint32_t impulseOnlyNpcId) {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
 	constexpr uint32_t SHIELD_WALL_SLIME_MASK =
 		~(CollisionLayer::Player | CollisionLayer::Boss | CollisionLayer::Slime);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
+
+	// 이전 impulse-only 대상이 바뀌면 면역을 먼저 원복한다.
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ != impulseOnlyNpcId
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* previous = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			previous->setHitImpulseImmune(false);
+		}
+	}
 
 	// 살아있는 blocker가 갱신 목록에서 빠진 경우 ShieldWall 설정을 즉시 원복한다.
 	// 죽은 NPC는 이미 물리 월드에서 빠졌지만 같은 처리는 무해하다.
@@ -2138,6 +2409,7 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
 		}
 	}
 
@@ -2147,31 +2419,52 @@ void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(CollisionLayer::Slime);
 			npc->body().setCollisionMask(SHIELD_WALL_SLIME_MASK);
+			npc->setHitImpulseImmune(true);
+		}
+	}
+
+	// 보스는 플레이어 차단벽에는 포함하지 않고 스킬 피격 impulse만 차단한다.
+	if (impulseOnlyNpcId != INVALID_NPC_ID && impulseOnlyNpcId < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[impulseOnlyNpcId]) {
+			protectedNpc->setHitImpulseImmune(true);
 		}
 	}
 
 	shieldWallBlockerIds_ = blockerIds;
+	shieldWallImpulseOnlyNpcId_ = impulseOnlyNpcId;
 	// on은 1회만(죽은 슬라임은 클라가 hp로 자동 제외 → ids 재통지 불필요).
 	if (!shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(true, blockerIds));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			true, blockerIds, static_cast<uint16>(impulseOnlyNpcId)));
 		shieldWallBarrierOn_ = true;
 	}
 }
 
 void Room::clearShieldWallBlockers() {
 	constexpr uint32_t NORMAL_TROOPER_MASK = ~(CollisionLayer::Player | CollisionLayer::Boss);
+	constexpr uint32_t INVALID_NPC_ID = SNpcBarrierPacket::INVALID_NPC_ID;
 	for (uint32_t id : shieldWallBlockerIds_) {
 		if (TacticalNpc* npc = findTacticalNpcById(id)) {
 			npc->body().setCollisionCategory(0xFFFFFFFFu);
 			npc->body().setCollisionMask(NORMAL_TROOPER_MASK);
+			npc->setHitImpulseImmune(false);
+		}
+	}
+
+	if (shieldWallImpulseOnlyNpcId_ != INVALID_NPC_ID
+		&& shieldWallImpulseOnlyNpcId_ < objectById_.size()) {
+		if (Object* protectedNpc = objectById_[shieldWallImpulseOnlyNpcId_]) {
+			protectedNpc->setHitImpulseImmune(false);
 		}
 	}
 
 	if (shieldWallBarrierOn_) {
-		broadcast(PacketManager::makeSNpcBarrierPacket(false, shieldWallBlockerIds_));
+		broadcast(PacketManager::makeSNpcBarrierPacket(
+			false, shieldWallBlockerIds_, static_cast<uint16>(shieldWallImpulseOnlyNpcId_)));
 		shieldWallBarrierOn_ = false;
 	}
 	shieldWallBlockerIds_.clear();
+	shieldWallImpulseOnlyNpcId_ = INVALID_NPC_ID;
 }
 
 // ── Grandbaum 뱀 증원 웨이브: 동적 소환/디스폰 ───────────────────────────────
@@ -2267,6 +2560,10 @@ void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
 		obj.animController().registerClip("Attack", findServerAnimClip(*anims, p + "_Attack1"));
 	obj.animController().switchClip("Idle");
 	obj.setCanReceiveDamage(true);
+	// Tactical NPCs (troopers and the PlatoonLeader boss) grant skill charge on death like
+	// their field counterparts. Keyed by objType so each variant uses its monster's value;
+	// boss objTypes (Hobgoblin/Grandbaum/Isys) read their own chargeConfig.lua entries.
+	obj.setKillChargeReward(assetManager_->chargeConfig().monsterCharge(type));
 
 	obj.body().setMotionType(MotionType::Dynamic);
 	obj.body().setMass(70.f);

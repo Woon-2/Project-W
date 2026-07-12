@@ -6,7 +6,8 @@
 
 class RoomServer {
 public:
-	RoomServer() : reactor_(), listener_(std::make_shared<Listener>(reactor_.iocpHandle())),
+	explicit RoomServer(uint16 listenPort)
+		: reactor_(), listener_(std::make_shared<Listener>(reactor_.iocpHandle(), listenPort)),
 		iocpThreads_(), jobTimerThread_(), jobThreads_()
 	{}
 

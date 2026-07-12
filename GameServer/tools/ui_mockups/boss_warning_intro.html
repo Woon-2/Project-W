@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>최종 보스 경고 연출</title>
+  <style>
+    :root {
+      --red: #f02a24;
+      --red-hot: #ff584d;
+      --cyan: #43f0ec;
+      --bone: #eee8dc;
+      --duration: 5.6s;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #020303;
+      color: var(--bone);
+      font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    body { display: grid; place-items: center; }
+
+    .scene {
+      position: relative;
+      width: min(100vw, 177.78vh);
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(76, 12, 10, .16), transparent 38%),
+        linear-gradient(#111515, #050606);
+      animation: scene-shock var(--duration) steps(1) both;
+    }
+
+    .battlefield {
+      position: absolute;
+      inset: -4%;
+      z-index: -5;
+      opacity: .38;
+      filter: grayscale(.75) contrast(1.35) brightness(.55) blur(1px);
+      background:
+        linear-gradient(162deg, transparent 0 48%, rgba(190,205,200,.08) 49% 51%, transparent 52%),
+        repeating-linear-gradient(108deg, transparent 0 8%, rgba(255,255,255,.025) 8.2% 8.5%),
+        radial-gradient(circle at 52% 35%, #52605c 0, #222827 31%, #090b0b 69%);
+      transform: scale(1.08);
+      animation: camera-hit var(--duration) steps(1) both;
+    }
+
+    .blackout, .red-wash, .vignette, .noise, .scanlines, .tear {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .blackout {
+      z-index: 1;
+      background: #000;
+      animation: blackout var(--duration) steps(1) both;
+    }
+
+    .red-wash {
+      z-index: 2;
+      opacity: 0;
+      mix-blend-mode: screen;
+      background:
+        linear-gradient(90deg, transparent, rgba(255,30,20,.14), transparent),
+        radial-gradient(circle, rgba(255,25,16,.1), transparent 55%);
+      animation: red-flash var(--duration) steps(1) both;
+    }
+
+    .vignette {
+      z-index: 8;
+      background: radial-gradient(ellipse, transparent 25%, rgba(0,0,0,.5) 67%, #000 100%);
+    }
+
+    .scanlines {
+      z-index: 12;
+      opacity: .25;
+      background: repeating-linear-gradient(
+        180deg,
+        rgba(255,255,255,.025) 0 1px,
+        transparent 1px 4px
+      );
+      animation: scan-drift .16s linear infinite;
+    }
+
+    .noise {
+      z-index: 13;
+      opacity: 0;
+      mix-blend-mode: screen;
+      background-image:
+        repeating-radial-gradient(circle at 20% 30%, transparent 0 1px, rgba(255,255,255,.22) 1.5px 2px);
+      background-size: 5px 5px;
+      animation: noise-burst var(--duration) steps(1) both, grain .09s steps(2) infinite;
+    }
+
+    .tear {
+      z-index: 14;
+      opacity: 0;
+      background:
+        linear-gradient(90deg, transparent 0 9%, rgba(255,255,255,.55) 9.2% 34%, transparent 34.4%),
+        linear-gradient(90deg, transparent 0 47%, rgba(240,42,36,.7) 47.2% 82%, transparent 82.4%);
+      clip-path: polygon(0 43%, 100% 43%, 100% 49%, 0 49%);
+      animation: tear var(--duration) steps(1) both;
+    }
+
+    .warning {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      opacity: 0;
+      animation: warning-block var(--duration) steps(1) both;
+    }
+
+    .warning-bars {
+      width: min(78vw, 1200px);
+      height: clamp(5px, .45vw, 9px);
+      margin: clamp(14px, 1.5vw, 28px) 0;
+      background: repeating-linear-gradient(
+        135deg,
+        var(--red) 0 22px,
+        transparent 22px 34px
+      );
+      box-shadow: 0 0 18px rgba(240,42,36,.35);
+      animation: bars-slide .35s linear infinite;
+    }
+
+    .warning-title {
+      position: relative;
+      margin: 0;
+      color: var(--red-hot);
+      font-family: "Arial Black", "Impact", sans-serif;
+      font-size: clamp(64px, 11vw, 210px);
+      line-height: .82;
+      letter-spacing: .12em;
+      text-indent: .12em;
+      text-shadow: 0 0 20px rgba(240,42,36,.42);
+      animation: warning-jitter .13s steps(2) infinite;
+    }
+
+    .warning-title::before,
+    .warning-title::after,
+    .boss-title::before,
+    .boss-title::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .warning-title::before {
+      color: var(--cyan);
+      opacity: .65;
+      transform: translate(-8px, 1px);
+      clip-path: inset(12% 0 63% 0);
+    }
+
+    .warning-title::after {
+      color: white;
+      opacity: .55;
+      transform: translate(10px, -1px);
+      clip-path: inset(65% 0 12% 0);
+    }
+
+    .boss-card {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      opacity: 0;
+      animation: boss-block var(--duration) steps(1) both;
+    }
+
+    .boss-frame {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 37%;
+      bottom: 31%;
+      border-top: 1px solid rgba(240,42,36,.62);
+      border-bottom: 1px solid rgba(240,42,36,.25);
+      transform: scaleX(0);
+      animation: boss-frame var(--duration) cubic-bezier(.2,.75,.25,1) both;
+    }
+
+    .boss-frame::before,
+    .boss-frame::after {
+      content: "";
+      position: absolute;
+      top: -3px;
+      width: 14%;
+      height: 5px;
+      background: var(--red);
+      box-shadow: 0 0 15px rgba(240,42,36,.6);
+    }
+
+    .boss-frame::before { left: 0; }
+    .boss-frame::after { right: 0; }
+
+    .zone-label {
+      margin-bottom: clamp(15px, 1.7vw, 32px);
+      color: var(--red-hot);
+      font-size: clamp(12px, 1.15vw, 22px);
+      font-weight: 700;
+      letter-spacing: .48em;
+      text-indent: .48em;
+      animation: text-corrupt .19s steps(2) infinite;
+    }
+
+    .boss-title {
+      position: relative;
+      margin: 0;
+      color: var(--bone);
+      font-size: clamp(48px, 7.5vw, 144px);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: .13em;
+      text-indent: .13em;
+      white-space: nowrap;
+      text-shadow: 0 3px 22px #000;
+      animation: boss-jitter var(--duration) steps(1) both;
+    }
+
+    .boss-title::before {
+      color: var(--red);
+      opacity: 0;
+      transform: translate(-9px, 0);
+      clip-path: inset(18% 0 57% 0);
+      animation: ghost-red var(--duration) steps(1) both;
+    }
+
+    .boss-title::after {
+      color: var(--cyan);
+      opacity: 0;
+      transform: translate(8px, 1px);
+      clip-path: inset(62% 0 8% 0);
+      animation: ghost-cyan var(--duration) steps(1) both;
+    }
+
+    .corner {
+      position: absolute;
+      z-index: 10;
+      width: 44px;
+      height: 44px;
+      opacity: 0;
+      animation: corner var(--duration) steps(1) both;
+    }
+
+    .corner.lt { left: 4%; top: 7%; border-left: 2px solid var(--red); border-top: 2px solid var(--red); }
+    .corner.rb { right: 4%; bottom: 7%; border-right: 2px solid var(--red); border-bottom: 2px solid var(--red); }
+
+    .replay {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 30;
+      padding: 9px 13px;
+      border: 1px solid rgba(240,42,36,.45);
+      background: rgba(2,3,3,.78);
+      color: rgba(238,232,220,.8);
+      font: 12px/1 "Malgun Gothic", sans-serif;
+      letter-spacing: .08em;
+      cursor: pointer;
+    }
+
+    .replay:hover { color: white; border-color: var(--red-hot); }
+
+    @keyframes blackout {
+      0% { opacity: 0; }
+      4% { opacity: .88; }
+      7% { opacity: .18; }
+      10% { opacity: .95; }
+      15%, 78% { opacity: .63; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes red-flash {
+      0%, 5% { opacity: 0; }
+      6% { opacity: 1; }
+      8%, 18% { opacity: 0; }
+      19% { opacity: .8; }
+      21%, 47% { opacity: 0; }
+      48% { opacity: .7; }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes noise-burst {
+      0%, 3% { opacity: 0; }
+      4%, 7% { opacity: .5; }
+      8%, 16% { opacity: .08; }
+      17%, 20% { opacity: .55; }
+      21%, 44% { opacity: .1; }
+      45%, 51% { opacity: .72; }
+      52%, 78% { opacity: .08; }
+      79%, 85% { opacity: .35; }
+      86%, 100% { opacity: 0; }
+    }
+
+    @keyframes warning-block {
+      0%, 7% { opacity: 0; transform: translateX(0); }
+      8% { opacity: 1; }
+      12% { opacity: .25; transform: translateX(-9px); }
+      14%, 34% { opacity: 1; transform: translateX(0); }
+      35% { opacity: .1; transform: translateX(18px); }
+      38% { opacity: 1; transform: translateX(-12px); }
+      42%, 100% { opacity: 0; transform: translateX(0); }
+    }
+
+    @keyframes boss-block {
+      0%, 40% { opacity: 0; }
+      43% { opacity: .35; }
+      45% { opacity: 0; }
+      48%, 82% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes boss-frame {
+      0%, 43% { opacity: 0; transform: scaleX(0); }
+      51% { opacity: 1; transform: scaleX(1); }
+      82% { opacity: 1; transform: scaleX(1); }
+      100% { opacity: 0; transform: scaleX(1.04); }
+    }
+
+    @keyframes boss-jitter {
+      0%, 42% { opacity: 0; transform: translate(0) scale(1.12); filter: blur(8px); }
+      43% { opacity: 1; transform: translate(-25px, 3px) scale(1.07); filter: blur(2px); }
+      45% { opacity: 0; transform: translate(18px, -2px) scale(.98); }
+      48% { opacity: 1; transform: translate(-8px, 1px) scale(1.03); filter: blur(1px); }
+      51% { transform: translate(6px, -1px) scale(.995); filter: none; }
+      55%, 70% { opacity: 1; transform: translate(0) scale(1); }
+      71% { transform: translate(-4px, 0); }
+      72%, 82% { transform: translate(0); }
+      100% { opacity: 0; transform: scale(.98); }
+    }
+
+    @keyframes ghost-red {
+      0%, 42% { opacity: 0; }
+      43%, 55% { opacity: .8; }
+      56%, 70% { opacity: .18; }
+      71% { opacity: .7; }
+      73%, 100% { opacity: 0; }
+    }
+
+    @keyframes ghost-cyan {
+      0%, 44% { opacity: 0; }
+      45%, 54% { opacity: .7; }
+      55%, 69% { opacity: .12; }
+      70% { opacity: .65; }
+      72%, 100% { opacity: 0; }
+    }
+
+    @keyframes tear {
+      0%, 17% { opacity: 0; transform: translateX(0); }
+      18% { opacity: .8; transform: translateX(-12%); }
+      20%, 35% { opacity: 0; }
+      36% { opacity: 1; transform: translateX(15%); }
+      39%, 46% { opacity: 0; }
+      47% { opacity: .9; transform: translateX(-7%); }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes scene-shock {
+      0%, 4% { filter: none; }
+      5% { filter: brightness(2.3) contrast(1.8); }
+      6%, 17% { filter: none; }
+      18% { filter: brightness(1.8) saturate(.3); }
+      20%, 100% { filter: none; }
+    }
+
+    @keyframes camera-hit {
+      0%, 4% { transform: scale(1.08); }
+      5% { transform: translate(-10px, 4px) scale(1.09); }
+      7% { transform: translate(8px, -2px) scale(1.085); }
+      10%, 100% { transform: scale(1.04); }
+    }
+
+    @keyframes warning-jitter {
+      0% { transform: translate(0); }
+      25% { transform: translate(-3px, 1px); }
+      50% { transform: translate(2px, -1px); }
+      75% { transform: translate(1px, 1px); }
+    }
+
+    @keyframes text-corrupt {
+      0%, 60% { transform: translateX(0); opacity: 1; }
+      61% { transform: translateX(-7px); opacity: .35; }
+      85% { transform: translateX(3px); opacity: 1; }
+    }
+
+    @keyframes bars-slide { to { background-position-x: 48px; } }
+    @keyframes scan-drift { to { transform: translateY(4px); } }
+
+    @keyframes grain {
+      0% { transform: translate(0,0); }
+      25% { transform: translate(-2px,1px); }
+      50% { transform: translate(1px,-2px); }
+      75% { transform: translate(2px,2px); }
+    }
+
+    @keyframes corner {
+      0%, 7% { opacity: 0; }
+      8%, 35% { opacity: .9; }
+      36%, 44% { opacity: 0; }
+      48%, 82% { opacity: .65; }
+      100% { opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-delay: 0ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="scene" id="scene" aria-label="최종 보스 경고 입장 연출">
+    <div class="battlefield"></div>
+    <div class="blackout"></div>
+    <div class="red-wash"></div>
+
+    <section class="warning">
+      <h1 class="warning-title" data-text="WARNING">WARNING</h1>
+    </section>
+
+    <section class="boss-card">
+      <div class="boss-frame"></div>
+      <div class="zone-label">보스 전투 구역</div>
+      <h2 class="boss-title" data-text="그랜드 밤">그랜드 밤</h2>
+    </section>
+
+    <i class="corner lt"></i>
+    <i class="corner rb"></i>
+    <div class="tear"></div>
+    <div class="scanlines"></div>
+    <div class="noise"></div>
+    <div class="vignette"></div>
+  </main>
+
+  <button class="replay" type="button" id="replay">연출 다시 보기</button>
+
+  <script>
+    document.querySelector("#replay").addEventListener("click", () => {
+      const oldScene = document.querySelector("#scene");
+      const newScene = oldScene.cloneNode(true);
+      oldScene.replaceWith(newScene);
+    });
+  </script>
+</body>
+</html>

@@ -100,8 +100,9 @@ private:
     static constexpr float SHIELD_RING_MAX_ARC_SPACING   = 2.8f;
     static constexpr float SHIELD_RING_RADIUS_SEARCH_STEP = 0.05f;
     static constexpr int32 MIN_SHIELD_WALL_SLIME_COUNT   = 10;     // 이 미만이면 ShieldWall 스킵
-    static constexpr float SHIELDWALL_BOSS_DAMAGE_MULT   = 0.1f;   // 발동 중 보스 받는 피해 경감
-    static constexpr float SLIME_NORMAL_DAMAGE_MULT      = 0.1f;   // 평상시 슬라임 받는 피해 경감
+    static constexpr float SHIELDWALL_BOSS_DAMAGE_MULT   = 0.1f;   // 발동 중 보스 받는 피해 90% 경감
+    static constexpr float SHIELDWALL_SLIME_DAMAGE_MULT  = 0.5f;   // 발동 중 슬라임 받는 피해 50% 경감
+    static constexpr float SLIME_NORMAL_DAMAGE_MULT      = 0.0f;   // 평상시 슬라임 무적
     // 방패벽 형성 가속(RingGuard 오더 speedMult). 전투 속도는 불변, 형성 접근만 가속.
     static constexpr float SHIELD_WALL_APPROACH_SPEED_MULT = 2.0f;
     // 형성 중 재넉백 안전 타임아웃: 형성이 비정상 지연돼도 이 시간 후엔 재넉백 중단(플레이어 영구 락 방지).

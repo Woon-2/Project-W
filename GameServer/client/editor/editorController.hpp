@@ -72,6 +72,10 @@ public:
     float timeScale()  const { return timeScale_; }
     bool  cameraFree() const { return cameraFree_; }
 
+    // Currently controlled object (player, or the hot-swapped monster caster rig).
+    // Exposed for host-side debug tools (e.g. ragdoll toggle).
+    std::shared_ptr<Object> controlledObject() const { return casterObj(); }
+
 private:
     // --- selection / playback ---
     void selectCharacter(int idx);

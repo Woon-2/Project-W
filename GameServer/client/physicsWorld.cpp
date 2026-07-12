@@ -1,6 +1,18 @@
 ﻿#include "pch.hpp"
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
+#include <cmath>   // std::isfinite (integrator NaN guard, [SAFETY 1])
+
+namespace {
+    // [SAFETY 1] helpers -- see client/docs/ragdollSafety.md.
+    inline bool isFiniteV(mu::Vec3 v) {
+        return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
+    }
+    inline bool isFiniteQ(mu::NQuat q) {
+        return std::isfinite(q.x()) && std::isfinite(q.y())
+            && std::isfinite(q.z()) && std::isfinite(q.w());
+    }
+}
 
 // 수직(y축) 공기 저항 계수. linearDamping은 수평 지면 마찰에 사용되므로
 // y축에는 별도의 작은 값을 적용한다.
@@ -236,11 +248,33 @@ void PhysicsWorld::integrate(Seconds dt)
                     b.setOmega(b.omega() * (kMaxAngularSpeed / std::sqrt(omegaLen2)));
             }
 
+            // [SAFETY 1] Linear speed clamp + NaN guard (see client/docs/ragdollSafety.md).
+            // Matches the angular clamp above so runaway translation can't jump positions
+            // and cascade into NaN; the guards keep a single non-finite value from
+            // corrupting the body (and, once rendered, risking a device-removed crash).
+            {
+                static constexpr float kMaxLinearSpeed = 40.f;
+                const float velLen2 = b.linearVel().len2();
+                if (velLen2 > kMaxLinearSpeed * kMaxLinearSpeed)
+                    b.setLinearVel(b.linearVel() * (kMaxLinearSpeed / std::sqrt(velLen2)));
+            }
+            if (!isFiniteV(b.linearVel())) b.setLinearVel(mu::Vec3{});
+            if (!isFiniteV(b.omega()))     b.setOmega(mu::Vec3{});
+
             // Integrate position and orientation.
             b.setPos(b.pos() + b.linearVel() * dtf);
             const auto wq = mu::Quat(b.omega(), 0.f);
             auto newOrient = mu::Quat(b.orient()) + mu::Quat(b.orient()) * wq * 0.5f * dtf;
             b.setOrient(mu::NQuat{ newOrient });
+
+            // [SAFETY 1] If integration still produced a non-finite state, restore the
+            // previous (finite) transform and kill velocity instead of corrupting it.
+            if (!isFiniteV(b.pos()) || !isFiniteQ(b.orient())) {
+                b.setPos(b.prev().pos);
+                b.setOrient(b.prev().orient);
+                b.setLinearVel(mu::Vec3{});
+                b.setOmega(mu::Vec3{});
+            }
             b.updateInertiaWorld();
 
             b.clearAccumulators();

@@ -34,6 +34,7 @@ public:
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 	static void handleSZoneStatePacket( byte* buffer, int32 len );
 	static void handleSPlayerKnockbackPacket( byte* buffer, int32 len );
+	static void handleSTimeSyncPacket( byte* buffer, int32 len );
 
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );
@@ -46,9 +47,10 @@ public:
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCDebugTeleportPacket(DirectX::XMFLOAT3 pos);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
-	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 clientMs);
-	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs, uint32 skillSeed);
+	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 actionServerMs);
+	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
 	static std::shared_ptr<SendBuffer> makeCSelectSkillPacket(uint8 slot);
+	static std::shared_ptr<SendBuffer> makeCTimeSyncPacket(uint64 clientSendMs);
 
 	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType);
 

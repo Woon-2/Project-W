@@ -27,6 +27,9 @@
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
 #include "terrainPipeline.hpp"
+#include "minimapTerrainPipeline.hpp"
+#include "minimapFogBlurPipeline.hpp"
+#include "minimapPropPipeline.hpp"
 #include "terrainDeferredPipeline.hpp"
 #include "spriteAnimation.hpp"
 #include "pbrDeferredPipeline.hpp"
@@ -252,6 +255,9 @@ public:
 	void addFrameData( const TwoSidesPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
+	// Submits a trail drawn into SceneColorHDR BEFORE bloom (glowing path-guidance
+	// ribbon). Shares TrailPipeline's camera/frame data with the regular trail pass.
+	void addHDRTrailDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
 	// 카메라 데이터를 입력한다.
 	void addCameraData( const TrailPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
@@ -305,9 +311,13 @@ public:
 	static constexpr u32t kMaxPortraitDrawEventsPerSlot = 64u;
 	static constexpr u32t kMaxPortraitBonesPerCharacter = 256u;
 	static constexpr u32t kMaxPortraitBonesPerSlot = kMaxPortraitBonesPerCharacter * kMaxPortraitDrawEventsPerSlot;
+	// 슬롯당 장착 무기 1개분의 submesh 상한(non-skinned 정적 메시).
+	static constexpr u32t kMaxPortraitStaticDrawEventsPerSlot = 16u;
 
 	// 슬롯 slot의 캐릭터 스킨드 draw event를 제출한다(포워드 PBRSkinnedPipeline).
 	void addLobbyPortraitDrawEvent(u32t slot, PBRSkinnedPipeline::DrawEvent&& drawEvent);
+	// 슬롯 slot의 장착 무기(non-skinned) draw event를 제출한다(포워드 PBRPipeline).
+	void addLobbyPortraitDrawEventStatic(u32t slot, PBRPipeline::DrawEvent&& drawEvent);
 	// 슬롯 slot의 포트레이트 카메라를 설정한다.
 	void setLobbyPortraitCamera(u32t slot, const PBRSkinnedPipeline::CameraData& cameraData);
 	// 포트레이트 조명(로비 방향광, 모든 슬롯 공유)을 추가한다. shadow는 끄되 direct light는 넣는다.
@@ -320,6 +330,28 @@ public:
 	const Texture* lobbyPortraitTextureForThisFrame() const;
 	// 슬롯 slot 셀의 sub-rect uvScaleBias(uv' = uv*xy + zw)를 반환한다.
 	XMFLOAT4 lobbyPortraitCellUvScaleBias(u32t slot) const;
+
+	// ===== 미니맵 배경 캐시 (지형 diffuse + prop + fog-of-war) =====
+	static constexpr u32t kMinimapRTSize       = 1024u;  // 캐시 RT 해상도(정사각). 단일 RT라 메모리 저렴
+	// 캐시 텍스처가 덮는 월드 변(邊, 미터). 청크 크기(200m)와 무관하게 시야에 맞춰 작게 잡아
+	// 해상도(px/m)를 확보한다. 매 프레임 이 텍스처를 UV sub-rect로 스크롤(MinimapHUD)하고,
+	// 플레이어가 중심에서 kMinimapRebakeMoveThreshold 이상 벗어나면 재굽기(plus 청크 로드/언로드).
+	static constexpr float kMinimapCoverageWorld = 360.f;
+	static constexpr float kMinimapRebakeMoveThreshold = 50.f;  // 이 거리 이상 이동 시 재굽기
+	static constexpr float kMinimapWorldRadius = 60.f;   // 기본 시야 반경(미터, 줌 base) — MinimapHUD가 사용
+	static constexpr float kMinimapFogBlurRadiusTexels = 48.f;  // fog-of-war 페이드 폭(텍셀, 1024 기준)
+
+	// 이번 프레임 render()가 미니맵 캐시를 재굽도록 요청한다. TerrainChunkManager가
+	// minimapDirty()를 보고 호출 — Portrait와 달리 요청된 프레임 한 번만 수행된다.
+	void requestMinimapRebake();
+	// 재굽기 패스에 지형 청크 draw event를 제출한다(요청되지 않은 프레임에는 버려진다).
+	void addMinimapDrawEvent(MinimapTerrainPipeline::DrawEvent&& drawEvent);
+	// 재굽기 패스에 scatter prop(나무/바위 등) draw event를 제출한다(지형 위에 top-down albedo로 굽힘).
+	void addMinimapPropDrawEvent(MinimapPropPipeline::DrawEvent&& drawEvent);
+	// 미니맵 직교 카메라(North-up, 플레이어 중심)를 설정한다.
+	void setMinimapCamera(const MinimapTerrainPipeline::CameraData& cameraData);
+	// 마지막으로 재굽힌 미니맵 캐시의 최종(블러+합성 완료) 텍스처. 매 프레임 UI가 샘플한다.
+	const Texture* minimapTextureForThisFrame() const;
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
@@ -412,6 +444,8 @@ public:
 	const Texture* solidColorTex() const { return &solidColorImage_.texture; }
 	// Creates a new Tahoma FontHandle with the specified point size.
 	FontHandle createFont(float fontSize);
+	// Creates a font using a system font family.
+	FontHandle createFont(const WCHAR* fontFamilyName, float fontSize);
 	// Measures text extents without rendering to a bitmap.
 	void measureText(FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH);
 
@@ -495,6 +529,19 @@ private:
 	PBRSkinnedPipeline::LightData mainDirectionalLightLobbyPortrait_{};      // cascadeCount=0 (no-shadow)
 	PBRSkinnedPipeline::FrameData frameDataLobbyPortrait_{};
 	bool lobbyPortraitActive_ = false;
+	// 슬롯별 장착 무기(non-skinned) draw event. 카메라/조명/프레임 데이터는 위 스킨드 포트레이트
+	// 값(cameraDataLobbyPortrait_/lightDataLobbyPortrait_/frameDataLobbyPortrait_)을 그대로
+	// PBRPipeline 타입으로 변환해 공유한다(필드 구성 동일, 별도 멤버 불필요).
+	std::array<std::vector<PBRPipeline::DrawEvent>, kMaxPortraitSlots> drawEventsLobbyPortraitStatic_{};
+	std::array<PBRPipeline::Resources, kMaxPortraitSlots> resourcesLobbyPortraitStatic_{};
+
+	std::vector<MinimapTerrainPipeline::DrawEvent> drawEventsMinimap_{};
+	std::vector<MinimapPropPipeline::DrawEvent>    drawEventsMinimapProp_{};
+	MinimapTerrainPipeline::Resources  resourcesMinimapTerrain_{};
+	MinimapPropPipeline::Resources     resourcesMinimapProp_{};
+	MinimapFogBlurPipeline::Resources  resourcesMinimapFogBlur_{};
+	MinimapTerrainPipeline::CameraData cameraDataMinimap_{};
+	bool minimapRebakeRequested_ = false;
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};
@@ -564,6 +611,10 @@ private:
 	TrailPipeline::Resources                 resourcesTrailPipeline_{};
 	TrailPipeline::CameraData                cameraDataTrailPipeline_{};
 	TrailPipeline::FrameData                 frameDataTrailPipeline_{};
+	// Trail Pipeline (HDR / pre-bloom) — independent resources so the two trail
+	// dispatchers do not clobber the same StructuredBuffer in a frame.
+	std::vector<TrailPipeline::DrawEvent>    drawEventsTrailPipelineHDR_{};
+	TrailPipeline::Resources                 resourcesTrailPipelineHDR_{};
 	// UI Pipeline
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};

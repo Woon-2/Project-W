@@ -17,6 +17,7 @@ void AssetManager::loadAssets() {
     // Named variants: share base monster anims, different model only.
     modelGrandbaum_ = loadModelFromFile("../resources/models/treant/GrandbaumServer.bin");
     modelIsys_      = loadModelFromFile("../resources/models/birdy/IsysServer.bin");
+    modelBoss_      = loadModelFromFile("../resources/boss/bossServer.bin");
 
     playerAnimations_   = loadServerAnimClipsFromFile("../resources/animations/playerAnimations.anim");
     goblinAnimations_   = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
@@ -26,6 +27,7 @@ void AssetManager::loadAssets() {
     birdyAnimations_    = loadServerAnimClipsFromFile("../resources/animations/birdyAnimations.anim");
     slimeAnimations_    = loadServerAnimClipsFromFile("../resources/animations/slimeAnimations.anim");
     treantAnimations_   = loadServerAnimClipsFromFile("../resources/animations/treantAnimations.anim");
+    bossAnimations_     = loadServerAnimClipsFromFile("../resources/boss/bossAnimations.anim");
 
     level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
     level_.terrainChunks.init("../resources/terrains/");

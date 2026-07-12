@@ -7,7 +7,7 @@ void Listener::startAccept() {
 	SocketUtils::setReuseAddr(listenSock_, true);
 	SocketUtils::setTcpNoDelay(listenSock_, true);
 
-	SocketUtils::bind(listenSock_, NetAddress(roomServerPort));
+	SocketUtils::bind(listenSock_, NetAddress(listenPort_));
 	SocketUtils::listen(listenSock_);
 
 	const int32 count = static_cast<int32>(numberOfPhysicalCores());

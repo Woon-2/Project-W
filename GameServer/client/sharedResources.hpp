@@ -117,8 +117,8 @@ extern std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowM
 struct GBufferData {
 	Texture gb0;    // R8G8B8A8_UNORM  — Albedo.rgb + AO.a
 	Texture gb1;    // R16G16_FLOAT    — NormalV oct-encoded
-	Texture gb2;    // R8G8B8A8_UNORM  — LightAccum.rgb + Roughness.a
-	Texture gb3;    // R8_UNORM        — Metallic
+	Texture gb2;    // R11G11B10_FLOAT — Emissive.rgb (HDR)
+	Texture gb3;    // R8G8_UNORM      — Metallic.r + Roughness.g
 	Texture gb4;    // R32_FLOAT       — Linear view-space Z (posV.z)
 	Texture depth;  // R32_TYPELESS resource; DSV=D32_FLOAT, SRV=R32_FLOAT
 	u32t width;
@@ -287,6 +287,44 @@ void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 }	// namespace Portrait
+
+// 미니맵 배경 캐시: 지형(diffuse) + prop + fog-of-war 마스크(alpha=로드된 영역)를 재굽을 때만
+// 갱신하는 작은 정사각 RT 쌍. texA/texB는 ping-pong 버퍼(둘 다 RTV+SRV) — 지형/prop 패스는
+// texA에 쓰고, fog 블러 2-pass(가로/세로)가 texA<->texB를 오가며 마지막에 texA에 최종
+// (지형*마스크) 결과를 남긴다. depth는 사용하지 않는다.
+//
+// per-room이 아닌 **단일 인스턴스**다(IBL과 동일). 미니맵은 매 프레임 GPU가 쓰는 게 아니라
+// 재굽기 시에만 GPU가 쓰고 매 프레임 GPU가 읽는다. 모든 명령은 단일 direct 큐(cmdQ_)에 제출
+// 순서대로 직렬 실행되므로, 같은 큐에서의 GPU-write→GPU-read는 프레임 간에도 해저드가 없다.
+// (per-room이면 재굽기가 한 room만 갱신해 나머지 room이 빈 채로 남아 깜빡였다 — 단일로 해소.)
+struct MinimapRTData {
+	Texture texA;   // R8G8B8A8_UNORM — RTV + bindless SRV
+	Texture texB;   // R8G8B8A8_UNORM — RTV + bindless SRV
+	u32t    size = 0u;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvA{};
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvB{};
+	D3D12_RESOURCE_STATES curStateA{};
+	D3D12_RESOURCE_STATES curStateB{};
+};
+
+namespace Minimap {
+
+// 단일 미니맵 캐시 RT 쌍. addMinimapRT() 전에는 created == false.
+extern MinimapRTData minimapData;
+extern bool          created;
+
+// size x size 크기의 RT 2장(texA/texB)을 생성한다(단일).
+void addMinimapRT( ID3D12Device* device, u32t size,
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool
+);
+
+// useA == true면 texA를, false면 texB를 대상으로 상태를 전환/클리어한다.
+void transitionToWrite(bool useA, ID3D12GraphicsCommandList* cmdList);
+void transitionToRead(bool useA, ID3D12GraphicsCommandList* cmdList);
+// 투명(0,0,0,0)으로 클리어한다. 호출 전 transitionToWrite()로 RENDER_TARGET 상태여야 한다.
+void clearMinimapRT(bool useA, ID3D12GraphicsCommandList* cmdList);
+
+}	// namespace Minimap
 
 namespace HiZMap {
 

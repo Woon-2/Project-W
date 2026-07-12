@@ -35,8 +35,13 @@
 #include "../particleEffect.hpp"
 #include "../damageNumberSystem.hpp"
 #include "../energyOrbSystem.hpp"
+#include "../pathGuideSystem.hpp"
+#include "../mesh.hpp"
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
+#include "../ui/minimapHUD.hpp"
+#include "../ui/intro/TacticalZoneIntro.hpp"
+#include "../ui/dialogue/DialogueSystem.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -88,6 +93,8 @@ public:
 	// Mid-boss bosses: dedicated models, routed through the Treant/Birdy corpse kind so death FX work.
 	void createGrandbaum(const ObjectInfo& info);
 	void createIsys(const ObjectInfo& info);
+	// Final boss: own 14-clip rig (AnimBlenderBoss), 1:1 combat, its own MonsterKind::Boss.
+	void createBoss(const ObjectInfo& info);
 	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
@@ -96,9 +103,9 @@ public:
 
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
-	// 서버가 전술 차단벽(barrier)을 토글. active NPC들을 클라에서 '플레이어를 막는 벽'으로
-	// 설정/해제한다(resolveBarrierSeparation 대상). PacketManager가 S_NpcBarrier 수신 시 호출.
-	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds);
+	// 서버가 전술 차단벽(barrier)을 토글. npcIds는 플레이어 차단+impulse 면역,
+	// impulseOnlyNpcId는 차단벽 등록 없이 impulse 면역만 설정한다.
+	void setNpcBarrier(bool active, const std::vector<uint16>& npcIds, uint16 impulseOnlyNpcId);
 
 	// 서버가 지정한 NPC들을 즉시 숨김(비표시) 처리. 사망과 달리 시체/래그돌 없이 화면에서 제거하며,
 	// 복귀는 onNpcRespawn이 hidden을 해제한다. PacketManager가 S_NpcHide 수신 시 호출.
@@ -107,12 +114,12 @@ public:
 
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
-	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1);
+	void applyHit(uint16 targetId, int32 newHp, int32 attackerId = -1, uint8 hitAnimIndex = 0);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
-	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
+	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
 	void onSkillSelect( uint16 playerId, uint8 slot );
@@ -122,6 +129,8 @@ public:
 	void onPlayerHp( uint16 playerId, int32 newHp );
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
+	void beginServerTimeSync();
+	void onServerTimeSync(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -143,16 +152,30 @@ private:
 
 	void sendMovePacket();
 	void sendMouseMovePacket();
-	// Debug teleport (F5/F6/F7): jump the player to an arena zone center to test mid-boss triggers.
+	// Debug teleport (F5/F6/F7/F9): jump the player to an arena zone center to test arena triggers.
 	// Looks up the zone center by tag, sets the local predicted pos, and sends C_DebugTeleport so the
 	// server moves its authoritative pos (bypassing the anti-cheat clamp) and the zone Enter fires.
 	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
 	void debugTeleportToArena(const std::string& tag);
+
+	// [임시 디버그] F8 토글로 켜는 로컬 플레이어 이동 속도 배율(1x↔5x). 서버 C_Move(20Hz)×7m/packet
+	// 클램프 한도(≈140m/s) 안이라 온라인에서도 러버밴딩 없음. 제거 시 이 멤버 + processInput의 적용부/F8 핸들러만 삭제.
+	float debugSpeedMultiplier_{ 1.f };
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
+	void updateServerTimeSync();
+	void requestServerTimeSync();
+	uint64 estimatedServerTimeMs() const;
+	int64  serverClockOffsetMs_{ 0 };
+	uint64 nextTimeSyncClientMs_{ 0 };
+	bool   serverClockSynchronized_{ false };
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
+	// 오른손 소켓에 weaponType에 해당하는 무기를 (재)장착한다. 인게임/로비 포트레이트 공용.
+	void equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType);
+	// lobbyChars_[i]를 lobbyPlayers_[i].weaponType과 동기화한다(인덱스 1:1 대응).
+	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
 	void registerInGamePartyPlayer(uint16 playerId);
@@ -305,6 +328,7 @@ private:
 	std::vector<std::shared_ptr<Birdy>>    birdys_{};
 	std::vector<std::shared_ptr<Slime>>    slimes_{};
 	std::vector<std::shared_ptr<Treant>>   treants_{};
+	std::vector<std::shared_ptr<Boss>>     bosses_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>>   idGoblinMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Snake>>    idSnakeMap_{};
 	std::unordered_map<uint16, std::shared_ptr<Mushroom>> idMushroomMap_{};
@@ -312,6 +336,10 @@ private:
 	// Object* 로 두어 고블린/뱀/버섯 등 종류와 무관하게 통합 순회한다.
 	// ragdoll 등 몬스터 공통 동작은 Object의 가상 접근자로 접근.
 	std::unordered_map<uint16, Object*> idMonsterMap_{};
+	// 보스/중간보스(Boss/Grandbaum/Isys) npc id 집합. 스폰 시(서버 ObjectType 권위) 기록하며,
+	// 미니맵 아이콘이 일반 몬스터(빨강)와 보스(주황)를 구별하는 데 쓴다(RTTI/dynamic_cast 무의존).
+	// idMonsterMap_에 없는 id는 순회되지 않으므로 죽은 보스의 잔존 엔트리는 무해(리스폰 시 재삽입).
+	std::unordered_set<uint16> bossNpcIds_{};
 	// 차단벽 barrier 활성 객체(non-owning; 수명은 goblins_ 등이 소유). resolveBarrierSeparation 대상.
 	// Object* 로 두어 고블린 외 몬스터 종류에도 일반화.
 	std::vector<Object*> barrierObjects_{};
@@ -326,6 +354,15 @@ private:
 	// the predicted local player. zoneStates_ caches server-driven S_ZoneState.
 	ZoneSystem clientZoneSystem_{};
 	std::unordered_map<uint16, uint8> zoneStates_{};
+	// Presentation ownership is client-local. Only a local ZoneSystem::Enter
+	// may select an arena here; replicated S_ZoneState packets never start UI/BGM.
+	int localArenaPresentationZoneId_{ -1 };
+	// One-shot latch per arena encounter. Crossing the small authored trigger
+	// volume again must not replay the entry presentation during the encounter.
+	std::unordered_set<int> localPresentedArenaZoneIds_{};
+	// Arenas whose active encounter has ended. Their local trigger remains
+	// disabled until the server reports a genuine new 0 -> 1 encounter cycle.
+	std::unordered_set<int> completedArenaZoneIds_{};
 	void bindZoneHandlers();
 	void rebuildBarrierMagicCircleQuads();
 	void renderBarrierMagicCircleQuads();
@@ -371,7 +408,13 @@ private:
 	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
 	// is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
-	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant };
+
+	// Path guidance (cosmetic, client-only): flowing HDR ribbon + guiding wisp.
+	// orbProxyMesh_ is the shared free-orb proxy used to render the wisp.
+	PathGuideSystem pathGuide_{};
+	Mesh            orbProxyMesh_{};
+
+	enum class MonsterKind { Goblin, Snake, Mushroom, Bomber, Birdy, Slime, Treant, Boss };
 
 	// HP bar tracking entry for non-goblin monsters (declared here so configureNetMonster's
 	// signature can reference it). Per-type maps below reuse this shape.
@@ -410,6 +453,7 @@ private:
 	std::vector<PooledMonster> birdyPool_;
 	std::vector<PooledMonster> slimePool_;
 	std::vector<PooledMonster> treantPool_;
+	std::vector<PooledMonster> bossPool_;
 	std::unordered_map<uint16, MonsterKind> respawnKind_;       // npc id -> kind (respawn routing)
 	std::unordered_map<uint16, ObjectInfo>  monsterSpawnInfo_;  // npc id -> spawn info (respawn fallback)
 
@@ -442,6 +486,15 @@ private:
 	// --- Stack-charge skill HUD ---
 	SkillDialHUD skillDial_{};
 	SkillLoadout skillLoadout_{};
+
+	// --- Minimap (top-left, North-up; background cache re-baked on chunk load/unload) ---
+	MinimapHUD minimap_{};
+	std::vector<MinimapEntityIcon> minimapIcons_{};
+	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
+	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk
+	// load/unload or when the player drifts > kMinimapRebakeMoveThreshold from this center.
+	mu::Vec3 minimapBakedCenter_{};
+	float    minimapBakedCoverage_ = 0.f;
 	unsigned     myWeaponOrdinal_    = 0;
 	int          dialSlotAssetId_[3] = { -1, -1, -1 };
 	int          basicSkillAssetId_  = -1;
@@ -462,6 +515,14 @@ private:
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
+	// Tactical arena entry title card (self-contained overlay module; the boss
+	// arena adds a WARNING phase). onlineGame only owns it and delegates.
+	UI::TacticalZoneIntro tacticalZoneIntro_{};
+
+	// Event-driven dialogue/monologue windows (loaded from dialogues.json).
+	// Shown when the local player finishes spawning in-game (sample_intro).
+	UI::DialogueSystem dialogueSystem_{};
+
 	// 로비 2D UI / 재사용 설정창 / 공유 설정 값. 위젯은 uiManager_ 트리가 소유한다.
 	GameSettings         settings_{};
 	LobbyUI              lobbyUI_{};
@@ -476,6 +537,7 @@ private:
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
+	ParticleEffect bloodEffect_{};   // 칼/창/완드 공통 피격 혈흔 (vfxId 0)
 	ParticleEffect swordSlash1Effect_{};
 	ParticleEffect swordSlash7Effect_{};
 	ParticleEffect swordSlashComboEffect_{};
@@ -540,6 +602,7 @@ private:
 	std::unordered_map<uint16, MonsterHpEntry> birdyHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> slimeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
+	std::unordered_map<uint16, MonsterHpEntry> bossHpBars_{};
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_
@@ -548,8 +611,6 @@ private:
 		float            hpBarVisibleSeconds = 0.f;  // remaining seconds to show after a hit
 	};
 	std::unordered_map<uint16, StrongholdHpEntry> strongholdHpBars_{};
-
-	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
@@ -604,7 +665,7 @@ private:
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
 	uint16                   hostId_ = 0;
-	uint16                   myId_   = 0;
+	uint16                   myLobbyId_ = 0;
 	PlayerWeaponType         selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 

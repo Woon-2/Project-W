@@ -61,8 +61,8 @@ private:
         bool                 engageIssued{ false };
     };
 
-    void    enterPhase( Phase next, PlatoonLeader& leader );
-    void    enterCooldown( PlatoonLeader& leader );
+    void    enterPhase( Phase next, Room& room, PlatoonLeader& leader );
+    void    enterCooldown( Room& room, PlatoonLeader& leader );
     bool    checkUnlockCondition( const PlatoonLeader& leader ) const;
     void    captureInitialSquadSizes( const PlatoonLeader& leader );
     void    issueEngage( Room& room, PlatoonLeader& leader, bool resetAssignments );
@@ -79,7 +79,7 @@ private:
     GameSession* selectPrimaryTarget( Room& room, const PlatoonLeader& leader ) const;
     uint32  selectStrikeEngageTarget( Room& room, const PlatoonLeader& leader, const StrikeTask& task ) const;
     void    updateActiveStrikeEngage( Room& room, PlatoonLeader& leader, bool forceAll );
-    void    forceActiveWedgeCharges();
+    bool    forceActiveWedgeCharges( Room& room );
     Seconds rollCooldown();
     bool    hasLiveBomberSquad( const PlatoonLeader& leader ) const;
     bool    hasLiveBuddySquad( const PlatoonLeader& leader ) const;

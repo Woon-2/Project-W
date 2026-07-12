@@ -30,6 +30,10 @@ Isys는 Grandbaum(수동적 생존형)과 대비되는 **능동적 섬멸형** �
 | `RegroupBuddies` | Buddy 라인 형성, 보스 본체가 쐐기 apex에 합류(자리 예약) | Buddy 슬롯 집결 & 보스 ready, 또는 4초 타임아웃 → `SecondBuddyWedge` |
 | `SecondBuddyWedge` | Buddy 2차 쐐기 + 보스 직접 가세 → **피해 ×1.5** | charge 완료/타임아웃 → `Cooldown` → `Engage` |
 
+피해 프로파일은 `Engage/Cooldown=1.0`, `RetreatForPincer`부터 `SecondBuddyWedge` 종료까지
+보스와 전 부대원 `0.0`이다. 부대가 먼저 전멸하면 진행 중 협공을 취소하고 `Engage`를 보스 단독 전투
+상태로 재사용하며, 보스가 먼저 사망하면 모든 생존 부대원을 `1.0`으로 복구한다.
+
 ## 핵심 메커니즘
 
 ### ① 전술 잠금 해제 (`checkUnlockCondition`)
@@ -68,7 +72,7 @@ score 기반 타깃 + `BOSS_TARGET_SWITCH_MARGIN`). 추가로 **피해 반응 Ba
 | 쐐기 충돌 처리 | `Room::beginWedgeCharge/endWedgeCharge/tryApplyWedgeChargeHit` (charge당 플레이어 1회 피격) |
 | 인카운터/존 | `Room::spawnGrandbaumEncounter` / `onArenaGrandbaumEnter` 미러 |
 
-Grandbaum과 달리 Isys는 **새 패킷·넉백·피해경감·동적소환이 일절 없는** 순수 서버 AI 포팅이다.
+Isys의 전술 무적은 공용 `damageTakenMultiplier`만 사용하므로 **새 패킷·동적소환 없이** 서버 phase에서 처리한다.
 `MidBossTactics.cpp/.hpp`는 이미 `.vcxproj`에 포함되어 신규 파일/프로젝트 수정도 없다.
 
 ### ⑤ 장애물 안전 슬롯과 교착 방지
@@ -78,6 +82,18 @@ Y를 맞춘 뒤 scatter prop과 아레나 벽/Static BVH 중첩을 검사한다.
 가까운 빈 바닥을 탐색하며 다른 슬롯과 NPC 분리 반경을 유지한다. 나무·바위 위 높이는 사용하지 않는다.
 쐐기 준비가 2.5초를 넘으면 현재 인원으로 강제 돌진하고, Buddy 재집결은 4초 후 2차 쐐기로 넘어가므로
 일부 NPC가 이동 경로에서 막혀도 전술 전체가 정지하지 않는다.
+
+### ⑥ 쐐기 준비와 돌진 명령 상태 분리
+
+`TacticalSquad`는 쐐기 대형의 준비 완료(`wedgePrepared_`)와 실제 `ChargeThrough` 명령 발행 완료
+(`wedgeChargeCommandIssued_`)를 별도로 관리한다. 실제 돌진 명령이 한 번 이상 발행되기 전에는
+`areChargeMembersComplete()`가 완료를 반환하지 않으므로, 집결만 마친 Bomber가 돌진 없이 Engage로
+넘어가지 않는다.
+
+자연 준비 완료와 2.5초 강제 시작은 동일한 돌진 시작 경로를 사용한다. 강제 시작 시 준비 슬롯 캐시가
+비어 있으면 현재 명령으로 캐시를 다시 만든 뒤 즉시 돌진을 발행한다. 기존 대표 플레이어가 사망하거나
+이탈한 경우에는 같은 군집의 다른 생존 플레이어를 우선 사용하고, 모두 유효하지 않으면 스쿼드에서 가장
+가까운 생존 플레이어를 향한다. 슬롯 배치, 85% 준비·완료 기준, 돌진 속도와 피해는 기존 값을 유지한다.
 
 ## 보스 고속 이동 — 모터 변환 (중요)
 

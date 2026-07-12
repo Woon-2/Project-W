@@ -11,11 +11,13 @@ skill.cooldownMs       = 1400
 skill.totalDurationMs  = 1000
 skill.interruptible    = true
 
+skill:addVFX(0, "effects/blood_hit.json")
 skill:addVFX(17, "effects/piercing_circle_slash.json")
 
 skill:addEvent(0, "PlayAnimation", {
-    clipName  = "Player_Attack",
-    blendTime = 0.1
+    clipName    = "Combat_1H_Attack",
+    attackIndex = 0,
+    blendTime   = 0.1
 })
 
 skill:addEvent(100, "PlayVFX", {
@@ -28,7 +30,7 @@ skill:addEvent(100, "PlaySound", { sound = "spear3" })
 
 local onHitBase = OnHit({
     damage          = 4,
-    vfxId           = 255,
+    vfxId           = 0,
     impulseStrength = 350.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
 })

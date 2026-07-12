@@ -2,6 +2,7 @@
 #define client_app_hpp
 
 #include "ServerSession.hpp"
+#include "networkConfig.hpp"
 
 class IGame;
 class SendBuffer;
@@ -22,7 +23,7 @@ enum class GameType {
 */
 class ClientApp {
 public:
-	static void init();
+	static void init(const NetworkEndpoint& lobbyEndpoint);
 	static bool connectToServer() { return serverSession_->connect(); }
 	// S_GameStart 핸드오프: 로비 세션을 은퇴시키고 RoomServer로 새 세션을 맺는다.
 	static void reconnectToRoomServer(const std::string& ip, uint16 port);

@@ -78,6 +78,7 @@ static constexpr u8t kPlayVFXParticleCollisionShift = 3;
 static constexpr u8t kPlayVFXParticleCollisionMask  = 0x18;
 static constexpr u8t kPlayVFXParticleConformShift   = 5;
 static constexpr u8t kPlayVFXParticleConformMask    = 0x60;
+static constexpr u8t kPlayVFXFlagFlipX              = 0x80;  // client-only: mirror mesh VFX on local X
 
 union SkillEventPayload {
     struct SpawnHitbox {
@@ -89,9 +90,9 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char  clipName[24];
+        char  clipName[32];  // null-terminated, max 31 chars (server switches player clip by this name)
         float blendTime;
-        u8t   attackIndex;   // mirror of client field (struct parity; server does not parse it)
+        u8t   attackIndex;   // mirror of client field (struct parity)
     } playAnimation;
 
     struct PlayVFX {

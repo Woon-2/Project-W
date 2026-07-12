@@ -85,13 +85,18 @@ struct BasicEvent {
 	EventType type;
 };
 
-struct EvHit : BasicEvent { 
+struct EvHit : BasicEvent {
 	EvHit() : BasicEvent{EventType::Hit} {}
 	EvHit(i32t targetId, i32t hp)
 		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp} {}
+	EvHit(i32t targetId, i32t hp, u8t hitAnimIndex)
+		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp}, hitAnimIndex{hitAnimIndex} {}
 
 	i32t targetId{-1};
 	i32t hp{-1};
+	// 어떤 피격 리액션 클립을 재생할지 선택하는 인덱스(서버 권위 선택, S_SkillHit로 전달).
+	// 다중 hit 리그(Boss: Hit1/Hit2)에서만 의미가 있고, 단일 hit 몬스터는 무시한다.
+	u8t hitAnimIndex{0};
 };
 struct EvBlood : BasicEvent {
 	EvBlood() : BasicEvent{EventType::Blood} {}

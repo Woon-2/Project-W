@@ -15,7 +15,7 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(800, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.0, 0.0, 0.4, 0.9, 0.6, 0.55, 0, 0, 0) },
+    localOBBs           = { OBB(0.0, 0.0, 0.4, 1.0, 0.6, 0.55, 0, 0, 0) },
     attach              = BoneAttach("slime_eye_region"),   -- placeholder: tune per skeleton in editor
     applyAttachRotation = true,
     hitGroup            = 0,

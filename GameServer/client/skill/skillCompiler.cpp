@@ -140,6 +140,7 @@ OnHitDef SkillCompiler::tableToOnHitDef(const sol::table& tbl) {
     OnHitDef oh{};
     oh.damage          = tbl.get_or("damage",          0);
     oh.hitVfxId        = static_cast<u8t>(tbl.get_or("vfxId",    (int)0xFF));
+    oh.hitVfxScale     = tbl.get_or("vfxScale",        1.f);
     oh.impulseStrength = tbl.get_or("impulseStrength", 0.f);
 
     sol::optional<sol::table> dir = tbl["impulseDir"];
@@ -384,6 +385,10 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                     p.flags |= kPlayVFXFlagGroundSnap;
                 if (evTbl.get_or("groundAlign", false))
                     p.flags |= kPlayVFXFlagGroundAlign;
+                // flipX: mirror a mesh VFX horizontally (reverse a slash arc to match
+                // the player's swing direction). Two-sided pipeline -> renders fine.
+                if (evTbl.get_or("flipX", false))
+                    p.flags |= kPlayVFXFlagFlipX;
 
                 // particleCollision / particleConform: drive the played effect's
                 // particle behaviour (fall-and-die, slope conform) from the skill,

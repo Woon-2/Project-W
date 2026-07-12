@@ -84,7 +84,9 @@ public:
     void init(const ps::ParticleSystemConfig& config, int maxParticles = kDefaultMaxParticles);
 
     // Emit particles using the config set by init().
-    void emit(int count);
+    // sizeScale: 이 emit으로 생성되는 파티클의 크기 배율(1회성, emit 후 1.0으로 복원).
+    // 피격 VFX의 hit별 크기 연출(예: 피니셔 타격 큰 혈흔)에 사용.
+    void emit(int count, float sizeScale = 1.f);
 
     // Start/stop continuous emission using the config set by init().
     void startContinuous();
@@ -190,6 +192,7 @@ private:
     mu::Vec3  inheritedVel_     = {};
     mu::Vec4  inheritedColor_   = { 1.f, 1.f, 1.f, 1.f };
     float     inheritedSize_    = 1.f;
+    float     emitSizeScale_    = 1.f;   // emit(count, sizeScale) 1회성 크기 배율
     int       shapeEmitIndex_   = 0;
     int       shapeEmitCount_   = 1;
 
