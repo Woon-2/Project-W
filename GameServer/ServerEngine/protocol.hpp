@@ -69,6 +69,9 @@ enum class PacketType : uint16 {
 	// Append-only: room-server monotonic clock synchronization.
 	C_TimeSync,
 	S_TimeSync,
+
+	// Append-only: server-authoritative tactical boss dialogue presentation.
+	S_TacticalDialogue,
 };
 
 enum class ObjectType : uint16 {
@@ -94,6 +97,13 @@ enum class PlayerWeaponType : uint8 {
 	SpearHook,
 	CrystalWand,
 	HeavyArrow,
+};
+
+enum class TacticalDialogueId : uint8 {
+	HobgoblinTactic,
+	GrandbaumShieldWall,
+	IsysPincer,
+	Count,
 };
 
 struct PacketHeader {
@@ -483,6 +493,11 @@ struct STimeSyncPacket : public PacketHeader {
 	uint64 clientSendMs;      // t0 (echo)
 	uint64 serverReceiveMs;   // t1
 	uint64 serverSendMs;      // t2
+};
+
+struct STacticalDialoguePacket : public PacketHeader {
+	uint16               zoneId;
+	TacticalDialogueId   dialogueId;
 };
 
 #pragma pack(pop)

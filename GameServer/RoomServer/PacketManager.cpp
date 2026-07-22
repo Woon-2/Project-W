@@ -570,6 +570,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSZoneStatePacket(uint16 zoneId, u
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSTacticalDialoguePacket(
+	uint16 zoneId, TacticalDialogueId dialogueId) {
+	auto sendBuffer = SendBufferManager::open(sizeof(STacticalDialoguePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt        = bw.reserve<STacticalDialoguePacket>();
+	pkt->zoneId     = zoneId;
+	pkt->dialogueId = dialogueId;
+	pkt->size       = bw.writeSize();
+	pkt->type       = PacketType::S_TacticalDialogue;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SNpcRespawnPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());

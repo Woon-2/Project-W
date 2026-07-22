@@ -109,6 +109,9 @@ public:
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
+	// Sends a tactical presentation event only to living players currently inside
+	// the active arena volume. Tactic implementations call this at cycle start.
+	void notifyTacticalDialogue(TacticalDialogueId dialogueId);
 
 	void pushJob( Job* job ) {
 		jobQueue_.push( job );
@@ -280,6 +283,7 @@ private:
 	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
 	bool                       arenaWallsActive_{ false };  // 일방향 벽이 올라가 있고 아직 해제 안 됨(1회성 가드)
 	std::vector<OneWayWall>    arenaWalls_;                 // 양끝 후방 Wall 일방향 슬랩(move() 권위 클램프 대상)
+	std::unordered_set<uint32> activeArenaParticipantIds_; // 현재 아레나 입장 이력이 있는 플레이어
 	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;

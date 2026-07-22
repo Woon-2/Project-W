@@ -48,6 +48,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSPlayerHpPacket(uint16 playerId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
+	static std::shared_ptr<SendBuffer> makeSTacticalDialoguePacket(uint16 zoneId, TacticalDialogueId dialogueId);
 };
 
 #endif // packet_manager_hpp

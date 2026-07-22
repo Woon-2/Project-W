@@ -113,6 +113,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSTimeSyncPacket( buffer, len );
 		break;
 
+	case PacketType::S_TacticalDialogue:
+		handleSTacticalDialoguePacket( buffer, len );
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -435,6 +439,20 @@ void PacketManager::handleSStrongholdStatePacket( byte* buffer, int32 len ) {
 void PacketManager::handleSZoneStatePacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SZoneStatePacket*>(buffer);
 	INet::ClientApp::onlineGame()->onZoneState( pkt->zoneId, pkt->state );
+}
+
+void PacketManager::handleSTacticalDialoguePacket( byte* buffer, int32 len ) {
+	if (len < static_cast<int32>(sizeof(STacticalDialoguePacket))) return;
+
+	auto pkt = reinterpret_cast<STacticalDialoguePacket*>(buffer);
+	if (pkt->size != sizeof(STacticalDialoguePacket) ||
+		static_cast<uint8>(pkt->dialogueId) >= static_cast<uint8>(TacticalDialogueId::Count)) {
+		return;
+	}
+
+	if (auto* game = INet::ClientApp::onlineGame()) {
+		game->onTacticalDialogue(pkt->zoneId, pkt->dialogueId);
+	}
 }
 
 void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {

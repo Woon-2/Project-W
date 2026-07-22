@@ -42,6 +42,7 @@
 #include "../ui/minimapHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
+#include "../ui/dialogue/TacticalDialogueOverlay.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -118,6 +119,7 @@ public:
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
+	void onTacticalDialogue( uint16 zoneId, TacticalDialogueId dialogueId );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
@@ -564,6 +566,7 @@ private:
 	// Tactical arena entry title card (self-contained overlay module; the boss
 	// arena adds a WARNING phase). onlineGame only owns it and delegates.
 	UI::TacticalZoneIntro tacticalZoneIntro_{};
+	UI::TacticalDialogueOverlay tacticalDialogueOverlay_{};
 
 	// Event-driven dialogue/monologue windows (loaded from dialogues.json).
 	// Shown when the local player finishes spawning in-game (sample_intro).

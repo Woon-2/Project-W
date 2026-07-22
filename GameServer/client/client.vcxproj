@@ -292,6 +292,10 @@
     <ClCompile Include="ui\UIElement.cpp" />
     <ClCompile Include="ui\UIManager.cpp" />
     <ClCompile Include="ui\dialogue\DialogueSystem.cpp" />
+    <ClCompile Include="ui\dialogue\TacticalDialogueOverlay.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="ui\intro\TacticalZoneIntro.cpp" />
     <ClCompile Include="ui\widgets\Panel.cpp" />
     <ClCompile Include="ui\widgets\Image.cpp" />
@@ -441,6 +445,7 @@
     <ClInclude Include="ui\UIElement.hpp" />
     <ClInclude Include="ui\UIManager.hpp" />
     <ClInclude Include="ui\dialogue\DialogueSystem.hpp" />
+    <ClInclude Include="ui\dialogue\TacticalDialogueOverlay.hpp" />
     <ClInclude Include="ui\intro\TacticalZoneIntro.hpp" />
     <ClInclude Include="ui\widgets\Panel.hpp" />
     <ClInclude Include="ui\widgets\Image.hpp" />
@@ -628,6 +633,10 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\resources\fonts\README.md" />
+    <None Include="..\resources\fonts\*.ttf" />
+    <None Include="..\resources\fonts\*.otf" />
+    <None Include="..\resources\fonts\*.ttc" />
     <None Include="..\resources\skills\aoe_slash_green.lua" />
     <None Include="..\resources\skills\arrow.lua" />
     <None Include="..\resources\skills\arrow_rain.lua" />

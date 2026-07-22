@@ -4,6 +4,22 @@
 
 using namespace D2D1;
 
+namespace {
+
+constexpr const wchar_t* kBundledFontDirectory = L"../resources/fonts";
+constexpr const wchar_t* kFallbackFontFamily = L"Malgun Gothic";
+
+bool isSupportedFontFile( const std::filesystem::path& path )
+{
+	std::wstring extension = path.extension().wstring();
+	std::ranges::transform( extension, extension.begin(), []( wchar_t ch ) {
+		return static_cast<wchar_t>( towlower( ch ) );
+	} );
+	return extension == L".ttf" || extension == L".otf" || extension == L".ttc";
+}
+
+} // namespace
+
 void Font::init( ID3D12Device* device, ID3D12CommandQueue* cmdQ, UINT width, UINT height, HWND hwnd )
 {
 	createD2D( device, cmdQ );
@@ -93,6 +109,58 @@ void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, fl
 	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateSolidColorBrush( ColorF( ColorF::Black ), &pBlackBrush_ ), true );
 
 	DISPLAY_ERROR_DX_HR( DWriteCreateFactory( DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory5), (IUnknown**)&pDWFactory_ ), true );
+
+	ComPtr<IDWriteFontCollection> systemFontCollection;
+	if ( pDWFactory_ && SUCCEEDED( pDWFactory_->GetSystemFontCollection( &systemFontCollection, FALSE ) ) )
+	{
+		systemFontCollection.As( &pSystemFontCollection_ );
+	}
+
+	createBundledFontCollection();
+}
+
+void Font::createBundledFontCollection()
+{
+	if ( !pDWFactory_ ) return;
+
+	std::error_code ec;
+	const std::filesystem::path fontDirectory( kBundledFontDirectory );
+	if ( !std::filesystem::is_directory( fontDirectory, ec ) ) return;
+
+	ComPtr<IDWriteFontSetBuilder1> fontSetBuilder;
+	if ( FAILED( pDWFactory_->CreateFontSetBuilder( &fontSetBuilder ) ) || !fontSetBuilder ) return;
+
+	bool addedAnyFont = false;
+	for ( std::filesystem::directory_iterator it( fontDirectory, ec ), end; it != end && !ec; it.increment( ec ) )
+	{
+		if ( !it->is_regular_file( ec ) || !isSupportedFontFile( it->path() ) ) continue;
+
+		ComPtr<IDWriteFontFile> fontFile;
+		const std::filesystem::path absoluteFontPath = std::filesystem::absolute( it->path(), ec );
+		if ( ec ) break;
+		const std::wstring fontPath = absoluteFontPath.wstring();
+		if ( SUCCEEDED( pDWFactory_->CreateFontFileReference( fontPath.c_str(), nullptr, &fontFile ) ) &&
+			fontFile && SUCCEEDED( fontSetBuilder->AddFontFile( fontFile.Get() ) ) )
+		{
+			addedAnyFont = true;
+		}
+	}
+
+	if ( !addedAnyFont ) return;
+
+	ComPtr<IDWriteFontSet> fontSet;
+	if ( FAILED( fontSetBuilder->CreateFontSet( &fontSet ) ) || !fontSet ) return;
+
+	pDWFactory_->CreateFontCollectionFromFontSet( fontSet.Get(), &pBundledFontCollection_ );
+}
+
+bool Font::hasFontFamily( IDWriteFontCollection1* collection, const WCHAR* fontFamilyName ) const
+{
+	if ( !collection || !fontFamilyName || fontFamilyName[0] == L'\0' ) return false;
+
+	UINT32 familyIndex = 0;
+	BOOL exists = FALSE;
+	return SUCCEEDED( collection->FindFamilyName( fontFamilyName, &familyIndex, &exists ) ) && exists;
 }
 
 bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
@@ -182,13 +250,33 @@ bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 	return true;
 }
 
-FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
+FontHandle Font::CreateFontObject(
+	const WCHAR* fontFamilyName,
+	float fontSize,
+	DWRITE_FONT_WEIGHT fontWeight )
 {
 	FontHandle ret{};
+	const WCHAR* requestedFamily =
+		( fontFamilyName && fontFamilyName[0] != L'\0' ) ? fontFamilyName : kFallbackFontFamily;
+	const WCHAR* resolvedFamily = requestedFamily;
 
 	IDWriteTextFormat* pTextFormat = nullptr;
 	IDWriteFactory5* pDWFactory = pDWFactory_.Get();
 	IDWriteFontCollection1* pFontCollection = nullptr;
+
+	if ( !hasFontFamily( pSystemFontCollection_.Get(), requestedFamily ) )
+	{
+		if ( hasFontFamily( pBundledFontCollection_.Get(), requestedFamily ) )
+		{
+			pFontCollection = pBundledFontCollection_.Get();
+		}
+		else
+		{
+			// 요청한 폰트가 PC와 배포 리소스 양쪽에 없더라도 한글 표시가
+			// 깨지지 않도록 Windows 기본 한글 폰트로 폴백한다.
+			resolvedFamily = kFallbackFontFamily;
+		}
+	}
 
 	// The logical size of the font in DIP("device-independent pixel") units.A DIP equals 1 / 96 inch.
 
@@ -197,9 +285,9 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 		// 실패 시 pTextFormat이 null로 남고, 이후 CreateBitmapFromText가 false를
 		// 돌려 호출자가 재시도한다. 프로세스를 종료시키지 않는다.
 		DISPLAY_ERROR_DX_HR( pDWFactory->CreateTextFormat(
-			fontFamilyName,
-			pFontCollection,                       // Font collection (nullptr sets it to use the system font collection).
-			DWRITE_FONT_WEIGHT_REGULAR,
+			resolvedFamily,
+			pFontCollection,                       // nullptr이면 시스템 폰트 컬렉션을 사용한다.
+			fontWeight,
 			DWRITE_FONT_STYLE_NORMAL,
 			DWRITE_FONT_STRETCH_NORMAL,
 			fontSize,
@@ -208,7 +296,7 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 		), false );
 	}
 
-	wcscpy_s( ret.wchFontFamilyName, fontFamilyName );
+	wcscpy_s( ret.wchFontFamilyName, resolvedFamily );
 	ret.fFontSize = fontSize;
 
 	if ( pTextFormat )

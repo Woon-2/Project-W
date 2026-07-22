@@ -30,6 +30,7 @@
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Image.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
+#include "../ui/dialogue/TacticalDialogueOverlay.hpp"
 
 #include "../editor/editorController.hpp"
 
@@ -64,6 +65,7 @@ public:
 
 private:
 	void processInput(Milliseconds deltaTime);
+	void toggleFullscreen();
 	// Debug: toggle ragdoll on/off for the currently controlled object (editor caster).
 	// Rebuilds the ragdoll for the caster's current model (covers hot-swapped rigs, e.g. Boss).
 	void toggleCasterRagdoll();
@@ -152,6 +154,8 @@ private:
 
 	UI::UIManager    uiManager_{};
 	UI::DialogueSystem dialogueSystem_{};
+	UI::TacticalDialogueOverlay tacticalDialogueOverlay_{};
+	uint8 tacticalDialoguePreviewIndex_ = 0;
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
@@ -222,6 +226,7 @@ private:
 	// --- Physics constraint debug state ---
 	std::vector<PhysicsTestObject> rdObjects_{};
 	float rdImpulseStrength_ = 5.f;    // N*s applied by R key
+	bool fullscreen_ = false;
 	float rdDebugTimeScale_  = 1.0f;   // physics time multiplier: 1.0 / 0.25 / 0.05
 	bool  rdShowBodies_      = false;  // V key: push body OBBs to debugBVView_ each frame
 	bool  rdFrozen_          = false;  // P key: zero all test-body velocities each step

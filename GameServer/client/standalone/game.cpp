@@ -15,6 +15,8 @@
 #include "../ui/widgets/Image.hpp"
 
 extern RECT gClientRect;
+extern void applyDisplayMode(bool fullscreen, int windowedW, int windowedH,
+	int* outClientW, int* outClientH);
 
 namespace StandAlone {
 
@@ -771,6 +773,7 @@ void Game::setupStage() {
 	);
 	uiManager_.requestDebugResources(gfx_);
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
+	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	// 기존 standalone HUD(도움말 라벨/플레이어 HP바/HiZ 라벨)는 에디터 UI와 겹쳐 제거했다.
 	// 조작법·상태·편집 패널은 EditorController가 별도로 구성한다.
 
@@ -2758,6 +2761,7 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	uiManager_.layout();
+	tacticalDialogueOverlay_.update(std::chrono::duration<float>(deltaTime).count());
 	dialogueSystem_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
@@ -3135,6 +3139,12 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
+	// F11: standalone 전체화면(borderless) 토글
+	if ((keyboardStateCurr_[VK_F11] & 0x80)
+		&& !(keyboardStatePrev_[VK_F11] & 0x80)) {
+		toggleFullscreen();
+	}
+
 	// Dialogue input has priority over gameplay/editor controls.
 	if (!dialogueSystem_.active()) {
 		editor_.handleInput(keyboardStateCurr_.data(), keyboardStatePrev_.data(),
@@ -3159,6 +3169,18 @@ void Game::processInput(Milliseconds deltaTime) {
 	// F8: replay the sample dialogue event authored in dialogues.json.
 	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
 		dialogueSystem_.show("sample_intro");
+	}
+
+	// F7: cycle through the three tactical boss dialogue previews.
+	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) ) {
+		constexpr TacticalDialogueId previews[] = {
+			TacticalDialogueId::HobgoblinTactic,
+			TacticalDialogueId::GrandbaumShieldWall,
+			TacticalDialogueId::IsysPincer,
+		};
+		tacticalDialogueOverlay_.trigger(previews[tacticalDialoguePreviewIndex_]);
+		tacticalDialoguePreviewIndex_ = static_cast<uint8>(
+			(tacticalDialoguePreviewIndex_ + 1) % std::size(previews));
 	}
 
 	// H key: toggle Hi-Z occlusion culling
@@ -3213,6 +3235,22 @@ void Game::processInput(Milliseconds deltaTime) {
 		toggleCasterRagdoll();
 	}
 
+}
+
+void Game::toggleFullscreen() {
+	fullscreen_ = !fullscreen_;
+
+	int clientW = 1024;
+	int clientH = 768;
+	applyDisplayMode(fullscreen_, 1024, 768, &clientW, &clientH);
+
+	// 창 크기가 바뀌었으므로 백버퍼·깊이버퍼·GBuffer를 같은 크기로 재생성한다.
+	gfx_.resize(static_cast<u32t>(clientW), static_cast<u32t>(clientH));
+
+	const float aspect = static_cast<float>(clientW)
+		/ std::max(1.f, static_cast<float>(clientH));
+	camera_.setPerspective(mu::Degree(90.f), aspect, 0.1f, 500.f);
+	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
 }
 
 void Game::toggleCasterRagdoll() {

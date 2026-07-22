@@ -35,6 +35,7 @@ public:
 	static void handleSZoneStatePacket( byte* buffer, int32 len );
 	static void handleSPlayerKnockbackPacket( byte* buffer, int32 len );
 	static void handleSTimeSyncPacket( byte* buffer, int32 len );
+	static void handleSTacticalDialoguePacket( byte* buffer, int32 len );
 
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );

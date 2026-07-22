@@ -345,6 +345,9 @@
     <ClCompile Include="ui\dialogue\DialogueSystem.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\dialogue\TacticalDialogueOverlay.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\intro\TacticalZoneIntro.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -773,6 +776,9 @@
     <ClInclude Include="ui\dialogue\DialogueSystem.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="ui\dialogue\TacticalDialogueOverlay.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="ui\intro\TacticalZoneIntro.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -1121,6 +1127,18 @@
     </None>
     <None Include="..\resources\skills\boss_swings.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\README.md">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.ttf">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.otf">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.ttc">
+      <Filter>리소스 파일</Filter>
     </None>
     <None Include="heatField.hlsli" />
   </ItemGroup>

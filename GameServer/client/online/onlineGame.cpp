@@ -444,6 +444,7 @@ void Game::setupStage() {
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 	setupBossHpHud();
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
+	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
@@ -3349,6 +3350,13 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	}
 }
 
+void Game::onTacticalDialogue(uint16 zoneId, TacticalDialogueId dialogueId) {
+	// Recipient selection is server-authoritative. Do not reject a valid targeted
+	// event because this client's shared zone-state cache is a frame behind.
+	(void)zoneId;
+	tacticalDialogueOverlay_.trigger(dialogueId);
+}
+
 // 아레나 후방 Wall 일방향 벽: 직전 프레임 위치 대비, 양끝 Wall을 바깥으로 통과하려는 로컬
 // 플레이어만 평면으로 되돌린다(XZ만, Y 보존). 안쪽 입장·측면 이동은 통과 → 후발 파티원이 벽에
 // 막히지 않는다. setCurrPos만 보정 → 임펄스 튕김 없음, 결과는 C_Move로 전파. 프레임당 1회.
@@ -4409,6 +4417,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		tacticalZoneIntro_.update(dtSec);
+		tacticalDialogueOverlay_.update(dtSec);
 		dialogueSystem_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());

@@ -452,8 +452,12 @@ public:
 	const Texture* solidColorTex() const { return &solidColorImage_.texture; }
 	// Creates a new Tahoma FontHandle with the specified point size.
 	FontHandle createFont(float fontSize);
-	// Creates a font using a system font family.
-	FontHandle createFont(const WCHAR* fontFamilyName, float fontSize);
+	// Creates a font using a system font family. Existing callers remain Regular
+	// unless they explicitly request another weight.
+	FontHandle createFont(
+		const WCHAR* fontFamilyName,
+		float fontSize,
+		DWRITE_FONT_WEIGHT fontWeight = DWRITE_FONT_WEIGHT_REGULAR);
 	// Measures text extents without rendering to a bitmap.
 	void measureText(FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH);
 

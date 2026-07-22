@@ -36,7 +36,7 @@ struct GameSettings {
     int  monsterDamageOpacity = 100;  // percent, [0..100]
     int  masterVolume         = 80;   // percent, [0..100]
     int  bgmVolume            = 15;    // percent, [0..100]
-    int  sfxVolume            = 15;  // percent, [0..100]
+    int  sfxVolume            = 90;  // percent, [0..100]
 };
 
 namespace UI {

@@ -560,6 +560,10 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -627,6 +631,8 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -637,6 +643,10 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -696,6 +706,8 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -707,6 +719,10 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -766,6 +782,8 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -1371,6 +1389,7 @@ void Room::leave(GameSession* session) {
 
 	std::erase_if(sessions_, [session](GameSession* s) { return s == session; });
 	idSessionMap_.erase(session->id());
+	activeArenaParticipantIds_.erase(static_cast<uint32>(session->id()));
 
 	auto leavePkt = PacketManager::makeSLeavePacket(static_cast<uint16>(session->id()));
 	broadcast(leavePkt);
@@ -1420,10 +1439,23 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	// 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는 플레이어만 평면으로 되돌린다. 안쪽으로
 	// 들어오기·측면 이동은 통과(입장 자유). felt collision은 클라 예측(resolveArenaWallLeash)이
 	// 담당하고, 여기선 치트 방지용 권위. 넉백 중(isMoveClampExempt)은 면제.
-	if (arenaWallsActive_ && !session->isMoveClampExempt()) {
+	if (arenaWallsActive_) {
 		constexpr float kArenaWallMargin = 0.5f;   // footprint 여유(플레이어 반경 근사)
-		for (const OneWayWall& w : arenaWalls_)
-			newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+		for (const OneWayWall& w : arenaWalls_) {
+			const mu::Vec3 oldDelta{ oldPos.x() - w.center.x(), 0.f, oldPos.z() - w.center.z() };
+			const mu::Vec3 newDelta{ newPos.x() - w.center.x(), 0.f, newPos.z() - w.center.z() };
+			const float oldSide = oldDelta.x() * w.outward.x() + oldDelta.z() * w.outward.z();
+			const float newSide = newDelta.x() * w.outward.x() + newDelta.z() * w.outward.z();
+			const float lateral = std::fabs(
+				newDelta.x() * w.widthDir.x() + newDelta.z() * w.widthDir.z());
+			if (oldSide > 0.01f && newSide <= 0.01f &&
+				lateral <= w.halfWidth + kArenaWallMargin) {
+				activeArenaParticipantIds_.insert(static_cast<uint32>(sessionId));
+			}
+			if (!session->isMoveClampExempt()) {
+				newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+			}
+		}
 	}
 
 	player->setPos(newPos);
@@ -1844,6 +1876,19 @@ void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<Sen
 	}
 }
 
+void Room::notifyTacticalDialogue(TacticalDialogueId dialogueId) {
+	if (!arenaWallsActive_) return;
+
+	auto packet = PacketManager::makeSTacticalDialoguePacket(activeArenaZoneId_, dialogueId);
+	for (GameSession* session : livingPlayersCache_) {
+		if (!session || !session->player()) continue;
+		Player* player = session->player();
+		if (player->hp() <= 0 ||
+			!activeArenaParticipantIds_.contains(static_cast<uint32>(session->id()))) continue;
+		session->send(packet);
+	}
+}
+
 void Room::doTimer(Milliseconds delay, CallbackType&& callback) {
 	auto job = ObjectPool<Job>::pop(std::move(callback));
 	JobTimer::addJob(delay, id_, job);
@@ -1941,6 +1986,7 @@ void Room::teardownArenaWalls() {
 	barriers_.clear();
 	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
 	arenaWallsActive_ = false;
+	activeArenaParticipantIds_.clear();
 	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
 }
 
