@@ -178,6 +178,7 @@ static constexpr float   kBossHpFillHeight          = 100.f;
 static constexpr float   kBossHpEmblemX              = 42.f;
 static constexpr float   kBossHpEmblemY              = 22.f;
 static constexpr float   kBossHpEmblemSize           = 84.f;
+static const DirectX::XMFLOAT4 kNamedMonsterHpColor{ 0.62f, 0.24f, 0.90f, 1.f };
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -2516,7 +2517,7 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 		bar->pivot     = UI::Pivots::TopLeft;
 		bar->width     = UI::DimValue::px(80.f);
 		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->fillColor = kNamedMonsterHpColor;
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
 		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
@@ -2669,7 +2670,8 @@ void Game::createMushroom(const ObjectInfo& info) {
 // the body of createSnake without the type-specific container/id-map lines.
 void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
                                const Model* model, MonsterKind kind, float mass,
-                               std::unordered_map<uint16, MonsterHpEntry>& hpBars) {
+                               std::unordered_map<uint16, MonsterHpEntry>& hpBars,
+                               bool isNamed) {
 	obj->setId(info.objectId);
 	obj->setPos(DirectX::XMLoadFloat3(&info.pos));
 	obj->setOrient(DirectX::XMLoadFloat4(&info.orient));
@@ -2704,7 +2706,9 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 		bar->pivot     = UI::Pivots::TopLeft;
 		bar->width     = UI::DimValue::px(80.f);
 		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->fillColor = isNamed
+			? kNamedMonsterHpColor
+			: DirectX::XMFLOAT4{ 0.9f, 0.15f, 0.1f, 1.f };
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
 		hpBars[info.objectId] = { obj.get(), bar, 2.5f };
@@ -2757,7 +2761,7 @@ void Game::createTreant(const ObjectInfo& info) {
 void Game::createGrandbaum(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto grandbaum = std::make_shared<Grandbaum>();
-	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
+	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_, true);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
@@ -2771,7 +2775,7 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 void Game::createIsys(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto isys = std::make_shared<Isys>();
-	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
+	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_, true);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
@@ -2786,7 +2790,7 @@ void Game::createIsys(const ObjectInfo& info) {
 void Game::createBoss(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto boss = std::make_shared<Boss>();
-	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
+	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_, true);
 	bosses_.push_back(boss);
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.

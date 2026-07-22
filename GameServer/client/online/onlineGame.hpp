@@ -470,7 +470,8 @@ private:
 	// Declared after MonsterKind so its signature can reference the enum.
 	void configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
 	                         const Model* model, MonsterKind kind, float mass,
-	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars);
+	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars,
+	                         bool isNamed = false);
 	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
 	struct Corpse {
 		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
