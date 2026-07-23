@@ -10,9 +10,7 @@
 #include "../particleImporter.hpp"
 #include "../ClientApp.hpp"
 #include "../sound/soundManager.hpp"
-#include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
-#include "../ui/widgets/Image.hpp"
 
 extern RECT gClientRect;
 extern void applyDisplayMode(bool fullscreen, int windowedW, int windowedH,
@@ -2436,13 +2434,8 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.body().setAngularDamping(25.f);
 	player.body().setUprightStiffness(40000.f);
 
-	//Equipment rifle{};
-	//rifle.socketType = Bone::SocketType::RightHand;
-	//rifle.object = std::make_unique<Object>();
-	//rifle.object->setModel(assetManager_.modelRifle());
-	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-	//player.equip(std::move(rifle));
+	// 무기 장착은 에디터의 무기 드롭다운이 담당한다
+	// (Editor::Controller::applyWeaponToPlayer → equipPlayerWeapon).
 }
 
 void Game::configureGoblin(Goblin& goblin) {
@@ -2793,17 +2786,6 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 
-	if (hiZStatsLabel_) {
-		if (gfx_.isHiZCullEnabled()) {
-			const auto stats = gfx_.getHiZStats();
-			wchar_t buf[64];
-			swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
-			hiZStatsLabel_->setText(buf);
-		} else {
-			hiZStatsLabel_->setText(L"HiZ: OFF");
-		}
-	}
-
 	uiManager_.layout();
 	tacticalDialogueOverlay_.update(std::chrono::duration<float>(deltaTime).count());
 	dialogueSystem_.update(std::chrono::duration<float>(deltaTime).count());
@@ -2973,10 +2955,6 @@ void Game::update(Milliseconds deltaTime) {
 			tornadoShotElapsed_  = 0s;
 		}
 	}
-
-	// UI 동기화
-	if (playerHpBar_)
-		playerHpBar_->setProgress(player_->hp() / 100.f);
 
 	clearEvents(eventList_);
 }

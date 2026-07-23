@@ -24,13 +24,38 @@ AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t) {
 
 // 전달된 애니메이션 프레임들의 가중합을 계산한다.
 // rotation은 normalized linear interpolation으로 계산된다.
+//
+// nlerp 가중합은 모든 항이 같은 반구에 있을 때만 성립한다. 쿼터니언은 q와 -q가
+// 같은 회전을 나타내는데, 클립마다 추출된 부호가 제각각이라 그대로 더하면 항들이
+// 상쇄된다. 실제로 플레이어 pelvis(전신을 지배하는 본)는 Combat_2H/Bow/Cast_Ready가
+// Run_* 클립과 반대 부호로 저장돼 있어(dot ≈ -0.95), idle과 run이 비슷한 가중치로
+// 섞이는 순간(=가감속 구간) 합의 크기가 0.15까지 붕괴하고 정규화 결과가 최대 180°까지
+// 튀었다 — 이동 중 캐릭터가 통째로 회전하는 것처럼 보이는 원인.
+// 따라서 가중치가 가장 큰 프레임(지배 항)을 기준으로 각 항의 부호를 맞춘 뒤 더한다.
+// (lerpAnimFrames는 XMQuaternionSlerp가 최단호 보정을 하므로 이 문제가 없다.)
 AnimFrame MU_CALLCONV sumWeightedAnimFrames(std::span<WeightedAnimFrame> frames) {
 	AnimFrame ret{};
 	auto tmpQuat = mu::Quat(0.f, 0.f, 0.f, 0.f);
 
+	// 기준 항은 가중치 최댓값으로 고른다. 기준이 바뀌면 합 전체의 부호가 뒤집히지만
+	// q와 -q는 같은 회전이라 결과는 동일하다(전환 시 튀지 않는다).
+	const WeightedAnimFrame* pRef = nullptr;
+	for (const auto& weightedFrame : frames) {
+		if (!pRef || weightedFrame.w > pRef->w) pRef = &weightedFrame;
+	}
+	if (!pRef) {
+		return ret;
+	}
+	const auto refRotation = pRef->frame.rotation;
+
 	for (auto& weightedFrame : frames) {
 		ret.translation += weightedFrame.frame.translation * weightedFrame.w;
-		tmpQuat += weightedFrame.frame.rotation * weightedFrame.w;
+
+		// 기준과 반대 반구면 부호를 뒤집어(같은 회전) 상쇄를 막는다.
+		const auto signedWeight = mu::dot(weightedFrame.frame.rotation, refRotation) < 0.f
+			? -weightedFrame.w : weightedFrame.w;
+		tmpQuat += weightedFrame.frame.rotation * signedWeight;
+
 		ret.scale += weightedFrame.frame.scale * weightedFrame.w;
 	}
 	ret.rotation = mu::NQuat(tmpQuat);
@@ -356,6 +381,7 @@ void AnimBlender::updatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPo
     // 거리 기반 weight
     const float wDist = 1.f / (1.f + d * d);
 
+	// 거리 LOD: refPos에서 약 29m(= kDistScale * 0.577) 밖이면 baked 샘플로 전환한다.
 	mode_ = wDist < 0.75f ? Mode::Baked : Mode::Keyframe;
 
     // 시간 기반 weight

@@ -46,7 +46,24 @@
   `renderDebugHitboxes(bv, selectedIdx)` 호박색 하이라이트, `Esc`로 선택 해제.
 - **테스트 더미**: reset(캐릭터 선택/`R`) 시 `positionDummyInFront()`가 타깃(=caster 반대편)을
   caster 정면 3.5m·지형 높이(`InitRefs::terrainHeightAt`)에 배치하고 caster를 바라보게 한다.
-- **UI**: 캐릭터/스킬 드롭다운 좌우 배치, 조작법=우상단 helpLabel, 상태=좌상단 statusLabel.
+- **무기 선택(Player 캐스터)**: 플레이어 애니메이션은 장착 무기별 클립 세트(2H/1H/Cast/Bow)로
+  나뉘므로, 무기를 고르지 않으면 어떤 스킬을 재생해도 검(2H) 모션만 나온다. 무기 드롭다운
+  (`Controller::selectWeapon`)이 선택 즉시 세 가지를 함께 바꾼다:
+  1. **무기 모델 장착** — 공용 자유 함수 `equipPlayerWeapon(obj, assetManager, weaponType)`
+     (`object.hpp/.cpp`, online과 공유). 장착 손은 무기 모델이 가진 단일 SocketOffset의
+     SocketType이 결정한다(활=왼손, 나머지=오른손).
+  2. **애니메이션 클립 세트** — 위 함수가 `AnimBlenderPlayer::setWeaponType`을 호출해
+     idle/hit/4방향 run/`attackClips_`를 교체. 스킬 타임라인의 `PlayAnimation.attackIndex`가
+     이 `attackClips_`를 인덱싱하므로 공격 모션도 자동으로 무기에 맞는다.
+  3. **스킬 목록 필터** — `Controller::rebuildSkillList()`가 `SkillAsset::weaponType`
+     (lua `skill.weapon`)로 걸러 선택 무기 스킬만 남기고, 무기 미지정(0xFF) 스킬
+     (`AoESlashGreen`/`TornadoShot`)은 어느 무기에서도 접근할 수 있도록 목록 후미에 유지한다.
+  드롭다운 항목 순서는 `PlayerWeaponType` ordinal과 1:1(Sword/Spear/Wand/Bow). 몬스터 캐스터를
+  고르면 무기 드롭다운·캡션이 숨겨지고(히트테스트에서도 제외) 몬스터 스킬 목록은 필터 없이 나온다.
+- **UI**: 상단 한 줄에 캡션 + 드롭다운 3열(캐릭터 | 무기 | 스킬), 그 아래 상태 라벨(좌상단
+  statusLabel), 편집 패널 순. 조작법은 우상단 helpLabel. 좌표는 `editorController.cpp` 익명
+  네임스페이스의 레이아웃 상수(`kColX*`/`kRowY`/`kStatusY`/`kPanelY`)에서만 정의한다.
+  `UI::Dropdown::setup()`이 zOrder를 100으로 덮으므로 zOrder는 setup() **이후**에 지정한다.
   기존 standalone HUD(도움말/HP바/HiZ 라벨)는 제거.
 
 ## 입력 맵
@@ -54,6 +71,7 @@
 | 입력 | 동작 |
 |---|---|
 | 캐릭터 드롭다운 | caster 선택 + 양쪽 리셋, 반대편이 타깃 더미 |
+| 무기 드롭다운 | (Player 전용) 무기 모델 장착 + 애니메이션 클립 세트 교체 + 스킬 목록 재필터 |
 | 스킬 드롭다운 | 해당 캐릭터의(레지스트리에 존재하는) 스킬 → draft 로드 |
 | `Space` | 선택 스킬 t=0부터 재생/재시작 |
 | `LMB` | 히트박스 피킹 선택 (UI 위/ RMB 룩 중 제외) |

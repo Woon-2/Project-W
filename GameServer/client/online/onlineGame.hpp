@@ -180,8 +180,7 @@ private:
 	bool   serverClockSynchronized_{ false };
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
-	// 오른손 소켓에 weaponType에 해당하는 무기를 (재)장착한다. 인게임/로비 포트레이트 공용.
-	void equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType);
+	// 무기 (재)장착은 object.hpp의 공용 자유 함수 equipPlayerWeapon()을 사용한다.
 	// lobbyChars_[i]를 lobbyPlayers_[i].weaponType과 동기화한다(인덱스 1:1 대응).
 	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();

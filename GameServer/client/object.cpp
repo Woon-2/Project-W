@@ -69,6 +69,33 @@ void AnimBlenderPlayer::setWeaponType(PlayerWeaponType weaponType) {
 	tAttack_ = 0.f;
 }
 
+// 무기 모델 장착 + 애니메이션 클립 세트 동기화 (online / standalone 에디터 공용).
+void equipPlayerWeapon(Object& obj, const AssetManager& assetManager,
+	PlayerWeaponType weaponType) {
+	// 무기 모델은 단일 SocketOffset만 가지며, 그 SocketType(오른손/왼손)으로
+	// 어느 손에 부착할지 데이터 주도로 결정한다(현재 Bow=왼손, 나머지=오른손).
+	const Model* weaponModel = assetManager.playerWeaponModel(weaponType);
+	auto socketType = Bone::SocketType::RightHand;
+	if (weaponModel && !weaponModel->socketOffsets.empty()) {
+		socketType = weaponModel->socketOffsets.begin()->first;
+	}
+
+	// 무기 전환 시 이전 손의 무기도 확실히 제거한다.
+	obj.disequip(Bone::SocketType::RightHand);
+	obj.disequip(Bone::SocketType::LeftHand);
+
+	Equipment eq{};
+	eq.socketType = socketType;
+	eq.object = std::make_unique<Object>();
+	eq.object->setModel(weaponModel);
+	obj.equip(std::move(eq));
+
+	// 장착 캐릭터의 애니메이션 블렌더에 무기 종류를 알려 클립 세트를 맞춘다.
+	if (auto* playerBlender = dynamic_cast<AnimBlenderPlayer*>(obj.animBlender())) {
+		playerBlender->setWeaponType(weaponType);
+	}
+}
+
 // pOwner의 물리 정보에 따라
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {

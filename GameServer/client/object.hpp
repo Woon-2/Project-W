@@ -1006,4 +1006,10 @@ private:
 	const TerrainData* terrainData_ = nullptr;
 };
 
+// 무기 모델을 (모델 자신이 선언한) 손 소켓에 장착하고,
+// 캐릭터의 AnimBlenderPlayer 클립 세트를 그 무기에 맞게 전환한다.
+// online 플레이와 standalone 스킬 에디터가 공유한다.
+void equipPlayerWeapon(Object& obj, const AssetManager& assetManager,
+	PlayerWeaponType weaponType);
+
 #endif	// __object_HPP

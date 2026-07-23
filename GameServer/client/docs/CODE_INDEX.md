@@ -1,4 +1,4 @@
-# Client Code Index
+﻿# Client Code Index
 
 > **규칙:** 파일/기능 위치를 찾을 때는 **이 파일을 먼저 조회**한다.
 > 코드를 수정한 후에는 **해당 항목의 라인 번호를 반드시 갱신**한다.
@@ -257,7 +257,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 충전 fill / 도넛 셰이더 | `client/ui.hlsl` + `uiPipeline.*` | `DrawEvent.fillAmount/effectMode`, `FrameData.time`, `Material.cRoughness/cMetallic` 재활용. mode 1=충전(어두운 base+밝은 fill) / 2=준비 / 3=절차적 반투명 도넛(텍스처 미샘플, `cRoughness`=안쪽 구멍 반지름). 아래서부터 일렁이는 액체 |
 | HUD z-order | `online/onlineGame.cpp::renderInGame` | 다이얼+콤보는 `uiManager_.render` **이전**에 제출 → 설정 패널(uiManager 오버레이)이 항상 위에 그려짐(UI는 제출 순서=그리기 순서) |
 | 스킬 아이콘 | `client/AssetManager.*` `skillIconByAssetName()` | 12개 명시 멤버(`resources/UI/*.dds`) |
-| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. `Online::Game::equipPlayerWeapon()`이 **무기 모델의 단일 SocketOffset 키(SocketType)를 읽어 해당 손에 장착**(Bow=왼손, 나머지=오른손; 하드코딩 RightHand 제거) + 캐릭터 `AnimBlenderPlayer::setWeaponType` 호출로 무기별 클립 세트 적용(onlineGame.{hpp,cpp}) |
+| 무기 모델 | `client/AssetManager.*` `playerWeaponModel(PlayerWeaponType)` | `modelKatana_/modelSpearHook_/modelCrystalWand_/modelHeavyArrow_` 4개 명시 멤버(`resources/models/{sword,spear,wand,bow}/*.bin`), Phase 1(`loadLobbyVisualAssets`)에서 로드. 장착은 공용 자유 함수 `equipPlayerWeapon()`(object.{hpp,cpp}) — **무기 모델의 단일 SocketOffset 키(SocketType)를 읽어 해당 손에 장착**(Bow=왼손, 나머지=오른손; 하드코딩 RightHand 제거) + 캐릭터 `AnimBlenderPlayer::setWeaponType` 호출로 무기별 클립 세트 적용. online(로비 포트레이트·인게임)과 standalone 에디터 무기 드롭다운이 공유 |
 | 입력 | `online/onlineGame.cpp` `processInputGame` / `receiveWndMsg`(WM_MOUSEWHEEL) | 휠=선택+회전+`C_SelectSkill`, 휠클릭=사용(자체 게이트+예측 쿨), 좌클릭=기본. `setupSkillDial`/`sendSelectSkillPacket` |
 | 수신 핸들러 | `online/onlineGame.cpp` | `onSkillCharge/onSkillSelect/onSkillUseReject/onComboState/onPlayerHp` (준비 시 `skill_ready` 사운드, 다이얼 위 콤보 카운터; `onPlayerHp`=`idPlayerMap_` 대상 `setHp`만, 매 프레임 HP UI가 반영) |
 
@@ -316,8 +316,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimFrame` struct | `animation.hpp #10-15` | translation, rotation(NQuat), scale, time |
 | `WeightedAnimFrame` struct | `animation.hpp #17-20` | frame + 가중치 w |
 | `convertAnimFrameToMatrix()` | `animation.hpp #25` | AnimFrame → Mat4x4 |
-| `lerpAnimFrames()` | `animation.hpp #30` | lerp(translation/scale) + slerp(rotation) |
-| `sumWeightedAnimFrames()` | `animation.hpp #33` | 가중합 (nlerp) |
+| `lerpAnimFrames()` | `animation.hpp #30` | lerp(translation/scale) + slerp(rotation). slerp=`XMQuaternionSlerp`가 최단호 부호 보정을 하므로 반구 문제 없음 |
+| `sumWeightedAnimFrames()` | `animation.hpp #33` / `animation.cpp #27` | 가중합 (nlerp). **가중치 최댓값 프레임을 기준으로 각 항의 쿼터니언 부호를 정렬한 뒤 합산**한다 — 클립별 추출 부호가 제각각이라(플레이어 pelvis: `Combat_2H/Bow/Cast_Ready`가 `Run_*`와 반대 부호, dot≈-0.95) 정렬 없이 더하면 idle↔run이 비슷한 가중치일 때 상쇄되어 최대 180° 회전 튐이 발생했다 |
 | `AnimClip` struct | `animation.hpp #42-54` | 키프레임, duration, skeletonEnum, flags |
 | `loadAnimClipsFromFile()` | `animation.hpp #56` | 바이너리 → AnimClip 벡터 |
 | `AnimBlender` class | `animation.hpp #84` | 추상 base; 상속 필수 |
@@ -327,6 +327,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::onCalcDress()` | `animation.hpp #126` | dress 공간으로 환원 |
 | `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
+| `AnimBlender::updatePriority()` | `animation.cpp #375` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
 | `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
 | `AnimSystem::update()` | `animation.cpp #386` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
@@ -334,11 +335,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #16` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive` |
-| `AnimBlenderGoblin` | `object.hpp #68` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
-| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #110` / `#145` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
-| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
-| `AnimBlenderBoss` | `object.hpp #336`/`object.cpp #788` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
+| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #23` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive` |
+| `AnimBlenderGoblin` | `object.hpp #88` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
+| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #136` / `#175` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #214`/`#249`/`#284`/`#319` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #358`/`object.cpp #904` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
@@ -382,12 +383,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
-| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1483,#1491,#1509` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(Online::Game::equipPlayerWeapon, onlineGame.cpp) |
-| `Object::render()` 부속 객체 루프 | `object.cpp #1277` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
-| `Object::renderPortrait()` | `object.cpp #1310` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
-| `Object::renderPortraitEquipment()` | `object.cpp #1348` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
-| `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
-| `Object::render()` | `object.cpp #843` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
+| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1583,#1591,#1609` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(자유 함수 `equipPlayerWeapon`) |
+| `equipPlayerWeapon(Object&, const AssetManager&, PlayerWeaponType)` (자유 함수) | `object.hpp #1012` / `object.cpp #73` | 무기 모델의 SocketOffset 키로 장착 손 결정 → 양손 disequip 후 equip → `AnimBlenderPlayer::setWeaponType`으로 클립 세트 동기화. online(`onlineGame.cpp` setupPlayer/createOtherPlayer/syncLobbyCharacterWeapons)과 standalone 에디터(`Editor::Controller::applyWeaponToPlayer`) 공용 |
+| `Object::render()` 부속 객체 루프 | `object.cpp #1373` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
+| `Object::renderPortrait()` | `object.cpp #1410` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
+| `Object::renderPortraitEquipment()` | `object.cpp #1448` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
+| `Object::update()` | `object.cpp #1152` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
+| `Object::render()` | `object.cpp #1256` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
 | `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
@@ -398,7 +400,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
 | `Object::adoptAnimBlender()` | `object.cpp` (Object::setModel 직전) | 이미 init된 `unique_ptr<AnimBlender>` 채택(소유권 이전): 기존 블렌더 `animSystem.untrackAnimBlender` 후 교체. `setAnimBlender`(클래스 고정 타입)와 달리 런타임 임의 블렌더 교체용 — 에디터 캐스터 핫스왑(`setMonsterCaster`) |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
-| `Object::updateGroundedGravityGate()` | `object.cpp #708` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
+| `Object::updateGroundedGravityGate()` | `object.cpp #1483` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
 | `Object::isGrounded()` | `object.hpp #232` | 접지 판정 결과 (updateGroundedGravityGate가 갱신) |
 
 **구체 오브젝트 클래스:**
@@ -1098,12 +1100,15 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수. Player(18스킬) + 몬스터 7종(Goblin/Mushroom/Snake/Birdy/Bomber/Slime/Treant) 전부 활성. 스킬명=`<Mon>_<Attack>`(lua `resources/skills/*_attackN.lua`) |
+| `Editor::CharacterKind` / `CharacterDef` / `kCharacterSkillMap` | `editor/characterSkillMap.hpp` | 전역 캐릭터→스킬 매핑 상수. Player(18스킬) + 몬스터 7종(Goblin/Mushroom/Snake/Birdy/Bomber/Slime/Treant) 전부 활성. 스킬명=`<Mon>_<Attack>`(lua `resources/skills/*_attackN.lua`). Player 목록은 런타임에 **선택 무기로 필터**(`SkillAsset::weaponType`; 무기 미지정 0xFF 스킬은 목록 후미에 유지) |
 | `Controller::setMonsterCaster(kind)` | `editor/editorController.cpp` | 몬스터 선택 시 단일 몬스터 객체(goblin_)를 해당 모델+`AnimBlender<Name>`로 핫스왑(`setModel`+`adoptAnimBlender`). kind별 switch(전부 활성). `selectCharacter`가 비-Player에서 호출. InitRefs에 `assetManager`/`animSystem` 주입(game.cpp editorRefs) |
 | `Editor::SkillDraft` | `editor/skillDraft.hpp/.cpp` | 컴파일 에셋의 original/draft 사본 + 편집 필드 목록 + diff 콘솔 덤프 |
 | `SkillDraft::Field` / `FieldType` | `editor/skillDraft.hpp` | 편집 가능한 스칼라 필드(center/half/euler/onHit/time/duration) |
 | `SkillDraft::load/buildFields/applyDelta/dumpDiff` | `editor/skillDraft.cpp` | 로드/필드구성/넛지/가이드 출력 |
-| `Editor::Controller` | `editor/editorController.hpp/.cpp` | 드롭다운 2개, 히트박스 피킹, nudge 편집, slow-mo/pause, free-fly 카메라 |
+| `Editor::Controller` | `editor/editorController.hpp/.cpp` | 드롭다운 3개(캐릭터/무기/스킬), 히트박스 피킹, nudge 편집, slow-mo/pause, free-fly 카메라 |
+| `Controller::buildUI` 레이아웃 상수 | `editor/editorController.cpp` 익명 ns | `kMarginX/kCaptionY/kRowY/kColX*/kColW*/kStatusY/kPanelY/kZOrder*` — 상단 한 줄 3열(캡션+드롭다운) + 상태 라벨 + 편집 패널. `UI::Dropdown::setup()`이 zOrder를 100으로 덮으므로 **zOrder는 setup() 이후 지정** |
+| `Controller::selectWeapon` / `applyWeaponToPlayer` | `editor/editorController.cpp` | 무기 드롭다운(Player 캐스터 전용, 몬스터 선택 시 캡션과 함께 `visible=false`). 항목 인덱스=`PlayerWeaponType` ordinal(`kWeaponItems`). 선택 시 `equipPlayerWeapon`(모델+클립 세트) → 스킬 목록 재필터 |
+| `Controller::rebuildSkillList` | `editor/editorController.cpp` | 현재 캐스터의 스킬 목록 구성(Player는 선택 무기 스킬 + 무기 미지정 스킬 후미) → `rebuildSkillDropdown` → `selectSkill(0)` |
 | `Controller::handleInput` | `editor/editorController.cpp` | 키/마우스 처리 (Game::processInput에서 위임) |
 | `Controller::updateCamera` | `editor/editorController.cpp` | follow(camera_.update) / free-fly(camera_.setView) 분기 |
 | `Controller::refresh` | `editor/editorController.cpp` | 선택 히트박스 하이라이트 + 패널 갱신 |

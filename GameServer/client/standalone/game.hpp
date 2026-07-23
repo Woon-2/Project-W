@@ -26,9 +26,6 @@
 #include "../particleEffect.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
-#include "../ui/widgets/Dropdown.hpp"
-#include "../ui/widgets/Label.hpp"
-#include "../ui/widgets/Image.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
 #include "../ui/inventoryPanel.hpp"
@@ -153,8 +150,6 @@ private:
 
 	TextImage textFPS_{};
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, ArrowVolley, ArrowRain, EnergyExplosionArrow, TornadoShot, Piercing, PiercingSlash, PiercingCircleSlash, PiercingMulti };
-
 	UI::UIManager    uiManager_{};
 	UI::DialogueSystem dialogueSystem_{};
 	UI::TacticalDialogueOverlay tacticalDialogueOverlay_{};
@@ -162,11 +157,8 @@ private:
 	Inventory            inventory_{};
 	UI::InventoryPanel   inventoryPanel_{};
 	uint8 tacticalDialoguePreviewIndex_ = 0;
-	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
-	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
-	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
-	SwordEffect      currentEffect_  = SwordEffect::SlashWave;
-	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
+	// 플레이어 HP바/HiZ 라벨/이펙트 드롭다운은 에디터 UI와 겹쳐 제거되었다.
+	// standalone HUD는 EditorController(상단 드롭다운 3개 + 상태 라벨 + 편집 패널)가 구성한다.
 
 	// In-game skill / monster-pattern authoring tool. The standalone mode boots
 	// straight into this editor (see CLAUDE editor design doc).
