@@ -3,6 +3,7 @@
 
 class SendBuffer;
 class GameSession;
+class Inventory;
 
 /**
 * @brief SingletonBase
@@ -18,6 +19,7 @@ public:
 	static void handleCSkillStartPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCSelectSkillPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCTimeSyncPacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCInventoryActionPacket(GameSession* session, byte* buffer, int32 len);
 
 	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
@@ -49,6 +51,10 @@ public:
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
 	static std::shared_ptr<SendBuffer> makeSTacticalDialoguePacket(uint16 zoneId, TacticalDialogueId dialogueId);
+	static std::shared_ptr<SendBuffer> makeSInventorySnapshotPacket(const Inventory& inventory);
+	static std::shared_ptr<SendBuffer> makeSInventoryActionResultPacket(
+		uint32 revision, uint8 slotIndex, InventoryAction action,
+		InventoryActionResult result, InventorySlotInfo slot);
 };
 
 #endif // packet_manager_hpp

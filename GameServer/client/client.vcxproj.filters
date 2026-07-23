@@ -309,6 +309,9 @@
     <ClCompile Include="ui\settingsPanel.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\inventoryPanel.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\widgets\Image.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -367,6 +370,9 @@
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="..\common\simpleJson.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\inventory.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="..\common\networkConfig.cpp">
@@ -737,6 +743,9 @@
     <ClInclude Include="ui\settingsPanel.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="ui\inventoryPanel.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="ui\uiBuild.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -801,6 +810,9 @@
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\simpleJson.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\inventory.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\networkConfig.hpp">

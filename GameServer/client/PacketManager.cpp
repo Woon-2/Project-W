@@ -117,6 +117,14 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSTacticalDialoguePacket( buffer, len );
 		break;
 
+	case PacketType::S_InventorySnapshot:
+		handleSInventorySnapshotPacket(buffer, len);
+		break;
+
+	case PacketType::S_InventoryActionResult:
+		handleSInventoryActionResultPacket(buffer, len);
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -455,6 +463,40 @@ void PacketManager::handleSTacticalDialoguePacket( byte* buffer, int32 len ) {
 	}
 }
 
+void PacketManager::handleSInventorySnapshotPacket(byte* buffer, int32 len) {
+	if (len < sizeof(SInventorySnapshotPacket))
+		return;
+	auto* pkt = reinterpret_cast<SInventorySnapshotPacket*>(buffer);
+	if (pkt->size != len)
+		return;
+	const std::size_t dataEnd = static_cast<std::size_t>(pkt->slotsOffset)
+		+ sizeof(InventorySlotInfo) * pkt->slotCount;
+	if (pkt->slotsOffset < sizeof(SInventorySnapshotPacket)
+		|| dataEnd > static_cast<std::size_t>(len)) {
+		return;
+	}
+
+	auto list = pkt->getSlotList();
+	std::vector<InventorySlotInfo> slots;
+	slots.reserve(list.count());
+	for (uint16 i = 0; i < list.count(); ++i)
+		slots.push_back(list[i]);
+	INet::ClientApp::onlineGame()->onInventorySnapshot(pkt->revision, slots);
+}
+
+void PacketManager::handleSInventoryActionResultPacket(byte* buffer, int32 len) {
+	if (len != sizeof(SInventoryActionResultPacket))
+		return;
+	const auto* pkt = reinterpret_cast<const SInventoryActionResultPacket*>(buffer);
+	if (pkt->size != sizeof(SInventoryActionResultPacket)
+		|| static_cast<uint8>(pkt->action) > static_cast<uint8>(InventoryAction::DiscardOne)
+		|| static_cast<uint8>(pkt->result) > static_cast<uint8>(InventoryActionResult::StaleRevision)) {
+		return;
+	}
+	INet::ClientApp::onlineGame()->onInventoryActionResult(
+		pkt->revision, pkt->slotIndex, pkt->action, pkt->result, pkt->slot);
+}
+
 void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SPlayerKnockbackPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onPlayerKnockback( pkt->playerId, pkt->dirX, pkt->dirZ, pkt->speed, pkt->knockMs, pkt->postLockMs );
@@ -554,6 +596,22 @@ std::shared_ptr<SendBuffer> PacketManager::makeCTimeSyncPacket(uint64 clientSend
 	pkt->clientSendMs = clientSendMs;
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_TimeSync;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCInventoryActionPacket(
+	uint32 revision, uint8 slotIndex, InventoryAction action) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CInventoryActionPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<CInventoryActionPacket>();
+	pkt->revision = revision;
+	pkt->slotIndex = slotIndex;
+	pkt->action = action;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_InventoryAction;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

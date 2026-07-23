@@ -1,6 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "AssetManager.hpp"
 #include "skill/skillCompiler.hpp"
+#include <stdexcept>
 
 void AssetManager::loadAssets() {
     modelCube_     = loadModelFromFile("../resources/models/cube/cubeServer.bin");
@@ -54,6 +55,13 @@ void AssetManager::loadAssets() {
 
     // 스택 충전 경제 튜닝(몬스터별 charge, 콤보, 소프트캡)을 부팅 시 1회 로드.
     chargeConfig_.load("../resources/data/chargeConfig.lua");
+
+    std::string inventoryError;
+    if (!itemCatalog_.load("../resources/data/inventory.json", inventoryError)) {
+        throw std::runtime_error("[AssetManager] Inventory config load failed: " + inventoryError);
+    }
+    std::cout << "[AssetManager] Loaded " << itemCatalog_.items().size()
+              << " item definition(s)\n";
 }
 
 const ServerAnimClip* AssetManager::findClip(const std::vector<ServerAnimClip>& set,

@@ -5,6 +5,7 @@
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
 #include "serverAnimation.hpp"
+#include "../common/inventory.hpp"
 #include <vector>
 #include <utility>
 
@@ -264,6 +265,9 @@ public:
 	int32 lastSyncedHp() const { return lastSyncedHp_; }
 	void  setLastSyncedHp(int32 v) { lastSyncedHp_ = v; }
 
+	Inventory& inventory() { return inventory_; }
+	const Inventory& inventory() const { return inventory_; }
+
 private:
 	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
@@ -274,6 +278,7 @@ private:
 	Milliseconds lastCreditMs_ { 0.f };
 	float        hpRegenAccum_ = 0.f;
 	int32        lastSyncedHp_ = -1;
+	Inventory    inventory_{};
 };
 
 class Cube : public Object {

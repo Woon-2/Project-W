@@ -31,6 +31,7 @@
 #include "../ui/widgets/Image.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
+#include "../ui/inventoryPanel.hpp"
 
 #include "../editor/editorController.hpp"
 
@@ -69,6 +70,8 @@ private:
 	// Debug: toggle ragdoll on/off for the currently controlled object (editor caster).
 	// Rebuilds the ragdoll for the caster's current model (covers hot-swapped rigs, e.g. Boss).
 	void toggleCasterRagdoll();
+	void setInventoryOpen(bool open);
+	void handleInventoryAction(uint8 slotIndex, InventoryAction action);
 
 	void cullObjects();
 	void cullObjectsForShadow();
@@ -155,6 +158,9 @@ private:
 	UI::UIManager    uiManager_{};
 	UI::DialogueSystem dialogueSystem_{};
 	UI::TacticalDialogueOverlay tacticalDialogueOverlay_{};
+	ItemCatalog          itemCatalog_{};
+	Inventory            inventory_{};
+	UI::InventoryPanel   inventoryPanel_{};
 	uint8 tacticalDialoguePreviewIndex_ = 0;
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
@@ -214,6 +220,8 @@ private:
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
 	bool cursorShowEnabled_ = true;
+	bool inventoryRestoreCapture_ = false;
+	bool inventoryRestoreShow_ = true;
 	bool gravityEnabled_ = true;
 
 	// F9: debug toggle for the boss heat-distortion effect (no server needed).

@@ -204,6 +204,9 @@
     <ClCompile Include="..\common\simpleJson.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\inventory.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
     <ClCompile Include="..\common\networkConfig.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
@@ -382,6 +385,9 @@
       <Filter>contents\etc</Filter>
     </ClInclude>
     <ClInclude Include="..\common\networkConfig.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\inventory.hpp">
       <Filter>contents\etc</Filter>
     </ClInclude>
     <ClInclude Include="skill\skillLoadout.hpp">

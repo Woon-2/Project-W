@@ -203,6 +203,14 @@ Game::Game() {
 	// 로비 표시에 필요한 공용 GPU 리소스만 즉시 초기화한다.
 	// 무거운 인게임 리소스(모델/지형/파티클)는 로비 진입 후 백그라운드로 로드한다.
 	gfx_.initSharedResources( assetConfigs_ );
+
+	std::string inventoryError;
+	DISPLAY_ERROR_STR(
+		itemCatalog_.load("../resources/data/inventory.json", inventoryError),
+		"[Inventory] config load failed: "s + inventoryError, true);
+	DISPLAY_ERROR_STR(
+		inventory_.initializeEmpty(itemCatalog_, &inventoryError),
+		"[Inventory] initialization failed: "s + inventoryError, true);
 }
 
 Game::~Game() {
@@ -4423,6 +4431,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		tacticalZoneIntro_.update(dtSec);
 		tacticalDialogueOverlay_.update(dtSec);
 		dialogueSystem_.update(dtSec);
+		inventoryPanel_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4835,6 +4844,23 @@ void Game::enterLobby() {
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(),
 		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_,
 		[]() { PostQuitMessage(0); });
+	if (!inventoryUiReady_) {
+		assetManager_.loadInventoryItemIcons(gfx_, itemCatalog_);
+		inventoryPanel_.build(uiManager_, itemCatalog_, {
+			.onAction = [this](uint8 slotIndex, InventoryAction action) {
+				sendInventoryAction(slotIndex, action);
+			}
+		}, {
+			.panelTexture = lobbyUI_.panelTexture(),
+			.buttonTexture = lobbyUI_.secondaryButtonTexture(),
+			.resolveItemIcon = [this](ItemId itemId) {
+				return assetManager_.inventoryItemIcon(itemId);
+			},
+		});
+		inventoryPanel_.setInventory(inventory_);
+		inventoryUiReady_ = true;
+	}
+	inventoryPanel_.close();
 	refreshLobbyUI();
 	settingsOpenPrev_ = settingsPanel_.isOpen();
 	applyCursorPolicy();
@@ -5304,6 +5330,13 @@ void Game::enterInGame() {
 	// 대기실 전시 캐릭터 정리: animSystem 트랙/shared_ptr를 제거해 인게임 씬으로 누수되지 않게 한다.
 	clearLobbyCharacters();
 
+	std::string inventoryError;
+	if (inventory_.initializeEmpty(itemCatalog_, &inventoryError))
+		inventoryPanel_.setInventory(inventory_);
+	else
+		gSharedLog << "[Inventory] reset failed: " << inventoryError << "\n";
+	inventoryPanel_.close();
+
 	setupStage();
 	scene_ = Scene::InGame;
 	settingsOpenPrev_ = settingsPanel_.isOpen();
@@ -5519,6 +5552,12 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
 		return 0;
 	}
+	if (inventoryPanel_.isOpen()
+		&& (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN)) {
+		inventoryPanel_.handleGlobalPointerDown(
+			static_cast<float>(LOWORD(lParam)),
+			static_cast<float>(HIWORD(lParam)));
+	}
 
 	switch (msg) {
 		// WM_INPUT 메시지
@@ -5592,7 +5631,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case WM_MOUSEWHEEL:
 		// In-game: accumulate wheel notches for the skill dial (consumed in
 		// processInputGame). With a cursor-capturing UI open, forward to the UI.
-		if (uiManager_.needsCursor())
+		if (inventoryPanel_.isOpen() || uiManager_.needsCursor())
 			uiManager_.onWndMsg(msg, wParam, lParam);
 		else
 			wheelAccum_ += GET_WHEEL_DELTA_WPARAM(wParam);
@@ -5609,6 +5648,23 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 void Game::sendMovePacket() {
 	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->velocity().getXmf());
 	INet::ClientApp::addSendBuffer(sendBuffer);
+}
+
+void Game::sendInventoryAction(uint8 slotIndex, InventoryAction action) {
+	if (!player_ || !inventoryPanel_.isOpen()) {
+		inventoryPanel_.setPending(false);
+		return;
+	}
+	INet::ClientApp::addSendBuffer(PacketManager::makeCInventoryActionPacket(
+		inventory_.revision(), slotIndex, action));
+}
+
+void Game::setInventoryOpen(bool open) {
+	if (open == inventoryPanel_.isOpen())
+		return;
+	if (open) inventoryPanel_.open();
+	else inventoryPanel_.close();
+	applyCursorPolicy();
 }
 
 bool Game::findZoneCenter(const std::string& tag, mu::Vec3& out) const {
@@ -5776,6 +5832,38 @@ void Game::onPlayerHp(uint16 playerId, int32 newHp) {
 		it->second->setHp(newHp);
 }
 
+void Game::onInventorySnapshot(uint32 revision,
+	const std::vector<InventorySlotInfo>& slots) {
+	std::vector<ItemStack> stacks;
+	stacks.reserve(slots.size());
+	for (const InventorySlotInfo& slot : slots)
+		stacks.push_back(ItemStack{ slot.itemId, slot.quantity });
+
+	std::string error;
+	if (!inventory_.applySnapshot(itemCatalog_, revision, stacks, &error)) {
+		gSharedLog << "[Inventory] rejected server snapshot: " << error << "\n";
+		return;
+	}
+	inventoryPanel_.setInventory(inventory_);
+	inventoryPanel_.setPending(false);
+}
+
+void Game::onInventoryActionResult(uint32 revision, uint8 slotIndex,
+	InventoryAction action, InventoryActionResult result, InventorySlotInfo slot) {
+	(void)action;
+	if (result == InventoryActionResult::Success) {
+		std::string error;
+		if (!inventory_.applyAuthoritativeSlot(
+				itemCatalog_, revision, slotIndex,
+				ItemStack{ slot.itemId, slot.quantity }, &error)) {
+			gSharedLog << "[Inventory] rejected action result: " << error << "\n";
+		} else {
+			inventoryPanel_.setInventory(inventory_);
+		}
+	}
+	inventoryPanel_.showActionResult(result);
+}
+
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
@@ -5787,8 +5875,23 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
+	const bool escapePressed =
+		(keyboardStateCurr_[VK_ESCAPE] & 0x80)
+		&& !(keyboardStatePrev_[VK_ESCAPE] & 0x80);
+	const bool inventoryPressed =
+		(keyboardStateCurr_['E'] & 0x80)
+		&& !(keyboardStatePrev_['E'] & 0x80);
+
+	if (inventoryPanel_.isOpen()) {
+		if (escapePressed || inventoryPressed)
+			setInventoryOpen(false);
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	// ESC: 인게임 설정창 토글(로비의 "설정" 버튼과 동일한 패널을 재사용).
-	if ( (keyboardStateCurr_[VK_ESCAPE] & 0x80) && !(keyboardStatePrev_[VK_ESCAPE] & 0x80) ) {
+	if (escapePressed) {
 		settingsPanel_.toggle();
 	}
 
@@ -5814,6 +5917,13 @@ void Game::processInput(Milliseconds deltaTime) {
 	// by handleWndMsg to advance pages; here we drop accumulated look delta so
 	// the camera doesn't drift, then skip gameplay until the window hides.
 	if (dialogueSystem_.active()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
+	if (inventoryPressed) {
+		setInventoryOpen(true);
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
 		return;
@@ -6202,8 +6312,9 @@ void Game::applyCursorPolicy() {
 
 	// 로비 메인 메뉴와 설정창에서는 포인터를 자유롭게 둔다.
 	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
-		|| settingsPanel_.isOpen();
-	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
+	const bool showCursorNow = (scene_ == Scene::Lobby)
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
 	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
 

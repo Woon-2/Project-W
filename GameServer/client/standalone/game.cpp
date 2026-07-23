@@ -57,6 +57,27 @@ static constexpr float   kPiercingMultiHalfWidth = 2.5f;
 static constexpr float   kPiercingMultiHalfHeight = 1.25f;
 static constexpr float   kRagdollLimitGraceDecay = mu::pi; // 180 deg/sec
 
+static InventoryActionResult toProtocolInventoryResult(
+	InventoryCommandResult result) {
+	switch (result) {
+	case InventoryCommandResult::Success:
+		return InventoryActionResult::Success;
+	case InventoryCommandResult::InvalidSlot:
+		return InventoryActionResult::InvalidSlot;
+	case InventoryCommandResult::EmptySlot:
+		return InventoryActionResult::EmptySlot;
+	case InventoryCommandResult::UnknownItem:
+		return InventoryActionResult::UnknownItem;
+	case InventoryCommandResult::NotUsable:
+		return InventoryActionResult::NotUsable;
+	case InventoryCommandResult::FullHealth:
+		return InventoryActionResult::FullHealth;
+	case InventoryCommandResult::Dead:
+		return InventoryActionResult::Dead;
+	}
+	return InventoryActionResult::NotUsable;
+}
+
 // ---------------------------------------------------------------------------
 // Physics test object factories
 //
@@ -774,6 +795,29 @@ void Game::setupStage() {
 	uiManager_.requestDebugResources(gfx_);
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
+	{
+		std::string error;
+		DISPLAY_ERROR_STR(
+			itemCatalog_.load("../resources/data/inventory.json", error),
+			"[Inventory] config load failed: "s + error, true);
+		DISPLAY_ERROR_STR(
+			inventory_.initialize(itemCatalog_, &error),
+			"[Inventory] initialization failed: "s + error, true);
+		assetManager_.loadInventoryUIAssets(gfx_);
+		assetManager_.loadInventoryItemIcons(gfx_, itemCatalog_);
+		inventoryPanel_.build(uiManager_, itemCatalog_, {
+			.onAction = [this](uint8 slotIndex, InventoryAction action) {
+				handleInventoryAction(slotIndex, action);
+			}
+		}, {
+			.panelTexture = assetManager_.inventoryPanelFrame(),
+			.buttonTexture = assetManager_.inventoryMenuButton(),
+			.resolveItemIcon = [this](ItemId itemId) {
+				return assetManager_.inventoryItemIcon(itemId);
+			},
+		});
+		inventoryPanel_.setInventory(inventory_);
+	}
 	// 기존 standalone HUD(도움말 라벨/플레이어 HP바/HiZ 라벨)는 에디터 UI와 겹쳐 제거했다.
 	// 조작법·상태·편집 패널은 EditorController가 별도로 구성한다.
 
@@ -2763,6 +2807,7 @@ void Game::update(Milliseconds deltaTime) {
 	uiManager_.layout();
 	tacticalDialogueOverlay_.update(std::chrono::duration<float>(deltaTime).count());
 	dialogueSystem_.update(std::chrono::duration<float>(deltaTime).count());
+	inventoryPanel_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
@@ -3044,6 +3089,12 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
 		return 0;
 	}
+	if (inventoryPanel_.isOpen()
+		&& (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN)) {
+		inventoryPanel_.handleGlobalPointerDown(
+			static_cast<float>(LOWORD(lParam)),
+			static_cast<float>(HIWORD(lParam)));
+	}
 
 	switch (msg) {
 	// WM_INPUT 메시지
@@ -3138,6 +3189,21 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
+
+	const bool inventoryTogglePressed =
+		(keyboardStateCurr_['E'] & 0x80) && !(keyboardStatePrev_['E'] & 0x80);
+	const bool inventoryEscapePressed =
+		inventoryPanel_.isOpen()
+		&& (keyboardStateCurr_[VK_ESCAPE] & 0x80)
+		&& !(keyboardStatePrev_[VK_ESCAPE] & 0x80);
+	if (!dialogueSystem_.active() && (inventoryTogglePressed || inventoryEscapePressed)) {
+		setInventoryOpen(!inventoryPanel_.isOpen());
+	}
+	if (inventoryPanel_.isOpen()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
 
 	// F11: standalone 전체화면(borderless) 토글
 	if ((keyboardStateCurr_[VK_F11] & 0x80)
@@ -3251,6 +3317,53 @@ void Game::toggleFullscreen() {
 		/ std::max(1.f, static_cast<float>(clientH));
 	camera_.setPerspective(mu::Degree(90.f), aspect, 0.1f, 500.f);
 	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));
+}
+
+void Game::setInventoryOpen(bool open) {
+	if (open == inventoryPanel_.isOpen())
+		return;
+
+	if (open) {
+		inventoryRestoreCapture_ = cursorCaptureEnabled_;
+		inventoryRestoreShow_ = cursorShowEnabled_;
+		inventoryPanel_.open();
+		cursorCaptureEnabled_ = false;
+		cursorShowEnabled_ = true;
+		releaseCursor();
+		showCursor();
+		return;
+	}
+
+	inventoryPanel_.close();
+	cursorCaptureEnabled_ = inventoryRestoreCapture_;
+	cursorShowEnabled_ = inventoryRestoreShow_;
+	if (cursorCaptureEnabled_) captureCursor();
+	else releaseCursor();
+	if (cursorShowEnabled_) showCursor();
+	else hideCursor();
+}
+
+void Game::handleInventoryAction(uint8 slotIndex, InventoryAction action) {
+	InventoryCommandResult commandResult = InventoryCommandResult::NotUsable;
+	int32 resultingHp = player_->hp();
+
+	if (action == InventoryAction::Use || action == InventoryAction::DiscardOne) {
+		const InventoryCommand command = action == InventoryAction::DiscardOne
+			? InventoryCommand::DiscardOne
+			: InventoryCommand::Use;
+		const InventoryCommandOutcome outcome = executeInventoryCommand(
+			inventory_, itemCatalog_, slotIndex, command,
+			player_->hp(), player_->maxHp());
+		commandResult = outcome.result;
+		resultingHp = outcome.resultingHp;
+	}
+
+	if (commandResult == InventoryCommandResult::Success
+		&& resultingHp != player_->hp()) {
+		player_->setHp(resultingHp);
+	}
+	inventoryPanel_.setInventory(inventory_);
+	inventoryPanel_.showActionResult(toProtocolInventoryResult(commandResult));
 }
 
 void Game::toggleCasterRagdoll() {

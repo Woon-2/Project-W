@@ -1,0 +1,24 @@
+{
+  "slotCount": 24,
+  "items": [
+    {
+      "id": 1,
+      "key": "ui_potion_0",
+      "name": "체력 회복 물약",
+      "description": "사용하면 최대 체력의 20%를 회복합니다.",
+      "iconPath": "../resources/UI/ui_potion_0.dds",
+      "maxStack": 20,
+      "use": {
+        "type": "heal_percent",
+        "value": 0.2
+      }
+    }
+  ],
+  "starter": [
+    {
+      "slot": 0,
+      "itemId": 1,
+      "quantity": 5
+    }
+  ]
+}

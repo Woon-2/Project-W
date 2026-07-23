@@ -49,6 +49,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCTimeSyncPacket(session, buffer, len);
 		break;
 
+	case PacketType::C_InventoryAction:
+		handleCInventoryActionPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -126,6 +130,23 @@ void PacketManager::handleCSelectSkillPacket( GameSession* session, byte* buffer
 	session->room()->doAsync( [session, slot]() {
 		session->room()->selectSkill( session->id(), slot );
 	} );
+}
+
+void PacketManager::handleCInventoryActionPacket(GameSession* session, byte* buffer, int32 len) {
+	if (!session || !session->room() || len != sizeof(CInventoryActionPacket))
+		return;
+
+	const auto* pkt = reinterpret_cast<const CInventoryActionPacket*>(buffer);
+	if (static_cast<uint8>(pkt->action) > static_cast<uint8>(InventoryAction::DiscardOne))
+		return;
+
+	const uint32 revision = pkt->revision;
+	const uint8 slotIndex = pkt->slotIndex;
+	const InventoryAction action = pkt->action;
+	session->room()->doAsync([session, revision, slotIndex, action]() {
+		if (session->room())
+			session->room()->inventoryAction(session->id(), revision, slotIndex, action);
+	});
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
@@ -596,6 +617,52 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, i
 
 	pkt->size     = bw.writeSize();
 	pkt->type     = PacketType::S_NpcRespawn;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSInventorySnapshotPacket(
+	const Inventory& inventory) {
+	const uint8 count = static_cast<uint8>(inventory.slotCount());
+	auto sendBuffer = SendBufferManager::open(
+		sizeof(SInventorySnapshotPacket) + sizeof(InventorySlotInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SInventorySnapshotPacket>();
+	auto* entries = bw.reserve<InventorySlotInfo>(count);
+	for (uint8 i = 0; i < count; ++i) {
+		const ItemStack* stack = inventory.slot(i);
+		entries[i] = stack
+			? InventorySlotInfo{ stack->itemId, stack->quantity }
+			: InventorySlotInfo{};
+	}
+
+	pkt->revision = inventory.revision();
+	pkt->slotsOffset = static_cast<uint16>(
+		reinterpret_cast<uint64>(entries) - reinterpret_cast<uint64>(pkt));
+	pkt->slotCount = count;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_InventorySnapshot;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSInventoryActionResultPacket(
+	uint32 revision, uint8 slotIndex, InventoryAction action,
+	InventoryActionResult result, InventorySlotInfo slot) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SInventoryActionResultPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SInventoryActionResultPacket>();
+	pkt->revision = revision;
+	pkt->slotIndex = slotIndex;
+	pkt->action = action;
+	pkt->result = result;
+	pkt->slot = slot;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_InventoryActionResult;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

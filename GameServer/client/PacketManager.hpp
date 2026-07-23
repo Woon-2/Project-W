@@ -36,6 +36,8 @@ public:
 	static void handleSPlayerKnockbackPacket( byte* buffer, int32 len );
 	static void handleSTimeSyncPacket( byte* buffer, int32 len );
 	static void handleSTacticalDialoguePacket( byte* buffer, int32 len );
+	static void handleSInventorySnapshotPacket(byte* buffer, int32 len);
+	static void handleSInventoryActionResultPacket(byte* buffer, int32 len);
 
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );
@@ -52,6 +54,8 @@ public:
 	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
 	static std::shared_ptr<SendBuffer> makeCSelectSkillPacket(uint8 slot);
 	static std::shared_ptr<SendBuffer> makeCTimeSyncPacket(uint64 clientSendMs);
+	static std::shared_ptr<SendBuffer> makeCInventoryActionPacket(
+		uint32 revision, uint8 slotIndex, InventoryAction action);
 
 	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType);
 

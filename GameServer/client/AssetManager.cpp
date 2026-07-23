@@ -76,6 +76,64 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	loadRemainingInGameAssets(gfx, configs);
 }
 
+void AssetManager::loadInventoryUIAssets(GFX& gfx) {
+	if (inventoryUiAssetsLoaded_)
+		return;
+
+	gfx.addRequestTextureLoad(RequestTextureLoad{
+		.name = "InventoryPanelFrame",
+		.texturePath = "../resources/UI/ui_panel_frame.dds",
+		.pDest = &inventoryPanelFrame_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	});
+	gfx.addRequestTextureLoad(RequestTextureLoad{
+		.name = "InventoryMenuButton",
+		.texturePath = "../resources/UI/ui_btn_secondary.dds",
+		.pDest = &inventoryMenuButton_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	});
+	gfx.loadRequestedAssets();
+	inventoryUiAssetsLoaded_ = true;
+}
+
+void AssetManager::loadInventoryItemIcons(GFX& gfx, const ItemCatalog& catalog) {
+	if (inventoryItemIconsLoaded_)
+		return;
+
+	bool requestedAny = false;
+	for (const ItemDefinition& item : catalog.items()) {
+		if (item.iconPath.empty())
+			continue;
+
+		auto [it, inserted] = inventoryItemIcons_.try_emplace(item.id);
+		if (!inserted)
+			continue;
+
+		gfx.addRequestTextureLoad(RequestTextureLoad{
+			.name = item.key,
+			.texturePath = item.iconPath,
+			.pDest = &it->second,
+			.pTexHashMap = &texHashMap_,
+			.needsUploadInfo = false,
+			.sampler = Samplers::BilinearClamp
+		});
+		requestedAny = true;
+	}
+
+	if (requestedAny)
+		gfx.loadRequestedAssets();
+	inventoryItemIconsLoaded_ = true;
+}
+
+const Texture* AssetManager::inventoryItemIcon(ItemId itemId) const {
+	const auto it = inventoryItemIcons_.find(itemId);
+	return it == inventoryItemIcons_.end() ? nullptr : &it->second;
+}
+
 void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) {
 	// Minimum set needed to render the waiting-room 3D: cube (skybox mesh),
 	// player model, skybox material, and the full player animation set.

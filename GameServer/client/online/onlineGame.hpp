@@ -43,6 +43,7 @@
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
+#include "../ui/inventoryPanel.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -129,6 +130,9 @@ public:
 	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
 	// Server-authoritative HP push (regen): apply newHp directly, no hit event/animation.
 	void onPlayerHp( uint16 playerId, int32 newHp );
+	void onInventorySnapshot(uint32 revision, const std::vector<InventorySlotInfo>& slots);
+	void onInventoryActionResult(uint32 revision, uint8 slotIndex,
+		InventoryAction action, InventoryActionResult result, InventorySlotInfo slot);
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 	void beginServerTimeSync();
@@ -166,6 +170,8 @@ private:
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
+	void sendInventoryAction(uint8 slotIndex, InventoryAction action);
+	void setInventoryOpen(bool open);
 	void updateServerTimeSync();
 	void requestServerTimeSync();
 	uint64 estimatedServerTimeMs() const;
@@ -547,6 +553,10 @@ private:
 	std::unordered_map<uint16, uint8>                teammateSelected_{};
 
 	UI::UIManager    uiManager_{};
+	ItemCatalog      itemCatalog_{};
+	Inventory        inventory_{};
+	UI::InventoryPanel inventoryPanel_{};
+	bool             inventoryUiReady_ = false;
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_

@@ -217,6 +217,11 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="online\lobbyUI.cpp" />
     <ClCompile Include="ui\settingsPanel.cpp" />
+    <ClCompile Include="ui\inventoryPanel.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="particleRenderMode.cpp" />
     <ClCompile Include="particleRenderSubmit.cpp" />
     <ClCompile Include="particleEffect.cpp" />
@@ -255,6 +260,12 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\common\simpleJson.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\common\inventory.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
@@ -384,6 +395,7 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="online\lobbyUI.hpp" />
     <ClInclude Include="ui\settingsPanel.hpp" />
+    <ClInclude Include="ui\inventoryPanel.hpp" />
     <ClInclude Include="ui\uiBuild.hpp" />
     <ClInclude Include="particleRenderMode.hpp" />
     <ClInclude Include="particleRenderSubmit.hpp" />
@@ -413,6 +425,7 @@
     <ClInclude Include="sharedResources.hpp" />
     <ClInclude Include="..\common\networkConfig.hpp" />
     <ClInclude Include="..\common\simpleJson.hpp" />
+    <ClInclude Include="..\common\inventory.hpp" />
     <ClInclude Include="..\common\particleGameplay.hpp" />
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />

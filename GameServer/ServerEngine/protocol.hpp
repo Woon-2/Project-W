@@ -72,6 +72,11 @@ enum class PacketType : uint16 {
 
 	// Append-only: server-authoritative tactical boss dialogue presentation.
 	S_TacticalDialogue,
+
+	// Append-only: server-authoritative fixed-slot inventory.
+	C_InventoryAction,
+	S_InventorySnapshot,
+	S_InventoryActionResult,
 };
 
 enum class ObjectType : uint16 {
@@ -104,6 +109,22 @@ enum class TacticalDialogueId : uint8 {
 	GrandbaumShieldWall,
 	IsysPincer,
 	Count,
+};
+
+enum class InventoryAction : uint8 {
+	Use = 0,
+	DiscardOne,
+};
+
+enum class InventoryActionResult : uint8 {
+	Success = 0,
+	InvalidSlot,
+	EmptySlot,
+	UnknownItem,
+	NotUsable,
+	FullHealth,
+	Dead,
+	StaleRevision,
 };
 
 struct PacketHeader {
@@ -498,6 +519,37 @@ struct STimeSyncPacket : public PacketHeader {
 struct STacticalDialoguePacket : public PacketHeader {
 	uint16               zoneId;
 	TacticalDialogueId   dialogueId;
+};
+
+struct InventorySlotInfo {
+	uint32 itemId;
+	uint16 quantity;
+};
+
+struct CInventoryActionPacket : public PacketHeader {
+	uint32          revision;
+	uint8           slotIndex;
+	InventoryAction action;
+};
+
+struct SInventorySnapshotPacket : public PacketHeader {
+	uint32 revision;
+	uint16 slotsOffset;
+	uint8  slotCount;
+
+	using SlotList = DataList<InventorySlotInfo>;
+	SlotList getSlotList() {
+		byte* start = reinterpret_cast<byte*>(this) + slotsOffset;
+		return SlotList(reinterpret_cast<InventorySlotInfo*>(start), slotCount);
+	}
+};
+
+struct SInventoryActionResultPacket : public PacketHeader {
+	uint32                revision;
+	uint8                 slotIndex;
+	InventoryAction       action;
+	InventoryActionResult result;
+	InventorySlotInfo     slot;
 };
 
 #pragma pack(pop)

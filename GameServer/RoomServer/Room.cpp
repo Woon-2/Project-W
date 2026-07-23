@@ -50,6 +50,26 @@ ValidatedActionTime validateActionTime(uint64 actionServerMs, uint64 serverNowMs
 
 	return { actionServerMs, static_cast<uint16>(ageMs), true };
 }
+
+InventoryActionResult toProtocolInventoryResult(InventoryCommandResult result) {
+	switch (result) {
+	case InventoryCommandResult::Success:
+		return InventoryActionResult::Success;
+	case InventoryCommandResult::InvalidSlot:
+		return InventoryActionResult::InvalidSlot;
+	case InventoryCommandResult::EmptySlot:
+		return InventoryActionResult::EmptySlot;
+	case InventoryCommandResult::UnknownItem:
+		return InventoryActionResult::UnknownItem;
+	case InventoryCommandResult::NotUsable:
+		return InventoryActionResult::NotUsable;
+	case InventoryCommandResult::FullHealth:
+		return InventoryActionResult::FullHealth;
+	case InventoryCommandResult::Dead:
+		return InventoryActionResult::Dead;
+	}
+	return InventoryActionResult::NotUsable;
+}
 }
 
 void Room::registerObject(Object* obj) {
@@ -1211,6 +1231,9 @@ void Room::enter(GameSession* session) {
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
 	player->resetSkillState();
+	std::string inventoryError;
+	ASSERT_CRASH(assetManager_ != nullptr);
+	ASSERT_CRASH(player->inventory().initialize(assetManager_->itemCatalog(), &inventoryError));
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -1362,6 +1385,7 @@ void Room::enter(GameSession* session) {
 	// 패킷 생성 후 새로 들어온 플레이어에게 전송
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
+	session->send(PacketManager::makeSInventorySnapshotPacket(player->inventory()));
 
 	// 새로 들어온 플레이어의 정보를 기존 플레이어들에게 브로드캐스트
 	if (sessions_.size() > 0) {	// 기존 플레이어가 있을 때만 브로드캐스트
@@ -1754,6 +1778,65 @@ void Room::selectSkill(int32 sessionId, uint8 slot) {
 	// Relay so teammate HUDs mirror the selected skill.
 	broadcastExcept(it->second,
 		PacketManager::makeSSkillSelectPacket(static_cast<uint16>(p->getId()), slot));
+}
+
+void Room::inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
+	InventoryAction action) {
+	const auto sessionIt = idSessionMap_.find(sessionId);
+	if (sessionIt == idSessionMap_.end())
+		return;
+
+	GameSession* session = sessionIt->second;
+	Player* player = session->player();
+	Inventory& inventory = player->inventory();
+
+	auto currentSlotInfo = [&]() -> InventorySlotInfo {
+		if (const ItemStack* stack = inventory.slot(slotIndex))
+			return InventorySlotInfo{ stack->itemId, stack->quantity };
+		return InventorySlotInfo{};
+	};
+	auto reply = [&](InventoryActionResult result) {
+		session->send(PacketManager::makeSInventoryActionResultPacket(
+			inventory.revision(), slotIndex, action, result, currentSlotInfo()));
+	};
+
+	if (revision != inventory.revision()) {
+		reply(InventoryActionResult::StaleRevision);
+		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+		return;
+	}
+
+	if (action != InventoryAction::Use && action != InventoryAction::DiscardOne) {
+		reply(InventoryActionResult::NotUsable);
+		return;
+	}
+
+	ASSERT_CRASH(assetManager_ != nullptr);
+	const int32 previousHp = player->hp();
+	const InventoryCommand command = action == InventoryAction::DiscardOne
+		? InventoryCommand::DiscardOne
+		: InventoryCommand::Use;
+	const InventoryCommandOutcome outcome = executeInventoryCommand(
+		inventory, assetManager_->itemCatalog(), slotIndex,
+		command, previousHp, kPlayerMaxHp);
+	const InventoryActionResult result = toProtocolInventoryResult(outcome.result);
+
+	if (outcome.result == InventoryCommandResult::Success
+		&& outcome.resultingHp != previousHp) {
+		player->setHp(outcome.resultingHp);
+		player->setLastSyncedHp(outcome.resultingHp);
+	}
+
+	reply(result);
+	if (outcome.result == InventoryCommandResult::InvalidSlot
+		|| outcome.result == InventoryCommandResult::UnknownItem) {
+		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+	}
+	if (outcome.result == InventoryCommandResult::Success
+		&& outcome.resultingHp != previousHp) {
+		broadcast(PacketManager::makeSPlayerHpPacket(
+			static_cast<uint16>(sessionId), outcome.resultingHp));
+	}
 }
 
 const SkillAsset* Room::findSkillAsset(uint32 id) const {

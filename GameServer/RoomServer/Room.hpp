@@ -97,6 +97,8 @@ public:
 	void attack(int32 sessionId, uint64 actionServerMs);
 	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
+	void inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
+		InventoryAction action);
 
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
 	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
