@@ -12,11 +12,11 @@ public:
 	DBConnectionPool() : poolMutex_(), hEnv_( SQL_NULL_HANDLE ), conns_() {}
 	~DBConnectionPool() { clear(); }
 
-	bool connect( int32 connCnt, const std::wstring& connStr );
+	bool connect( int32 connCnt, const WCHAR* connStr );
 	void clear();
 
-	DBConnection* pop();
 	void push( DBConnection* conn );
+	DBConnection* pop();
 
 private:
 	std::mutex poolMutex_;

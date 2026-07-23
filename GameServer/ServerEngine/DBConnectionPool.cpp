@@ -5,7 +5,7 @@
      DBConnectionPool
 ------------------------*/
 
-bool DBConnectionPool::connect( int32 connCnt, const std::wstring& connStr ) {
+bool DBConnectionPool::connect( int32 connCnt, const WCHAR* connStr ) {
 	std::lock_guard lock( poolMutex_ );
 
     if ( ::SQLAllocHandle( SQL_HANDLE_ENV, SQL_NULL_HANDLE, &hEnv_ ) != SQL_SUCCESS ) {
@@ -42,6 +42,11 @@ void DBConnectionPool::clear() {
 	conns_.clear();
 }
 
+void DBConnectionPool::push( DBConnection* conn ) {
+    std::lock_guard lock( poolMutex_ );
+    conns_.push_back( conn );
+}
+
 DBConnection* DBConnectionPool::pop() {
 	std::lock_guard lock( poolMutex_ );
 
@@ -53,9 +58,4 @@ DBConnection* DBConnectionPool::pop() {
 	conns_.pop_back();
 
 	return conn;
-}
-
-void DBConnectionPool::push( DBConnection* conn ) {
-    std::lock_guard lock( poolMutex_ );
-	conns_.push_back( conn );
 }
