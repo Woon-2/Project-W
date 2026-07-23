@@ -22,6 +22,7 @@
 12. [스킬 에디터 (standalone)](#12-스킬-에디터-standalone)
 13. [지면 연계 스킬 / 파티클](#13-지면-연계-스킬--파티클-terrain-interaction)
 14. [사운드 시스템](#14-사운드-시스템)
+15. [인벤토리 시스템](#15-인벤토리-시스템)
 
 ---
 
@@ -1273,3 +1274,19 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `TacticalZoneIntro::trigger` | `ui/intro/TacticalZoneIntro.cpp` | Starts the intro for an arena wall prefix (`WallHobgoblin`/`WallGrandbaum`/`WallIsys`/`WallBoss`); unknown prefixes return false |
 | `TacticalZoneIntro::update` | `ui/intro/TacticalZoneIntro.cpp` | Per-frame alpha/offset/size animation; hides itself when finished |
 | Online integration | `online/onlineGame.cpp` | `setupStage` init, local `ZoneSystem::Enter` triggers arena intro/BGM from `player_->pos()`, per-frame update in `InGameScene`; shared `onZoneState` never starts presentation |
+
+---
+
+## 15. 인벤토리 시스템
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `ItemCatalog` / `Inventory` | `../common/inventory.hpp/.cpp` | 공유 아이템 정의·고정 슬롯·스택 모델, revision, JSON 검증 |
+| `executeInventoryCommand` | `../common/inventory.cpp` | 서버와 standalone이 공유하는 사용/버리기 판정 및 수량·HP 변경 |
+| 인벤토리 JSON | `../../resources/data/inventory.json` | 슬롯 수, 아이템 정의, 시작 슬롯의 단일 원본 |
+| `UI::InventoryPanel` | `ui/inventoryPanel.hpp/.cpp` | E/Esc 토글, 6×4 슬롯, 호버 툴팁, 우클릭 메뉴, 입력 차단 |
+| 온라인 연결 | `online/onlineGame.cpp`, `PacketManager.cpp` | 서버 스냅샷/result 수신, action 요청, HP 동기화 |
+| standalone 연결 | `standalone/game.cpp` | 공용 액션 실행기의 로컬 동기 실행 및 커서 복구 |
+| 서버 권한 처리 | `../../RoomServer/Room.cpp`, `PacketManager.cpp` | Player 소유 인벤토리, revision 검증, HP 브로드캐스트 |
+| 프로토콜 | `../../ServerEngine/protocol.hpp` | `C_InventoryAction`, `S_InventorySnapshot`, `S_InventoryActionResult` |
+| 유지보수 문서 | `inventorySystem.md` | 아이템 추가 방법, 확장 규칙, 빌드·검증 절차 |
