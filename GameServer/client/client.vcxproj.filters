@@ -441,6 +441,12 @@
     <ClCompile Include="ui\minimapHUD.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="ui\uiShapes.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\pathGuideHUD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="energyOrbPipeline.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -891,6 +897,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="ui\minimapHUD.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\uiShapes.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\pathGuideHUD.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="energyOrbPipeline.hpp">

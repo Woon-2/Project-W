@@ -41,7 +41,11 @@ cbuffer PerDrawcallData : register(b0) {
     // actually attenuates by the age fade below instead of ignoring alpha. 0 = off
     // (default; required for the non-additive SRC_ALPHA PSO to stay correct).
     uint     premultiplyAlpha;
-    float3   pad0;
+
+    // 1 = overlay a procedural flowing-chevron mask (arrows toward the head/goal)
+    // on top of the sampled texture. 0 = texture unchanged (default).
+    uint     patternMode;
+    float2   pad0;
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -138,6 +142,21 @@ PSInput VSMain(uint vid : SV_VertexID) {
 float4 PSMain(PSInput input) : SV_TARGET {
     float4 src = sampleBindless(idxMainTex, input.uv);
     float4 ret = float4(src.rgb * input.color.rgb, src.a * input.color.a);
+
+    // Procedural flowing chevrons: a repeating V-mask over the tiled UV. u across
+    // the width (0..1) shifts the crossbar so the tip (u=0.5) leads toward the head,
+    // and V already scrolls over time (Tile mode), so the arrows flow toward the goal.
+    if (patternMode != 0u) {
+        const float density = 0.7f;   // chevrons per tile (lower = wider spacing)
+        const float slope   = 0.58f;  // V steepness across the width (kept ~ density ratio)
+        float uc    = abs(input.uv.x - 0.5f) * 2.0f;                 // 0 center .. 1 edges
+        float phase = frac(input.uv.y * density + slope * uc);       // repeating [0,1)
+        // A bright band centered at phase ~ 0.5 with a dim continuous base between bands.
+        float stripe = smoothstep(0.30f, 0.50f, phase) * (1.0f - smoothstep(0.50f, 0.70f, phase));
+        float mask   = 0.34f + 1.55f * stripe;
+        ret.rgb *= mask;
+    }
+
     if (premultiplyAlpha != 0u) ret.rgb *= ret.a;
     return ret;
 }

@@ -154,12 +154,21 @@ void PathGuideSystem::update(float dtSec, const mu::Vec3& playerPos, const Terra
     bobPhase_  += dtSec * cfg_.wispBobFreq;
     ribbon_.clear();
 
-    // Pick the nearest path within the activation radius.
+    // Hard off-switch (tactical combat): drop all guidance and report inactive.
+    if (suppressed_) {
+        wispVisible_    = false;
+        activePath_     = -1;
+        activePathPrev_ = -1;
+        sPlayer_        = 0.f;
+        return;
+    }
+
+    // Pick the nearest not-yet-completed path within the activation radius.
     activePath_ = -1;
     float bestDist = cfg_.activateRadius;
     float sPlayer  = 0.f;
     for (std::size_t i = 0; i < paths_.size(); ++i) {
-        if (paths_[i].samples.size() < 2u) continue;
+        if (paths_[i].samples.size() < 2u || paths_[i].completed) continue;
         float d = 0.f;
         const float s = projectOntoPath(paths_[i], playerPos, d);
         if (d < bestDist) {
@@ -169,12 +178,25 @@ void PathGuideSystem::update(float dtSec, const mu::Vec3& playerPos, const Terra
         }
     }
 
+    // Arrival: reaching a path's end retires it for good (no more guidance for it).
+    if (activePath_ >= 0) {
+        const mu::Vec3 endp = paths_[static_cast<std::size_t>(activePath_)].samples.back().pos;
+        const float ex = endp.x() - playerPos.x();
+        const float ez = endp.z() - playerPos.z();
+        if (ex * ex + ez * ez < cfg_.arriveRadius * cfg_.arriveRadius) {
+            paths_[static_cast<std::size_t>(activePath_)].completed = true;
+            activePath_ = -1;
+        }
+    }
+
     if (activePath_ < 0) {
         wispVisible_    = false;
         activePathPrev_ = -1;
+        sPlayer_        = 0.f;
         return;
     }
 
+    sPlayer_ = sPlayer;
     const Path& p = paths_[static_cast<std::size_t>(activePath_)];
 
     // Conform XZ to ground height; fall back to the authored Y when no chunk is
@@ -256,6 +278,7 @@ void PathGuideSystem::submitDrawEvents(GFX& gfx, const Texture* ribbonTex, const
         ev.currentSystemTime = flowTime_;
         ev.flowSpeed         = cfg_.flowSpeed;
         ev.alignMode         = 1u;            // ground-aligned ribbon
+        ev.patternMode       = 1u;            // flowing directional chevrons (emphasis)
         ev.premultiplyAlpha  = 1u;            // HDR channel is always additive (One/One) -- needs
                                                // alpha premultiplied for the end-fade to be visible
         ev.pMainTex          = ribbonTex;
@@ -286,4 +309,30 @@ void PathGuideSystem::submitDrawEvents(GFX& gfx, const Texture* ribbonTex, const
         ev.renderOrder  = 0;
         gfx.addDrawEvent(ev);
     }
+}
+
+mu::Vec3 PathGuideSystem::goalWorld() const {
+    if (activePath_ < 0) return mu::Vec3{ 0.f, 0.f, 0.f };
+    const Path& p = paths_[static_cast<std::size_t>(activePath_)];
+    return p.samples.empty() ? mu::Vec3{ 0.f, 0.f, 0.f } : p.samples.back().pos;
+}
+
+float PathGuideSystem::distanceToGoal() const {
+    if (activePath_ < 0) return 0.f;
+    const Path& p = paths_[static_cast<std::size_t>(activePath_)];
+    return std::max(0.f, p.totalLen - sPlayer_);
+}
+
+void PathGuideSystem::activePathPoints(std::vector<mu::Vec3>& out) const {
+    if (activePath_ < 0) return;
+    const Path& p = paths_[static_cast<std::size_t>(activePath_)];
+    if (p.samples.size() < 2u) return;
+
+    // Sub-sample to ~2 m so the minimap polyline stays cheap; keep the endpoints.
+    const float spacing = (cfg_.sampleSpacing > 1e-3f) ? cfg_.sampleSpacing : 0.5f;
+    std::size_t stride = static_cast<std::size_t>(std::max(1.f, std::round(2.f / spacing)));
+    for (std::size_t i = 0; i < p.samples.size(); i += stride)
+        out.push_back(p.samples[i].pos);
+    if ((p.samples.size() - 1u) % stride != 0u)
+        out.push_back(p.samples.back().pos);
 }

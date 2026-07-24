@@ -35,12 +35,12 @@ public:
         float    leadGap       = 3.f;    // gap ahead of the player before the ribbon starts
                                           // fading in (m) -- nothing is drawn under/behind the
                                           // player, so the ribbon reads as starting ahead of them
-        float    ribbonWidth   = 0.8f;   // ribbon width (m)
+        float    ribbonWidth   = 1.4f;   // ribbon width (m) -- widened for on-ground legibility
         float    ribbonYOffset = 0.10f;  // lift above terrain to avoid z-fighting (m)
-        float    flowSpeed     = 0.5f;   // Tile-UV scroll toward the goal (tiles/sec)
+        float    flowSpeed     = 0.85f;  // Tile-UV scroll toward the goal (tiles/sec)
         float    tileLength    = 2.5f;   // world units per texture tile
         float    endFade       = 3.0f;   // fade length at both window ends (m)
-        mu::Vec3 ribbonColor   = { 0.5f, 1.8f, 2.6f };  // HDR cyan (bloom)
+        mu::Vec3 ribbonColor   = { 0.8f, 3.0f, 4.5f };  // HDR cyan (bloom) -- brightened emphasis
 
         // Wisp
         float    wispLead      = 22.0f;  // arc-length ahead of the player (m) -- kept near the
@@ -56,6 +56,9 @@ public:
 
         // Activation: ignore paths whose nearest point is farther than this (m).
         float    activateRadius = 80.f;
+        // Arrival: once the player is within this of a path's end point (XZ), that
+        // path is marked done and never guides again (no ribbon/wisp/HUD for it).
+        float    arriveRadius   = 4.f;
     };
 
     // Parses "PathPt" markers into resampled polylines. Safe to call again on reload.
@@ -65,6 +68,12 @@ public:
     // through build()) starting at origin and heading along forwardDir. Used as a
     // fallback so the effect can be seen online before any path is authored in Unity.
     void buildSamplePath(const mu::Vec3& origin, const mu::Vec3& forwardDir);
+
+    // Suppresses all guidance (ribbon/wisp/HUD/minimap) while true -- e.g. during
+    // tactical-combat arenas, where the player is locked in and cannot leave anyway.
+    // update() then clears state and reports no active guidance.
+    void setSuppressed(bool s) { suppressed_ = s; }
+    bool suppressed() const { return suppressed_; }
 
     // Advances ribbon window + wisp. playerPos is the live local player position;
     // terrain supplies per-frame ground height for the visible window.
@@ -79,9 +88,23 @@ public:
     Config& config() { return cfg_; }
     const Config& config() const { return cfg_; }
 
+    // --- Guidance data for the 2D HUD + minimap direction indicators ---
+    // Valid only while guidanceActive() is true (a path is within activateRadius).
+    bool     guidanceActive()      const { return activePath_ >= 0; }
+    // Look-ahead point to steer toward (the wisp's position); follows the path's
+    // next bend so an arrow points along the route, not straight through geometry.
+    mu::Vec3 guidanceTargetWorld() const { return wispPos_; }
+    // Final destination = the active path's last authored sample.
+    mu::Vec3 goalWorld()           const;
+    // Arc-length remaining from the player's projection to the path end (m).
+    float    distanceToGoal()      const;
+    // Appends the active path's world sample points (sub-sampled ~every 2 m) to out,
+    // for the minimap route polyline. Clears nothing; no-op when inactive.
+    void     activePathPoints(std::vector<mu::Vec3>& out) const;
+
 private:
     struct Sample { mu::Vec3 pos; float dist = 0.f; };  // pos = authored (xz + authored y); dist = arc length
-    struct Path   { std::string id; std::vector<Sample> samples; float totalLen = 0.f; };
+    struct Path   { std::string id; std::vector<Sample> samples; float totalLen = 0.f; bool completed = false; };
 
     struct RibbonVert { mu::Vec3 pos; float cumulative = 0.f; float age = 0.f; };
 
@@ -97,7 +120,9 @@ private:
     int      activePath_     = -1;
     int      activePathPrev_ = -1;
     float    flowTime_       = 0.f;
+    float    sPlayer_        = 0.f;   // player's arc-length projection on the active path (m)
 
+    bool     suppressed_     = false;  // hard off-switch (tactical combat)
     bool     wispVisible_    = false;
     float    sWisp_          = 0.f;
     float    bobPhase_       = 0.f;
