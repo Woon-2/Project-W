@@ -95,7 +95,7 @@ public:
 	void debugTeleport(int32 sessionId, DirectX::XMFLOAT3 pos);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 actionServerMs);
-	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
+	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad);
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 	void inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 		InventoryAction action);

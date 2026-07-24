@@ -101,7 +101,7 @@ public:
 
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
-	void rotatePlayer(uint16 playerId, float yawRad);
+	void rotatePlayer(uint16 playerId, float yawRad, float pitchRad);
 
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
@@ -121,7 +121,7 @@ public:
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onTacticalDialogue( uint16 zoneId, TacticalDialogueId dialogueId );
-	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
@@ -439,6 +439,9 @@ private:
 	// 카메라 yaw는 기본적으로 플레이어에 대한 오프셋으로만 작동하지만,
 	// 플레이어 사망 이후에는 이 변수로 작동한다.
 	mu::Radian cameraYaw_ = 0.f;
+	// 마지막으로 C_MouseMove에 실어 보낸 조준 pitch. yaw가 안 변해도 pitch가
+	// 이 값에서 0.01rad 이상 벗어나면 송신한다(pitch만 움직일 때 패킷 누락 방지).
+	float lastSentAimPitch_ = 0.f;
 
 	Light dirLight_{};
 	AssetConfigs assetConfigs_{};

@@ -181,6 +181,18 @@ private:
 	const Model* pModel_ = nullptr;
 	AnimController animController_;
 	std::vector<mu::Mat4x4> boneWorldXforms_;
+
+	// Aim-pitch spine recomposition (mirrors client AnimBlenderPlayer::onPostDress).
+	// Built once in setModel from the skeleton; NPCs keep cameraPitch_ == 0 so the
+	// recomposition is a no-op for them.
+	// spineChainIdx_: bone indices of spine_01..03 (-1 if missing).
+	// spineDepth_[b]: number of chain bones among b's ancestors-or-self (0 = outside).
+	std::array<int, 3> spineChainIdx_{ -1, -1, -1 };
+	std::vector<uint8_t> spineDepth_;
+
+	// Rotates each spine subtree around its pivot by cameraPitch_/N in model space.
+	// Called from updateAnimBones() BEFORE the entity world transform is applied.
+	void applySpinePitch(std::vector<mu::Mat4x4>& boneModelXforms) const;
 	bool canReceiveDamage_ = false;
 	float damageTakenMultiplier_ = 1.f;
 	bool hitImpulseImmune_ = false;

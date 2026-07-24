@@ -602,7 +602,17 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             mu::Mat4x4 eulerOff = mu::rotateRPYH(mu::Degree{ p.localEulerDeg.z() },   // roll
                                                  mu::Degree{ p.localEulerDeg.y() },   // pitch
                                                  mu::Degree{ p.localEulerDeg.x() });  // yaw
-            mu::Mat4x4 aim = eulerOff * baseRot;  // pure rotation: local euler then caster orientation
+            // Aim pitch: tilt the launch frame by the caster's aim pitch (bow/wand
+            // trajectories follow the camera). Skipped for yaw-only/ground effects
+            // (must stay flat) and for bone attaches (the bone transform already
+            // carries the pitched spine pose — avoid double application).
+            // MIRROR: RoomServer/skill/skillSystem.cpp PlayVFX uses owner->cameraPitch().
+            const float aimPitch = (!(p.flags & kPlayVFXFlagYawOnly) &&
+                                    !(p.flags & kPlayVFXFlagGroundSnap) &&
+                                    !hasBoneAttach) ? owner->aimPitch() : 0.f;
+            mu::Mat4x4 aim = (aimPitch != 0.f)   // pure rotation: local euler, aim pitch, then caster yaw
+                ? eulerOff * mu::rotateXH(mu::Radian(aimPitch)) * baseRot
+                : eulerOff * baseRot;
 
             // localOffset is in the aimed frame (right=X, up=Y, forward=Z), added to the attach origin.
             mu::Vec3 origin = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * baseXform);

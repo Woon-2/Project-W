@@ -238,11 +238,13 @@ struct SPlayerKnockbackPacket : public PacketHeader {
 
 struct CMouseMovePacket : public PacketHeader {
 	float yawRadian;
+	float pitchRadian;   // camera/aim pitch (+down); server stores it for aim-pitched skills, relays for remote spine bend
 };
 
 struct SMouseMovePacket : public PacketHeader {
 	uint16 playerId;
 	float yawRadian;
+	float pitchRadian;   // relayed aim pitch for remote upper-body bend visuals
 };
 
 struct SNpcMovePacket : public PacketHeader {
@@ -351,6 +353,7 @@ struct CSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint64 actionServerMs;   // client-estimated server monotonic time; server validates before use
 	uint32 skillSeed;   // caster-generated per-cast seed (deterministic particle hitboxes)
+	float  aimPitchRadian;   // cast-time aim pitch snapshot (+down); server judges pitched hitboxes with it (determinism, like skillSeed)
 };
 
 struct SSkillStartPacket : public PacketHeader {
@@ -358,6 +361,7 @@ struct SSkillStartPacket : public PacketHeader {
 	uint16 ownerId;
 	uint16 elapsedMs;
 	uint32 skillSeed;   // relayed caster seed; remote clients reproduce identical VFX params
+	float  aimPitchRadian;   // relayed cast-time aim pitch; remote clients reproduce the pitched trajectory (0 for NPCs)
 };
 
 struct SSkillHitPacket : public PacketHeader {

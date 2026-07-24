@@ -37,14 +37,15 @@ public:
 	Seconds runDuration() const { return targetClip(clipRunForward_)->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
-	// 디버그: 상하체 분리 마스크 on/off (M 키 토글, A/B 비교용).
-	// off면 공격 오버레이가 종전처럼 전신 lerp로 동작한다.
-	static inline bool sDebugUpperBodyMask = true;
-
 private:
-	// 공격 오버레이의 본별 상체 마스크를 구축한다 (spine_01 서브트리=1, 경계 소프트).
+	// 공격 오버레이의 본별 상체 마스크와 스파인 체인 데이터를 구축한다
+	// (spine_01 서브트리=상체, 경계 소프트 / spine_01..03 체인 인덱스·서브트리 깊이).
 	// setSkeleton 이후(init)에 1회 호출.
 	void buildAttackMask();
+
+	// 드레스 공간 후처리: 스파인 체인에 조준 pitch를 피벗-공액으로 분산 주입한다.
+	// (onCalcDress 누적 직후 호출됨. 자식 본들은 서브트리 곱으로 함께 회전.)
+	void onPostDress() override;
 
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
@@ -53,6 +54,14 @@ private:
 	// 이동 중 하체가 run 클립을 유지해 발 미끄러짐을 없앤다.
 	// 정지 시(tIdle_=1)에는 전신 공격(종전 동작)과 프레임 단위로 동일하다.
 	std::vector<float> attackMask_{};
+
+	// 조준 pitch 스파인 체인 (spine_01..03 본 인덱스, 미발견 시 -1).
+	std::array<int, 3> spineChainIdx_{ -1, -1, -1 };
+	// 본별 스파인 체인 깊이: b가 spine_0k의 서브트리에 속하면 spineDepth_[b] >= k.
+	// (체인이 중첩 서브트리이므로 "조상인 체인 본 개수"와 같다. 0 = 하체/체인 밖.)
+	std::vector<uint8_t> spineDepth_{};
+	// update()에서 owner로부터 캐시한 조준 pitch (onPostDress는 owner 접근 불가).
+	float aimPitch_ = 0.f;
 
 	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
 	// 무기별로 해석된 클립 이름(setWeaponType에서 갱신). death는 전 무기 공용 상수.

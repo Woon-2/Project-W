@@ -19,22 +19,26 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	setWeaponType(weaponType_);
 }
 
-// 공격 오버레이용 상하체 마스크를 구축한다.
-// spine_01 서브트리(상체)=1, 그 외(하체/힙)=0, 경계 본은 소프트 가중치로
-// 힙-스파인 전이의 시어를 방지한다. 본 미발견 시 전부 1(종전 전신 공격)로 폴백.
+// 공격 오버레이용 상하체 마스크와 조준 pitch 스파인 체인 데이터를 구축한다.
+// - 마스크: spine_01 서브트리(상체)=1, 그 외(하체/힙)=0, 경계 본은 소프트 가중치로
+//   힙-스파인 전이의 시어를 방지한다. 본 미발견 시 전부 1(종전 전신 공격)로 폴백.
+// - 스파인 체인: spine_01..03 인덱스와 본별 체인 깊이(서브트리 소속 수)를 채운다.
 void AnimBlenderPlayer::buildAttackMask() {
 	const auto& bones = *skeleton().bones;
 	attackMask_.assign(bones.size(), 0.f);
+	spineDepth_.assign(bones.size(), 0);
+	spineChainIdx_ = { -1, -1, -1 };
 
 	// 경계 소프트 가중치 (튜닝 지점).
 	static constexpr std::pair<std::string_view, float> kBoundaryWeights[] = {
 		{ "spine_01", 0.5f },
 		{ "spine_02", 0.85f },
 	};
+	static constexpr std::string_view kSpineChain[] = { "spine_01", "spine_02", "spine_03" };
 
 	const Bone* spineRoot = nullptr;
 	for (const auto& b : bones) {
-		if (b.name == "spine_01") { spineRoot = &b; break; }
+		if (b.name == kSpineChain[0]) { spineRoot = &b; break; }
 	}
 	if (!spineRoot) {
 		std::ranges::fill(attackMask_, 1.f);
@@ -60,10 +64,32 @@ void AnimBlenderPlayer::buildAttackMask() {
 		}
 	}
 
-	// 검증 로그: 상체 본 수와 경계 가중치를 남긴다 (Phase 1 확인용).
+	// 스파인 체인: 각 체인 본의 서브트리에 깊이를 누적한다.
+	// 체인이 중첩(spine_01 ⊃ spine_02 ⊃ spine_03)이므로 spineDepth_[b] =
+	// "b의 조상(자기 포함)인 체인 본 개수"가 된다. 중간 본 미발견 시 체인을 끊는다.
+	int chainCnt = 0;
+	for (int c = 0; c < 3; ++c) {
+		const Bone* chainBone = nullptr;
+		for (const auto& b : bones) {
+			if (b.name == kSpineChain[c]) { chainBone = &b; break; }
+		}
+		if (!chainBone) break;
+		spineChainIdx_[c] = chainBone->boneIdx;
+		++chainCnt;
+		std::vector<const Bone*> st{ chainBone };
+		while (!st.empty()) {
+			const Bone* b = st.back();
+			st.pop_back();
+			spineDepth_[b->boneIdx] = static_cast<uint8_t>(c + 1);
+			for (const auto* pChild : b->children) st.push_back(pChild);
+		}
+	}
+
+	// 검증 로그: 상체 본 수·경계 가중치·스파인 체인 길이 (Phase 1/3 확인용).
 	gSharedLog << "[UpperBodyMask] built: totalBones=" << bones.size()
 		<< " upperBones=" << upperCnt
-		<< " boundary(spine_01=0.5, spine_02=0.85)\n";
+		<< " boundary(spine_01=0.5, spine_02=0.85)"
+		<< " spineChain=" << chainCnt << "\n";
 	dumpLog();
 }
 
@@ -150,6 +176,8 @@ void equipPlayerWeapon(Object& obj, const AssetManager& assetManager,
 void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	setOwnerPos(pOwner->pos());
+	// 조준 pitch 캐시 (onPostDress는 AnimSystem에서 호출되어 owner 접근 불가).
+	aimPitch_ = pOwner->aimPitch();
 	
 	// 객체의 속력이 runThreshold를 넘는지를 기준으로
 	// run 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -342,7 +370,7 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 			// 정지(tIdle_=1) 시 전 본 가중치가 tAttack_이 되어 종전 전신 공격과 동일하고,
 			// 이동 시 하체(mask=0)는 run 클립을 유지해 발 미끄러짐이 사라진다.
 			if (framesAttack) {
-				const float m = (sDebugUpperBodyMask && i < attackMask_.size()) ? attackMask_[i] : 1.f;
+				const float m = (i < attackMask_.size()) ? attackMask_[i] : 1.f;
 				const float wAttack = tAttack_ * (m + (1.f - m) * tIdle_);
 				framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], wAttack);
 			}
@@ -352,6 +380,39 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 		}
 		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
+}
+
+// 드레스 공간 후처리: 스파인 체인(spine_01..03)에 조준 pitch를 분산 주입한다.
+// 각 체인 본 k의 피벗(드레스 공간 본 원점) 기준 X축 회전 K를 서브트리 전체에
+// 우측 곱(dress[b] * K)으로 적용한다 — 부모→자식 누적이 끝난 상태이므로 서브트리
+// 전 본에 곱해야 자식이 함께 회전한다. 3관절에 pitch/N씩 누적해 자연스러운 굽힘.
+// (aimPitch + = 아래를 봄 = 상체 숙임. rotateXH(+)가 전방을 아래로 기울임 — Phase 2 검증됨.)
+void AnimBlenderPlayer::onPostDress() {
+	if (spineChainIdx_[0] < 0) return;
+
+	// 사망 페이드: death 블렌딩과 함께 조준 자세도 풀어준다.
+	const float effPitch = aimPitch_ * (1.f - tDeath_);
+	if (std::fabs(effPitch) < 1e-4f) return;
+
+	auto& dress = dressXformData();
+
+	int chainCnt = 0;
+	for (int c = 0; c < 3; ++c) {
+		if (spineChainIdx_[c] >= 0) ++chainCnt;
+	}
+	const auto perJoint = mu::Radian(effPitch / static_cast<float>(chainCnt));
+
+	for (int c = 0; c < chainCnt; ++c) {
+		const int k = spineChainIdx_[c];
+		// 앞 단계 K가 이미 반영된 dress[k]에서 피벗을 얻는다 (체인 누적 순서 중요).
+		const mu::Vec3 pivot = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * dress[k]);
+		const mu::Mat4x4 K = mu::translate(-pivot) * mu::rotateXH(perJoint) * mu::translate(pivot);
+		for (std::size_t b = 0; b < dress.size(); ++b) {
+			if (spineDepth_[b] > c) {
+				dress[b] = dress[b] * K;
+			}
+		}
 	}
 }
 

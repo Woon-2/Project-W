@@ -239,11 +239,14 @@ void AnimBlender::setSkeleton(const Skeleton& skeleton) {
 
 // 본들의 로컬 변환을 스켈레톤의 본 트리를 순회하며
 // 드레스 공간 변환으로 환원한다.
+// 누적이 끝나면 onPostDress 훅을 호출해, 파생 블렌더가 드레스 공간에서의
+// 프로시저럴 보정(조준 pitch 등)을 주입할 수 있게 한다 (Keyframe 모드 한정).
 void AnimBlender::onCalcDress(PassKey<AnimSystem>) {
 	if (mode_ == Mode::Baked) {
 		return;
 	}
 	traverseBone(*skeleton_.pRoot);
+	onPostDress();
 }
 
 void MU_CALLCONV AnimBlender::traverseBone(const Bone& bone, mu::Mat4x4 parentXform) {

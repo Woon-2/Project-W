@@ -95,6 +95,7 @@ void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, i
 	auto cMouseMvPktClone = ObjectPool<CMouseMovePacket>::pop();
 
 	cMouseMvPktClone->yawRadian = clientMouseMovePacket->yawRadian;
+	cMouseMvPktClone->pitchRadian = clientMouseMovePacket->pitchRadian;
 
 	session->room()->doAsync([session, cMouseMvPktClone]() {
 		session->room()->rotate(session->id(), cMouseMvPktClone);
@@ -113,8 +114,9 @@ void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer,
 	uint32 skillAssetId = pkt->skillAssetId;
 	uint64 actionServerMs = pkt->actionServerMs;
 	uint32 skillSeed    = pkt->skillSeed;
-	session->room()->doAsync( [session, skillAssetId, actionServerMs, skillSeed]() {
-		session->room()->skillStart( session->id(), skillAssetId, actionServerMs, skillSeed );
+	float  aimPitchRad  = pkt->aimPitchRadian;
+	session->room()->doAsync( [session, skillAssetId, actionServerMs, skillSeed, aimPitchRad]() {
+		session->room()->skillStart( session->id(), skillAssetId, actionServerMs, skillSeed, aimPitchRad );
 	} );
 }
 
@@ -242,13 +244,14 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerKnockbackPacket(uint16 pla
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad, float pitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto sMouseMvPkt = bw.reserve<SMouseMovePacket>();
 	sMouseMvPkt->playerId = playerId;
 	sMouseMvPkt->yawRadian = yawRad;
+	sMouseMvPkt->pitchRadian = pitchRad;
 
 	sMouseMvPkt->size = bw.writeSize();
 	sMouseMvPkt->type = PacketType::S_MouseMove;
@@ -488,7 +491,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerHpPacket(uint16 playerId, 
 }
 
 
-std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed) {
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -497,6 +500,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->ownerId      = ownerId;
 	pkt->elapsedMs    = elapsedMs;
 	pkt->skillSeed    = skillSeed;
+	pkt->aimPitchRadian = aimPitchRad;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
 

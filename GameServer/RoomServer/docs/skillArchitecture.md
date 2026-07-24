@@ -122,6 +122,14 @@ bone.toDress * animController_.bakedSamples[i][sampleIdx] * orientMat(owner->ori
 
 `animController_`는 `Object` 베이스 클래스에 있으며, AI 상태 전환 시 `switchClip()`이 호출되어 클라이언트의 시각적 포즈와 근사치로 동기화된다.
 
+**조준 pitch 재합성 (플레이어 전용):** `Object::updateAnimBones()`가 `computeBoneModelXforms` 직후
+`applySpinePitch()`로 스파인 체인(spine_01..03) 서브트리를 각 피벗 기준 `cameraPitch()/3`씩 X축 회전시킨다
+(클라 `AnimBlenderPlayer::onPostDress`와 동일 수식 — 모델 공간 피벗-공액). 따라서 `BoneAttach("spine_01")`
+멜리 히트박스가 캐스터의 상하 조준을 따라 기울어진다. `cameraPitch_`는 `C_MouseMove.pitchRadian`(연속)과
+`C_SkillStart.aimPitchRadian`(시전 스냅, `startSkill` 직전 반영)으로 갱신되고 NPC는 항상 0(no-op).
+PlayVFX emitter frame에도 동일 pitch가 합성된다(YawOnly/GroundSnap/본attach 제외).
+상세: `client/docs/aimPitchUpperBodyMask.md`.
+
 ---
 
 ## 피격 데미지와 damageCoeff

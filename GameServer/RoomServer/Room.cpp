@@ -1530,8 +1530,11 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	auto player = session->player();
 	auto yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(cMouseMvPkt->yawRadian));
 	player->setOrient(yaw);
+	// Aim pitch rides the live yaw stream (yaw-symmetric semantics). Stored separately
+	// from body orient so forward()/melee AABB/NPC logic stay yaw-only.
+	player->setCameraPitch(cMouseMvPkt->pitchRadian);
 
-	auto sMouseMvPkt = PacketManager::makeSMouseMovePacket(static_cast<uint16>(sessionId), cMouseMvPkt->yawRadian);
+	auto sMouseMvPkt = PacketManager::makeSMouseMovePacket(static_cast<uint16>(sessionId), cMouseMvPkt->yawRadian, cMouseMvPkt->pitchRadian);
 	broadcastExcept(session, sMouseMvPkt);
 
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
@@ -1602,7 +1605,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 	if (sessionIt == idSessionMap_.end()) {
 		return;
@@ -1641,6 +1644,11 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerM
 	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
 	const uint16 elapsedMs = actionTime.ageMs;
 
+	// Cast-time aim pitch snapshot: set BEFORE startSkill so t=0 timeline events
+	// (PlayVFX emitter frames, pitched bone hitboxes) use the exact cast-time value
+	// the caster predicted with (determinism, same rationale as skillSeed).
+	player->setCameraPitch(aimPitchRad);
+
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic
 	// VFXParticle hitbox sampler so server hits match the caster's visuals.
@@ -1661,7 +1669,8 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerM
 			skillAssetId,
 			static_cast<uint16>(player->getId()),
 			elapsedMs,
-			skillSeed
+			skillSeed,
+			aimPitchRad
 		)
 	);
 }
@@ -1694,11 +1703,13 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 
 	// Broadcast to ALL clients (NPC has no session to exclude) so they play the
 	// matching VFX + drive the NPC's AnimBlender via the skill's PlayAnimation.
+	// NPCs have no aim pitch (0.f).
 	broadcast(PacketManager::makeSSkillStartPacket(
 		skillAssetId,
 		static_cast<uint16>(ownerObjectId),
 		uint16(0),
-		skillSeed));
+		skillSeed,
+		0.f));
 }
 
 void Room::attack(int32 sessionId, uint64 actionServerMs) {

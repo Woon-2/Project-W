@@ -49,9 +49,9 @@ public:
 
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCDebugTeleportPacket(DirectX::XMFLOAT3 pos);
-	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
+	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad, float pitchRad);
 	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 actionServerMs);
-	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed);
+	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad);
 	static std::shared_ptr<SendBuffer> makeCSelectSkillPacket(uint8 slot);
 	static std::shared_ptr<SendBuffer> makeCTimeSyncPacket(uint64 clientSendMs);
 	static std::shared_ptr<SendBuffer> makeCInventoryActionPacket(

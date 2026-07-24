@@ -232,6 +232,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Online::Game::sendSkillStartPacket(assetId, seed)` | `online/onlineGame.cpp` | `C_SkillStart{assetId, clientMs, skillSeed}` 송신 (clientMs=ClientApp::clientMs) |
 | `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
 | `Online::Game::onSkillHit(attackerId, targetId, newHp, assetId, targetVelocity)` | `online/onlineGame.cpp` | `S_SkillHit` 수신: 킬 시 `setRagdollInitVelocity(targetVelocity)` → `applyHit`(EvHit/EvDeath) → 타깃 위치에 hit VFX |
+| PlayVFX aim pitch 합성 | `client/skill/skillSystem.cpp #610` (서버 미러: `RoomServer/skill/skillSystem.cpp` PlayVFX) | `aim = eulerOff·rotateXH(aimPitch)·baseRot` — 캐스터 조준 pitch로 발사 프레임 기울임(활/완드 궤적). YawOnly/GroundSnap/본attach 제외. `C/S_MouseMove.pitchRadian`(연속)+`C/S_SkillStart.aimPitchRadian`(시전 스냅) — `docs/aimPitchUpperBodyMask.md` |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 > VFXParticle 히트박스의 클라/서버 결정론 동기화: `docs/particleHitboxDeterminism.md`.
@@ -320,26 +321,27 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `sumWeightedAnimFrames()` | `animation.hpp #33` / `animation.cpp #27` | 가중합 (nlerp). **가중치 최댓값 프레임을 기준으로 각 항의 쿼터니언 부호를 정렬한 뒤 합산**한다 — 클립별 추출 부호가 제각각이라(플레이어 pelvis: `Combat_2H/Bow/Cast_Ready`가 `Run_*`와 반대 부호, dot≈-0.95) 정렬 없이 더하면 idle↔run이 비슷한 가중치일 때 상쇄되어 최대 180° 회전 튐이 발생했다 |
 | `AnimClip` struct | `animation.hpp #42-54` | 키프레임, duration, skeletonEnum, flags |
 | `loadAnimClipsFromFile()` | `animation.hpp #56` | 바이너리 → AnimClip 벡터 |
-| `AnimBlender` class | `animation.hpp #84` | 추상 base; 상속 필수 |
-| `AnimBlender::update()` | `animation.hpp #118` | priority_ 갱신 (오브젝트가 호출) |
-| `AnimBlender::setCulled()/isCulled()` | `animation.hpp #112` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
-| `AnimBlender::onCalcLocal()` | `animation.hpp #123` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
-| `AnimBlender::onCalcDress()` | `animation.hpp #126` | dress 공간으로 환원 |
-| `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
-| `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
-| `AnimBlender::updatePriority()` | `animation.cpp #375` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
-| `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.cpp #386` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
+| `AnimBlender` class | `animation.hpp #92` | 추상 base; 상속 필수 |
+| `AnimBlender::update()` | `animation.hpp #138` | priority_ 갱신 (오브젝트가 호출) |
+| `AnimBlender::setCulled()/isCulled()` | `animation.hpp #123` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
+| `AnimBlender::onCalcLocal()` | `animation.hpp #143` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
+| `AnimBlender::onCalcDress()` | `animation.hpp #146` | dress 공간으로 환원. 누적 직후 `onPostDress()` 훅 호출 |
+| `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 스파인 조준 pitch에 사용 — `docs/aimPitchUpperBodyMask.md` |
+| `AnimBlender::onCalcFinal()` | `animation.hpp #156` | toLocal 적용 → finalXformData |
+| `AnimBlender::finalXformData()` | `animation.hpp #160-161` | 셰이더 입력용 최종 행렬 배열 |
+| `AnimBlender::updatePriority()` | `animation.cpp #378` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
+| `AnimSystem` class | `animation.hpp #256` | 스케줄링 / 로드밸런싱 |
+| `AnimSystem::update()` | `animation.cpp #415` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #23` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive` |
-| `AnimBlenderGoblin` | `object.hpp #88` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
-| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #136` / `#175` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
-| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #214`/`#249`/`#284`/`#319` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
-| `AnimBlenderBoss` | `object.hpp #358`/`object.cpp #904` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
+| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #98` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): `buildAttackMask()`=`object.cpp #26`(spine_01 서브트리 마스크+스파인 체인, init 시 1회), 공격 lerp에 `tAttack_*(mask+(1-mask)*tIdle_)` 적용, `onPostDress()`=`object.cpp #391`(스파인 피벗-공액 pitch, 사망 페이드) |
+| `AnimBlenderGoblin` | `object.hpp #110` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
+| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #158` / `#197` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #236`/`#271`/`#306`/`#341` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #380`/`object.cpp #1000` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
@@ -398,6 +400,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::worldCullBounds()` | `object.cpp` | Hi-Z cull용 월드 AABB = worldBVH 본 부착 노드 합집합(+15% 마진), 포즈/랙돌 추종. 비스킨이면 nullopt |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
+| `Object::setAimPitch()/aimPitch()` | `object.hpp #541` | 조준 pitch(+아래, 라디안) — body orient(yaw 전용)와 분리된 상체 조준 채널. 로컬=카메라 pitch, 원격=S_MouseMove/S_SkillStart. AnimBlenderPlayer 스파인 굽힘·PlayVFX aim이 소비. NPC는 0 — `docs/aimPitchUpperBodyMask.md` |
 | `Object::adoptAnimBlender()` | `object.cpp` (Object::setModel 직전) | 이미 init된 `unique_ptr<AnimBlender>` 채택(소유권 이전): 기존 블렌더 `animSystem.untrackAnimBlender` 후 교체. `setAnimBlender`(클래스 고정 타입)와 달리 런타임 임의 블렌더 교체용 — 에디터 캐스터 핫스왑(`setMonsterCaster`) |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
 | `Object::updateGroundedGravityGate()` | `object.cpp #1483` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |

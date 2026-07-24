@@ -265,7 +265,7 @@ void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 	auto sMouseMvPkt = reinterpret_cast<SMouseMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
+	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian, sMouseMvPkt->pitchRadian);
 }
 
 void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
@@ -395,7 +395,7 @@ void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed );
+	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed, pkt->aimPitchRadian );
 }
 
 void PacketManager::handleSTimeSyncPacket( byte* buffer, int32 len ) {
@@ -544,7 +544,7 @@ void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
+std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -552,6 +552,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAss
 	pkt->skillAssetId = skillAssetId;
 	pkt->actionServerMs = actionServerMs;
 	pkt->skillSeed    = skillSeed;
+	pkt->aimPitchRadian = aimPitchRad;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_SkillStart;
@@ -646,12 +647,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCDebugTeleportPacket(DirectX::XMF
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad, float pitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMouseMvPkt = bw.reserve<CMouseMovePacket>();
 	cMouseMvPkt->yawRadian = yawRad;
+	cMouseMvPkt->pitchRadian = pitchRad;
 
 	cMouseMvPkt->size = bw.writeSize();
 	cMouseMvPkt->type = PacketType::C_MouseMove;

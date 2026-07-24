@@ -179,6 +179,11 @@ public:
 	Mode mode() const { return mode_; }
 
 protected:
+	// onCalcDress의 부모 누적 완료 직후 호출되는 훅 (Keyframe 모드 한정).
+	// 파생 블렌더가 드레스 공간 행렬(dressXformData)에 프로시저럴 보정을
+	// 주입할 수 있다 (예: AnimBlenderPlayer의 스파인 조준 pitch).
+	virtual void onPostDress() {}
+
 	// 본들의 로컬 변환 행렬들에 접근한다.
 	// onCalcLocal에서 사용하도록 한다.
 	std::vector<mu::Mat4x4>& localXformData();

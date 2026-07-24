@@ -3279,13 +3279,6 @@ void Game::processInput(Milliseconds deltaTime) {
 		toggleCasterRagdoll();
 	}
 
-	// M 키: 상하체 분리 마스크 토글 (디버그 A/B 비교 — 이동 중 공격 발 미끄러짐 확인용).
-	if ( (keyboardStateCurr_['M'] & 0x80) && !(keyboardStatePrev_['M'] & 0x80) ) {
-		AnimBlenderPlayer::sDebugUpperBodyMask = !AnimBlenderPlayer::sDebugUpperBodyMask;
-		gSharedLog << "[UpperBodyMask] " << (AnimBlenderPlayer::sDebugUpperBodyMask ? "ON" : "OFF") << "\n";
-		dumpLog();
-	}
-
 }
 
 void Game::toggleFullscreen() {

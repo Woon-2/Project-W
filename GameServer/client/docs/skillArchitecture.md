@@ -211,11 +211,16 @@ void Game::onSkillHit(uint16 attackerId, uint16 targetId, int32 newHp,
 ## 패킷 구조 (`ServerEngine/protocol.hpp`)
 
 ```cpp
-CSkillStartPacket { uint32 skillAssetId; uint64 clientMs; uint32 skillSeed; }
-SSkillStartPacket { uint32 skillAssetId; uint16 ownerId; uint16 elapsedMs; uint32 skillSeed; }
+CSkillStartPacket { uint32 skillAssetId; uint64 clientMs; uint32 skillSeed; float aimPitchRadian; }
+SSkillStartPacket { uint32 skillAssetId; uint16 ownerId; uint16 elapsedMs; uint32 skillSeed; float aimPitchRadian; }
 SSkillHitPacket   { uint16 attackerId; uint16 targetId; int32 newHp;
                     uint32 skillAssetId; XMFLOAT3 targetVelocity; }
 ```
+
+- `aimPitchRadian`: 시전 시점 조준 pitch 스냅샷(+아래). skillSeed와 동일한 결정론 원리 —
+  서버는 `startSkill` 전에 캐스터의 `cameraPitch_`에 반영해 t=0 이벤트(PlayVFX emitter frame,
+  본 부착 히트박스)가 캐스터 예측과 동일 pitch로 판정된다. 연속 스트림은 `C/S_MouseMove.pitchRadian`.
+  NPC 캐스트는 0. 상세: `docs/aimPitchUpperBodyMask.md`.
 
 ## 패킷 흐름 (Online)
 

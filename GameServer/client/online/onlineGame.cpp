@@ -3664,7 +3664,7 @@ void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float spe
 	postKnockbackLockTimer_ = static_cast<float>( postLockMs ) / 1000.f;
 }
 
-void Game::rotatePlayer(uint16 playerId, float yawRad) {
+void Game::rotatePlayer(uint16 playerId, float yawRad, float pitchRad) {
 	auto playerIt = idPlayerMap_.find(playerId);
 	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
@@ -3683,6 +3683,8 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 
 	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
 	player->setOrient(yaw);
+	// 원격 플레이어 조준 pitch(상체 굽힘 시각용). body orient에는 넣지 않는다.
+	player->setAimPitch(pitchRad);
 }
 
 void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
@@ -3803,9 +3805,15 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
+
+	// Cast-time aim pitch snapshot: set on the remote caster BEFORE startSkill so
+	// t=0 timeline events reproduce the caster's pitched trajectory (NPC casts are 0).
+	if (auto it = idPlayerMap_.find(ownerId); it != idPlayerMap_.end()) {
+		it->second->setAimPitch(aimPitchRad);
+	}
 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
 	// skillSeed is the caster-generated seed relayed by the server, so this
@@ -5671,7 +5679,8 @@ void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
 
-	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad);
+	lastSentAimPitch_ = static_cast<float>(cameraPitch_);
+	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad, lastSentAimPitch_);
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
@@ -5681,7 +5690,9 @@ void Game::sendAttackPacket() {
 
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 	const uint64 actionServerMs = estimatedServerTimeMs();
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
+	// 시전 시점 조준 pitch 스냅샷을 동봉한다(서버 판정·원격 재현이 캐스터 예측과 일치 — seed와 동일 원리).
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(
+		skillAssetId, actionServerMs, skillSeed, static_cast<float>(cameraPitch_)));
 }
 
 void Game::beginServerTimeSync() {
@@ -6007,6 +6018,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
 	}
 
+
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
@@ -6020,6 +6032,9 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		-mu::pi * 0.16f,
 		mu::pi * 0.3f
 	);
+	// 조준 pitch를 로컬 플레이어에 반영한다(스파인 굽힘·스킬 aim 합성이 읽음).
+	// body orient에는 넣지 않는다(pitch를 orient에 넣으면 캐릭터가 굴러버림).
+	player_->setAimPitch(static_cast<float>(cameraPitch_));
 
 	if (!playerDead_) {
 		if (rightMouseDragging) {
@@ -6038,7 +6053,10 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	const auto currForward = player_->forward();
 
-	if (prevForward != currForward) {
+	// yaw(전방)뿐 아니라 pitch만 변한 경우에도 송신한다 — 종전 조건은 forward가
+	// yaw 전용이라 pitch 변화가 패킷으로 나가지 않았다.
+	if (prevForward != currForward
+		|| std::fabs(static_cast<float>(cameraPitch_) - lastSentAimPitch_) > 0.01f) {
 		sendMouseMovePacket();
 	}
 
