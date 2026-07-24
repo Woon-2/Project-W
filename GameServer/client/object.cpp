@@ -10,12 +10,61 @@
 void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	setSkeleton(assetManager.modelPlayer()->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
+	buildAttackMask();
 	for (auto& clip : assetManager.playerAnimations()) {
 		pushTargetClip(clip->name, clip);
 	}
 	// 무기 미지정 컨텍스트(standalone 등)에서도 유효한 클립 세트를 갖도록 기본값으로 초기화한다.
 	// online에서는 무기 장착 시 setWeaponType이 다시 호출된다.
 	setWeaponType(weaponType_);
+}
+
+// 공격 오버레이용 상하체 마스크를 구축한다.
+// spine_01 서브트리(상체)=1, 그 외(하체/힙)=0, 경계 본은 소프트 가중치로
+// 힙-스파인 전이의 시어를 방지한다. 본 미발견 시 전부 1(종전 전신 공격)로 폴백.
+void AnimBlenderPlayer::buildAttackMask() {
+	const auto& bones = *skeleton().bones;
+	attackMask_.assign(bones.size(), 0.f);
+
+	// 경계 소프트 가중치 (튜닝 지점).
+	static constexpr std::pair<std::string_view, float> kBoundaryWeights[] = {
+		{ "spine_01", 0.5f },
+		{ "spine_02", 0.85f },
+	};
+
+	const Bone* spineRoot = nullptr;
+	for (const auto& b : bones) {
+		if (b.name == "spine_01") { spineRoot = &b; break; }
+	}
+	if (!spineRoot) {
+		std::ranges::fill(attackMask_, 1.f);
+		gSharedLog << "[UpperBodyMask] spine_01 not found in player skeleton ("
+			<< bones.size() << " bones) -- fallback to full-body attack\n";
+		dumpLog();
+		return;
+	}
+
+	// spine_01 서브트리 전체를 상체로 표시한다.
+	int upperCnt = 0;
+	std::vector<const Bone*> stack{ spineRoot };
+	while (!stack.empty()) {
+		const Bone* b = stack.back();
+		stack.pop_back();
+		attackMask_[b->boneIdx] = 1.f;
+		++upperCnt;
+		for (const auto* pChild : b->children) stack.push_back(pChild);
+	}
+	for (const auto& [name, w] : kBoundaryWeights) {
+		for (const auto& b : bones) {
+			if (b.name == name) { attackMask_[b.boneIdx] = w; break; }
+		}
+	}
+
+	// 검증 로그: 상체 본 수와 경계 가중치를 남긴다 (Phase 1 확인용).
+	gSharedLog << "[UpperBodyMask] built: totalBones=" << bones.size()
+		<< " upperBones=" << upperCnt
+		<< " boundary(spine_01=0.5, spine_02=0.85)\n";
+	dumpLog();
 }
 
 // 장착 무기에 따라 idle/hit/4방향 run/공격 클립 이름 세트를 재구성한다.
@@ -289,8 +338,14 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 				WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			// 공격 오버레이 보간
-			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
+			// 공격 오버레이 보간 — 상하체 마스크 적용.
+			// 정지(tIdle_=1) 시 전 본 가중치가 tAttack_이 되어 종전 전신 공격과 동일하고,
+			// 이동 시 하체(mask=0)는 run 클립을 유지해 발 미끄러짐이 사라진다.
+			if (framesAttack) {
+				const float m = (sDebugUpperBodyMask && i < attackMask_.size()) ? attackMask_[i] : 1.f;
+				const float wAttack = tAttack_ * (m + (1.f - m) * tIdle_);
+				framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], wAttack);
+			}
 			// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
 			// death animation 보간

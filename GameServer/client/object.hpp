@@ -37,9 +37,22 @@ public:
 	Seconds runDuration() const { return targetClip(clipRunForward_)->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
+	// 디버그: 상하체 분리 마스크 on/off (M 키 토글, A/B 비교용).
+	// off면 공격 오버레이가 종전처럼 전신 lerp로 동작한다.
+	static inline bool sDebugUpperBodyMask = true;
+
 private:
+	// 공격 오버레이의 본별 상체 마스크를 구축한다 (spine_01 서브트리=1, 경계 소프트).
+	// setSkeleton 이후(init)에 1회 호출.
+	void buildAttackMask();
+
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
+
+	// 상하체 분리: 공격 오버레이 본별 가중치(상체=1, 하체=0, 경계 소프트).
+	// 이동 중 하체가 run 클립을 유지해 발 미끄러짐을 없앤다.
+	// 정지 시(tIdle_=1)에는 전신 공격(종전 동작)과 프레임 단위로 동일하다.
+	std::vector<float> attackMask_{};
 
 	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
 	// 무기별로 해석된 클립 이름(setWeaponType에서 갱신). death는 전 무기 공용 상수.
@@ -512,6 +525,13 @@ public:
 	mu::Vec3 MU_CALLCONV right() const { return right_; }
 	mu::Vec3 MU_CALLCONV up() const { return up_; }
 
+	// 조준 pitch(라디안, +아래). body orient(yaw 전용)와 분리된 상체 조준 상태 —
+	// orient에 pitch를 넣으면 캐릭터가 굴러버리므로 별도 채널로 관리한다.
+	// 로컬 플레이어는 카메라 pitch에서, 원격 플레이어는 S_MouseMove/S_SkillStart에서 갱신.
+	// AnimBlenderPlayer의 스파인 굽힘과 스킬 PlayVFX aim 합성이 읽는다. NPC/비플레이어는 항상 0.
+	void setAimPitch(float pitchRad) { aimPitch_ = pitchRad; }
+	float aimPitch() const { return aimPitch_; }
+
 	// Physics body accessor. PhysicsWorld 등록 시 &body()를 전달한다.
 	RigidBody&       body()       { return body_; }
 	const RigidBody& body() const { return body_; }
@@ -664,6 +684,9 @@ protected:
 	mu::Vec3 forward_{};
 	mu::Vec3 right_{};
 	mu::Vec3 up_{};
+
+	// 조준 pitch(라디안). setAimPitch/aimPitch 참조.
+	float aimPitch_ = 0.f;
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
