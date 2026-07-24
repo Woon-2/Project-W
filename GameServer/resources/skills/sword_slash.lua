@@ -45,7 +45,7 @@ local onHitRF = deepCopy(onHitDefBase)
 onHitRF.impulseDir = Vec3(0.52, 0.1, 0.85)
 
 local hitboxBase = {
-    attach             = BoneAttach("spine_01"),
+    attach             = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup           = 0,
     hitGroupCooldownMs = 350,

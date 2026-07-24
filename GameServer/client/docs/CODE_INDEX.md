@@ -233,6 +233,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
 | `Online::Game::onSkillHit(attackerId, targetId, newHp, assetId, targetVelocity)` | `online/onlineGame.cpp` | `S_SkillHit` 수신: 킬 시 `setRagdollInitVelocity(targetVelocity)` → `applyHit`(EvHit/EvDeath) → 타깃 위치에 hit VFX |
 | PlayVFX aim pitch 합성 | `client/skill/skillSystem.cpp #610` (서버 미러: `RoomServer/skill/skillSystem.cpp` PlayVFX) | `aim = eulerOff·rotateXH(aimPitch)·baseRot` — 캐스터 조준 pitch로 발사 프레임 기울임(활/완드 궤적). YawOnly/GroundSnap/본attach 제외. `C/S_MouseMove.pitchRadian`(연속)+`C/S_SkillStart.aimPitchRadian`(시전 스냅) — `docs/aimPitchUpperBodyMask.md` |
+| `AttachType::Body` (애니 독립 멜리) | `client/skill/skillSystem.cpp computeAttachTransform` Body 분기 (서버 미러 `RoomServer/skill/skillSystem.cpp`) | 본 rest 프레임(`toDress`)+aim pitch(본 원점 피벗), 재생 클립 무관. OBB는 BoneAttach와 동일 본-로컬 공간. resolveAttach/dispatch/updateHitboxes/collectActiveHitboxes가 Bone과 동일 경로로 Body 처리. lua `BodyAttach("spine_01",{pitch=})`. 플레이어 근접 8종이 사용 — `docs/aimPitchUpperBodyMask.md` §6.5 |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 > VFXParticle 히트박스의 클라/서버 결정론 동기화: `docs/particleHitboxDeterminism.md`.

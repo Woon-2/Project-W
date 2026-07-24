@@ -30,9 +30,10 @@ class DebugBVView;
 
 // Resolved attach handle (no strings; filled once at SpawnHitbox dispatch).
 struct ResolvedAttach {
-    AttachType      type    = AttachType::Bone;
-    i32t            boneIdx = -1;       // Bone: resolved bone index, -1 = root
-    ParticleSystem* pSystem = nullptr;  // VFXParticle: source particle system
+    AttachType      type         = AttachType::Bone;
+    i32t            boneIdx      = -1;       // Bone/Body: resolved bone index, -1 = root
+    ParticleSystem* pSystem      = nullptr;  // VFXParticle: source particle system
+    bool            applyAimPitch = true;    // Body: tilt the rest frame by the caster's aim pitch
 };
 
 struct AttachedHitbox {

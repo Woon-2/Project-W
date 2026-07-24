@@ -668,6 +668,14 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
             const int mx = (isDown(cur, 'D') ? 1 : 0) - (isDown(cur, 'A') ? 1 : 0);
             const int mz = (isDown(cur, 'W') ? 1 : 0) - (isDown(cur, 'S') ? 1 : 0);
             if (mx || mz) {
+                // Online parity (onlineGame.cpp processInputGame): once the caster moves,
+                // fold the orbited camera yaw into the body so it faces the look direction,
+                // then move relative to that facing. Holding RMB keeps orbiting (no turn).
+                if (!rmb && std::abs(static_cast<float>(camYaw_)) > 1e-5f) {
+                    caster->setOrient(caster->orient()
+                        * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), camYaw_));
+                    camYaw_ = mu::Radian(0.f);
+                }
                 const mu::Vec3 mdir = mu::Vec3(mu::NVec3(
                     static_cast<float>(mx) * caster->right() +
                     static_cast<float>(mz) * caster->forward()));
@@ -693,6 +701,13 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
                 caster->setVelocity(mu::Vec3(nx, v.y(), nz));
             }
         }
+    }
+
+    // Online parity: drive the caster's aim pitch from the camera pitch every frame so a
+    // camera look tilts the spine (AnimBlenderPlayer::onPostDress) and the Body-attach
+    // hitboxes. Players only -- monster casters keep aimPitch 0 (no spine aim rig).
+    if (casterKind_ == CharacterKind::Player) {
+        if (auto pc = casterObj()) pc->setAimPitch(static_cast<float>(camPitch_));
     }
 }
 

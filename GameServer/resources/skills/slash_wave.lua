@@ -46,7 +46,7 @@ local onHit = OnHit({
 skill:addEvent(120, "SpawnHitbox", {
     slot                = 0,
     localOBBs           = { OBB(0.0, -1.3, -0.85, 0.3, 1.2, 0.75, 0, 45, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 600,
@@ -56,7 +56,7 @@ skill:addEvent(120, "SpawnHitbox", {
 skill:addEvent(150, "SpawnHitbox", {
     slot                = 1,
     localOBBs           = { OBB(0.0, -1.45, 0, 0.3, 1.25, 1.15, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 600,
@@ -66,7 +66,7 @@ skill:addEvent(150, "SpawnHitbox", {
 skill:addEvent(180, "SpawnHitbox", {
     slot                = 2,
     localOBBs           = { OBB(0.0, -1.3, 0.85, 0.3, 1.2, 0.75, 0, -45, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 600,

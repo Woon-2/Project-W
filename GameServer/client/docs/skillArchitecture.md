@@ -265,6 +265,26 @@ bone.toDress                         — bind pose: bone-local → model space
 
 `localOBBs`의 center를 `boneWorldXform`으로 변환해 `worldOBBs`를 구성한다.
 
+### 애니메이션 독립 부착: `AttachType::Body` (2026-07-25)
+
+`BoneAttach`는 `finalXformData[i]`(**현재 재생 클립의 포즈**)를 타므로, 무기별로 공격 클립이 달라지면
+같은 본이라도 히트박스가 어긋난다. `BodyAttach(bone)`는 애니 포즈 대신 본의 **rest(bind) 프레임**만 쓰고
+조준 pitch를 본 원점 피벗으로 주입한다:
+
+```
+pivot = Vec4(0,0,0,1) · bone.toDress            — 본 rest 원점(model space)
+K     = translate(-pivot) · rotateXH(aimPitch) · translate(pivot)
+xform = bone.toDress · K · renderState().world  — finalXformData 미참조 → 클립 무관
+```
+
+- OBB는 `BoneAttach`와 **동일한 본-로컬 공간**에 저작(마이그레이션은 attach 한 줄 교체, OBB 값 불변).
+  pitch=0이면 `bone.toDress · world` = 종전 bind 포즈 위치와 동일.
+- `computeAttachTransform`만 타입 분기(Body=rest+pitch). resolveAttach/dispatch/updateHitboxes/
+  collectActiveHitboxes는 `Bone || Body` 공통 경로. 서버 미러(`RoomServer/skill/skillSystem.cpp`,
+  `owner.cameraPitch()`+`entityWorld`)로 클라 예측=서버 판정.
+- 플레이어 근접 8종이 `BodyAttach("spine_01")` 사용(chest 피벗). `pitch=false`=yaw 전용 평탄(예: `spikes` 링).
+- 무기 교체가 없는 NPC 공격 스킬은 `BoneAttach` 유지. 상세: `aimPitchUpperBodyMask.md` §6.5.
+
 ---
 
 ## 히트 그룹과 중복 제거

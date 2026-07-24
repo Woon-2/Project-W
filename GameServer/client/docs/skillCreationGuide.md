@@ -65,7 +65,8 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 
 | 부착 대상 | 기준 |
 |-----------|------|
-| `BoneAttach("bone")` | 해당 뼈의 월드 변환(애니메이션 추종). 스킬 대부분이 `spine_02` 사용 |
+| `BoneAttach("bone")` | 해당 뼈의 **현재 애니 포즈** 월드 변환(클립 추종). 무기별로 공격 클립이 바뀌면 히트박스가 어긋나므로 플레이어 근접엔 `BodyAttach` 권장 |
+| `BodyAttach("bone", {pitch=})` | **애니메이션 독립**: 해당 뼈의 rest(bind) 프레임 + 조준 pitch(본 원점 피벗). OBB는 BoneAttach와 동일 본-로컬 공간. 무기/클립 바뀌어도 고정. 플레이어 근접은 `BodyAttach("spine_01")`(chest 피벗). `pitch=false`=yaw 전용 평탄(지면 링 등). `docs/aimPitchUpperBodyMask.md` §6.5 |
 | `BoneAttach("")` / attach 생략 (PlayVFX) | 시전자 루트(캐릭터 위치+방향) |
 | `VFXParticleAttach(vfxId, sysIdx)` (히트박스) | 해당 이펙트의 파티클들 — 파티클마다 히트박스 1개 |
 | `GroundAttach{}` (히트박스) | **시전자 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=시전자 전방/우측 오프셋, center.y=표면 위 높이. 기본은 OBB별 독립 스냅(분산 융기). `anchor=N`이면 `SetGroundAnchor`로 등록한 앵커 프레임에 강체 배치(점 충돌). `align=true`면 지면 노멀로 기울임(분산 모드) |
