@@ -44,66 +44,53 @@ onHitRB.impulseDir = Vec3(0.97, 0.1, 0.2)
 local onHitRF = deepCopy(onHitDefBase)
 onHitRF.impulseDir = Vec3(0.52, 0.1, 0.85)
 
-local hitboxBase = {
-    attach             = BodyAttach("spine_01"),
-    applyAttachRotation = true,
-    hitGroup           = 0,
-    hitGroupCooldownMs = 350,
-    onHit              = onHitDefBase
-}
-
--- Right backward sweep segment
 skill:addEvent(200, "SpawnHitbox", {
-    slot      = 0,
-    localOBBs = { OBB(0.25, -1.45, 0.3, 0.15, 1.1, 0.8, 0, 0, 0) },
-    attach              = hitboxBase.attach,
-    applyAttachRotation = hitboxBase.applyAttachRotation,
-    hitGroup            = hitboxBase.hitGroup,
-    hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
+    slot                = 0,
+    localOBBs           = { OBB(0.3, -0.95, 1.2, 0.3, 1.1, 0.95, 0, -90, 0) },
+    attach              = BodyAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 600,
     onHit               = onHitRB
 })
 
--- Right forward sweep segment
 skill:addEvent(220, "SpawnHitbox", {
-    slot      = 1,
-    localOBBs = { OBB(1.4, -0.75, 0.3, 0.15, 1.3, 1.2, 0, 0, 0) },
-    attach              = hitboxBase.attach,
-    applyAttachRotation = hitboxBase.applyAttachRotation,
-    hitGroup            = hitboxBase.hitGroup,
-    hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
+    slot                = 1,
+    localOBBs           = { OBB(0.3, -1.6, 1.0, 0.3, 1.2, 0.75, 0, -42, 0) },
+    attach              = BodyAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 600,
     onHit               = onHitRF
 })
 
--- forward sweep segment
 skill:addEvent(240, "SpawnHitbox", {
-    slot      = 2,
-    localOBBs = { OBB(1.6, 0.0, 0.3, 0.15, 1.55, 1.0, 0, 0, 0) },
-    attach              = hitboxBase.attach,
-    applyAttachRotation = hitboxBase.applyAttachRotation,
-    hitGroup            = hitboxBase.hitGroup,
-    hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
+    slot                = 2,
+    localOBBs           = { OBB(0.3, -2.0, 0, 0.3, 1.05, 1.3, 0, 0, 0) },
+    attach              = BodyAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 600,
     onHit               = onHitF
 })
 
--- Left forward sweep segment
 skill:addEvent(260, "SpawnHitbox", {
-    slot      = 3,
-    localOBBs = { OBB(1.4, 0.75, 0.3, 0.15, 1.3, 1.2, 0, 0, 0) },
-    attach              = hitboxBase.attach,
-    applyAttachRotation = hitboxBase.applyAttachRotation,
-    hitGroup            = hitboxBase.hitGroup,
-    hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
+    slot                = 3,
+    localOBBs           = { OBB(0.3, -1.6, -1.0, 0.3, 1.2, 0.75, 0, 42, 0) },
+    attach              = BodyAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 600,
     onHit               = onHitLF
 })
 
--- Left backward sweep segment
 skill:addEvent(280, "SpawnHitbox", {
-    slot      = 4,
-    localOBBs = { OBB(0.25, 1.45, 0.3, 0.15, 1.1, 0.8, 77, 0, 0) },
-    attach              = hitboxBase.attach,
-    applyAttachRotation = hitboxBase.applyAttachRotation,
-    hitGroup            = hitboxBase.hitGroup,
-    hitGroupCooldownMs  = hitboxBase.hitGroupCooldownMs,
+    slot                = 4,
+    localOBBs           = { OBB(0.3, -0.95, -1.2, 0.3, 1.1, 0.95, 0, 90, 0) },
+    attach              = BodyAttach("spine_01"),
+    applyAttachRotation = true,
+    hitGroup            = 0,
+    hitGroupCooldownMs  = 600,
     onHit               = onHitLB
 })
 
