@@ -880,8 +880,15 @@ void Room::onArenaBossEnter(Zone& zone, uint32 playerId) {
 	FinalBoss* raw = finalBoss_.get();
 	raw->body().snapToCurrent();
 	physicsWorld_.registerBody(&raw->body(), [raw]() { raw->rebuildBodyBVH(); });
+	physicsWorld_.setTraceBody(&raw->body());   // [TEMP DIAGNOSTIC] levitation trace
 	registerObject(raw);
 	npcBodyOwner_[&raw->body()] = raw;
+
+	// [TEMP DIAGNOSTIC] baseline for the trace: model scale drives BVH size, which
+	// drives contact depth. Logged once so the trace output can be read in context.
+	std::cout << "[TRACE-Y] boss spawned at y=" << spawnPos.y()
+	          << " scale=(" << raw->scale().x() << ", " << raw->scale().y()
+	          << ", " << raw->scale().z() << ")\n";
 
 	std::vector<ObjectInfo> spawnInfos;
 	spawnInfos.push_back(ObjectInfo{
