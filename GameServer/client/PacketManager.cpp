@@ -270,7 +270,9 @@ void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 
 void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
 	auto sNpcMvPkt = reinterpret_cast<SNpcMovePacket*>(buffer);
-	INet::ClientApp::onlineGame()->moveGoblin(sNpcMvPkt->npcId, sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
+	INet::ClientApp::onlineGame()->moveGoblin(
+		sNpcMvPkt->npcId, sNpcMvPkt->statusFlags,
+		sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
 }
 
 void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
@@ -281,7 +283,7 @@ void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
 
 	for (uint16 i = 0; i < list.count(); ++i) {
 		const auto& info = list[i];
-		game->moveGoblin(info.npcId, info.pos, info.orient, info.velocity);
+		game->moveGoblin(info.npcId, info.statusFlags, info.pos, info.orient, info.velocity);
 	}
 }
 

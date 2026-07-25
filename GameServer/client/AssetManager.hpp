@@ -43,6 +43,7 @@ public:
 	const Model* playerWeaponModel(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
+	const Texture* confusionStatusIcon() const { return &confusionStatusIcon_; }
 	const Texture* tacticalZoneTitleBanner() const { return &tacticalZoneTitleBanner_; }
 	const Texture* monsterHpFrame() const { return &monsterHpFrame_; }
 	const Texture* monsterHpBar() const { return &monsterHpBar_; }
@@ -180,6 +181,7 @@ private:
 	bool inventoryItemIconsLoaded_ = false;
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
+	Texture confusionStatusIcon_{};
 	Texture tacticalZoneTitleBanner_{};
 	Texture monsterHpFrame_{};
 	Texture monsterHpBar_{};

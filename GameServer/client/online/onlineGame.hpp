@@ -103,7 +103,7 @@ public:
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	void rotatePlayer(uint16 playerId, float yawRad, float pitchRad);
 
-	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
 	// 서버가 전술 차단벽(barrier)을 토글. npcIds는 플레이어 차단+impulse 면역,
 	// impulseOnlyNpcId는 차단벽 등록 없이 impulse 면역만 설정한다.
@@ -208,6 +208,8 @@ private:
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
+	void setNpcStatusFlags(uint16 npcId, uint8 statusFlags);
+	void updateNpcStatusIcons(float deltaTimeSec);
 	void setupBossHpHud();
 	void showBossHpHud();
 	void hideBossHpHud();
@@ -665,6 +667,14 @@ private:
 	std::unordered_map<uint16, MonsterHpEntry> slimeHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> bossHpBars_{};
+
+	struct NpcStatusIconEntry {
+		UI::Image* icon = nullptr;   // owned by uiManager_
+		uint8      statusFlags = npcStatusMask(NpcStatusFlag::None);
+		float      phaseOffset = 0.f;
+	};
+	std::unordered_map<uint16, NpcStatusIconEntry> npcStatusIcons_{};
+	float npcStatusIconElapsed_ = 0.f;
 
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_

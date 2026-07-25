@@ -179,6 +179,13 @@ static constexpr float   kBossHpEmblemX              = 42.f;
 static constexpr float   kBossHpEmblemY              = 22.f;
 static constexpr float   kBossHpEmblemSize           = 84.f;
 static const DirectX::XMFLOAT4 kNamedMonsterHpColor{ 0.62f, 0.24f, 0.90f, 1.f };
+static constexpr float   kConfusionIconBaseSize      = 40.f;
+static constexpr float   kConfusionIconWorldGap      = 0.65f;
+static constexpr float   kConfusionIconPulseAmount   = 0.08f;
+static constexpr float   kConfusionIconPulseHz       = 2.0f;
+static constexpr float   kConfusionIconBobPixels     = 4.f;
+static constexpr float   kConfusionIconBobHz         = 1.5f;
+static constexpr float   kTwoPi                      = 6.28318530718f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -2800,6 +2807,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 	// not looked up by id, so a shared sentinel is safe and needs no per-corpse allocation.
 	obj->setId(kDetachedCorpseId);
 	detachedNpcIds_.insert(npcId);
+	setNpcStatusFlags(npcId, npcStatusMask(NpcStatusFlag::None));
 
 	// Freeze the detached body. It no longer receives server moves (advanceState), so the
 	// stale prev != curr left by the death-frame move (e.g. knockback launching curr up
@@ -3687,7 +3695,7 @@ void Game::rotatePlayer(uint16 playerId, float yawRad, float pitchRad) {
 	player->setAimPitch(pitchRad);
 }
 
-void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void Game::moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto it = idMonsterMap_.find(npcId);
 	if (it == idMonsterMap_.end()) {
 		// Detached as a corpse (dead, awaiting respawn): in-flight server moves for it are
@@ -3707,6 +3715,121 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	// Restart network interpolation for this move (mirrors movePlayer). Without this the
 	// monster would interpolate on the physics clock and oscillate between prev/curr.
 	monster->netInterpAcc_ = 0s;
+	setNpcStatusFlags(npcId, statusFlags);
+}
+
+void Game::setNpcStatusFlags(uint16 npcId, uint8 statusFlags) {
+	auto entryIt = npcStatusIcons_.find(npcId);
+	const bool confused = hasNpcStatusFlag(statusFlags, NpcStatusFlag::Confused);
+
+	if (!confused) {
+		if (entryIt != npcStatusIcons_.end()) {
+			entryIt->second.statusFlags = statusFlags;
+			if (entryIt->second.icon) entryIt->second.icon->visible = false;
+		}
+		return;
+	}
+
+	if (entryIt == npcStatusIcons_.end()) {
+		auto* icon = static_cast<UI::Image*>(
+			uiManager_.root()->addChild(std::make_unique<UI::Image>())
+		);
+		icon->name    = "npcConfusionStatusIcon";
+		icon->anchor  = UI::Anchors::TopLeft;
+		icon->pivot   = UI::Pivots::Center;
+		icon->width   = UI::DimValue::px(kConfusionIconBaseSize);
+		icon->height  = UI::DimValue::px(kConfusionIconBaseSize);
+		icon->texture = assetManager_.confusionStatusIcon();
+		icon->zOrder  = 50;
+		icon->visible = false;
+
+		const float phaseOffset =
+			(static_cast<float>(npcId % 31u) / 31.f) * kTwoPi;
+		entryIt = npcStatusIcons_.emplace(
+			npcId,
+			NpcStatusIconEntry{
+				.icon = icon,
+				.statusFlags = statusFlags,
+				.phaseOffset = phaseOffset
+			}
+		).first;
+	}
+	else {
+		entryIt->second.statusFlags = statusFlags;
+	}
+}
+
+void Game::updateNpcStatusIcons(float deltaTimeSec) {
+	npcStatusIconElapsed_ += deltaTimeSec;
+	if (npcStatusIconElapsed_ > 3600.f) {
+		npcStatusIconElapsed_ = std::fmod(npcStatusIconElapsed_, 3600.f);
+	}
+
+	auto resolveWorldYOffset = [&](uint16 npcId) {
+		if (auto it = goblinHpBars_.find(npcId); it != goblinHpBars_.end())
+			return it->second.worldYOffset;
+
+		auto fromMonsterBars = [npcId](const auto& bars, float& out) {
+			if (auto it = bars.find(npcId); it != bars.end()) {
+				out = it->second.worldYOffset;
+				return true;
+			}
+			return false;
+		};
+
+		float result = 2.5f;
+		if (fromMonsterBars(snakeHpBars_, result))    return result;
+		if (fromMonsterBars(mushroomHpBars_, result)) return result;
+		if (fromMonsterBars(bomberHpBars_, result))   return result;
+		if (fromMonsterBars(birdyHpBars_, result))    return result;
+		if (fromMonsterBars(slimeHpBars_, result))    return result;
+		if (fromMonsterBars(treantHpBars_, result))   return result;
+		if (fromMonsterBars(bossHpBars_, result))     return result;
+		return result;
+	};
+
+	const Texture* confusionTexture = assetManager_.confusionStatusIcon();
+	for (auto& [npcId, entry] : npcStatusIcons_) {
+		if (!entry.icon) continue;
+		entry.icon->visible = false;
+
+		if (!hasNpcStatusFlag(entry.statusFlags, NpcStatusFlag::Confused) ||
+			!confusionTexture || !confusionTexture->res) {
+			continue;
+		}
+
+		auto monsterIt = idMonsterMap_.find(npcId);
+		if (monsterIt == idMonsterMap_.end()) continue;
+		Object* monster = monsterIt->second;
+		if (!monster || monster->hidden() || monster->isHiddenByOrb() ||
+			monster->isDead() || monster->hp() <= 0) {
+			continue;
+		}
+
+		const mu::Vec3 iconWorldPos = monster->renderState().pos
+			+ mu::Vec3{ 0.f, resolveWorldYOffset(npcId) + kConfusionIconWorldGap, 0.f };
+		float screenX{}, screenY{};
+		if (!worldToScreen(
+				iconWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				screenX, screenY)) {
+			continue;
+		}
+
+		const float phase = entry.phaseOffset;
+		const float pulse = 1.f + kConfusionIconPulseAmount * std::sinf(
+			npcStatusIconElapsed_ * kTwoPi * kConfusionIconPulseHz + phase);
+		const float bob = kConfusionIconBobPixels * std::sinf(
+			npcStatusIconElapsed_ * kTwoPi * kConfusionIconBobHz + phase);
+		const float size = kConfusionIconBaseSize * pulse;
+
+		entry.icon->width   = UI::DimValue::px(size);
+		entry.icon->height  = UI::DimValue::px(size);
+		entry.icon->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(screenX));
+		entry.icon->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(screenY) - bob);
+		entry.icon->visible = true;
+	}
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
@@ -3755,6 +3878,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	// This npc id is live again — clear any "detached as corpse" mark (covers all three
 	// respawn sub-paths below: revive-in-place / pool reuse / fresh create).
 	detachedNpcIds_.erase(npcId);
+	setNpcStatusFlags(npcId, npcStatusMask(NpcStatusFlag::None));
 
 	// Still active (e.g. temporarily hidden via S_NpcHide, never killed): revive in place.
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
@@ -4310,6 +4434,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		const float dtSec = std::chrono::duration<float>(deltaTime).count();
+		updateNpcStatusIcons(dtSec);
 		for (auto& [id, entry] : goblinHpBars_) {
 			if (!entry.goblin || entry.goblin->hidden() || entry.goblin->hp() <= 0 || entry.goblin->maxHp() <= 0) {
 				entry.hpBar->visible = false;
