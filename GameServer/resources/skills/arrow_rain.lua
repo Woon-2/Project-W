@@ -7,7 +7,7 @@ skill.name             = "ArrowRain"
 skill.weapon           = "bow"
 skill.dialSlot         = 1
 skill.chargeCost       = 5
-skill.cooldownMs       = 2400
+skill.cooldownMs       = 2020
 skill.totalDurationMs  = 2000
 skill.interruptible    = true
 

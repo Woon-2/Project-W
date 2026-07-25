@@ -7,7 +7,7 @@ skill.name             = "SlashWave"
 skill.weapon           = "sword"
 skill.dialSlot         = 0
 skill.chargeCost       = 3
-skill.cooldownMs       = 1400
+skill.cooldownMs       = 1020
 skill.totalDurationMs  = 1000
 skill.interruptible    = true
 

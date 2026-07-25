@@ -7,7 +7,7 @@ skill.name             = "EnergyExplosionArrow"
 skill.weapon           = "bow"
 skill.dialSlot         = 2
 skill.chargeCost       = 9
-skill.cooldownMs       = 3800
+skill.cooldownMs       = 3420
 skill.totalDurationMs  = 3400
 skill.interruptible    = true
 

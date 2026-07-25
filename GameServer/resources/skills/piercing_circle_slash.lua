@@ -7,7 +7,7 @@ skill.name             = "PiercingCircleSlash"
 skill.weapon           = "spear"
 skill.dialSlot         = 1
 skill.chargeCost       = 6
-skill.cooldownMs       = 1400
+skill.cooldownMs       = 1020
 skill.totalDurationMs  = 1000
 skill.interruptible    = true
 

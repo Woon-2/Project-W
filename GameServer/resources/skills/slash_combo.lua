@@ -7,7 +7,7 @@ skill.name             = "SlashCombo"
 skill.weapon           = "sword"
 skill.dialSlot         = 2
 skill.chargeCost       = 8
-skill.cooldownMs       = 2050
+skill.cooldownMs       = 2020
 skill.totalDurationMs  = 2000
 skill.interruptible    = true
 
