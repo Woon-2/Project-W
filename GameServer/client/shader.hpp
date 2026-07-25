@@ -1310,7 +1310,12 @@ struct PerDrawcallData {           // 160B
     // matches the SrcBlend=SRC_ALPHA non-additive PSO where the hardware blend
     // already applies alpha -- premultiplying again would double-darken it).
     u32t          premultiplyAlpha;    // 4B
-    XMFLOAT3      pad0;                // 12B
+
+    // 0 = sample the bound texture unchanged (default). 1 = multiply in a procedural
+    // flowing-chevron mask (arrows pointing toward the trail head / goal) on top of
+    // the texture -- used by the path-guidance ribbon for a stronger directional read.
+    u32t          patternMode;         // 4B
+    XMFLOAT2      pad0;                // 8B
 };
 
 // b1 — per-frame.

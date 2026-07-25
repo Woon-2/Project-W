@@ -13,6 +13,60 @@ void Object::setModel(const Model* pModel){
 	pModel_ = pModel;
 	modelBaseScale_ = pModel->baseScale;   // model's own scale (unbaked); applied via body scale
 	applyCompositeScale();
+
+	// Build the aim-pitch spine chain (spine_01..03) and per-bone subtree depth.
+	// The chain is nested (spine_01 ⊃ spine_02 ⊃ spine_03), so depth = number of
+	// chain bones among the bone's ancestors-or-self. Missing bones cut the chain.
+	spineChainIdx_ = { -1, -1, -1 };
+	spineDepth_.clear();
+	const ServerSkeleton& sk = pModel->skeleton;
+	if (!sk.empty()) {
+		static constexpr const char* kSpineChain[] = { "spine_01", "spine_02", "spine_03" };
+		spineDepth_.assign(sk.bones.size(), 0);
+		for (int c = 0; c < 3; ++c) {
+			auto it = sk.nameToIdx.find(kSpineChain[c]);
+			if (it == sk.nameToIdx.end()) break;
+			spineChainIdx_[c] = it->second;
+		}
+		for (std::size_t b = 0; b < sk.bones.size(); ++b) {
+			uint8 depth = 0;
+			for (int i = static_cast<int>(b); i >= 0; i = sk.bones[static_cast<std::size_t>(i)].parentIdx) {
+				for (int c = 0; c < 3; ++c) {
+					if (spineChainIdx_[c] == i)
+						depth = std::max<uint8>(depth, static_cast<uint8>(c + 1));
+				}
+			}
+			spineDepth_[b] = depth;
+		}
+	}
+}
+
+// Mirrors the client's AnimBlenderPlayer::onPostDress in model (dress) space:
+// rotates each spine-chain subtree around the chain bone's pivot by
+// cameraPitch()/N about the local X axis, accumulating down the chain.
+// Applied before the entity world transform, so bone-attached hitboxes
+// (BoneAttach("spine_01") + applyAttachRotation) follow the pitched pose
+// the caster predicted with.
+void Object::applySpinePitch(std::vector<mu::Mat4x4>& boneModelXforms) const {
+	int chainCnt = 0;
+	for (int c = 0; c < 3; ++c) {
+		if (spineChainIdx_[c] >= 0) ++chainCnt;
+	}
+	if (chainCnt == 0) return;
+	if (spineDepth_.size() != boneModelXforms.size()) return;
+
+	const auto perJoint = mu::Radian(cameraPitch() / static_cast<float>(chainCnt));
+
+	for (int c = 0; c < chainCnt; ++c) {
+		const int k = spineChainIdx_[c];
+		// Pivot from the CURRENT matrix (previous chain steps already applied).
+		const mu::Vec3 pivot = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * boneModelXforms[static_cast<std::size_t>(k)]);
+		const mu::Mat4x4 K = mu::translate(-pivot) * mu::rotateXH(perJoint) * mu::translate(pivot);
+		for (std::size_t b = 0; b < boneModelXforms.size(); ++b) {
+			if (spineDepth_[b] > c)
+				boneModelXforms[b] = boneModelXforms[b] * K;
+		}
+	}
 }
 
 void Object::update(Milliseconds deltaTime) {
@@ -72,12 +126,27 @@ mu::Vec3 MU_CALLCONV Object::calcSeparationForce( const std::vector<mu::Vec3>& n
 }
 
 void Object::updateAnimBones(Seconds dt) {
+	// Locomotion clips play back proportionally to ground speed, mirroring the client's
+	// foot-slide reduction. The bone poses computed below feed the hit BVH, so if only the
+	// client scaled playback a walking monster's limbs would sit where the server thinks
+	// they are, not where the player sees them. Every other clip stays at 1x -- skill
+	// timelines and hit windows assume real-time playback.
+	animController_.setPlaybackRate(
+		(animRefSpeed_ > 0.f && animController_.isPlayingLocomotion())
+			? ServerAnimState::locomotionRate(horizontalSpeed(), animRefSpeed_, animBandEnd_)
+			: 1.f);
+
 	animController_.advance(dt.count());
 	if (!pModel_ || pModel_->skeleton.empty() || !animController_.clip) return;
 
 	const int boneCnt = pModel_->skeleton.boneCount();
 	std::vector<mu::Mat4x4> boneModelXforms(boneCnt);
 	animController_.computeBoneModelXforms(pModel_->skeleton, boneModelXforms);
+
+	// Aim-pitch spine recomposition (players only in practice — NPCs keep 0).
+	if (cameraPitch() != 0.f && spineChainIdx_[0] >= 0) {
+		applySpinePitch(boneModelXforms);
+	}
 
 	// Includes body scale so bone-attached BV centers grow with the model (client parity).
 	const mu::Mat4x4 entityWorld = mu::Mat4x4(mu::scale(body_.scale()))

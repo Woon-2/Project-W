@@ -12,11 +12,40 @@
 namespace Editor {
 
 namespace {
-constexpr float kCasterAccel    = 40.f;   // m/s^2 (follow-mode WASD)
-constexpr float kCasterMaxSpeed = 8.f;    // m/s
+constexpr float kCasterMaxSpeed = 8.f;    // m/s (follow-mode WASD)
 constexpr float kFreeBaseSpeed  = 6.f;    // m/s (free-fly)
 constexpr float kFreeFastMult   = 3.f;    // shift multiplier
 constexpr float kPitchLimit     = 1.5f;   // radians (~86 deg)
+
+// --- top-bar layout (UIManager layout space is 1024x768) ---------------------
+//   Character      Weapon     Skill        <- captions (kCaptionY)
+//  [Player     v][Sword    v][SlashWave v] <- dropdown headers (kRowY)
+//   status line ...                        <- kStatusY
+//  +-- edit panel ---------------------+   <- kPanelY
+// The row ends at x=528, well clear of the top-right help label (starts at 652).
+constexpr float kMarginX     = 12.f;
+constexpr float kCaptionY    = 8.f;
+constexpr float kCaptionH    = 14.f;
+constexpr float kRowY        = 24.f;
+constexpr float kRowH        = 32.f;    // == UI::Dropdown::headerHeight
+constexpr float kColGap      = 8.f;
+constexpr float kColWChar    = 150.f;
+constexpr float kColWWeapon  = 130.f;
+constexpr float kColWSkill   = 220.f;
+constexpr float kColXChar    = kMarginX;
+constexpr float kColXWeapon  = kColXChar   + kColWChar   + kColGap;
+constexpr float kColXSkill   = kColXWeapon + kColWWeapon + kColGap;
+constexpr float kStatusY     = kRowY + kRowH + 6.f;
+constexpr float kPanelY      = kStatusY + 26.f;
+// Dropdown::setup() forces zOrder to 100, so these are applied AFTER setup().
+// All three must stay above the edit panel (zOrder 0) so open lists draw over it.
+constexpr int   kZOrderChar   = 102;
+constexpr int   kZOrderWeapon = 101;
+constexpr int   kZOrderSkill  = 100;
+
+// Weapon dropdown items. The item index maps 1:1 onto PlayerWeaponType
+// (Katana / SpearHook / CrystalWand / HeavyArrow) -- keep the order in sync.
+const std::vector<std::string> kWeaponItems = { "Sword", "Spear", "Wand", "Bow" };
 
 inline bool isDown(const BYTE* s, int k)            { return (s[k] & 0x80) != 0; }
 inline bool isPressed(const BYTE* c, const BYTE* p, int k) {
@@ -54,6 +83,10 @@ void Controller::init(const InitRefs& refs) {
     if (goblin_) { goblinSpawnPos_ = goblin_->pos(); goblinSpawnOrient_ = goblin_->orient(); }
 
     buildUI();
+    // Equip the default weapon before the first skill list is built: the player
+    // otherwise starts empty-handed with a stale clip set (standalone had no
+    // weapon wiring at all before the weapon dropdown was added).
+    applyWeaponToPlayer();
     selectCharacter(0);
 
     gSharedLog << "[Editor] Skill editor ready.\n"
@@ -66,33 +99,65 @@ void Controller::init(const InitRefs& refs) {
 void Controller::buildUI() {
     auto* root = uiManager_->root();
 
-    characterDropdown_ = static_cast<UI::Dropdown*>(
-        root->addChild(std::make_unique<UI::Dropdown>()));
-    characterDropdown_->name    = "editorCharacterDropdown";
-    characterDropdown_->anchor  = UI::Anchors::TopLeft;
-    characterDropdown_->pivot   = UI::Pivots::TopLeft;
-    characterDropdown_->offsetX = UI::DimValue::px(12.f);
-    characterDropdown_->offsetY = UI::DimValue::px(12.f);
-    characterDropdown_->width   = UI::DimValue::px(180.f);
-    characterDropdown_->zOrder  = 100;
+    // Caption above each dropdown column.
+    auto addCaption = [root](const char* name, float x, float w, const wchar_t* text) {
+        auto* lbl = static_cast<UI::Label*>(root->addChild(std::make_unique<UI::Label>()));
+        lbl->name    = name;
+        lbl->anchor  = UI::Anchors::TopLeft;
+        lbl->pivot   = UI::Pivots::TopLeft;
+        lbl->offsetX = UI::DimValue::px(x);
+        lbl->offsetY = UI::DimValue::px(kCaptionY);
+        lbl->width   = UI::DimValue::px(w);
+        lbl->height  = UI::DimValue::px(kCaptionH);
+        lbl->setFontSize(12.f);
+        lbl->setTextColor(0.72f, 0.76f, 0.85f, 1.f);
+        lbl->setText(text);
+        return lbl;
+    };
+
+    // Dropdown shared setup. zOrder must be assigned AFTER setup() (it forces 100).
+    auto addDropdown = [root](const char* name, float x, float w,
+                              std::vector<std::string> items, int zOrder) {
+        auto* dd = static_cast<UI::Dropdown*>(
+            root->addChild(std::make_unique<UI::Dropdown>()));
+        dd->name    = name;
+        dd->anchor  = UI::Anchors::TopLeft;
+        dd->pivot   = UI::Pivots::TopLeft;
+        dd->offsetX = UI::DimValue::px(x);
+        dd->offsetY = UI::DimValue::px(kRowY);
+        dd->width   = UI::DimValue::px(w);
+        dd->setup(std::move(items));
+        dd->zOrder  = zOrder;
+        return dd;
+    };
+
+    addCaption("editorCaptionCharacter", kColXChar,  kColWChar,  L"Character");
+    addCaption("editorCaptionSkill",     kColXSkill, kColWSkill, L"Skill");
+    captionWeapon_ = addCaption("editorCaptionWeapon", kColXWeapon, kColWWeapon, L"Weapon");
+
     {
         std::vector<std::string> labels;
         for (const auto& def : kCharacterSkillMap)
             labels.emplace_back(def.label);
-        characterDropdown_->setup(std::move(labels));
+        characterDropdown_ = addDropdown("editorCharacterDropdown", kColXChar, kColWChar,
+                                         std::move(labels), kZOrderChar);
     }
     characterDropdown_->onSelectionChanged = [this](int idx) { selectCharacter(idx); };
 
-    // Skill dropdown sits to the RIGHT of the character dropdown (side-by-side).
-    // (re)built per character; created in rebuildSkillDropdown().
+    weaponDropdown_ = addDropdown("editorWeaponDropdown", kColXWeapon, kColWWeapon,
+                                  kWeaponItems, kZOrderWeapon);
+    weaponDropdown_->onSelectionChanged = [this](int idx) { selectWeapon(idx); };
+
+    // Skill dropdown occupies the third column; it is (re)built per character /
+    // weapon selection in rebuildSkillDropdown().
 
     statusLabel_ = static_cast<UI::Label*>(root->addChild(std::make_unique<UI::Label>()));
     statusLabel_->name    = "editorStatus";
     statusLabel_->anchor  = UI::Anchors::TopLeft;
     statusLabel_->pivot   = UI::Pivots::TopLeft;
-    statusLabel_->offsetX = UI::DimValue::px(12.f);
-    statusLabel_->offsetY = UI::DimValue::px(52.f);
-    statusLabel_->width   = UI::DimValue::px(560.f);
+    statusLabel_->offsetX = UI::DimValue::px(kMarginX);
+    statusLabel_->offsetY = UI::DimValue::px(kStatusY);
+    statusLabel_->width   = UI::DimValue::px(620.f);
     statusLabel_->height  = UI::DimValue::px(22.f);
     statusLabel_->setFontSize(15.f);
     statusLabel_->setTextColor(0.6f, 1.f, 0.6f, 1.f);
@@ -131,8 +196,8 @@ void Controller::buildUI() {
     panel_->name    = "editorPanel";
     panel_->anchor  = UI::Anchors::TopLeft;
     panel_->pivot   = UI::Pivots::TopLeft;
-    panel_->offsetX = UI::DimValue::px(12.f);
-    panel_->offsetY = UI::DimValue::px(78.f);
+    panel_->offsetX = UI::DimValue::px(kMarginX);
+    panel_->offsetY = UI::DimValue::px(kPanelY);
     panel_->width   = UI::DimValue::px(420.f);
     panel_->height  = UI::DimValue::px(kMaxPanelLines * 18.f + 10.f);
     panel_->colorTint = { 0.05f, 0.05f, 0.08f, 0.78f };
@@ -289,8 +354,8 @@ void Controller::clearHitboxSelection() {
 
 void Controller::selectCharacter(int idx) {
     if (idx < 0 || idx >= (int)kCharacterSkillMap.size()) return;
-    const CharacterDef& def = kCharacterSkillMap[idx];
-    casterKind_ = def.kind;
+    characterIdx_ = idx;
+    casterKind_   = kCharacterSkillMap[idx].kind;
 
     if (casterKind_ == CharacterKind::Player) { casterId_ = 0; targetId_ = 1; }
     else                                      { casterId_ = 1; targetId_ = 0; }
@@ -305,17 +370,50 @@ void Controller::selectCharacter(int idx) {
     // Follow camera tracks the caster.
     if (camera_) camera_->setTargetObject(casterObj());
 
-    // Build the skill list from this character's mapping, keeping only skills
-    // that actually exist in the registry.
+    // The weapon column only applies to the player rig; hiding it also removes it
+    // from hit-testing (UIManager skips invisible subtrees).
+    const bool isPlayer = (casterKind_ == CharacterKind::Player);
+    if (weaponDropdown_) weaponDropdown_->visible = isPlayer;
+    if (captionWeapon_)  captionWeapon_->visible  = isPlayer;
+
+    rebuildSkillList();
+}
+
+void Controller::selectWeapon(int idx) {
+    if (idx < 0 || idx >= (int)kWeaponItems.size()) return;
+    weapon_ = static_cast<PlayerWeaponType>(idx);
+
+    applyWeaponToPlayer();
+
+    // The skill list is weapon-scoped for the player; monster lists are unaffected.
+    if (casterKind_ == CharacterKind::Player) rebuildSkillList();
+}
+
+void Controller::applyWeaponToPlayer() {
+    if (!player_ || !assetManager_) return;
+    equipPlayerWeapon(*player_, *assetManager_, weapon_);
+}
+
+void Controller::rebuildSkillList() {
+    const CharacterDef& def = kCharacterSkillMap[characterIdx_];
+    const bool isPlayer = (casterKind_ == CharacterKind::Player);
+
+    // Player: keep the selected weapon's skills, then the weapon-less ones
+    // (SkillAsset::weaponType == 0xFF, e.g. AoESlashGreen / TornadoShot) so they
+    // stay reachable from any weapon. Other weapons' skills are dropped.
     skillNames_.clear();
-    std::vector<std::string> labels;
+    std::vector<std::string> weaponless;
     for (std::string_view s : def.skills) {
-        if (skillSystem_ && skillSystem_->findAsset(s)) {
-            skillNames_.emplace_back(s);
-            labels.emplace_back(s);
-        }
+        const SkillAsset* asset = skillSystem_ ? skillSystem_->findAsset(s) : nullptr;
+        if (!asset) continue;   // not compiled -> not selectable
+        if (!isPlayer) { skillNames_.emplace_back(s); continue; }
+
+        if (asset->weaponType == static_cast<u8t>(weapon_)) skillNames_.emplace_back(s);
+        else if (asset->weaponType == 0xFFu)                weaponless.emplace_back(s);
     }
-    rebuildSkillDropdown(labels);
+    skillNames_.insert(skillNames_.end(), weaponless.begin(), weaponless.end());
+
+    rebuildSkillDropdown(skillNames_);
 
     if (!skillNames_.empty()) selectSkill(0);
     else {
@@ -343,11 +441,11 @@ void Controller::rebuildSkillDropdown(const std::vector<std::string>& items) {
     skillDropdown_->name    = "editorSkillDropdown";
     skillDropdown_->anchor  = UI::Anchors::TopLeft;
     skillDropdown_->pivot   = UI::Pivots::TopLeft;
-    skillDropdown_->offsetX = UI::DimValue::px(200.f);  // right of the character dropdown
-    skillDropdown_->offsetY = UI::DimValue::px(12.f);
-    skillDropdown_->width   = UI::DimValue::px(180.f);
-    skillDropdown_->zOrder  = 99;
+    skillDropdown_->offsetX = UI::DimValue::px(kColXSkill);   // third column of the top row
+    skillDropdown_->offsetY = UI::DimValue::px(kRowY);
+    skillDropdown_->width   = UI::DimValue::px(kColWSkill);
     skillDropdown_->setup(items.empty() ? std::vector<std::string>{ "(no skills)" } : items);
+    skillDropdown_->zOrder  = kZOrderSkill;   // setup() forces 100; set it afterwards
     skillDropdown_->onSelectionChanged = [this](int idx) { selectSkill(idx); };
 }
 
@@ -570,12 +668,31 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
             const int mx = (isDown(cur, 'D') ? 1 : 0) - (isDown(cur, 'A') ? 1 : 0);
             const int mz = (isDown(cur, 'W') ? 1 : 0) - (isDown(cur, 'S') ? 1 : 0);
             if (mx || mz) {
+                // Online parity (onlineGame.cpp processInputGame): once the caster moves,
+                // fold the orbited camera yaw into the body so it faces the look direction,
+                // then move relative to that facing. Holding RMB keeps orbiting (no turn).
+                if (!rmb && std::abs(static_cast<float>(camYaw_)) > 1e-5f) {
+                    caster->setOrient(caster->orient()
+                        * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), camYaw_));
+                    camYaw_ = mu::Radian(0.f);
+                }
                 const mu::Vec3 mdir = mu::Vec3(mu::NVec3(
                     static_cast<float>(mx) * caster->right() +
                     static_cast<float>(mz) * caster->forward()));
+
+                // The integrator damps horizontal velocity by (1 - linearDamping*dt)
+                // every step, so sustained speed under constant input is
+                // accel / linearDamping -- the acceleration has to be derived from the
+                // caster's own damping or it silently tops out far below the cap.
+                // (A flat 40 m/s^2 against the player's damping of 12 capped the caster
+                // at 3.3 m/s, which also pinned the idle/run blend weight at ~0.35 and
+                // kept the locomotion animation permanently half-idle.)
+                const float accel = kCasterMaxSpeed
+                    * std::max(1.f, caster->body().linearDamping());
+
                 const mu::Vec3 v = caster->velocity();
-                float nx = v.x() + mdir.x() * kCasterAccel * dtSec;
-                float nz = v.z() + mdir.z() * kCasterAccel * dtSec;
+                float nx = v.x() + mdir.x() * accel * dtSec;
+                float nz = v.z() + mdir.z() * accel * dtSec;
                 const float h2 = nx * nx + nz * nz;
                 if (h2 > kCasterMaxSpeed * kCasterMaxSpeed) {
                     const float s = kCasterMaxSpeed / std::sqrt(h2);
@@ -584,6 +701,13 @@ void Controller::handleInput(const BYTE* cur, const BYTE* prev,
                 caster->setVelocity(mu::Vec3(nx, v.y(), nz));
             }
         }
+    }
+
+    // Online parity: drive the caster's aim pitch from the camera pitch every frame so a
+    // camera look tilts the spine (AnimBlenderPlayer::onPostDress) and the Body-attach
+    // hitboxes. Players only -- monster casters keep aimPitch 0 (no spine aim rig).
+    if (casterKind_ == CharacterKind::Player) {
+        if (auto pc = casterObj()) pc->setAimPitch(static_cast<float>(camPitch_));
     }
 }
 
@@ -645,6 +769,10 @@ void Controller::refreshPanel() {
                    thp, tmax, destroyed,
                    (selectedDefIdx_ >= 0 ? L"editing def (Esc to exit)" : L"click a hitbox to edit"));
         s += buf;
+        if (casterKind_ == CharacterKind::Player) {
+            s += L"  |  weapon ";
+            s += widen(kWeaponItems[static_cast<std::size_t>(weapon_)]);
+        }
         statusLabel_->setText(s);
     }
 

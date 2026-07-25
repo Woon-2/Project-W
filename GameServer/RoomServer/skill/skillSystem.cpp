@@ -331,7 +331,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         const int slot = def.slot;
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
-        if (def.attach.type == AttachType::Bone) {
+        if (def.attach.type == AttachType::Bone || def.attach.type == AttachType::Body) {
+            // Bone (animated) and Body (rest frame + aim pitch) share the dynamic
+            // per-frame update path; computeAttachTransform branches on the resolved type.
             int oldH = inst.getBoneHandle(slot);
             if (oldH >= 0) freeHitbox(oldH);
 
@@ -542,7 +544,17 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         mu::Mat4x4 eulerOff = mu::rotateRPYH(mu::Degree{ p.localEulerDeg.z() },   // roll
                                              mu::Degree{ p.localEulerDeg.y() },   // pitch
                                              mu::Degree{ p.localEulerDeg.x() });  // yaw
-        mu::Mat4x4 aim = eulerOff * baseRot;
+        // Aim pitch: tilt the launch frame by the caster's aim pitch (bow/wand
+        // trajectories follow the camera). Skipped for yaw-only/ground effects
+        // (must stay flat) and for bone attaches (the bone transform already
+        // carries the pitched spine pose — avoid double application).
+        // MIRROR: client/skill/skillSystem.cpp PlayVFX uses owner->aimPitch().
+        const float aimPitch = (!(p.flags & kPlayVFXFlagYawOnly) &&
+                                !(p.flags & kPlayVFXFlagGroundSnap) &&
+                                !hasBoneAttach) ? owner->cameraPitch() : 0.f;
+        mu::Mat4x4 aim = (aimPitch != 0.f)
+            ? eulerOff * mu::rotateXH(mu::Radian(aimPitch)) * baseRot
+            : eulerOff * baseRot;
 
         mu::Vec3 origin = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * baseXform);
         const mu::Vec3& off = p.localOffset;
@@ -626,7 +638,8 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
     for (AttachedHitbox& hb : hitboxPool_) {
         if (!hb.active) continue;
-        if (hb.resolvedAttach.type != AttachType::Bone) continue;
+        if (hb.resolvedAttach.type != AttachType::Bone &&
+            hb.resolvedAttach.type != AttachType::Body) continue;
 
         Object* owner = lookupObject(ctx, hb.ownerObjectId);
         if (!owner) { hb.active = false; continue; }
@@ -807,9 +820,12 @@ ResolvedAttach SkillSystem::resolveAttach(const AttachTarget&        attach,
                                           const Object&              owner,
                                           const SkillDispatchContext& /*ctx*/) const {
     ResolvedAttach ra{};
-    ra.type = attach.type;
+    ra.type          = attach.type;
+    ra.applyAimPitch = attach.bodyAimPitch;
 
-    if (attach.type == AttachType::Bone) {
+    if (attach.type == AttachType::Bone || attach.type == AttachType::Body) {
+        // Bone: follow the animated (baked) pose. Body: anchor to the same bone's REST
+        // frame + aim pitch (animation independent). Both resolve the bone index by name.
         if (!owner.model() || owner.model()->skeleton.empty()) { ra.boneIdx = -1; return ra; }
         const auto& nameToIdx = owner.model()->skeleton.nameToIdx;
         auto it = nameToIdx.find(attach.targetName);
@@ -824,6 +840,27 @@ ResolvedAttach SkillSystem::resolveAttach(const AttachTarget&        attach,
 mu::Mat4x4 SkillSystem::computeAttachTransform(const Object& owner,
                                                 const AttachedHitbox& hb) const {
     const i32t idx = hb.resolvedAttach.boneIdx;
+
+    if (hb.resolvedAttach.type == AttachType::Body) {
+        // Mirror of client computeAttachTransform: the bone's REST (bind) frame plus the
+        // caster's aim pitch about the bone origin, independent of the playing clip. The
+        // entityWorld composition matches Object::updateAnimBones (scale * orient * translate)
+        // so authoritative hit positions equal the caster's prediction.
+        const mu::Mat4x4 entityWorld = mu::Mat4x4(mu::scale(owner.body().scale()))
+                                     * mu::Mat4x4(owner.orient().mat())
+                                     * mu::translate(owner.pos());
+        if (!owner.model() || idx < 0 || idx >= owner.model()->skeleton.boneCount())
+            return entityWorld;
+        const mu::Mat4x4 rest = owner.model()->skeleton.bones[static_cast<std::size_t>(idx)].toDress;
+        if (!hb.resolvedAttach.applyAimPitch || owner.cameraPitch() == 0.f)
+            return rest * entityWorld;
+        const mu::Vec3 pivot = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * rest);
+        const mu::Mat4x4 K = mu::translate(-pivot)
+                           * mu::rotateXH(mu::Radian{ owner.cameraPitch() })
+                           * mu::translate(pivot);
+        return rest * K * entityWorld;
+    }
+
     if (idx >= 0) {
         const auto& boneXforms = owner.boneWorldXforms();
         if (idx < static_cast<i32t>(boneXforms.size()))

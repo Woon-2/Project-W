@@ -5,6 +5,7 @@
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
 #include "serverAnimation.hpp"
+#include "../common/inventory.hpp"
 #include <vector>
 #include <utility>
 
@@ -42,6 +43,12 @@ public:
 	mu::Vec3 velocity() const { return body_.linearVel(); }
 	void MU_CALLCONV setVelocity(mu::Vec3 v) { body_.setLinearVel(v); }
 
+	// Horizontal (XZ) speed. Locomotion playback rate must not be polluted by fall speed.
+	float horizontalSpeed() const {
+		const auto v = body_.linearVel();
+		return std::sqrt(v.x() * v.x() + v.z() * v.z());
+	}
+
 	// Velocity motor: AI declares desired velocity; physics converges toward it.
 	void MU_CALLCONV setDesiredVel(mu::Vec3 v) { body_.setDesiredVel(v); }
 	mu::Vec3 desiredVel() const { return body_.desiredVel(); }
@@ -78,6 +85,15 @@ public:
 
 	AnimController&       animController()       { return animController_; }
 	const AnimController& animController() const { return animController_; }
+
+	// Ground speed (m/s) the locomotion clips were authored for, and the speed at which the
+	// client's idle->locomotion blend weight saturates. updateAnimBones() feeds both to
+	// ServerAnimState::locomotionRate so the server's bone poses match the client's
+	// foot-slide-corrected animation. refSpeed 0 (default) disables the scaling entirely.
+	void  setAnimRefSpeed(float v) { animRefSpeed_ = v; }
+	float animRefSpeed() const { return animRefSpeed_; }
+	void  setAnimBandEnd(float v) { animBandEnd_ = v; }
+	float animBandEnd() const { return animBandEnd_; }
 
 	const Model* model() const { return pModel_; }
 
@@ -179,7 +195,23 @@ private:
 
 	const Model* pModel_ = nullptr;
 	AnimController animController_;
+	// Authored ground speed of the locomotion clips; 0 = no playback-rate scaling.
+	float animRefSpeed_ = 0.f;
+	// Speed at which the client's idle->locomotion blend weight reaches 1 (monster default).
+	float animBandEnd_ = 3.06f;
 	std::vector<mu::Mat4x4> boneWorldXforms_;
+
+	// Aim-pitch spine recomposition (mirrors client AnimBlenderPlayer::onPostDress).
+	// Built once in setModel from the skeleton; NPCs keep cameraPitch_ == 0 so the
+	// recomposition is a no-op for them.
+	// spineChainIdx_: bone indices of spine_01..03 (-1 if missing).
+	// spineDepth_[b]: number of chain bones among b's ancestors-or-self (0 = outside).
+	std::array<int, 3> spineChainIdx_{ -1, -1, -1 };
+	std::vector<uint8_t> spineDepth_;
+
+	// Rotates each spine subtree around its pivot by cameraPitch_/N in model space.
+	// Called from updateAnimBones() BEFORE the entity world transform is applied.
+	void applySpinePitch(std::vector<mu::Mat4x4>& boneModelXforms) const;
 	bool canReceiveDamage_ = false;
 	float damageTakenMultiplier_ = 1.f;
 	bool hitImpulseImmune_ = false;
@@ -264,6 +296,9 @@ public:
 	int32 lastSyncedHp() const { return lastSyncedHp_; }
 	void  setLastSyncedHp(int32 v) { lastSyncedHp_ = v; }
 
+	Inventory& inventory() { return inventory_; }
+	const Inventory& inventory() const { return inventory_; }
+
 private:
 	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
@@ -274,6 +309,7 @@ private:
 	Milliseconds lastCreditMs_ { 0.f };
 	float        hpRegenAccum_ = 0.f;
 	int32        lastSyncedHp_ = -1;
+	Inventory    inventory_{};
 };
 
 class Cube : public Object {

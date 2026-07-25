@@ -7,6 +7,7 @@
 #include "skill/skillTypes.hpp"
 #include "skill/skillLoadout.hpp"
 #include "chargeConfig.hpp"
+#include "../common/inventory.hpp"
 
 class AssetManager {
 public:
@@ -50,6 +51,7 @@ public:
 
 	// 무기별 스킬 로드아웃(기본공격 + 3슬롯 + 코스트). 부팅 시 1회 빌드.
 	const SkillLoadout& loadout() const { return loadout_; }
+	const ItemCatalog& itemCatalog() const { return itemCatalog_; }
 
 	static const ServerAnimClip* findClip(const std::vector<ServerAnimClip>& set,
 	                                      std::string_view name);
@@ -85,6 +87,7 @@ private:
 	std::vector<SkillAsset> skillAssets_;   // 전 룸 공유(부팅 1회 컴파일, 읽기 전용)
 	ChargeConfig            chargeConfig_;  // 전 룸 공유(부팅 1회 로드, 읽기 전용)
 	SkillLoadout            loadout_;       // 무기→스킬 로드아웃(부팅 1회 빌드)
+	ItemCatalog             itemCatalog_;   // shared item definitions + starter inventory
 };
 
 #endif // room_server_asset_manager_hpp

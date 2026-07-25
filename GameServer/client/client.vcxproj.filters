@@ -309,6 +309,9 @@
     <ClCompile Include="ui\settingsPanel.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\inventoryPanel.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\widgets\Image.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -345,6 +348,9 @@
     <ClCompile Include="ui\dialogue\DialogueSystem.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\dialogue\TacticalDialogueOverlay.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\intro\TacticalZoneIntro.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -364,6 +370,9 @@
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="..\common\simpleJson.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\inventory.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="..\common\networkConfig.cpp">
@@ -430,6 +439,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="ui\minimapHUD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\uiShapes.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\pathGuideHUD.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="energyOrbPipeline.cpp">
@@ -734,6 +749,9 @@
     <ClInclude Include="ui\settingsPanel.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="ui\inventoryPanel.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="ui\uiBuild.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -773,6 +791,9 @@
     <ClInclude Include="ui\dialogue\DialogueSystem.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="ui\dialogue\TacticalDialogueOverlay.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="ui\intro\TacticalZoneIntro.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -795,6 +816,9 @@
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\simpleJson.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\inventory.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\common\networkConfig.hpp">
@@ -873,6 +897,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="ui\minimapHUD.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\uiShapes.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\pathGuideHUD.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="energyOrbPipeline.hpp">
@@ -1121,6 +1151,18 @@
     </None>
     <None Include="..\resources\skills\boss_swings.lua">
       <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\README.md">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.ttf">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.otf">
+      <Filter>리소스 파일</Filter>
+    </None>
+    <None Include="..\resources\fonts\*.ttc">
+      <Filter>리소스 파일</Filter>
     </None>
     <None Include="heatField.hlsli" />
   </ItemGroup>

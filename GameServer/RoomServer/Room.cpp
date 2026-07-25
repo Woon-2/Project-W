@@ -50,6 +50,26 @@ ValidatedActionTime validateActionTime(uint64 actionServerMs, uint64 serverNowMs
 
 	return { actionServerMs, static_cast<uint16>(ageMs), true };
 }
+
+InventoryActionResult toProtocolInventoryResult(InventoryCommandResult result) {
+	switch (result) {
+	case InventoryCommandResult::Success:
+		return InventoryActionResult::Success;
+	case InventoryCommandResult::InvalidSlot:
+		return InventoryActionResult::InvalidSlot;
+	case InventoryCommandResult::EmptySlot:
+		return InventoryActionResult::EmptySlot;
+	case InventoryCommandResult::UnknownItem:
+		return InventoryActionResult::UnknownItem;
+	case InventoryCommandResult::NotUsable:
+		return InventoryActionResult::NotUsable;
+	case InventoryCommandResult::FullHealth:
+		return InventoryActionResult::FullHealth;
+	case InventoryCommandResult::Dead:
+		return InventoryActionResult::Dead;
+	}
+	return InventoryActionResult::NotUsable;
+}
 }
 
 void Room::registerObject(Object* obj) {
@@ -560,6 +580,10 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -627,6 +651,8 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -637,6 +663,10 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -696,6 +726,8 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -707,6 +739,10 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
 	if (!worldTerrain_) return;
+	if (arenaWallsActive_ && activeArenaZoneId_ == static_cast<uint16>(zone.id())) {
+		activeArenaParticipantIds_.insert(playerId);
+		return;
+	}
 
 	// 다른 아레나 인카운터가 이미 진행 중이면 이 zone엔 어떤 부수효과(벽/broadcast/disarm)도
 	// 남기지 않는다. 한 Room에 동시에 2개 이상의 아레나가 활성화되는 것은 금지된 상태 — 조기
@@ -766,6 +802,8 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
 	activeArenaZoneId_ = static_cast<uint16>(zone.id());   // 전 NPC 처치 시 이 zone에 S_ZoneState(.,0)로 벽 해제
 	arenaWallsActive_  = true;
+	activeArenaParticipantIds_.clear();
+	activeArenaParticipantIds_.insert(playerId);
 
 	zone.setArmed(false);   // one-shot trigger
 }
@@ -939,6 +977,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 			if (npc.hp() > 0) {
 				moveInfos.push_back({
 					static_cast<uint16>(npc.getId()),
+					npcStatusMask(NpcStatusFlag::None),
 					npc.pos().getXmf(),
 					npc.orient().getXmf(),
 					npc.linearVel().getXmf()
@@ -967,6 +1006,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 		if (finalBoss_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(finalBoss_->getId()),
+				npcStatusMask(NpcStatusFlag::None),
 				finalBoss_->pos().getXmf(),
 				finalBoss_->orient().getXmf(),
 				finalBoss_->linearVel().getXmf()
@@ -1173,6 +1213,12 @@ static void registerPlayerAnimClips(Player& player, const std::vector<ServerAnim
 	ac.registerClip("Death",        findServerAnimClip(anims, "Death"));
 	for (const char* a : attacks)
 		ac.registerClip(a, findServerAnimClip(anims, a));
+
+	// run 클립 세트는 무기와 무관하게 같은 리그·같은 보속으로 제작되어 있으므로
+	// 기준 속력도 무기별로 다르지 않다. 클라 AnimBlenderPlayer::kRefSpeedRun과 같은 값.
+	player.setAnimRefSpeed(5.f);
+	// 클라 AnimBlenderPlayer의 run 블렌드 밴드 끝(runThreshold 0.1 + 5.f).
+	player.setAnimBandEnd(5.1f);
 }
 
 void Room::enter(GameSession* session) {
@@ -1193,6 +1239,9 @@ void Room::enter(GameSession* session) {
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
 	player->resetSkillState();
+	std::string inventoryError;
+	ASSERT_CRASH(assetManager_ != nullptr);
+	ASSERT_CRASH(player->inventory().initialize(assetManager_->itemCatalog(), &inventoryError));
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -1344,6 +1393,7 @@ void Room::enter(GameSession* session) {
 	// 패킷 생성 후 새로 들어온 플레이어에게 전송
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
+	session->send(PacketManager::makeSInventorySnapshotPacket(player->inventory()));
 
 	// 새로 들어온 플레이어의 정보를 기존 플레이어들에게 브로드캐스트
 	if (sessions_.size() > 0) {	// 기존 플레이어가 있을 때만 브로드캐스트
@@ -1371,6 +1421,7 @@ void Room::leave(GameSession* session) {
 
 	std::erase_if(sessions_, [session](GameSession* s) { return s == session; });
 	idSessionMap_.erase(session->id());
+	activeArenaParticipantIds_.erase(static_cast<uint32>(session->id()));
 
 	auto leavePkt = PacketManager::makeSLeavePacket(static_cast<uint16>(session->id()));
 	broadcast(leavePkt);
@@ -1420,10 +1471,23 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	// 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는 플레이어만 평면으로 되돌린다. 안쪽으로
 	// 들어오기·측면 이동은 통과(입장 자유). felt collision은 클라 예측(resolveArenaWallLeash)이
 	// 담당하고, 여기선 치트 방지용 권위. 넉백 중(isMoveClampExempt)은 면제.
-	if (arenaWallsActive_ && !session->isMoveClampExempt()) {
+	if (arenaWallsActive_) {
 		constexpr float kArenaWallMargin = 0.5f;   // footprint 여유(플레이어 반경 근사)
-		for (const OneWayWall& w : arenaWalls_)
-			newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+		for (const OneWayWall& w : arenaWalls_) {
+			const mu::Vec3 oldDelta{ oldPos.x() - w.center.x(), 0.f, oldPos.z() - w.center.z() };
+			const mu::Vec3 newDelta{ newPos.x() - w.center.x(), 0.f, newPos.z() - w.center.z() };
+			const float oldSide = oldDelta.x() * w.outward.x() + oldDelta.z() * w.outward.z();
+			const float newSide = newDelta.x() * w.outward.x() + newDelta.z() * w.outward.z();
+			const float lateral = std::fabs(
+				newDelta.x() * w.widthDir.x() + newDelta.z() * w.widthDir.z());
+			if (oldSide > 0.01f && newSide <= 0.01f &&
+				lateral <= w.halfWidth + kArenaWallMargin) {
+				activeArenaParticipantIds_.insert(static_cast<uint32>(sessionId));
+			}
+			if (!session->isMoveClampExempt()) {
+				newPos = clampOneWayWall(oldPos, newPos, w, kArenaWallMargin);
+			}
+		}
 	}
 
 	player->setPos(newPos);
@@ -1474,8 +1538,11 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	auto player = session->player();
 	auto yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(cMouseMvPkt->yawRadian));
 	player->setOrient(yaw);
+	// Aim pitch rides the live yaw stream (yaw-symmetric semantics). Stored separately
+	// from body orient so forward()/melee AABB/NPC logic stay yaw-only.
+	player->setCameraPitch(cMouseMvPkt->pitchRadian);
 
-	auto sMouseMvPkt = PacketManager::makeSMouseMovePacket(static_cast<uint16>(sessionId), cMouseMvPkt->yawRadian);
+	auto sMouseMvPkt = PacketManager::makeSMouseMovePacket(static_cast<uint16>(sessionId), cMouseMvPkt->yawRadian, cMouseMvPkt->pitchRadian);
 	broadcastExcept(session, sMouseMvPkt);
 
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
@@ -1546,7 +1613,7 @@ void Room::updateSkillSystem(Milliseconds dt) {
 	}
 }
 
-void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad) {
 	auto sessionIt = idSessionMap_.find(sessionId);
 	if (sessionIt == idSessionMap_.end()) {
 		return;
@@ -1585,6 +1652,11 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerM
 	const ValidatedActionTime actionTime = validateActionTime(actionServerMs, serverNow);
 	const uint16 elapsedMs = actionTime.ageMs;
 
+	// Cast-time aim pitch snapshot: set BEFORE startSkill so t=0 timeline events
+	// (PlayVFX emitter frames, pitched bone hitboxes) use the exact cast-time value
+	// the caster predicted with (determinism, same rationale as skillSeed).
+	player->setCameraPitch(aimPitchRad);
+
 	// Start server-side skill instance for authoritative hit detection.
 	// skillSeed: caster-generated per-cast seed; drives the deterministic
 	// VFXParticle hitbox sampler so server hits match the caster's visuals.
@@ -1605,7 +1677,8 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 actionServerM
 			skillAssetId,
 			static_cast<uint16>(player->getId()),
 			elapsedMs,
-			skillSeed
+			skillSeed,
+			aimPitchRad
 		)
 	);
 }
@@ -1638,11 +1711,13 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 
 	// Broadcast to ALL clients (NPC has no session to exclude) so they play the
 	// matching VFX + drive the NPC's AnimBlender via the skill's PlayAnimation.
+	// NPCs have no aim pitch (0.f).
 	broadcast(PacketManager::makeSSkillStartPacket(
 		skillAssetId,
 		static_cast<uint16>(ownerObjectId),
 		uint16(0),
-		skillSeed));
+		skillSeed,
+		0.f));
 }
 
 void Room::attack(int32 sessionId, uint64 actionServerMs) {
@@ -1722,6 +1797,65 @@ void Room::selectSkill(int32 sessionId, uint8 slot) {
 	// Relay so teammate HUDs mirror the selected skill.
 	broadcastExcept(it->second,
 		PacketManager::makeSSkillSelectPacket(static_cast<uint16>(p->getId()), slot));
+}
+
+void Room::inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
+	InventoryAction action) {
+	const auto sessionIt = idSessionMap_.find(sessionId);
+	if (sessionIt == idSessionMap_.end())
+		return;
+
+	GameSession* session = sessionIt->second;
+	Player* player = session->player();
+	Inventory& inventory = player->inventory();
+
+	auto currentSlotInfo = [&]() -> InventorySlotInfo {
+		if (const ItemStack* stack = inventory.slot(slotIndex))
+			return InventorySlotInfo{ stack->itemId, stack->quantity };
+		return InventorySlotInfo{};
+	};
+	auto reply = [&](InventoryActionResult result) {
+		session->send(PacketManager::makeSInventoryActionResultPacket(
+			inventory.revision(), slotIndex, action, result, currentSlotInfo()));
+	};
+
+	if (revision != inventory.revision()) {
+		reply(InventoryActionResult::StaleRevision);
+		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+		return;
+	}
+
+	if (action != InventoryAction::Use && action != InventoryAction::DiscardOne) {
+		reply(InventoryActionResult::NotUsable);
+		return;
+	}
+
+	ASSERT_CRASH(assetManager_ != nullptr);
+	const int32 previousHp = player->hp();
+	const InventoryCommand command = action == InventoryAction::DiscardOne
+		? InventoryCommand::DiscardOne
+		: InventoryCommand::Use;
+	const InventoryCommandOutcome outcome = executeInventoryCommand(
+		inventory, assetManager_->itemCatalog(), slotIndex,
+		command, previousHp, kPlayerMaxHp);
+	const InventoryActionResult result = toProtocolInventoryResult(outcome.result);
+
+	if (outcome.result == InventoryCommandResult::Success
+		&& outcome.resultingHp != previousHp) {
+		player->setHp(outcome.resultingHp);
+		player->setLastSyncedHp(outcome.resultingHp);
+	}
+
+	reply(result);
+	if (outcome.result == InventoryCommandResult::InvalidSlot
+		|| outcome.result == InventoryCommandResult::UnknownItem) {
+		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+	}
+	if (outcome.result == InventoryCommandResult::Success
+		&& outcome.resultingHp != previousHp) {
+		broadcast(PacketManager::makeSPlayerHpPacket(
+			static_cast<uint16>(sessionId), outcome.resultingHp));
+	}
 }
 
 const SkillAsset* Room::findSkillAsset(uint32 id) const {
@@ -1844,6 +1978,19 @@ void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<Sen
 	}
 }
 
+void Room::notifyTacticalDialogue(TacticalDialogueId dialogueId) {
+	if (!arenaWallsActive_) return;
+
+	auto packet = PacketManager::makeSTacticalDialoguePacket(activeArenaZoneId_, dialogueId);
+	for (GameSession* session : livingPlayersCache_) {
+		if (!session || !session->player()) continue;
+		Player* player = session->player();
+		if (player->hp() <= 0 ||
+			!activeArenaParticipantIds_.contains(static_cast<uint32>(session->id()))) continue;
+		session->send(packet);
+	}
+}
+
 void Room::doTimer(Milliseconds delay, CallbackType&& callback) {
 	auto job = ObjectPool<Job>::pop(std::move(callback));
 	JobTimer::addJob(delay, id_, job);
@@ -1874,6 +2021,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (platoonLeader_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(platoonLeader_->getId()),
+				npcStatusMask(NpcStatusFlag::None),
 				platoonLeader_->pos().getXmf(),
 				platoonLeader_->orient().getXmf(),
 				platoonLeader_->linearVel().getXmf()
@@ -1902,6 +2050,10 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (npc->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(npc->getId()),
+				npcStatusMask(
+					npc->getDisplayState() == TacticalNpcState::Confused
+						? NpcStatusFlag::Confused
+						: NpcStatusFlag::None),
 				npc->pos().getXmf(),
 				npc->orient().getXmf(),
 				npc->linearVel().getXmf()
@@ -1941,6 +2093,7 @@ void Room::teardownArenaWalls() {
 	barriers_.clear();
 	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
 	arenaWallsActive_ = false;
+	activeArenaParticipantIds_.clear();
 	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
 }
 
@@ -2230,7 +2383,9 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	// 부대별 config는 몬스터별 Tactical 클래스에서(단일 출처). 보스 config는 인카운터 고유.
 	const TacticalNpcConfig slimeCfg = TacticalSlime::trooperConfig();
 	TacticalNpcConfig bossCfg{
-		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.maxHp = 2000.f, .moveSpeed = 4.f,
+		.animRefSpeed = 7.8f,   // Grandbaum은 Treant 클립셋을 그대로 쓴다(setupTacticalNpc* objType 스위치)
+		.attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
 		.separationRadius = 4.f, .separationWeight = 0.3f,
 		.attackDamageScale = 5.0f   // 보스 공격력 레버(Treant 스킬 × scale, 주 위협). attackDamage는 레거시 폴백(미사용). 튜닝값.
@@ -2300,7 +2455,9 @@ void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	const TacticalNpcConfig buddyCfg  = TacticalBirdy::trooperConfig();
 	const TacticalNpcConfig bomberCfg = TacticalBomber::trooperConfig();
 	TacticalNpcConfig bossCfg{
-		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.maxHp = 2000.f, .moveSpeed = 4.f,
+		.animRefSpeed = 3.0f,   // Isys reuses the Birdy clip set (see the objType switch in setupTacticalNpc*)
+		.attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
 		.separationRadius = 4.f, .separationWeight = 0.3f,
 		.attackDamageScale = 3.0f   // boss reuses the Birdy skill roster but hits ~3x harder
@@ -2532,6 +2689,10 @@ void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
 	case ObjectType::Goblin:
 	default:                    model = assetManager_->modelGoblin();    anims = &assetManager_->goblinAnimations();   prefix = "Goblin";  break;
 	}
+	// NOTE: the anim set is picked here by objType, but the locomotion playback reference
+	// speed rides on TacticalNpcConfig::animRefSpeed, set at the spawn call site. The two must
+	// agree -- a variant that reuses another monster's clips (Hobgoblin/Grandbaum/Isys above)
+	// needs that monster's animRefSpeed, not one derived from its own moveSpeed.
 
 	obj.setId(IdPool::pop());
 	obj.setFaction(Faction::Monsters);

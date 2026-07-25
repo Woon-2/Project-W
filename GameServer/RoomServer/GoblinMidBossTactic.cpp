@@ -230,6 +230,10 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next, Room& room, PlatoonLeade
         ( next == LeaderPhase::TacticalRetreat || next == LeaderPhase::BoxAdvance );
     const float multiplier = invulnerablePreparation ? 0.f : 1.f;
     setEncounterDamageProfile( room, leader, multiplier, multiplier );
+
+    if ( next == LeaderPhase::TacticalRetreat && tacticsUnlocked_ ) {
+        room.notifyTacticalDialogue( TacticalDialogueId::HobgoblinTactic );
+    }
 }
 
 void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& leader ) {

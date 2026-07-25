@@ -260,6 +260,7 @@ void IsysMidBossTactic::enterPhase( Phase next, Room& room, PlatoonLeader& leade
     }
     if ( next == Phase::RetreatForPincer ) {
         leader.transitionTacticalState( TacticalNpcState::Chase );
+        room.notifyTacticalDialogue( TacticalDialogueId::IsysPincer );
     }
     else if ( next == Phase::RegroupBombers || next == Phase::FirstBomberWedge ||
               next == Phase::RegroupBuddies || next == Phase::SecondBuddyWedge ) {

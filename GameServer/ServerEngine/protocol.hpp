@@ -75,6 +75,13 @@ enum class PacketType : uint16 {
 	S_Register,
 	C_Login,
 	S_Login,
+	// Append-only: server-authoritative tactical boss dialogue presentation.
+	S_TacticalDialogue,
+
+	// Append-only: server-authoritative fixed-slot inventory.
+	C_InventoryAction,
+	S_InventorySnapshot,
+	S_InventoryActionResult,
 };
 
 enum class ObjectType : uint16 {
@@ -94,6 +101,22 @@ enum class ObjectType : uint16 {
 	Isys,        // named variant of Birdy  (shares Birdy anims, different model)
 	Boss,        // final boss: 1:1 combat (NOT tactical), own 14-clip rig
 };
+
+// Server-authoritative, repeatedly synchronized NPC presentation states.
+// This is a bit mask on the wire so new independent status indicators can be
+// appended without changing the movement packet shape again.
+enum class NpcStatusFlag : uint8 {
+	None     = 0,
+	Confused = 1 << 0,
+};
+
+constexpr uint8 npcStatusMask(NpcStatusFlag flag) {
+	return static_cast<uint8>(flag);
+}
+
+constexpr bool hasNpcStatusFlag(uint8 flags, NpcStatusFlag flag) {
+	return (flags & npcStatusMask(flag)) != 0;
+}
 
 enum class PlayerWeaponType : uint8 {
 	Katana,
@@ -118,6 +141,28 @@ enum class AccountResult : uint8 {
 constexpr int32 kLoginIdMax = 24;     // ASCII
 constexpr int32 kPasswordMax = 32;    // ASCII
 constexpr int32 kNicknameMax = 16;    // wchar_t — 한글 지원
+enum class TacticalDialogueId : uint8 {
+	HobgoblinTactic,
+	GrandbaumShieldWall,
+	IsysPincer,
+	Count,
+};
+
+enum class InventoryAction : uint8 {
+	Use = 0,
+	DiscardOne,
+};
+
+enum class InventoryActionResult : uint8 {
+	Success = 0,
+	InvalidSlot,
+	EmptySlot,
+	UnknownItem,
+	NotUsable,
+	FullHealth,
+	Dead,
+	StaleRevision,
+};
 
 struct PacketHeader {
 	uint16 size;
@@ -230,15 +275,18 @@ struct SPlayerKnockbackPacket : public PacketHeader {
 
 struct CMouseMovePacket : public PacketHeader {
 	float yawRadian;
+	float pitchRadian;   // camera/aim pitch (+down); server stores it for aim-pitched skills, relays for remote spine bend
 };
 
 struct SMouseMovePacket : public PacketHeader {
 	uint16 playerId;
 	float yawRadian;
+	float pitchRadian;   // relayed aim pitch for remote upper-body bend visuals
 };
 
 struct SNpcMovePacket : public PacketHeader {
 	uint16 npcId;
+	uint8 statusFlags;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
@@ -246,6 +294,7 @@ struct SNpcMovePacket : public PacketHeader {
 
 struct SNpcMoveInfo {
 	uint16              npcId;
+	uint8               statusFlags;
 	DirectX::XMFLOAT3   pos;
 	DirectX::XMFLOAT4   orient;
 	DirectX::XMFLOAT3   velocity;
@@ -343,6 +392,7 @@ struct CSkillStartPacket : public PacketHeader {
 	uint32 skillAssetId;
 	uint64 actionServerMs;   // client-estimated server monotonic time; server validates before use
 	uint32 skillSeed;   // caster-generated per-cast seed (deterministic particle hitboxes)
+	float  aimPitchRadian;   // cast-time aim pitch snapshot (+down); server judges pitched hitboxes with it (determinism, like skillSeed)
 };
 
 struct SSkillStartPacket : public PacketHeader {
@@ -350,6 +400,7 @@ struct SSkillStartPacket : public PacketHeader {
 	uint16 ownerId;
 	uint16 elapsedMs;
 	uint32 skillSeed;   // relayed caster seed; remote clients reproduce identical VFX params
+	float  aimPitchRadian;   // relayed cast-time aim pitch; remote clients reproduce the pitched trajectory (0 for NPCs)
 };
 
 struct SSkillHitPacket : public PacketHeader {
@@ -532,8 +583,45 @@ struct SLoginPacket : public PacketHeader {
 	AccountResult result;
 	int64 accountId;                  // 실패 시 0
 	wchar_t nickname[kNicknameMax];   // 실패 시 빈 문자열
+struct STacticalDialoguePacket : public PacketHeader {
+	uint16               zoneId;
+	TacticalDialogueId   dialogueId;
+};
+
+struct InventorySlotInfo {
+	uint32 itemId;
+	uint16 quantity;
+};
+
+struct CInventoryActionPacket : public PacketHeader {
+	uint32          revision;
+	uint8           slotIndex;
+	InventoryAction action;
+};
+
+struct SInventorySnapshotPacket : public PacketHeader {
+	uint32 revision;
+	uint16 slotsOffset;
+	uint8  slotCount;
+
+	using SlotList = DataList<InventorySlotInfo>;
+	SlotList getSlotList() {
+		byte* start = reinterpret_cast<byte*>(this) + slotsOffset;
+		return SlotList(reinterpret_cast<InventorySlotInfo*>(start), slotCount);
+	}
+};
+
+struct SInventoryActionResultPacket : public PacketHeader {
+	uint32                revision;
+	uint8                 slotIndex;
+	InventoryAction       action;
+	InventoryActionResult result;
+	InventorySlotInfo     slot;
 };
 
 #pragma pack(pop)
+
+static_assert(sizeof(SNpcMoveInfo) == 43, "SNpcMoveInfo wire layout changed");
+static_assert(sizeof(SNpcMovePacket) == 47, "SNpcMovePacket wire layout changed");
 
 #endif // protocol_hpp

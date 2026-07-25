@@ -178,6 +178,14 @@ static constexpr float   kBossHpFillHeight          = 100.f;
 static constexpr float   kBossHpEmblemX              = 42.f;
 static constexpr float   kBossHpEmblemY              = 22.f;
 static constexpr float   kBossHpEmblemSize           = 84.f;
+static const DirectX::XMFLOAT4 kNamedMonsterHpColor{ 0.62f, 0.24f, 0.90f, 1.f };
+static constexpr float   kConfusionIconBaseSize      = 40.f;
+static constexpr float   kConfusionIconWorldGap      = 0.65f;
+static constexpr float   kConfusionIconPulseAmount   = 0.08f;
+static constexpr float   kConfusionIconPulseHz       = 2.0f;
+static constexpr float   kConfusionIconBobPixels     = 4.f;
+static constexpr float   kConfusionIconBobHz         = 1.5f;
+static constexpr float   kTwoPi                      = 6.28318530718f;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -202,6 +210,14 @@ Game::Game() {
 	// 로비 표시에 필요한 공용 GPU 리소스만 즉시 초기화한다.
 	// 무거운 인게임 리소스(모델/지형/파티클)는 로비 진입 후 백그라운드로 로드한다.
 	gfx_.initSharedResources( assetConfigs_ );
+
+	std::string inventoryError;
+	DISPLAY_ERROR_STR(
+		itemCatalog_.load("../resources/data/inventory.json", inventoryError),
+		"[Inventory] config load failed: "s + inventoryError, true);
+	DISPLAY_ERROR_STR(
+		inventory_.initializeEmpty(itemCatalog_, &inventoryError),
+		"[Inventory] initialization failed: "s + inventoryError, true);
 }
 
 Game::~Game() {
@@ -444,6 +460,8 @@ void Game::setupStage() {
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 	setupBossHpHud();
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
+	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
+	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
@@ -596,38 +614,13 @@ std::wstring Game::partyDisplayName(uint16 playerId) const {
 	return L"player";
 }
 
-void Game::equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType) {
-	// 무기 모델은 단일 SocketOffset만 가지며, 그 SocketType(오른손/왼손)으로
-	// 어느 손에 부착할지 데이터 주도로 결정한다(현재 Bow=왼손, 나머지=오른손).
-	const Model* weaponModel = assetManager_.playerWeaponModel(weaponType);
-	auto socketType = Bone::SocketType::RightHand;
-	if (weaponModel && !weaponModel->socketOffsets.empty()) {
-		socketType = weaponModel->socketOffsets.begin()->first;
-	}
-
-	// 무기 전환 시 이전 손의 무기도 확실히 제거한다.
-	obj.disequip(Bone::SocketType::RightHand);
-	obj.disequip(Bone::SocketType::LeftHand);
-
-	Equipment eq{};
-	eq.socketType = socketType;
-	eq.object = std::make_unique<Object>();
-	eq.object->setModel(weaponModel);
-	obj.equip(std::move(eq));
-
-	// 장착 캐릭터의 애니메이션 블렌더에 무기 종류를 알려 클립 세트를 맞춘다.
-	if (auto* playerBlender = dynamic_cast<AnimBlenderPlayer*>(obj.animBlender())) {
-		playerBlender->setWeaponType(weaponType);
-	}
-}
-
 void Game::syncLobbyCharacterWeapons() {
 	if (lobbyChars_.empty()) return;
 
 	for (std::size_t i = 0u; i < lobbyChars_.size(); ++i) {
 		if (!lobbyChars_[i]) continue;
 		if (i < lobbyPlayers_.size()) {
-			equipPlayerWeapon(*lobbyChars_[i], lobbyPlayers_[i].weaponType);
+			equipPlayerWeapon(*lobbyChars_[i], assetManager_, lobbyPlayers_[i].weaponType);
 		}
 		else {
 			lobbyChars_[i]->disequip(Bone::SocketType::RightHand);
@@ -2188,7 +2181,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
-	equipPlayerWeapon(*player_, playerInfo.weaponType);
+	equipPlayerWeapon(*player_, assetManager_, playerInfo.weaponType);
 	player_->setHp(playerInfo.hp);
 	player_->setMaxHp(playerInfo.maxHp);
 	player_->enableBVRendering();
@@ -2321,7 +2314,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
-	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
+	equipPlayerWeapon(*otherPlayer, assetManager_, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2367,7 +2360,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
-	equipPlayerWeapon(*otherPlayer, otherPlayerInfo.weaponType);
+	equipPlayerWeapon(*otherPlayer, assetManager_, otherPlayerInfo.weaponType);
 	otherPlayer->setHp(otherPlayerInfo.hp);
 	otherPlayer->setMaxHp(otherPlayerInfo.maxHp);
 	otherPlayer->setFaction(Faction::Players);
@@ -2515,7 +2508,7 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 		bar->pivot     = UI::Pivots::TopLeft;
 		bar->width     = UI::DimValue::px(80.f);
 		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->fillColor = kNamedMonsterHpColor;
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
 		goblinHpBars_[hobgoblinInfo.objectId] = { hobgoblin.get(), bar, 2.5f };
@@ -2668,7 +2661,8 @@ void Game::createMushroom(const ObjectInfo& info) {
 // the body of createSnake without the type-specific container/id-map lines.
 void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
                                const Model* model, MonsterKind kind, float mass,
-                               std::unordered_map<uint16, MonsterHpEntry>& hpBars) {
+                               std::unordered_map<uint16, MonsterHpEntry>& hpBars,
+                               bool isNamed) {
 	obj->setId(info.objectId);
 	obj->setPos(DirectX::XMLoadFloat3(&info.pos));
 	obj->setOrient(DirectX::XMLoadFloat4(&info.orient));
@@ -2703,7 +2697,9 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 		bar->pivot     = UI::Pivots::TopLeft;
 		bar->width     = UI::DimValue::px(80.f);
 		bar->height    = UI::DimValue::px(8.f);
-		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->fillColor = isNamed
+			? kNamedMonsterHpColor
+			: DirectX::XMFLOAT4{ 0.9f, 0.15f, 0.1f, 1.f };
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
 		hpBars[info.objectId] = { obj.get(), bar, 2.5f };
@@ -2756,7 +2752,7 @@ void Game::createTreant(const ObjectInfo& info) {
 void Game::createGrandbaum(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto grandbaum = std::make_shared<Grandbaum>();
-	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_);
+	configureNetMonster(grandbaum, info, assetManager_.modelGrandbaum(), MonsterKind::Treant, 120.f, treantHpBars_, true);
 	treants_.push_back(std::static_pointer_cast<Treant>(grandbaum));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
@@ -2770,7 +2766,7 @@ void Game::createGrandbaum(const ObjectInfo& info) {
 void Game::createIsys(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto isys = std::make_shared<Isys>();
-	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_);
+	configureNetMonster(isys, info, assetManager_.modelIsys(), MonsterKind::Birdy, 60.f, birdyHpBars_, true);
 	birdys_.push_back(std::static_pointer_cast<Birdy>(isys));
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
@@ -2785,7 +2781,7 @@ void Game::createIsys(const ObjectInfo& info) {
 void Game::createBoss(const ObjectInfo& info) {
 	if (idMonsterMap_.count(info.objectId)) return;
 	auto boss = std::make_shared<Boss>();
-	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_);
+	configureNetMonster(boss, info, assetManager_.modelBoss(), MonsterKind::Boss, 150.f, bossHpBars_, true);
 	bosses_.push_back(boss);
 	bossNpcIds_.insert(info.objectId);   // 미니맵 주황 아이콘 판별용
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
@@ -2812,6 +2808,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 	// not looked up by id, so a shared sentinel is safe and needs no per-corpse allocation.
 	obj->setId(kDetachedCorpseId);
 	detachedNpcIds_.insert(npcId);
+	setNpcStatusFlags(npcId, npcStatusMask(NpcStatusFlag::None));
 
 	// Freeze the detached body. It no longer receives server moves (advanceState), so the
 	// stale prev != curr left by the death-frame move (e.g. knockback launching curr up
@@ -3349,6 +3346,13 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 	}
 }
 
+void Game::onTacticalDialogue(uint16 zoneId, TacticalDialogueId dialogueId) {
+	// Recipient selection is server-authoritative. Do not reject a valid targeted
+	// event because this client's shared zone-state cache is a frame behind.
+	(void)zoneId;
+	tacticalDialogueOverlay_.trigger(dialogueId);
+}
+
 // 아레나 후방 Wall 일방향 벽: 직전 프레임 위치 대비, 양끝 Wall을 바깥으로 통과하려는 로컬
 // 플레이어만 평면으로 되돌린다(XZ만, Y 보존). 안쪽 입장·측면 이동은 통과 → 후발 파티원이 벽에
 // 막히지 않는다. setCurrPos만 보정 → 임펄스 튕김 없음, 결과는 C_Move로 전파. 프레임당 1회.
@@ -3669,7 +3673,7 @@ void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float spe
 	postKnockbackLockTimer_ = static_cast<float>( postLockMs ) / 1000.f;
 }
 
-void Game::rotatePlayer(uint16 playerId, float yawRad) {
+void Game::rotatePlayer(uint16 playerId, float yawRad, float pitchRad) {
 	auto playerIt = idPlayerMap_.find(playerId);
 	auto player = playerIt != idPlayerMap_.end() ? playerIt->second : nullptr;
 
@@ -3688,9 +3692,11 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 
 	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
 	player->setOrient(yaw);
+	// 원격 플레이어 조준 pitch(상체 굽힘 시각용). body orient에는 넣지 않는다.
+	player->setAimPitch(pitchRad);
 }
 
-void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void Game::moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto it = idMonsterMap_.find(npcId);
 	if (it == idMonsterMap_.end()) {
 		// Detached as a corpse (dead, awaiting respawn): in-flight server moves for it are
@@ -3710,6 +3716,121 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	// Restart network interpolation for this move (mirrors movePlayer). Without this the
 	// monster would interpolate on the physics clock and oscillate between prev/curr.
 	monster->netInterpAcc_ = 0s;
+	setNpcStatusFlags(npcId, statusFlags);
+}
+
+void Game::setNpcStatusFlags(uint16 npcId, uint8 statusFlags) {
+	auto entryIt = npcStatusIcons_.find(npcId);
+	const bool confused = hasNpcStatusFlag(statusFlags, NpcStatusFlag::Confused);
+
+	if (!confused) {
+		if (entryIt != npcStatusIcons_.end()) {
+			entryIt->second.statusFlags = statusFlags;
+			if (entryIt->second.icon) entryIt->second.icon->visible = false;
+		}
+		return;
+	}
+
+	if (entryIt == npcStatusIcons_.end()) {
+		auto* icon = static_cast<UI::Image*>(
+			uiManager_.root()->addChild(std::make_unique<UI::Image>())
+		);
+		icon->name    = "npcConfusionStatusIcon";
+		icon->anchor  = UI::Anchors::TopLeft;
+		icon->pivot   = UI::Pivots::Center;
+		icon->width   = UI::DimValue::px(kConfusionIconBaseSize);
+		icon->height  = UI::DimValue::px(kConfusionIconBaseSize);
+		icon->texture = assetManager_.confusionStatusIcon();
+		icon->zOrder  = 50;
+		icon->visible = false;
+
+		const float phaseOffset =
+			(static_cast<float>(npcId % 31u) / 31.f) * kTwoPi;
+		entryIt = npcStatusIcons_.emplace(
+			npcId,
+			NpcStatusIconEntry{
+				.icon = icon,
+				.statusFlags = statusFlags,
+				.phaseOffset = phaseOffset
+			}
+		).first;
+	}
+	else {
+		entryIt->second.statusFlags = statusFlags;
+	}
+}
+
+void Game::updateNpcStatusIcons(float deltaTimeSec) {
+	npcStatusIconElapsed_ += deltaTimeSec;
+	if (npcStatusIconElapsed_ > 3600.f) {
+		npcStatusIconElapsed_ = std::fmod(npcStatusIconElapsed_, 3600.f);
+	}
+
+	auto resolveWorldYOffset = [&](uint16 npcId) {
+		if (auto it = goblinHpBars_.find(npcId); it != goblinHpBars_.end())
+			return it->second.worldYOffset;
+
+		auto fromMonsterBars = [npcId](const auto& bars, float& out) {
+			if (auto it = bars.find(npcId); it != bars.end()) {
+				out = it->second.worldYOffset;
+				return true;
+			}
+			return false;
+		};
+
+		float result = 2.5f;
+		if (fromMonsterBars(snakeHpBars_, result))    return result;
+		if (fromMonsterBars(mushroomHpBars_, result)) return result;
+		if (fromMonsterBars(bomberHpBars_, result))   return result;
+		if (fromMonsterBars(birdyHpBars_, result))    return result;
+		if (fromMonsterBars(slimeHpBars_, result))    return result;
+		if (fromMonsterBars(treantHpBars_, result))   return result;
+		if (fromMonsterBars(bossHpBars_, result))     return result;
+		return result;
+	};
+
+	const Texture* confusionTexture = assetManager_.confusionStatusIcon();
+	for (auto& [npcId, entry] : npcStatusIcons_) {
+		if (!entry.icon) continue;
+		entry.icon->visible = false;
+
+		if (!hasNpcStatusFlag(entry.statusFlags, NpcStatusFlag::Confused) ||
+			!confusionTexture || !confusionTexture->res) {
+			continue;
+		}
+
+		auto monsterIt = idMonsterMap_.find(npcId);
+		if (monsterIt == idMonsterMap_.end()) continue;
+		Object* monster = monsterIt->second;
+		if (!monster || monster->hidden() || monster->isHiddenByOrb() ||
+			monster->isDead() || monster->hp() <= 0) {
+			continue;
+		}
+
+		const mu::Vec3 iconWorldPos = monster->renderState().pos
+			+ mu::Vec3{ 0.f, resolveWorldYOffset(npcId) + kConfusionIconWorldGap, 0.f };
+		float screenX{}, screenY{};
+		if (!worldToScreen(
+				iconWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				screenX, screenY)) {
+			continue;
+		}
+
+		const float phase = entry.phaseOffset;
+		const float pulse = 1.f + kConfusionIconPulseAmount * std::sinf(
+			npcStatusIconElapsed_ * kTwoPi * kConfusionIconPulseHz + phase);
+		const float bob = kConfusionIconBobPixels * std::sinf(
+			npcStatusIconElapsed_ * kTwoPi * kConfusionIconBobHz + phase);
+		const float size = kConfusionIconBaseSize * pulse;
+
+		entry.icon->width   = UI::DimValue::px(size);
+		entry.icon->height  = UI::DimValue::px(size);
+		entry.icon->offsetX = UI::DimValue::px(uiManager_.screenToLayoutX(screenX));
+		entry.icon->offsetY = UI::DimValue::px(uiManager_.screenToLayoutY(screenY) - bob);
+		entry.icon->visible = true;
+	}
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
@@ -3758,6 +3879,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	// This npc id is live again — clear any "detached as corpse" mark (covers all three
 	// respawn sub-paths below: revive-in-place / pool reuse / fresh create).
 	detachedNpcIds_.erase(npcId);
+	setNpcStatusFlags(npcId, npcStatusMask(NpcStatusFlag::None));
 
 	// Still active (e.g. temporarily hidden via S_NpcHide, never killed): revive in place.
 	if (auto it = idMonsterMap_.find(npcId); it != idMonsterMap_.end()) {
@@ -3808,9 +3930,15 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
+
+	// Cast-time aim pitch snapshot: set on the remote caster BEFORE startSkill so
+	// t=0 timeline events reproduce the caster's pitched trajectory (NPC casts are 0).
+	if (auto it = idPlayerMap_.find(ownerId); it != idPlayerMap_.end()) {
+		it->second->setAimPitch(aimPitchRad);
+	}
 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
 	// skillSeed is the caster-generated seed relayed by the server, so this
@@ -4191,6 +4319,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		pathGuide_.buildSamplePath(player_->pos(), player_->forward());
 
 	// Path guidance: advance the ribbon window + guiding wisp (re-conforms to ground).
+	// Suppressed entirely during tactical-combat arenas (player is locked in anyway).
+	pathGuide_.setSuppressed(localArenaPresentationZoneId_ >= 0);
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
@@ -4307,6 +4437,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		const float dtSec = std::chrono::duration<float>(deltaTime).count();
+		updateNpcStatusIcons(dtSec);
 		for (auto& [id, entry] : goblinHpBars_) {
 			if (!entry.goblin || entry.goblin->hidden() || entry.goblin->hp() <= 0 || entry.goblin->maxHp() <= 0) {
 				entry.hpBar->visible = false;
@@ -4409,7 +4540,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 
 		tacticalZoneIntro_.update(dtSec);
+		tacticalDialogueOverlay_.update(dtSec);
 		dialogueSystem_.update(dtSec);
+		inventoryPanel_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4751,7 +4884,23 @@ void Game::renderInGame() {
 			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
 		});
 	}
+	// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
+	minimapGuidePoly_.clear();
+	pathGuide_.activePathPoints(minimapGuidePoly_);
+	const MinimapGuide mmGuide{
+		pathGuide_.guidanceActive(),
+		std::span<const mu::Vec3>(minimapGuidePoly_),
+		pathGuide_.guidanceTargetWorld()
+	};
 	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top),
+		mmGuide);
+
+	// On-screen destination indicator: beacon when the look-ahead is on screen, an
+	// edge arrow (+distance) when it is off screen / behind the camera.
+	pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
+		pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 
@@ -4822,6 +4971,23 @@ void Game::enterLobby() {
 	settingsPanel_.build(uiManager_, lobbyUI_.panelTexture(),
 		lobbyUI_.secondaryButtonTexture(), settings_, availableResolutions_,
 		[]() { PostQuitMessage(0); });
+	if (!inventoryUiReady_) {
+		assetManager_.loadInventoryItemIcons(gfx_, itemCatalog_);
+		inventoryPanel_.build(uiManager_, itemCatalog_, {
+			.onAction = [this](uint8 slotIndex, InventoryAction action) {
+				sendInventoryAction(slotIndex, action);
+			}
+		}, {
+			.panelTexture = lobbyUI_.panelTexture(),
+			.buttonTexture = lobbyUI_.secondaryButtonTexture(),
+			.resolveItemIcon = [this](ItemId itemId) {
+				return assetManager_.inventoryItemIcon(itemId);
+			},
+		});
+		inventoryPanel_.setInventory(inventory_);
+		inventoryUiReady_ = true;
+	}
+	inventoryPanel_.close();
 	refreshLobbyUI();
 	settingsOpenPrev_ = settingsPanel_.isOpen();
 	applyCursorPolicy();
@@ -4987,8 +5153,10 @@ void Game::refreshLobbyUI() {
 	LobbyUI::ViewState vs{};
 	vs.inLobbyScene       = (scene_ == Scene::Lobby);
 	vs.inMainMenu         = (lobbyState_ == LobbyState::MainMenu);
+	vs.isAuthenticated    = isAuthenticated_;
 	vs.waitingRoom3DReady = stageVisualReady_.load(std::memory_order_acquire);
 	vs.isHost             = isHost_;
+	vs.nickname           = L"PLAYER";
 	vs.roomCode           = roomCode_;
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
@@ -5009,6 +5177,13 @@ void Game::refreshLobbyUI() {
 
 LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	LobbyUI::Callbacks cb{};
+	cb.onLogin = [this](const std::wstring& id, const std::wstring& password) {
+		lobbyLogin(id, password);
+	};
+	cb.onRegister = [this](const std::wstring& id, const std::wstring& password,
+		const std::wstring& nickname) {
+		lobbyRegister(id, password, nickname);
+	};
 	cb.onCreateRoom   = [this]() { lobbyCreateRoom(); };
 	cb.onJoinRoom     = [this](const std::string& code) { lobbyJoinRoom(code); };
 	cb.onLeaveRoom    = [this]() { lobbyLeaveRoom(); };
@@ -5291,6 +5466,13 @@ void Game::enterInGame() {
 	// 대기실 전시 캐릭터 정리: animSystem 트랙/shared_ptr를 제거해 인게임 씬으로 누수되지 않게 한다.
 	clearLobbyCharacters();
 
+	std::string inventoryError;
+	if (inventory_.initializeEmpty(itemCatalog_, &inventoryError))
+		inventoryPanel_.setInventory(inventory_);
+	else
+		gSharedLog << "[Inventory] reset failed: " << inventoryError << "\n";
+	inventoryPanel_.close();
+
 	setupStage();
 	scene_ = Scene::InGame;
 	settingsOpenPrev_ = settingsPanel_.isOpen();
@@ -5312,7 +5494,60 @@ std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
 	return L"Player_" + std::to_wstring(sessionId);
 }
 
+void Game::lobbyLogin(const std::wstring& id, const std::wstring& password) {
+	if (id.empty() || password.empty()) {
+		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호를 입력하세요.");
+		gSharedLog << "[Auth] 로그인 실패: 빈 아이디 또는 비밀번호\n";
+		return;
+	}
+
+	gwSharedLog << L"[Auth] 로컬 로그인 성공 (id=" << id
+		<< L", passwordLength=" << password.size() << L")\n";
+
+	isAuthenticated_ = true;
+	lobbyUI_.clearLoginPassword();
+	lobbyUI_.setMainMenuMessage(L"");
+	uiManager_.resetInteractionState();
+	refreshLobbyUI();
+}
+
+void Game::lobbyRegister(const std::wstring& id, const std::wstring& password,
+	const std::wstring& nickname) {
+	if (id.empty() || password.empty() || nickname.empty()) {
+		lobbyUI_.setSignupMessage(L"아이디, 비밀번호, 닉네임을 모두 입력하세요.");
+		gSharedLog << "[Auth] 회원가입 실패: 빈 필드\n";
+		return;
+	}
+
+	if (localRegisteredIds_.contains(id)) {
+		lobbyUI_.setSignupMessage(L"이미 사용 중인 아이디입니다.");
+		gSharedLog << "[Auth] 회원가입 실패: 아이디 중복\n";
+		return;
+	}
+
+	if (localRegisteredNicknames_.contains(nickname)) {
+		lobbyUI_.setSignupMessage(L"이미 사용 중인 닉네임입니다.");
+		gSharedLog << "[Auth] 회원가입 실패: 닉네임 중복\n";
+		return;
+	}
+
+	gwSharedLog << L"[Auth] 로컬 회원가입 완료 (id=" << id
+		<< L", nickname=" << nickname
+		<< L", passwordLength=" << password.size() << L")\n";
+
+	localRegisteredIds_.insert(id);
+	localRegisteredNicknames_.insert(nickname);
+	uiManager_.resetInteractionState();
+	lobbyUI_.completeRegistration(id);
+}
+
 void Game::lobbyCreateRoom() {
+	if (!isAuthenticated_) {
+		lobbyUI_.setMainMenuMessage(L"로그인 후 이용할 수 있습니다.");
+		gSharedLog << "[Lobby] 방 생성 차단: 로그인 필요\n";
+		return;
+	}
+
 	// 방 생성 요청만 보낸다. 대기실 전환은 S_CreateRoom 수신(onLobbyCreated) 시 수행.
 	INet::ClientApp::addSendBuffer(PacketManager::makeCCreateRoomPacket());
 	INet::ClientApp::send();
@@ -5320,6 +5555,12 @@ void Game::lobbyCreateRoom() {
 }
 
 void Game::lobbyJoinRoom(const std::string& code) {
+	if (!isAuthenticated_) {
+		lobbyUI_.setMainMenuMessage(L"로그인 후 이용할 수 있습니다.");
+		gSharedLog << "[Lobby] 방 참가 차단: 로그인 필요\n";
+		return;
+	}
+
 	// 코드 정규화: 대문자 + 영숫자만 (TextInput에서 이미 필터되지만 방어적으로 한 번 더).
 	std::string norm;
 	for (char c : code) {
@@ -5506,6 +5747,12 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
 		return 0;
 	}
+	if (inventoryPanel_.isOpen()
+		&& (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN)) {
+		inventoryPanel_.handleGlobalPointerDown(
+			static_cast<float>(LOWORD(lParam)),
+			static_cast<float>(HIWORD(lParam)));
+	}
 
 	switch (msg) {
 		// WM_INPUT 메시지
@@ -5579,7 +5826,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case WM_MOUSEWHEEL:
 		// In-game: accumulate wheel notches for the skill dial (consumed in
 		// processInputGame). With a cursor-capturing UI open, forward to the UI.
-		if (uiManager_.needsCursor())
+		if (inventoryPanel_.isOpen() || uiManager_.needsCursor())
 			uiManager_.onWndMsg(msg, wParam, lParam);
 		else
 			wheelAccum_ += GET_WHEEL_DELTA_WPARAM(wParam);
@@ -5596,6 +5843,23 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 void Game::sendMovePacket() {
 	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->velocity().getXmf());
 	INet::ClientApp::addSendBuffer(sendBuffer);
+}
+
+void Game::sendInventoryAction(uint8 slotIndex, InventoryAction action) {
+	if (!player_ || !inventoryPanel_.isOpen()) {
+		inventoryPanel_.setPending(false);
+		return;
+	}
+	INet::ClientApp::addSendBuffer(PacketManager::makeCInventoryActionPacket(
+		inventory_.revision(), slotIndex, action));
+}
+
+void Game::setInventoryOpen(bool open) {
+	if (open == inventoryPanel_.isOpen())
+		return;
+	if (open) inventoryPanel_.open();
+	else inventoryPanel_.close();
+	applyCursorPolicy();
 }
 
 bool Game::findZoneCenter(const std::string& tag, mu::Vec3& out) const {
@@ -5627,7 +5891,8 @@ void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
 
-	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad);
+	lastSentAimPitch_ = static_cast<float>(cameraPitch_);
+	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad, lastSentAimPitch_);
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
@@ -5637,7 +5902,9 @@ void Game::sendAttackPacket() {
 
 void Game::sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed) {
 	const uint64 actionServerMs = estimatedServerTimeMs();
-	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, actionServerMs, skillSeed));
+	// 시전 시점 조준 pitch 스냅샷을 동봉한다(서버 판정·원격 재현이 캐스터 예측과 일치 — seed와 동일 원리).
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(
+		skillAssetId, actionServerMs, skillSeed, static_cast<float>(cameraPitch_)));
 }
 
 void Game::beginServerTimeSync() {
@@ -5763,6 +6030,38 @@ void Game::onPlayerHp(uint16 playerId, int32 newHp) {
 		it->second->setHp(newHp);
 }
 
+void Game::onInventorySnapshot(uint32 revision,
+	const std::vector<InventorySlotInfo>& slots) {
+	std::vector<ItemStack> stacks;
+	stacks.reserve(slots.size());
+	for (const InventorySlotInfo& slot : slots)
+		stacks.push_back(ItemStack{ slot.itemId, slot.quantity });
+
+	std::string error;
+	if (!inventory_.applySnapshot(itemCatalog_, revision, stacks, &error)) {
+		gSharedLog << "[Inventory] rejected server snapshot: " << error << "\n";
+		return;
+	}
+	inventoryPanel_.setInventory(inventory_);
+	inventoryPanel_.setPending(false);
+}
+
+void Game::onInventoryActionResult(uint32 revision, uint8 slotIndex,
+	InventoryAction action, InventoryActionResult result, InventorySlotInfo slot) {
+	(void)action;
+	if (result == InventoryActionResult::Success) {
+		std::string error;
+		if (!inventory_.applyAuthoritativeSlot(
+				itemCatalog_, revision, slotIndex,
+				ItemStack{ slot.itemId, slot.quantity }, &error)) {
+			gSharedLog << "[Inventory] rejected action result: " << error << "\n";
+		} else {
+			inventoryPanel_.setInventory(inventory_);
+		}
+	}
+	inventoryPanel_.showActionResult(result);
+}
+
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
@@ -5774,8 +6073,23 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
+	const bool escapePressed =
+		(keyboardStateCurr_[VK_ESCAPE] & 0x80)
+		&& !(keyboardStatePrev_[VK_ESCAPE] & 0x80);
+	const bool inventoryPressed =
+		(keyboardStateCurr_['E'] & 0x80)
+		&& !(keyboardStatePrev_['E'] & 0x80);
+
+	if (inventoryPanel_.isOpen()) {
+		if (escapePressed || inventoryPressed)
+			setInventoryOpen(false);
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	// ESC: 인게임 설정창 토글(로비의 "설정" 버튼과 동일한 패널을 재사용).
-	if ( (keyboardStateCurr_[VK_ESCAPE] & 0x80) && !(keyboardStatePrev_[VK_ESCAPE] & 0x80) ) {
+	if (escapePressed) {
 		settingsPanel_.toggle();
 	}
 
@@ -5801,6 +6115,13 @@ void Game::processInput(Milliseconds deltaTime) {
 	// by handleWndMsg to advance pages; here we drop accumulated look delta so
 	// the camera doesn't drift, then skip gameplay until the window hides.
 	if (dialogueSystem_.active()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
+	if (inventoryPressed) {
+		setInventoryOpen(true);
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
 		return;
@@ -5909,6 +6230,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
 	}
 
+
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
@@ -5922,6 +6244,9 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		-mu::pi * 0.16f,
 		mu::pi * 0.3f
 	);
+	// 조준 pitch를 로컬 플레이어에 반영한다(스파인 굽힘·스킬 aim 합성이 읽음).
+	// body orient에는 넣지 않는다(pitch를 orient에 넣으면 캐릭터가 굴러버림).
+	player_->setAimPitch(static_cast<float>(cameraPitch_));
 
 	if (!playerDead_) {
 		if (rightMouseDragging) {
@@ -5940,7 +6265,10 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	const auto currForward = player_->forward();
 
-	if (prevForward != currForward) {
+	// yaw(전방)뿐 아니라 pitch만 변한 경우에도 송신한다 — 종전 조건은 forward가
+	// yaw 전용이라 pitch 변화가 패킷으로 나가지 않았다.
+	if (prevForward != currForward
+		|| std::fabs(static_cast<float>(cameraPitch_) - lastSentAimPitch_) > 0.01f) {
 		sendMouseMovePacket();
 	}
 
@@ -6189,8 +6517,9 @@ void Game::applyCursorPolicy() {
 
 	// 로비 메인 메뉴와 설정창에서는 포인터를 자유롭게 둔다.
 	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
-		|| settingsPanel_.isOpen();
-	const bool showCursorNow = (scene_ == Scene::Lobby) || settingsPanel_.isOpen();
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
+	const bool showCursorNow = (scene_ == Scene::Lobby)
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
 	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
 

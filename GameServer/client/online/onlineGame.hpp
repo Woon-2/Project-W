@@ -40,8 +40,11 @@
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../ui/minimapHUD.hpp"
+#include "../ui/pathGuideHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
+#include "../ui/dialogue/TacticalDialogueOverlay.hpp"
+#include "../ui/inventoryPanel.hpp"
 #include "../debugBVView.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
@@ -99,9 +102,9 @@ public:
 
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
-	void rotatePlayer(uint16 playerId, float yawRad);
+	void rotatePlayer(uint16 playerId, float yawRad, float pitchRad);
 
-	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
 	// 서버가 전술 차단벽(barrier)을 토글. npcIds는 플레이어 차단+impulse 면역,
 	// impulseOnlyNpcId는 차단벽 등록 없이 impulse 면역만 설정한다.
@@ -118,7 +121,8 @@ public:
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
-	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed );
+	void onTacticalDialogue( uint16 zoneId, TacticalDialogueId dialogueId );
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
@@ -127,6 +131,9 @@ public:
 	void onComboState( uint16 playerId, uint16 comboCount, float windowMs );
 	// Server-authoritative HP push (regen): apply newHp directly, no hit event/animation.
 	void onPlayerHp( uint16 playerId, int32 newHp );
+	void onInventorySnapshot(uint32 revision, const std::vector<InventorySlotInfo>& slots);
+	void onInventoryActionResult(uint32 revision, uint8 slotIndex,
+		InventoryAction action, InventoryActionResult result, InventorySlotInfo slot);
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 	void beginServerTimeSync();
@@ -164,6 +171,8 @@ private:
 	void sendAttackPacket();
 	void sendSkillStartPacket(uint32 skillAssetId, uint32 skillSeed);
 	void sendSelectSkillPacket(uint8 slot);
+	void sendInventoryAction(uint8 slotIndex, InventoryAction action);
+	void setInventoryOpen(bool open);
 	void updateServerTimeSync();
 	void requestServerTimeSync();
 	uint64 estimatedServerTimeMs() const;
@@ -172,8 +181,7 @@ private:
 	bool   serverClockSynchronized_{ false };
 	void setupSkillDial(PlayerWeaponType weaponType);   // builds the dial loadout after skills register
 	void createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponType weaponType);
-	// 오른손 소켓에 weaponType에 해당하는 무기를 (재)장착한다. 인게임/로비 포트레이트 공용.
-	void equipPlayerWeapon(Object& obj, PlayerWeaponType weaponType);
+	// 무기 (재)장착은 object.hpp의 공용 자유 함수 equipPlayerWeapon()을 사용한다.
 	// lobbyChars_[i]를 lobbyPlayers_[i].weaponType과 동기화한다(인덱스 1:1 대응).
 	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
@@ -201,6 +209,8 @@ private:
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
+	void setNpcStatusFlags(uint16 npcId, uint8 statusFlags);
+	void updateNpcStatusIcons(float deltaTimeSec);
 	void setupBossHpHud();
 	void showBossHpHud();
 	void hideBossHpHud();
@@ -232,6 +242,9 @@ private:
 	void applyDisplaySettings();
 
 	// 로비 mock 액션 (script.js 프로토타입 이식).
+	void lobbyLogin(const std::wstring& id, const std::wstring& password);
+	void lobbyRegister(const std::wstring& id, const std::wstring& password,
+		const std::wstring& nickname);
 	void lobbyCreateRoom();
 	void lobbyJoinRoom(const std::string& code);
 	void lobbyLeaveRoom();
@@ -432,6 +445,9 @@ private:
 	// 카메라 yaw는 기본적으로 플레이어에 대한 오프셋으로만 작동하지만,
 	// 플레이어 사망 이후에는 이 변수로 작동한다.
 	mu::Radian cameraYaw_ = 0.f;
+	// 마지막으로 C_MouseMove에 실어 보낸 조준 pitch. yaw가 안 변해도 pitch가
+	// 이 값에서 0.01rad 이상 벗어나면 송신한다(pitch만 움직일 때 패킷 누락 방지).
+	float lastSentAimPitch_ = 0.f;
 
 	Light dirLight_{};
 	AssetConfigs assetConfigs_{};
@@ -468,7 +484,8 @@ private:
 	// Declared after MonsterKind so its signature can reference the enum.
 	void configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectInfo& info,
 	                         const Model* model, MonsterKind kind, float mass,
-	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars);
+	                         std::unordered_map<uint16, MonsterHpEntry>& hpBars,
+	                         bool isNamed = false);
 	struct PooledMonster { std::shared_ptr<Object> obj; UI::ProgressBar* hpBar = nullptr; };
 	struct Corpse {
 		std::shared_ptr<Object> obj;        // detached monster (owns ragdoll + mesh)
@@ -527,6 +544,9 @@ private:
 	// --- Minimap (top-left, North-up; background cache re-baked on chunk load/unload) ---
 	MinimapHUD minimap_{};
 	std::vector<MinimapEntityIcon> minimapIcons_{};
+	// On-screen destination indicator (beacon / edge arrow) for the path-guidance route.
+	PathGuideHUD pathGuideHUD_{};
+	std::vector<mu::Vec3> minimapGuidePoly_{};   // active route sample points for the minimap
 	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
 	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk
 	// load/unload or when the player drifts > kMinimapRebakeMoveThreshold from this center.
@@ -544,6 +564,10 @@ private:
 	std::unordered_map<uint16, uint8>                teammateSelected_{};
 
 	UI::UIManager    uiManager_{};
+	ItemCatalog      itemCatalog_{};
+	Inventory        inventory_{};
+	UI::InventoryPanel inventoryPanel_{};
+	bool             inventoryUiReady_ = false;
 	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
 	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
@@ -564,6 +588,7 @@ private:
 	// Tactical arena entry title card (self-contained overlay module; the boss
 	// arena adds a WARNING phase). onlineGame only owns it and delegates.
 	UI::TacticalZoneIntro tacticalZoneIntro_{};
+	UI::TacticalDialogueOverlay tacticalDialogueOverlay_{};
 
 	// Event-driven dialogue/monologue windows (loaded from dialogues.json).
 	// Shown when the local player finishes spawning in-game (sample_intro).
@@ -650,6 +675,14 @@ private:
 	std::unordered_map<uint16, MonsterHpEntry> treantHpBars_{};
 	std::unordered_map<uint16, MonsterHpEntry> bossHpBars_{};
 
+	struct NpcStatusIconEntry {
+		UI::Image* icon = nullptr;   // owned by uiManager_
+		uint8      statusFlags = npcStatusMask(NpcStatusFlag::None);
+		float      phaseOffset = 0.f;
+	};
+	std::unordered_map<uint16, NpcStatusIconEntry> npcStatusIcons_{};
+	float npcStatusIconElapsed_ = 0.f;
+
 	struct StrongholdHpEntry {
 		Stronghold*      obj;          // non-owning; owned by shared_ptr in strongholds_
 		UI::ProgressBar* hpBar;        // owned by uiManager_
@@ -685,6 +718,9 @@ private:
 
 	Scene      scene_      = Scene::Lobby;
 	LobbyState lobbyState_ = LobbyState::MainMenu;
+	bool       isAuthenticated_ = false;
+	std::unordered_set<std::wstring> localRegisteredIds_{};
+	std::unordered_set<std::wstring> localRegisteredNicknames_{};
 
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.

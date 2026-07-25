@@ -16,13 +16,13 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	// --- Background music (streamed, looped) ---
 	{ "lobby",             "../resources/audio/bgm/lobby.wav",                    Bus::Bgm, /*loop*/true, /*stream*/true, 1.0f },
 	{ "ingame",            "../resources/audio/bgm/Action 5 (Loop).wav",           Bus::Bgm, /*loop*/true, /*stream*/true, 1.0f },
-	{ "hobgoblin_arena",   "../resources/audio/bgm/Boss of the Abyss (Loop).mp3", Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
-	{ "grandbaum_arena",   "../resources/audio/bgm/Boss Domain (Grandbaum).mp3",   Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
-	{ "isys_arena",        "../resources/audio/bgm/Quiet Omen (Isys).mp3",         Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
-	{ "boss_arena",        "../resources/audio/bgm/Whispering Vale.mp3",           Bus::Bgm, /*loop*/true, /*stream*/true, 0.8f },
+	{ "hobgoblin_arena",   "../resources/audio/bgm/Boss of the Abyss (Loop).mp3", Bus::Bgm, /*loop*/true, /*stream*/true, 0.3f },
+	{ "grandbaum_arena",   "../resources/audio/bgm/Boss Domain (Grandbaum).mp3",   Bus::Bgm, /*loop*/true, /*stream*/true, 0.3f },
+	{ "isys_arena",        "../resources/audio/bgm/Quiet Omen (Isys).mp3",         Bus::Bgm, /*loop*/true, /*stream*/true, 0.3f },
+	{ "boss_arena",        "../resources/audio/bgm/Whispering Vale.mp3",           Bus::Bgm, /*loop*/true, /*stream*/true, 0.5f },
 
 	// --- UI ---
-	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 1.0f },
+	{ "ui_click",  "../resources/audio/sfx/ui_click.wav", Bus::Ui,  false, false, 0.3f },
 
 	// --- Skill SFX (positional, fired by PlaySound timeline events) ---
 	{ "sword_slash_1",      "../resources/audio/sfx/sword/sword_slash_1.mp3",      Bus::Sfx, false, false, 1.0f },
@@ -41,7 +41,7 @@ constexpr std::array kCatalog = std::to_array<CatalogEntry>({
 	{ "quake",             "../resources/audio/sfx/wand/quake.mp3",            Bus::Sfx, false, false, 1.0f },
 	{ "ice_crossfade",     "../resources/audio/sfx/wand/ice_crossfade.mp3",    Bus::Sfx, false, false, 1.0f },
 	{ "ice_front_attack",  "../resources/audio/sfx/wand/ice_front_attack.wav", Bus::Sfx, false, false, 1.0f },
-	{ "red_energy",        "../resources/audio/sfx/wand/red_energy.mp3",       Bus::Sfx, false, false, 2.0f },
+	{ "red_energy",        "../resources/audio/sfx/wand/red_energy.mp3",       Bus::Sfx, false, false, 1.0f },
 
 	// --- Spear skill SFX (positional, fired by PlaySound timeline events) ---
 	{ "spear1",            "../resources/audio/sfx/spear/spear1.mp3",          Bus::Sfx, false, false, 1.0f },

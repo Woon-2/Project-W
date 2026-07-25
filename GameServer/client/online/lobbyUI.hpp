@@ -35,6 +35,9 @@ public:
 
     // Actions invoked from lobby buttons; wired by Game at build() time.
     struct Callbacks {
+        std::function<void(const std::wstring&, const std::wstring&)> onLogin;
+        std::function<void(const std::wstring&, const std::wstring&,
+                           const std::wstring&)>                      onRegister;
         std::function<void()>                    onCreateRoom;
         std::function<void(const std::string&)>  onJoinRoom;
         std::function<void()>                    onLeaveRoom;
@@ -55,8 +58,10 @@ public:
     struct ViewState {
         bool        inLobbyScene       = true;   // scene_ == Scene::Lobby
         bool        inMainMenu         = true;   // lobbyState_ == LobbyState::MainMenu
+        bool        isAuthenticated    = false;  // local-only gate until auth server exists
         bool        waitingRoom3DReady = false;  // stageVisualReady_
         bool        isHost             = false;
+        std::wstring nickname          = L"PLAYER";
         std::string roomCode;
         std::vector<PlayerSlot> players;
         int         maxPlayers         = kMaxLobbyPlayers;
@@ -86,7 +91,10 @@ public:
     void setRootVisible(bool v)            { if (lobbyRoot_) lobbyRoot_->visible = v; }
     void setLoadingVisible(bool v)         { if (loadingRoot_) loadingRoot_->visible = v; }
     void setFlatBackgroundVisible(bool v);
-    void setMainMenuMessage(const std::wstring& msg) { if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(msg); }
+    void setMainMenuMessage(const std::wstring& msg, bool isError = true);
+    void setSignupMessage(const std::wstring& msg);
+    void completeRegistration(const std::wstring& id);
+    void clearLoginPassword()              { if (loginPasswordInput_) loginPasswordInput_->clear(); }
     void clearRoomCodeInput()              { if (roomCodeInput_) roomCodeInput_->clear(); }
 
     // Textures shared with the settings panel (9-slice frames).
@@ -95,6 +103,10 @@ public:
 
 private:
     void buildLoadingScreen(UI::UIManager& uiManager);
+    void openSignup();
+    void closeSignup();
+    void submitLogin();
+    void submitRegistration();
 
     Callbacks callbacks_{};
 
@@ -120,10 +132,24 @@ private:
     UI::Image*     lobbyLogoImage_  = nullptr;
     UI::UIElement* mainMenuRoot_    = nullptr;
     UI::UIElement* waitingRoomRoot_ = nullptr;
+    UI::UIElement* authRoot_        = nullptr;
+    UI::UIElement* roomSelectionRoot_ = nullptr;
+    UI::Button*    profileImageBox_ = nullptr;
+    UI::Label*     profileNicknameLabel_ = nullptr;
+    UI::TextInput* loginIdInput_    = nullptr;
+    UI::TextInput* loginPasswordInput_ = nullptr;
     UI::TextInput* roomCodeInput_   = nullptr;
     UI::Label*     mainMenuMsgLabel_= nullptr;
     UI::Label*     roomCodeLabel_   = nullptr;
     UI::Label*     playerCountLabel_= nullptr;
+
+    // Lobby-only registration modal. The root blocks interaction with the main
+    // menu while visible; widgets remain mounted and retain their text on submit.
+    UI::UIElement* signupRoot_          = nullptr;
+    UI::TextInput* signupIdInput_       = nullptr;
+    UI::TextInput* signupPasswordInput_ = nullptr;
+    UI::TextInput* signupNicknameInput_ = nullptr;
+    UI::Label*     signupMsgLabel_      = nullptr;
 
     std::array<UI::Image*,  kMaxLobbyPlayers> slotBays_{};
     std::array<UI::Button*, kMaxLobbyPlayers> slotPanels_{};

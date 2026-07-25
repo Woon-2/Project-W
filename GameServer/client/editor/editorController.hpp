@@ -79,6 +79,14 @@ public:
 private:
     // --- selection / playback ---
     void selectCharacter(int idx);
+    // Weapon dropdown (Player caster only): equips the weapon model, switches the
+    // player's animation clip set, and re-filters the skill list to that weapon.
+    void selectWeapon(int idx);
+    void applyWeaponToPlayer();
+    // Rebuilds skillNames_ + the skill dropdown for the current caster. For the
+    // Player the list is filtered by the selected weapon (skills of other weapons
+    // are dropped; weapon-less skills stay at the end).
+    void rebuildSkillList();
     void rebuildSkillDropdown(const std::vector<std::string>& items);
     void selectSkill(int idx);
     void play();
@@ -123,6 +131,8 @@ private:
 
     // --- selection state ---
     CharacterKind            casterKind_ = CharacterKind::Player;
+    int                      characterIdx_ = 0;   // index into kCharacterSkillMap
+    PlayerWeaponType         weapon_     = PlayerWeaponType::Katana;
     i32t                     casterId_   = 0;
     i32t                     targetId_   = 1;
     std::vector<std::string> skillNames_;       // names backing the skill dropdown
@@ -148,8 +158,13 @@ private:
     mu::Vec3  goblinSpawnPos_{};  mu::NQuat goblinSpawnOrient_{};
 
     // --- UI (owned by uiManager_) ---
+    // Top row, left to right: character | weapon | skill, each with a caption above.
     UI::Dropdown* characterDropdown_ = nullptr;
+    UI::Dropdown* weaponDropdown_    = nullptr;  // hidden for monster casters
     UI::Dropdown* skillDropdown_     = nullptr;
+    // Only the weapon caption needs a handle (it is shown/hidden with its dropdown);
+    // the other two captions are static and stay owned by the UI tree alone.
+    UI::Label*    captionWeapon_     = nullptr;
     UI::Panel*    panel_             = nullptr;
     UI::Label*    statusLabel_       = nullptr;
     UI::Label*    helpLabel_         = nullptr;  // controls cheat-sheet (top-right)

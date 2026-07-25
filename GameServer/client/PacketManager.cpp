@@ -113,6 +113,18 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSTimeSyncPacket( buffer, len );
 		break;
 
+	case PacketType::S_TacticalDialogue:
+		handleSTacticalDialoguePacket( buffer, len );
+		break;
+
+	case PacketType::S_InventorySnapshot:
+		handleSInventorySnapshotPacket(buffer, len);
+		break;
+
+	case PacketType::S_InventoryActionResult:
+		handleSInventoryActionResultPacket(buffer, len);
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -253,12 +265,14 @@ void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 	auto sMouseMvPkt = reinterpret_cast<SMouseMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
+	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian, sMouseMvPkt->pitchRadian);
 }
 
 void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
 	auto sNpcMvPkt = reinterpret_cast<SNpcMovePacket*>(buffer);
-	INet::ClientApp::onlineGame()->moveGoblin(sNpcMvPkt->npcId, sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
+	INet::ClientApp::onlineGame()->moveGoblin(
+		sNpcMvPkt->npcId, sNpcMvPkt->statusFlags,
+		sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
 }
 
 void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
@@ -269,7 +283,7 @@ void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
 
 	for (uint16 i = 0; i < list.count(); ++i) {
 		const auto& info = list[i];
-		game->moveGoblin(info.npcId, info.pos, info.orient, info.velocity);
+		game->moveGoblin(info.npcId, info.statusFlags, info.pos, info.orient, info.velocity);
 	}
 }
 
@@ -383,7 +397,7 @@ void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed );
+	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed, pkt->aimPitchRadian );
 }
 
 void PacketManager::handleSTimeSyncPacket( byte* buffer, int32 len ) {
@@ -437,6 +451,54 @@ void PacketManager::handleSZoneStatePacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onZoneState( pkt->zoneId, pkt->state );
 }
 
+void PacketManager::handleSTacticalDialoguePacket( byte* buffer, int32 len ) {
+	if (len < static_cast<int32>(sizeof(STacticalDialoguePacket))) return;
+
+	auto pkt = reinterpret_cast<STacticalDialoguePacket*>(buffer);
+	if (pkt->size != sizeof(STacticalDialoguePacket) ||
+		static_cast<uint8>(pkt->dialogueId) >= static_cast<uint8>(TacticalDialogueId::Count)) {
+		return;
+	}
+
+	if (auto* game = INet::ClientApp::onlineGame()) {
+		game->onTacticalDialogue(pkt->zoneId, pkt->dialogueId);
+	}
+}
+
+void PacketManager::handleSInventorySnapshotPacket(byte* buffer, int32 len) {
+	if (len < sizeof(SInventorySnapshotPacket))
+		return;
+	auto* pkt = reinterpret_cast<SInventorySnapshotPacket*>(buffer);
+	if (pkt->size != len)
+		return;
+	const std::size_t dataEnd = static_cast<std::size_t>(pkt->slotsOffset)
+		+ sizeof(InventorySlotInfo) * pkt->slotCount;
+	if (pkt->slotsOffset < sizeof(SInventorySnapshotPacket)
+		|| dataEnd > static_cast<std::size_t>(len)) {
+		return;
+	}
+
+	auto list = pkt->getSlotList();
+	std::vector<InventorySlotInfo> slots;
+	slots.reserve(list.count());
+	for (uint16 i = 0; i < list.count(); ++i)
+		slots.push_back(list[i]);
+	INet::ClientApp::onlineGame()->onInventorySnapshot(pkt->revision, slots);
+}
+
+void PacketManager::handleSInventoryActionResultPacket(byte* buffer, int32 len) {
+	if (len != sizeof(SInventoryActionResultPacket))
+		return;
+	const auto* pkt = reinterpret_cast<const SInventoryActionResultPacket*>(buffer);
+	if (pkt->size != sizeof(SInventoryActionResultPacket)
+		|| static_cast<uint8>(pkt->action) > static_cast<uint8>(InventoryAction::DiscardOne)
+		|| static_cast<uint8>(pkt->result) > static_cast<uint8>(InventoryActionResult::StaleRevision)) {
+		return;
+	}
+	INet::ClientApp::onlineGame()->onInventoryActionResult(
+		pkt->revision, pkt->slotIndex, pkt->action, pkt->result, pkt->slot);
+}
+
 void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SPlayerKnockbackPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onPlayerKnockback( pkt->playerId, pkt->dirX, pkt->dirZ, pkt->speed, pkt->knockMs, pkt->postLockMs );
@@ -484,7 +546,7 @@ void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed) {
+std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -492,6 +554,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAss
 	pkt->skillAssetId = skillAssetId;
 	pkt->actionServerMs = actionServerMs;
 	pkt->skillSeed    = skillSeed;
+	pkt->aimPitchRadian = aimPitchRad;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_SkillStart;
@@ -541,6 +604,22 @@ std::shared_ptr<SendBuffer> PacketManager::makeCTimeSyncPacket(uint64 clientSend
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeCInventoryActionPacket(
+	uint32 revision, uint8 slotIndex, InventoryAction action) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CInventoryActionPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<CInventoryActionPacket>();
+	pkt->revision = revision;
+	pkt->slotIndex = slotIndex;
+	pkt->action = action;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_InventoryAction;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -570,12 +649,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCDebugTeleportPacket(DirectX::XMF
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad, float pitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMouseMvPkt = bw.reserve<CMouseMovePacket>();
 	cMouseMvPkt->yawRadian = yawRad;
+	cMouseMvPkt->pitchRadian = pitchRad;
 
 	cMouseMvPkt->size = bw.writeSize();
 	cMouseMvPkt->type = PacketType::C_MouseMove;

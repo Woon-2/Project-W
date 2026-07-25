@@ -7,6 +7,7 @@
 #include "piercingMaterial.hpp"
 #include "piercingSlashMaterial.hpp"
 #include "protocol.hpp"
+#include "../common/inventory.hpp"
 
 class AssetManager {
 public:
@@ -18,6 +19,8 @@ public:
 	// goblin animations). loadGFXAssets() runs both in order (used by standalone).
 	void loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
 	void loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
+	void loadInventoryUIAssets(GFX& gfx);
+	void loadInventoryItemIcons(GFX& gfx, const ItemCatalog& catalog);
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelStronghold() const { return &modelStronghold_; }
@@ -33,10 +36,14 @@ public:
 	const Texture* crystalWand() const { return &crystalWand_; }
 	const Texture* heavyArrow() const { return &heavyArrow_; }
 	const Texture* uiLeftButton() const { return &uiLeftButton_; }
+	const Texture* inventoryPanelFrame() const { return &inventoryPanelFrame_; }
+	const Texture* inventoryMenuButton() const { return &inventoryMenuButton_; }
+	const Texture* inventoryItemIcon(ItemId itemId) const;
 	const Texture* playerWeaponIcon(PlayerWeaponType weaponType) const;
 	const Model* playerWeaponModel(PlayerWeaponType weaponType) const;
 	const Texture* digitAtlasTex() const { return &digitAtlasTex_; }
 	const Texture* killIconTex()   const { return &killIconTex_; }
+	const Texture* confusionStatusIcon() const { return &confusionStatusIcon_; }
 	const Texture* tacticalZoneTitleBanner() const { return &tacticalZoneTitleBanner_; }
 	const Texture* monsterHpFrame() const { return &monsterHpFrame_; }
 	const Texture* monsterHpBar() const { return &monsterHpBar_; }
@@ -167,8 +174,14 @@ private:
 	Texture crystalWand_{};
 	Texture heavyArrow_{};
 	Texture uiLeftButton_{};
+	Texture inventoryPanelFrame_{};
+	Texture inventoryMenuButton_{};
+	bool inventoryUiAssetsLoaded_ = false;
+	std::map<ItemId, Texture> inventoryItemIcons_{};
+	bool inventoryItemIconsLoaded_ = false;
 	Texture digitAtlasTex_{};
 	Texture killIconTex_{};
+	Texture confusionStatusIcon_{};
 	Texture tacticalZoneTitleBanner_{};
 	Texture monsterHpFrame_{};
 	Texture monsterHpBar_{};

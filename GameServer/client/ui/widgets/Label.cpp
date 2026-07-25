@@ -21,6 +21,14 @@ void Label::setFontFamily(std::wstring family) {
     }
 }
 
+void Label::setFontWeight(DWRITE_FONT_WEIGHT weight) {
+    if (fontWeight_ != weight) {
+        fontWeight_ = weight;
+        prevFontSize_ = -1.f;
+        dirty_ = true;
+    }
+}
+
 void Label::setFontSize(float size) {
     if (fontSize_ != size) { fontSize_ = size; dirty_ = true; }
 }
@@ -54,7 +62,7 @@ void Label::onUpdate(const UpdateContext& ctx) {
         float hi = autoSizeMax_ * ctx.uiScale;
         for (int i = 0; i < 8; ++i) {
             float mid = (lo + hi) * 0.5f;
-            FontHandle tryFont = ctx.gfx->createFont(fontFamily_.c_str(), mid);
+            FontHandle tryFont = ctx.gfx->createFont(fontFamily_.c_str(), mid, fontWeight_);
             int tw = 0, th = 0;
             ctx.gfx->measureText(&tryFont, text_.c_str(), static_cast<DWORD>(text_.size()),
                                  static_cast<float>(ownedTextImage_.width),
@@ -66,14 +74,14 @@ void Label::onUpdate(const UpdateContext& ctx) {
                 hi = mid;
         }
         if (lo != prevFontSize_) {
-            ownedFont_    = ctx.gfx->createFont(fontFamily_.c_str(), lo);
+            ownedFont_    = ctx.gfx->createFont(fontFamily_.c_str(), lo, fontWeight_);
             prevFontSize_ = lo;
         }
         font = &ownedFont_;
     } else if (fontSize_ > 0.f) {
         const float scaledFontSize = fontSize_ * ctx.uiScale;
         if (scaledFontSize != prevFontSize_) {
-            ownedFont_    = ctx.gfx->createFont(fontFamily_.c_str(), scaledFontSize);
+            ownedFont_    = ctx.gfx->createFont(fontFamily_.c_str(), scaledFontSize, fontWeight_);
             prevFontSize_ = scaledFontSize;
         }
         font = &ownedFont_;

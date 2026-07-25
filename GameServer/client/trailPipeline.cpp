@@ -122,6 +122,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
             .flowSpeed            = e.flowSpeed,
             .alignMode            = e.alignMode,
             .premultiplyAlpha     = e.premultiplyAlpha,
+            .patternMode          = e.patternMode,
         };
         pResources_->perDrawcallData.cbuffers[i].stage(roomIdx_, &pdd, 1u);
     }

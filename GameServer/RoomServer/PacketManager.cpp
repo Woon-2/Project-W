@@ -49,6 +49,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCTimeSyncPacket(session, buffer, len);
 		break;
 
+	case PacketType::C_InventoryAction:
+		handleCInventoryActionPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -91,6 +95,7 @@ void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, i
 	auto cMouseMvPktClone = ObjectPool<CMouseMovePacket>::pop();
 
 	cMouseMvPktClone->yawRadian = clientMouseMovePacket->yawRadian;
+	cMouseMvPktClone->pitchRadian = clientMouseMovePacket->pitchRadian;
 
 	session->room()->doAsync([session, cMouseMvPktClone]() {
 		session->room()->rotate(session->id(), cMouseMvPktClone);
@@ -109,8 +114,9 @@ void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer,
 	uint32 skillAssetId = pkt->skillAssetId;
 	uint64 actionServerMs = pkt->actionServerMs;
 	uint32 skillSeed    = pkt->skillSeed;
-	session->room()->doAsync( [session, skillAssetId, actionServerMs, skillSeed]() {
-		session->room()->skillStart( session->id(), skillAssetId, actionServerMs, skillSeed );
+	float  aimPitchRad  = pkt->aimPitchRadian;
+	session->room()->doAsync( [session, skillAssetId, actionServerMs, skillSeed, aimPitchRad]() {
+		session->room()->skillStart( session->id(), skillAssetId, actionServerMs, skillSeed, aimPitchRad );
 	} );
 }
 
@@ -126,6 +132,23 @@ void PacketManager::handleCSelectSkillPacket( GameSession* session, byte* buffer
 	session->room()->doAsync( [session, slot]() {
 		session->room()->selectSkill( session->id(), slot );
 	} );
+}
+
+void PacketManager::handleCInventoryActionPacket(GameSession* session, byte* buffer, int32 len) {
+	if (!session || !session->room() || len != sizeof(CInventoryActionPacket))
+		return;
+
+	const auto* pkt = reinterpret_cast<const CInventoryActionPacket*>(buffer);
+	if (static_cast<uint8>(pkt->action) > static_cast<uint8>(InventoryAction::DiscardOne))
+		return;
+
+	const uint32 revision = pkt->revision;
+	const uint8 slotIndex = pkt->slotIndex;
+	const InventoryAction action = pkt->action;
+	session->room()->doAsync([session, revision, slotIndex, action]() {
+		if (session->room())
+			session->room()->inventoryAction(session->id(), revision, slotIndex, action);
+	});
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
@@ -221,13 +244,14 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerKnockbackPacket(uint16 pla
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad, float pitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto sMouseMvPkt = bw.reserve<SMouseMovePacket>();
 	sMouseMvPkt->playerId = playerId;
 	sMouseMvPkt->yawRadian = yawRad;
+	sMouseMvPkt->pitchRadian = pitchRad;
 
 	sMouseMvPkt->size = bw.writeSize();
 	sMouseMvPkt->type = PacketType::S_MouseMove;
@@ -236,12 +260,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId,
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SNpcMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto sNpcMvPkt = bw.reserve<SNpcMovePacket>();
 	sNpcMvPkt->npcId = npcId;
+	sNpcMvPkt->statusFlags = statusFlags;
 	sNpcMvPkt->pos = pos;
 	sNpcMvPkt->orient = orient;
 	sNpcMvPkt->velocity = velocity;
@@ -467,7 +492,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerHpPacket(uint16 playerId, 
 }
 
 
-std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed) {
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -476,6 +501,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->ownerId      = ownerId;
 	pkt->elapsedMs    = elapsedMs;
 	pkt->skillSeed    = skillSeed;
+	pkt->aimPitchRadian = aimPitchRad;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
 
@@ -570,6 +596,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSZoneStatePacket(uint16 zoneId, u
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSTacticalDialoguePacket(
+	uint16 zoneId, TacticalDialogueId dialogueId) {
+	auto sendBuffer = SendBufferManager::open(sizeof(STacticalDialoguePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt        = bw.reserve<STacticalDialoguePacket>();
+	pkt->zoneId     = zoneId;
+	pkt->dialogueId = dialogueId;
+	pkt->size       = bw.writeSize();
+	pkt->type       = PacketType::S_TacticalDialogue;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SNpcRespawnPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -581,6 +622,52 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, i
 
 	pkt->size     = bw.writeSize();
 	pkt->type     = PacketType::S_NpcRespawn;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSInventorySnapshotPacket(
+	const Inventory& inventory) {
+	const uint8 count = static_cast<uint8>(inventory.slotCount());
+	auto sendBuffer = SendBufferManager::open(
+		sizeof(SInventorySnapshotPacket) + sizeof(InventorySlotInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SInventorySnapshotPacket>();
+	auto* entries = bw.reserve<InventorySlotInfo>(count);
+	for (uint8 i = 0; i < count; ++i) {
+		const ItemStack* stack = inventory.slot(i);
+		entries[i] = stack
+			? InventorySlotInfo{ stack->itemId, stack->quantity }
+			: InventorySlotInfo{};
+	}
+
+	pkt->revision = inventory.revision();
+	pkt->slotsOffset = static_cast<uint16>(
+		reinterpret_cast<uint64>(entries) - reinterpret_cast<uint64>(pkt));
+	pkt->slotCount = count;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_InventorySnapshot;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSInventoryActionResultPacket(
+	uint32 revision, uint8 slotIndex, InventoryAction action,
+	InventoryActionResult result, InventorySlotInfo slot) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SInventoryActionResultPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SInventoryActionResultPacket>();
+	pkt->revision = revision;
+	pkt->slotIndex = slotIndex;
+	pkt->action = action;
+	pkt->result = result;
+	pkt->slot = slot;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_InventoryActionResult;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

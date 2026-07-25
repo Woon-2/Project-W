@@ -22,9 +22,24 @@ function OBB(cx, cy, cz, hex, hey, hez, yaw, pitch, roll)
     return t
 end
 
--- Helper: bone attachment target.
+-- Helper: bone attachment target. Follows the bone's CURRENT animated pose, so the
+-- hitbox drifts if the playing clip changes (e.g. a different weapon's attack clip).
 function BoneAttach(boneName)
     return { type = "Bone", name = boneName }
+end
+
+-- Helper: body attachment target -- ANIMATION-INDEPENDENT melee anchor.
+-- OBBs live in the named bone's REST (bind) frame (same bone-local space as BoneAttach),
+-- but the runtime ignores the playing clip's pose, so the hitbox stays put regardless of
+-- which weapon (and thus attack clip) the caster holds. The frame is tilted by the caster's
+-- aim pitch about the anchor bone's origin (pitch = false to keep it flat / yaw-only).
+-- For player melee use BodyAttach("spine_01"): the aim pitch pivots at the chest, matching
+-- the visual spine bend. See client/docs/aimPitchUpperBodyMask.md.
+function BodyAttach(boneName, opts)
+    opts = opts or {}
+    local p = true
+    if opts.pitch ~= nil then p = opts.pitch end
+    return { type = "Body", name = boneName, pitch = p }
 end
 
 -- Helper: VFX particle system attachment.

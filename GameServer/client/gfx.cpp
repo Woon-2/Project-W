@@ -3310,11 +3310,15 @@ FontHandle GFX::createFont( float fontSize )
 	return font_.CreateFontObject( L"Tahoma", fontSize );
 }
 
-FontHandle GFX::createFont( const WCHAR* fontFamilyName, float fontSize )
+FontHandle GFX::createFont(
+	const WCHAR* fontFamilyName,
+	float fontSize,
+	DWRITE_FONT_WEIGHT fontWeight )
 {
 	return font_.CreateFontObject(
 		(fontFamilyName && fontFamilyName[0] != L'\0') ? fontFamilyName : L"Tahoma",
-		fontSize
+		fontSize,
+		fontWeight
 	);
 }
 

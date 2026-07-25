@@ -5,6 +5,7 @@ void Birdy::applyBirdyConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 60.f;
     cfg.moveSpeed      = 4.5f;
+    cfg.animRefSpeed   = 3.0f;   // authored speed of Birdy_Walk (not measured -- default; Isys shares it)
     cfg.attackRange    = 1.4f;
     cfg.detectionRange = 12.f;
     cfg.attackDamage   = 9.f;

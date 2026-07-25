@@ -7,7 +7,7 @@ skill.name             = "SlashCombo"
 skill.weapon           = "sword"
 skill.dialSlot         = 2
 skill.chargeCost       = 8
-skill.cooldownMs       = 2400
+skill.cooldownMs       = 2050
 skill.totalDurationMs  = 2000
 skill.interruptible    = true
 
@@ -39,9 +39,9 @@ skill:addEvent(100, "PlayVFX", {
 -- Per-beat swing SFX, aligned to the four hitbox waves (SpawnHitbox times):
 --   150 / 550 / 750ms = light slashes; 1250ms = finisher (the big double-arc wave).
 skill:addEvent(150,  "PlaySound", { sound = "sword_slash_1" })
-skill:addEvent(350,  "PlaySound", { sound = "sword_slash_1" })
-skill:addEvent(550,  "PlaySound", { sound = "sword_slash_1" })
-skill:addEvent(1000, "PlaySound", { sound = "sword_slash_finish" })
+skill:addEvent(500,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(700,  "PlaySound", { sound = "sword_slash_1" })
+skill:addEvent(1250, "PlaySound", { sound = "sword_slash_finish" })
 
 local onHit = OnHit({
     damage          = 75,
@@ -54,137 +54,137 @@ local onHit = OnHit({
 local onHitFinisher = deepCopy(onHit)
 onHitFinisher.vfxScale = 2.5
 
-skill:addEvent(150, "SpawnHitbox", {
+skill:addEvent(200, "SpawnHitbox", {
     slot                = 0,
     localOBBs           = { OBB(-0.25, 0.05, -1.45, 0.55, 1.2, 1.4, 29, 80, -8) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
-skill:addEvent(150, "SpawnHitbox", {
+skill:addEvent(200, "SpawnHitbox", {
     slot                = 1,
     localOBBs           = { OBB(0.2, -1.2, -0.65, 0.55, 1.15, 1.6, 37, 31, 5) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
-skill:addEvent(150, "SpawnHitbox", {
+skill:addEvent(200, "SpawnHitbox", {
     slot                = 2,
     localOBBs           = { OBB(1.1, -1.5, 0.7, 0.55, 1.0, 1.4, 29, 80, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(550, "SpawnHitbox", {
     slot                = 3,
     localOBBs           = { OBB(0.0, 0.35, -1.6, 0.3, 1.5, 1.2, -8, 44, 4) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 1,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(550, "SpawnHitbox", {
     slot                = 4,
     localOBBs           = { OBB(0.0, -0.4, -0.35, 0.3, 1.7, 1.2, -8, 13, 4) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 1,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(550, "SpawnHitbox", {
     slot                = 5,
     localOBBs           = { OBB(0.0, -0.55, 1.1, 0.3, 1.65, 1.1, -8, -6, 4) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 1,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 6,
     localOBBs           = { OBB(0.0, 0.85, -1.6, 0.3, 1.25, 0.8, 0, 67, -17) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 2,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 7,
     localOBBs           = { OBB(0.0, -0.15, -0.75, 0.3, 1.55, 1.2, 5, 43, -15) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 2,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 8,
     localOBBs           = { OBB(0.0, -0.4, 0.2, 0.3, 1.5, 1.2, 10, -7, -10) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 2,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 9,
     localOBBs           = { OBB(0.05, 0.1, 1.45, 0.3, 1.5, 1.2, 6, -38, -5) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 3,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHit
 })
 
-skill:addEvent(900, "SpawnHitbox", {
+skill:addEvent(1300, "SpawnHitbox", {
     slot                = 10,
     localOBBs           = { OBB(0.4, -0.95, -0.75, 0.65, 1.15, 2.3, 0, 50, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 3,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHitFinisher
 })
 
-skill:addEvent(900, "SpawnHitbox", {
+skill:addEvent(1300, "SpawnHitbox", {
     slot                = 11,
     localOBBs           = { OBB(0.4, 1.1, 0.7, 0.65, 1.15, 2.3, 0, 50, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 3,
-    hitGroupCooldownMs  = 300,
+    hitGroupCooldownMs  = 550,
     onHit               = onHitFinisher
 })
 
 skill:addEvent(350, "DestroyHitbox", { slot = 0 })
 skill:addEvent(350, "DestroyHitbox", { slot = 1 })
 skill:addEvent(350, "DestroyHitbox", { slot = 2 })
-skill:addEvent(700, "DestroyHitbox", { slot = 3 })
-skill:addEvent(700, "DestroyHitbox", { slot = 4 })
-skill:addEvent(700, "DestroyHitbox", { slot = 5 })
-skill:addEvent(900, "DestroyHitbox", { slot = 6 })
-skill:addEvent(900, "DestroyHitbox", { slot = 7 })
-skill:addEvent(900, "DestroyHitbox", { slot = 8 })
-skill:addEvent(900, "DestroyHitbox", { slot = 9 })
-skill:addEvent(1100, "DestroyHitbox", { slot = 10 })
-skill:addEvent(1100, "DestroyHitbox", { slot = 11 })
+skill:addEvent(800, "DestroyHitbox", { slot = 3 })
+skill:addEvent(800, "DestroyHitbox", { slot = 4 })
+skill:addEvent(800, "DestroyHitbox", { slot = 5 })
+skill:addEvent(1250, "DestroyHitbox", { slot = 6 })
+skill:addEvent(1250, "DestroyHitbox", { slot = 7 })
+skill:addEvent(1250, "DestroyHitbox", { slot = 8 })
+skill:addEvent(1250, "DestroyHitbox", { slot = 9 })
+skill:addEvent(1700, "DestroyHitbox", { slot = 10 })
+skill:addEvent(1700, "DestroyHitbox", { slot = 11 })
 
 return skill

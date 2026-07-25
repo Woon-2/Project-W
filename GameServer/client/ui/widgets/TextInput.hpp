@@ -27,6 +27,9 @@ public:
 
     void setMaxLength(std::size_t n) { maxLength_ = n; }
     void setFontSize(float size);
+    void setFontFamily(const std::wstring& family);
+    void setTextPaddingX(float pixels);
+    void setPasswordMode(bool enabled);
 
     // Optional 9-slice background texture (overrides the solid-color quad when set).
     // sliceCornerX/Y > 0 enables 9-slice; uvBorderX/Y are slice insets (fraction of source).
@@ -65,6 +68,7 @@ private:
     std::wstring placeholder_;
     std::size_t  maxLength_ = 32;
     bool         focused_   = false;
+    bool         passwordMode_ = false;
     Label*       label_     = nullptr;   // child, owned by UIElement children
 };
 

@@ -3,6 +3,7 @@
 
 class SendBuffer;
 class GameSession;
+class Inventory;
 
 /**
 * @brief SingletonBase
@@ -18,13 +19,14 @@ public:
 	static void handleCSkillStartPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCSelectSkillPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCTimeSyncPacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCInventoryActionPacket(GameSession* session, byte* buffer, int32 len);
 
 	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
 	static std::shared_ptr<SendBuffer> makeSLeavePacket(uint16 playerId);
 	static std::shared_ptr<SendBuffer> makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
-	static std::shared_ptr<SendBuffer> makeSMouseMovePacket(uint16 playerId, float yawRad);
-	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	static std::shared_ptr<SendBuffer> makeSMouseMovePacket(uint16 playerId, float yawRad, float pitchRad);
+	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos);
 	static std::shared_ptr<SendBuffer> makeSNpcSpawnBatchPacket(const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSNpcBarrierPacket(
@@ -38,7 +40,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos);
 	static std::shared_ptr<SendBuffer> makeSStrongholdStatePacket(uint16 strongholdId, int32 hp, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSZoneStatePacket(uint16 zoneId, uint8 state);
-	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed);
+	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad);
 	static std::shared_ptr<SendBuffer> makeSPlayerKnockbackPacket(uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0);
 	static std::shared_ptr<SendBuffer> makeSSkillSelectPacket(uint16 playerId, uint8 slot);
@@ -48,6 +50,11 @@ public:
 	static std::shared_ptr<SendBuffer> makeSPlayerHpPacket(uint16 playerId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 clientSendMs, uint64 serverReceiveMs, uint64 serverSendMs);
+	static std::shared_ptr<SendBuffer> makeSTacticalDialoguePacket(uint16 zoneId, TacticalDialogueId dialogueId);
+	static std::shared_ptr<SendBuffer> makeSInventorySnapshotPacket(const Inventory& inventory);
+	static std::shared_ptr<SendBuffer> makeSInventoryActionResultPacket(
+		uint32 revision, uint8 slotIndex, InventoryAction action,
+		InventoryActionResult result, InventorySlotInfo slot);
 };
 
 #endif // packet_manager_hpp

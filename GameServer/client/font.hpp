@@ -30,7 +30,10 @@ public:
 	~Font() = default;
 
 	void init( ID3D12Device* device, ID3D12CommandQueue* cmdQ, UINT width, UINT height, HWND hwnd );
-	FontHandle CreateFontObject( const WCHAR* fontFamilyName, float fontSize );
+	FontHandle CreateFontObject(
+		const WCHAR* fontFamilyName,
+		float fontSize,
+		DWRITE_FONT_WEIGHT fontWeight = DWRITE_FONT_WEIGHT_REGULAR );
 	// Returns false when D2D/DWrite rendering fails (e.g. device loss); the
 	// caller should keep its text dirty and retry later instead of exiting.
 	bool WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
@@ -39,6 +42,8 @@ public:
 private:
 	void createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ );
 	void createDWrite( ID3D12Device* device, UINT texWidth, UINT texHeight, float dpi );
+	void createBundledFontCollection();
+	bool hasFontFamily( IDWriteFontCollection1* collection, const WCHAR* fontFamilyName ) const;
 	bool CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color );
 
 	ComPtr<ID2D1Device2> pD2DDevice_ = nullptr;
@@ -50,6 +55,8 @@ private:
 	ComPtr<ID2D1SolidColorBrush> pBlackBrush_ = nullptr;
 
 	ComPtr<IDWriteFactory5> pDWFactory_ = nullptr;
+	ComPtr<IDWriteFontCollection1> pSystemFontCollection_ = nullptr;
+	ComPtr<IDWriteFontCollection1> pBundledFontCollection_ = nullptr;
 	UINT	D2DBitmapWidth_ = 0;
 	UINT	D2DBitmapHeight_ = 0;
 };

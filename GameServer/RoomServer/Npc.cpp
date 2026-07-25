@@ -30,6 +30,8 @@ void Npc::applyConfig(const NpcConfig& cfg) {
     detectionRange_     = cfg.detectionRange;
     attackRange_        = cfg.attackRange;
     moveSpeed_          = cfg.moveSpeed;
+    setAnimRefSpeed(cfg.animRefSpeed);
+    setAnimBandEnd(cfg.animBandEnd);
     attackDamage_       = cfg.attackDamage;
     attackWindupTime_   = cfg.attackWindupTime;
     attackRecoverTime_  = cfg.attackRecoverTime;

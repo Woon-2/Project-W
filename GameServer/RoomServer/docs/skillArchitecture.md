@@ -122,6 +122,22 @@ bone.toDress * animController_.bakedSamples[i][sampleIdx] * orientMat(owner->ori
 
 `animController_`는 `Object` 베이스 클래스에 있으며, AI 상태 전환 시 `switchClip()`이 호출되어 클라이언트의 시각적 포즈와 근사치로 동기화된다.
 
+**조준 pitch 재합성 (플레이어 전용):** `Object::updateAnimBones()`가 `computeBoneModelXforms` 직후
+`applySpinePitch()`로 스파인 체인(spine_01..03) 서브트리를 각 피벗 기준 `cameraPitch()/3`씩 X축 회전시킨다
+(클라 `AnimBlenderPlayer::onPostDress`와 동일 수식 — 모델 공간 피벗-공액). 따라서 `BoneAttach("spine_01")`
+멜리 히트박스가 캐스터의 상하 조준을 따라 기울어진다. `cameraPitch_`는 `C_MouseMove.pitchRadian`(연속)과
+`C_SkillStart.aimPitchRadian`(시전 스냅, `startSkill` 직전 반영)으로 갱신되고 NPC는 항상 0(no-op).
+PlayVFX emitter frame에도 동일 pitch가 합성된다(YawOnly/GroundSnap/본attach 제외).
+상세: `client/docs/aimPitchUpperBodyMask.md`.
+
+**애니메이션 독립 부착 `AttachType::Body` (2026-07-25):** `BoneAttach`는 위 `bakedSamples[i]`(재생 클립 포즈)를
+타므로 무기별 공격 클립 변경 시 히트박스가 어긋난다. `BodyAttach(bone)`는 애니 포즈 대신 본의 **rest 프레임
+`toDress`**만 쓰고 조준 pitch를 본 원점 피벗으로 주입한다 — `computeBoneModelXforms`/`applySpinePitch`를 거치지 않고
+`computeAttachTransform`이 직접 `toDress · [translate(-pivot)·rotateXH(cameraPitch)·translate(pivot)] · entityWorld`를
+반환(`entityWorld`=`updateAnimBones`와 동일 `scale·orient·translate`). 클라 `computeAttachTransform` Body 분기와
+동일 수식이라 판정=예측. OBB는 `BoneAttach`와 동일 본-로컬 공간(마이그레이션은 attach 교체만). 플레이어 근접 8종이
+`BodyAttach("spine_01")` 사용. NPC 공격 스킬은 무기 교체가 없어 `BoneAttach` 유지.
+
 ---
 
 ## 피격 데미지와 damageCoeff

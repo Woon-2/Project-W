@@ -38,8 +38,30 @@ public:
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
 private:
+	// 공격 오버레이의 본별 상체 마스크와 스파인 체인 데이터를 구축한다
+	// (spine_01 서브트리=상체, 경계 소프트 / spine_01..03 체인 인덱스·서브트리 깊이).
+	// setSkeleton 이후(init)에 1회 호출.
+	void buildAttackMask();
+
+	// 드레스 공간 후처리: 스파인 체인에 조준 pitch를 피벗-공액으로 분산 주입한다.
+	// (onCalcDress 누적 직후 호출됨. 자식 본들은 서브트리 곱으로 함께 회전.)
+	void onPostDress() override;
+
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
+
+	// 상하체 분리: 공격 오버레이 본별 가중치(상체=1, 하체=0, 경계 소프트).
+	// 이동 중 하체가 run 클립을 유지해 발 미끄러짐을 없앤다.
+	// 정지 시(tIdle_=1)에는 전신 공격(종전 동작)과 프레임 단위로 동일하다.
+	std::vector<float> attackMask_{};
+
+	// 조준 pitch 스파인 체인 (spine_01..03 본 인덱스, 미발견 시 -1).
+	std::array<int, 3> spineChainIdx_{ -1, -1, -1 };
+	// 본별 스파인 체인 깊이: b가 spine_0k의 서브트리에 속하면 spineDepth_[b] >= k.
+	// (체인이 중첩 서브트리이므로 "조상인 체인 본 개수"와 같다. 0 = 하체/체인 밖.)
+	std::vector<uint8_t> spineDepth_{};
+	// update()에서 owner로부터 캐시한 조준 pitch (onPostDress는 owner 접근 불가).
+	float aimPitch_ = 0.f;
 
 	PlayerWeaponType weaponType_ = PlayerWeaponType::Katana;
 	// 무기별로 해석된 클립 이름(setWeaponType에서 갱신). death는 전 무기 공용 상수.
@@ -63,6 +85,8 @@ private:
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 run 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float runRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
@@ -110,6 +134,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -158,6 +184,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -197,6 +225,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -236,6 +266,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -271,6 +303,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -306,6 +340,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -341,6 +377,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -381,6 +419,10 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// Speed-linked playback rate, shared by the walk and run clips (smoothed).
+	// Single value on purpose: walk and run crossfade against each other, so per-clip rates
+	// would double-compensate for the blend weight -- see AnimBlenderBoss::update.
+	float locoRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalkForward_ = 0.f;
 	float tWalkBackward_ = 0.f;
@@ -498,6 +540,11 @@ public:
 	// 속도(linearVel)를 갱신한다. 매 프레임 game 로직이 0으로 초기화 후 설정.
 	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
 	mu::Vec3 MU_CALLCONV velocity() const { return body_.linearVel(); }
+	// 수평(XZ) 속력. 로코모션 판정은 낙하 속도에 오염되면 안 되므로 이 값을 쓴다.
+	float MU_CALLCONV horizontalSpeed() const {
+		const auto v = body_.linearVel();
+		return std::sqrt(v.x() * v.x() + v.z() * v.z());
+	}
 	// 각속도를 갱신한다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
 	mu::Vec3 MU_CALLCONV omega() const { return body_.omega(); }
@@ -511,6 +558,13 @@ public:
 	mu::Vec3 MU_CALLCONV forward() const { return forward_; }
 	mu::Vec3 MU_CALLCONV right() const { return right_; }
 	mu::Vec3 MU_CALLCONV up() const { return up_; }
+
+	// 조준 pitch(라디안, +아래). body orient(yaw 전용)와 분리된 상체 조준 상태 —
+	// orient에 pitch를 넣으면 캐릭터가 굴러버리므로 별도 채널로 관리한다.
+	// 로컬 플레이어는 카메라 pitch에서, 원격 플레이어는 S_MouseMove/S_SkillStart에서 갱신.
+	// AnimBlenderPlayer의 스파인 굽힘과 스킬 PlayVFX aim 합성이 읽는다. NPC/비플레이어는 항상 0.
+	void setAimPitch(float pitchRad) { aimPitch_ = pitchRad; }
+	float aimPitch() const { return aimPitch_; }
 
 	// Physics body accessor. PhysicsWorld 등록 시 &body()를 전달한다.
 	RigidBody&       body()       { return body_; }
@@ -664,6 +718,9 @@ protected:
 	mu::Vec3 forward_{};
 	mu::Vec3 right_{};
 	mu::Vec3 up_{};
+
+	// 조준 pitch(라디안). setAimPitch/aimPitch 참조.
+	float aimPitch_ = 0.f;
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
@@ -1005,5 +1062,11 @@ public:
 private:
 	const TerrainData* terrainData_ = nullptr;
 };
+
+// 무기 모델을 (모델 자신이 선언한) 손 소켓에 장착하고,
+// 캐릭터의 AnimBlenderPlayer 클립 세트를 그 무기에 맞게 전환한다.
+// online 플레이와 standalone 스킬 에디터가 공유한다.
+void equipPlayerWeapon(Object& obj, const AssetManager& assetManager,
+	PlayerWeaponType weaponType);
 
 #endif	// __object_HPP

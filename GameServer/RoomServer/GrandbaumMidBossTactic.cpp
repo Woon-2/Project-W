@@ -487,6 +487,7 @@ bool GrandbaumMidBossTactic::tryConsumePendingShieldWall( Room& room, PlatoonLea
     shieldWallSlimeCountAtForm_ = liveSlimes;
     shieldWallRingRadius_ = calcShieldWallRadius( liveSlimes, countLiveSlimeSquads( room, leader ) );
     enterPhase( Phase::ShieldWall, leader );
+    room.notifyTacticalDialogue( TacticalDialogueId::GrandbaumShieldWall );
     applyShieldWallProtection( room, leader );   // 보스 보호(0.1) + 슬라임 반감(0.5) + 하드 블로커
     issueShieldWall( room, leader );             // 넉백 + 슬라임 링(RingGuard) 발령(1회)
     return true;
