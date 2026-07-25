@@ -134,6 +134,7 @@ private:
     UI::UIElement* waitingRoomRoot_ = nullptr;
     UI::UIElement* authRoot_        = nullptr;
     UI::UIElement* roomSelectionRoot_ = nullptr;
+    UI::Button*    signupButton_    = nullptr;
     UI::Button*    profileImageBox_ = nullptr;
     UI::Label*     profileNicknameLabel_ = nullptr;
     UI::TextInput* loginIdInput_    = nullptr;
