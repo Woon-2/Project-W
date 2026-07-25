@@ -156,6 +156,7 @@
     <ClInclude Include="BufferReader.hpp" />
     <ClInclude Include="BufferWriter.hpp" />
     <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="DBBinder.hpp" />
     <ClInclude Include="DBConnection.hpp" />
     <ClInclude Include="DBConnectionPool.hpp" />
     <ClInclude Include="JobQueuePool.hpp" />

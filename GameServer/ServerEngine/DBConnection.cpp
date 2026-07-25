@@ -138,7 +138,60 @@ bool DBConnection::bindParam( int32 paramIdx, const WCHAR* str, SQLLEN* idx ) {
 }
 
 bool DBConnection::bindParam( int32 paramIdx, const byte* bin, int32 size, SQLLEN* idx ) {
-    return false;
+    if ( bin == nullptr ) {
+        *idx = SQL_NULL_DATA;
+        size = 1;
+    }
+    else {
+        *idx = size;
+    }
+
+    if ( size > BINARY_MAX ) {
+		return bindParam( paramIdx, SQL_C_BINARY, SQL_LONGVARBINARY, size, const_cast<byte*>(bin), idx );
+    }
+    else {
+		return bindParam( paramIdx, SQL_C_BINARY, SQL_BINARY, size, const_cast<byte*>(bin), idx );
+    }
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, bool* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_TINYINT, sizeof( bool ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, float* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_FLOAT, sizeof( float ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, double* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_DOUBLE, sizeof( double ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, int8* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_TINYINT, sizeof( int8 ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, int16* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_SHORT, sizeof( int16 ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, int32* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_LONG, sizeof( int32 ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, int64* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_SBIGINT, sizeof( int64 ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, TIMESTAMP_STRUCT* val, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_TYPE_TIMESTAMP, sizeof( TIMESTAMP_STRUCT ), val, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, WCHAR* str, int32 size, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_WCHAR, size, str, idx );
+}
+
+bool DBConnection::bindColumn( int32 columnIdx, byte* bin, int32 size, SQLLEN* idx ) {
+	return bindColumn( columnIdx, SQL_C_BINARY, size, bin, idx );
 }
 
 bool DBConnection::bindParam( SQLUSMALLINT paramIdx, SQLSMALLINT cType, SQLSMALLINT sqlType, SQLULEN len, SQLPOINTER ptr, SQLLEN* idx ) {
@@ -151,7 +204,7 @@ bool DBConnection::bindParam( SQLUSMALLINT paramIdx, SQLSMALLINT cType, SQLSMALL
 	return true;
 }
 
-bool DBConnection::bindCol( SQLUSMALLINT columnIdx, SQLSMALLINT cType, SQLULEN len, SQLPOINTER value, SQLLEN* idx ) {
+bool DBConnection::bindColumn( SQLUSMALLINT columnIdx, SQLSMALLINT cType, SQLULEN len, SQLPOINTER value, SQLLEN* idx ) {
 	SQLRETURN ret = ::SQLBindCol( hStmt_, columnIdx, cType, value, len, idx );
     if ( ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO ) {
         handleError( ret );

@@ -126,6 +126,9 @@
     <ClInclude Include="DBConnectionPool.hpp">
       <Filter>DB</Filter>
     </ClInclude>
+    <ClInclude Include="DBBinder.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sepch.cpp">

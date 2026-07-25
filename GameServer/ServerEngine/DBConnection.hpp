@@ -33,16 +33,16 @@ public:
 	bool bindParam( int32 paramIdx, const WCHAR* str, SQLLEN* idx );
 	bool bindParam( int32 paramIdx, const byte* bin, int32 size, SQLLEN* idx );
 
-	bool bindCol( int32 columnIdx, bool* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, float* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, double* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, int8* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, int16* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, int32* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, int64* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, TIMESTAMP_STRUCT* val, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, WCHAR* val, int32 size, SQLLEN* idx );
-	bool bindCol( int32 columnIdx, byte* val, int32 size, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, bool* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, float* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, double* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, int8* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, int16* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, int32* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, int64* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, TIMESTAMP_STRUCT* val, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, WCHAR* str, int32 size, SQLLEN* idx );
+	bool bindColumn( int32 columnIdx, byte* bin, int32 size, SQLLEN* idx );
 
 private:
 	enum {
@@ -53,7 +53,7 @@ private:
 	// SQL_PARAM_INPUT 전용이므로 드라이버는 ptr을 읽기만 한다.
 	// const 버퍼를 넘기는 호출부가 const_cast를 쓰는 근거가 이것이다.
 	bool bindParam( SQLUSMALLINT paramIdx, SQLSMALLINT cType, SQLSMALLINT sqlType, SQLULEN len, SQLPOINTER ptr, SQLLEN* idx );
-	bool bindCol( SQLUSMALLINT columnIdx, SQLSMALLINT cType, SQLULEN len, SQLPOINTER value, SQLLEN* idx );
+	bool bindColumn( SQLUSMALLINT columnIdx, SQLSMALLINT cType, SQLULEN len, SQLPOINTER value, SQLLEN* idx );
 	void handleError( SQLRETURN ret );
 
 	SQLHDBC hConn_;

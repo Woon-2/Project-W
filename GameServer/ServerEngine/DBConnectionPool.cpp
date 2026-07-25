@@ -25,6 +25,8 @@ bool DBConnectionPool::connect( int32 connCnt, const WCHAR* connStr ) {
 
 		conns_.push_back( conn );
     }
+
+    return true;
 }
 
 void DBConnectionPool::clear() {
