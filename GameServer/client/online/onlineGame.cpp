@@ -461,6 +461,7 @@ void Game::setupStage() {
 	setupBossHpHud();
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
+	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
@@ -4318,6 +4319,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		pathGuide_.buildSamplePath(player_->pos(), player_->forward());
 
 	// Path guidance: advance the ribbon window + guiding wisp (re-conforms to ground).
+	// Suppressed entirely during tactical-combat arenas (player is locked in anyway).
+	pathGuide_.setSuppressed(localArenaPresentationZoneId_ >= 0);
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
@@ -4881,7 +4884,23 @@ void Game::renderInGame() {
 			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
 		});
 	}
+	// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
+	minimapGuidePoly_.clear();
+	pathGuide_.activePathPoints(minimapGuidePoly_);
+	const MinimapGuide mmGuide{
+		pathGuide_.guidanceActive(),
+		std::span<const mu::Vec3>(minimapGuidePoly_),
+		pathGuide_.guidanceTargetWorld()
+	};
 	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top),
+		mmGuide);
+
+	// On-screen destination indicator: beacon when the look-ahead is on screen, an
+	// edge arrow (+distance) when it is off screen / behind the camera.
+	pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
+		pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
 		static_cast<float>(gClientRect.right - gClientRect.left),
 		static_cast<float>(gClientRect.bottom - gClientRect.top));
 

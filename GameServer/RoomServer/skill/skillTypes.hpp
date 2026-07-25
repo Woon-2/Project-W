@@ -20,6 +20,7 @@ enum class AttachType : u8t {
     Bone,
     VFXParticle,
     Ground,       // plant at a caster-relative ground point, snapped to terrain, then static
+    Body,         // anchor to a bone's REST (bind) frame + aim pitch -- animation independent (mirror of client)
 };
 
 struct AttachTarget {
@@ -29,6 +30,7 @@ struct AttachTarget {
     int         particleSystemIdx = 0;
     bool        groundAlign      = false;  // Ground attach (per-OBB self snap only): tilt OBBs to the terrain normal
     i32t        groundAnchorRef  = -1;     // Ground attach: >=0 places OBBs in a registered SetGroundAnchor frame (rigid, point impact); -1 = per-OBB self snap (distributed eruption)
+    bool        bodyAimPitch     = true;   // Body attach: rotate the rest frame by the caster's aim pitch about the anchor bone origin
 };
 
 struct OnHitDef {

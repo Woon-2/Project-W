@@ -5,6 +5,7 @@ TacticalNpcConfig TacticalSnake::trooperConfig() {
 	return TacticalNpcConfig{
 		.maxHp             = 45.f,
 		.moveSpeed         = 8.f,
+		.animRefSpeed      = 3.0f,   // Snake_Walk authored speed (not measured -- default)
 		.attackRange       = 2.6f,
 		.attackDamage      = 12.f,
 		.attackWindupTime  = 0.35s,

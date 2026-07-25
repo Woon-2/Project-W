@@ -41,10 +41,19 @@
   (`damageScale_`)로 1회 시전 후 `Success`(`BtCooldown`이 시전 시점부터 카운트). 이후 `BossSkillBusyGuard`가
   스킬 종료까지 트리를 Running으로 잡아 다른 공격이 끼어들지 못하게 한다(스킬 lua 타임라인이
   windup/hit/recover를 담당하므로 멀티페이즈 노드 불필요).
+- **추격 gait**: `BossChaseAction`이 거리로 걷기/질주를 고른다 —
+  `updateChaseGait(dist)`가 `RUN_ENTER_DISTANCE(6.0)` 초과에서 질주로 래치하고
+  `RUN_EXIT_DISTANCE(4.5)` 미만에서 걷기로 복귀(히스테리시스, 경계 플랩 방지).
+  질주 속도 = `moveSpeed(3.5) × RUN_SPEED_MULT(2.5)` = 8.75 m/s.
+  **속도와 클립을 반드시 같이 바꾼다** — 클라는 state를 안 받고 velocity로 gait를 추론하므로
+  `switchClip("Run")`만 해서는 클라가 계속 걷는 모션을 섞는다(종전 버그). 클립 전환은
+  서버 본(피격 BVH)용, 클라 gait를 바꾸는 건 브로드캐스트되는 속도다.
 - **빌드 시점**: `Room::setupFinalBoss`가 `addAttack` 4종 등록 **직후** `buildBehaviorTree()` 호출
   (리프가 인덱스 0~3으로 skillId/clipKey 참조).
-- **튜닝 포인트**: 거리 밴드(`gapRange_`), 스킬별 쿨다운, `damageScale_`, 타깃 점수 가중치
+- **튜닝 포인트**: 거리 밴드(`gapRange_`), 추격 gait(`RUN_SPEED_MULT`/`RUN_ENTER_DISTANCE`/`RUN_EXIT_DISTANCE`),
+  스킬별 쿨다운, `damageScale_`, 타깃 점수 가중치
   (`TARGET_W_PROXIMITY`/`TARGET_W_LOWHP`/`TARGET_W_THREAT`/`TARGET_STICKY_BONUS`/`TARGET_THREAT_WINDOW`).
+  로코모션 재생 배속(`animRefSpeed`/`animBandEnd`)은 `client/docs/gameArchitecture.md` 참조.
 
 ## 리소스
 - 모델: 클라 `resources/boss/boss.bin`, 서버 `resources/boss/bossServer.bin`

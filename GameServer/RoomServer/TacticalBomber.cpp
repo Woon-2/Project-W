@@ -5,6 +5,7 @@ TacticalNpcConfig TacticalBomber::trooperConfig() {
 	return TacticalNpcConfig{
 		.maxHp             = 45.f,
 		.moveSpeed         = 5.f,
+		.animRefSpeed      = 3.0f,   // Bomber_Walk authored speed (not measured -- default)
 		.attackRange       = 2.6f,
 		.attackDamage      = 8.f,
 		.attackWindupTime  = 0.35s,

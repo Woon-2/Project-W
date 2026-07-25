@@ -57,6 +57,8 @@ TacticalNpc::TacticalNpc( Object&& base, const TacticalNpcConfig& cfg )
 void TacticalNpc::applyConfig( const TacticalNpcConfig& cfg ) {
     maxHp_ = cfg.maxHp;
     moveSpeed_ = cfg.moveSpeed;
+    setAnimRefSpeed( cfg.animRefSpeed );
+    setAnimBandEnd( cfg.animBandEnd );
     attackRange_ = cfg.attackRange;
     attackDamage_ = cfg.attackDamage;
     attackWindupTime_ = cfg.attackWindupTime;
@@ -91,6 +93,8 @@ TacticalNpcConfig TacticalNpc::getConfig() const {
     auto cfg = TacticalNpcConfig{
         .maxHp = maxHp_,
         .moveSpeed = moveSpeed_,
+        .animRefSpeed = animRefSpeed(),
+        .animBandEnd = animBandEnd(),
         .attackRange = attackRange_,
         .attackDamage = attackDamage_,
         .attackWindupTime = attackWindupTime_,

@@ -199,11 +199,7 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 
 	// Idle(무기별 Ready) 애니메이션은 그냥 계속 돌린다.
 	// 딱히 멈추지 않아도 부자연스럽진 않다.
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip(clipIdle_)->duration;
-	while (animTimeIdle_ > durationIdle) {
-		animTimeIdle_ -= durationIdle;
-	}
+	advanceClipTime(clipIdle_, animTimeIdle_, deltaTime);
 	tIdle_ = tIdleBase;
 
 	// run 애니메이션이 필요하다고 판단되었으면,
@@ -232,8 +228,6 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunBackward_ = tRun * wBackward / total;
 		tRunLeft_ = tRun * wLeft / total;
 		tRunRight_ = tRun * wRight / total;
-
-		animTimeRun_ += deltaTime;
 	}
 	else {
 		// 완전한 idle 애니메이션이 재생되고 있다면
@@ -244,6 +238,7 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunRight_ = 0.f;
 
 		animTimeRun_ = 0s;
+		runRate_ = 1.f;
 	}
 
 	// 공격 오버레이: 선택된 무기 공격 클립을 idle/run 위에 얹는다.
@@ -257,6 +252,27 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// run 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tRun > 0.f) {
+		// run 클립이 저작된 기준 이동 속력. 초기값은 블렌드 밴드 끝값(≈5.1)에서 출발한다 —
+		// 현재 룩을 재현하는 값이라 중저속 구간이 종전과 같아야 한다(회귀 판정 기준).
+		constexpr float kRefSpeedRun = 5.f;
+
+		// 다리가 실제로 드러내는 로코모션 가중치.
+		// 상하체 마스크로 하체(m=0)의 공격 오버레이 비중은 tAttack_ * tIdle_이므로
+		// 그만큼 보폭이 깎인다. 이동이 빠를수록(tIdle_→0) 이 항은 사라지고 다리는 순수 run이 된다.
+		// hit/death는 넉백·입력잠금 상태라 접지 정확도가 의미 없어 보정에서 제외한다.
+		const float wLegs = tRun * (1.f - tAttack_ * tIdle_);
+
+		runRate_ = solveLocomotionRate(runRate_, pOwner->horizontalSpeed(), kRefSpeedRun,
+			wLegs, deltaTime);
+
+		// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
+		// forward run 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
+		advanceClipTime(clipRunForward_, animTimeRun_, deltaTime, runRate_);
 	}
 
 	// death 애니메이션은 가장 우선순위가 높게 계산된다.
@@ -290,14 +306,6 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		animTimeHit_ = 0s;
 		tHit_ = 0.f;
 	}
-
-	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
-	// forward run 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
-	const auto durationRun = targetClip(clipRunForward_)->duration;
-	while (animTimeRun_ > durationRun) {
-		animTimeRun_ -= durationRun;
-	}
-
 }
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
@@ -319,13 +327,13 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip(kClipDeath);
 			finalBakedClipId_ = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		// 그 다음 공격 애니메이션 우선도 높게 주기
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_ = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			// baked animation에는 hit 제외시킴
@@ -340,10 +348,8 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_ = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
-		// std::ranges::max_element()
-
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
 		auto& localXforms = localXformData();
@@ -519,15 +525,7 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Goblin_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Goblin_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Goblin_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -538,6 +536,25 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Goblin::applyGoblinConfig / TacticalGoblin와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 3.0f;   // 미측정 — 기본값. Hobgoblin도 같은 클립셋
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Goblin_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	// death 애니메이션은 가장 우선순위가 높게 계산된다.
@@ -587,13 +604,13 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Goblin_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		// 그 다음 공격 애니메이션 우선도 높게 주기
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			// baked animation에는 hit 제외시킴
@@ -605,7 +622,7 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -696,15 +713,7 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Snake_Walk")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Snake_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Snake_Walk", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -715,6 +724,25 @@ void AnimBlenderSnake::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Snake::applySnakeConfig / TacticalSnake와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 3.0f;   // 미측정 — 기본값
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Snake_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -756,12 +784,12 @@ void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Snake_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -772,7 +800,7 @@ void AnimBlenderSnake::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -862,15 +890,7 @@ void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Mushroom_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Mushroom_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Mushroom_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -881,6 +901,25 @@ void AnimBlenderMushroom::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Mushroom::applyMushroomConfig와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 4.5f;   // Mushroom_Walk 저작 보속
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Mushroom_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -922,12 +961,12 @@ void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Mushroom_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -938,7 +977,7 @@ void AnimBlenderMushroom::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -1031,9 +1070,13 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto moveRangeEnd   = moveThreshold + 1.5f;
 	const auto tMove = std::clamp((speed - moveRangeStart) / (moveRangeEnd - moveRangeStart), 0.f, 1.f);
 
-	// Run band: fades in once the boss is clearly moving fast.
-	const auto runRangeStart = 2.0f;
-	const auto runRangeEnd   = 5.0f;
+	// Run band. Straddles the gap between the boss's two authored gaits (walk 3.5, run 8.75 --
+	// FinalBoss::RUN_SPEED_MULT) so each gait lands cleanly on one side: pure walk while
+	// walking, pure run while running. It used to start at 2.0, which put the walk gait at a
+	// 50/50 crossfade and tied the walk playback rate to kRefSpeedRun -- tuning one gait's
+	// foot speed then dragged the other along with it.
+	const auto runRangeStart = 4.0f;
+	const auto runRangeEnd   = 7.0f;
 	const auto tRunBand = std::clamp((speed - runRangeStart) / (runRangeEnd - runRangeStart), 0.f, 1.f);
 
 	tIdle_ = 1.f - tMove;
@@ -1061,23 +1104,7 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 		tWalkForward_ = tWalkBackward_ = tWalkLeft_ = tWalkRight_ = 0.f;
 	}
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Boss_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (walkLevel > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Boss_Walk_Forward")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
-	if (tRun_ > 0.f) {
-		animTimeRun_ += deltaTime;
-		const auto durationRun = targetClip("Boss_Run")->duration;
-		while (animTimeRun_ > durationRun) animTimeRun_ -= durationRun;
-	}
-	else {
-		animTimeRun_ = 0s;
-	}
+	advanceClipTime("Boss_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -1088,6 +1115,45 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// Locomotion playback rate: ONE rate shared by the walk and run clips.
+	//
+	// The per-clip weight division the other blenders use assumes the locomotion clip is
+	// blended against *idle* -- a foot-planted pose -- so the blended stride really is
+	// (weight x clipStride) and dividing it back out is correct. The boss instead crossfades
+	// walk against run, and *both* carry stride, so dividing each clip by its own weight
+	// double-compensates: at the 50/50 crossfade the walk clip demanded 4.7x and sat pinned
+	// at the clamp. That is what made the boss's footwork look skittery.
+	//
+	// Blend the two authored speeds by their share of the locomotion weight instead, then
+	// divide once by the total locomotion weight (idle is still the only strideless partner).
+	// Sharing the rate also keeps the two clips' cadence consistent through the crossfade.
+	// Computed after the attack overlay because the boss rig has no upper/lower body mask --
+	// an attack dilutes the whole pose, legs included.
+	// The run band above keeps each gait on one clip, so these two are now independent:
+	// walk speed 3.5 reads only kRefSpeedWalk, run speed 8.75 only kRefSpeedRun.
+	constexpr float kRefSpeedWalk = 4.8f;   // Boss_Walk_* authored speed -> 3.5 m/s at 0.729x
+	constexpr float kRefSpeedRun  = 9.6f;   // Boss_Run authored speed   -> 8.75 m/s at 0.911x
+	const float speedXZ = pOwner->horizontalSpeed();
+	if (tMove > 0.f) {
+		// tRunBand is run's share of the locomotion weight (tRun_ = tMove * tRunBand,
+		// walkLevel = tMove * (1 - tRunBand)).
+		const float refBlended = (1.f - tRunBand) * kRefSpeedWalk + tRunBand * kRefSpeedRun;
+		locoRate_ = solveLocomotionRate(locoRate_, speedXZ, refBlended,
+			tMove * (1.f - tAttack_), deltaTime);
+	}
+	else {
+		locoRate_ = 1.f;
+	}
+	if (walkLevel > 0.f) {
+		advanceClipTime("Boss_Walk_Forward", animTimeWalk_, deltaTime, locoRate_);
+	}
+	if (tRun_ > 0.f) {
+		advanceClipTime("Boss_Run", animTimeRun_, deltaTime, locoRate_);
+	}
+	else {
+		animTimeRun_ = 0s;
 	}
 
 	// Death (highest priority) and hit reaction, mirroring AnimBlenderGoblin.
@@ -1131,12 +1197,12 @@ void AnimBlenderBoss::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Boss_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>(deathClip->bakedSampleRate * animTimeDeath_.count());
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>(attackClip->bakedSampleRate * animTimeAttack_.count());
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalkForward_, tWalkBackward_, tWalkLeft_, tWalkRight_, tRun_ };
@@ -1151,7 +1217,7 @@ void AnimBlenderBoss::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>(std::distance(std::begin(weights), std::ranges::max_element(weights)));
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>(clips[i]->bakedSampleRate * animTimes[i].count());
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* Keyframe */ {
@@ -2299,15 +2365,7 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Bomber_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Bomber_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Bomber_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -2318,6 +2376,25 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Bomber::applyBomberConfig / TacticalBomber와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 3.0f;   // 미측정 — 기본값
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Bomber_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -2359,12 +2436,12 @@ void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Bomber_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -2375,7 +2452,7 @@ void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -2461,15 +2538,7 @@ void AnimBlenderBirdy::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Birdy_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Birdy_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Birdy_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -2480,6 +2549,25 @@ void AnimBlenderBirdy::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Birdy::applyBirdyConfig / TacticalBirdy와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 3.0f;   // 미측정 — 기본값. Isys도 같은 클립셋
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Birdy_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -2521,12 +2609,12 @@ void AnimBlenderBirdy::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Birdy_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -2537,7 +2625,7 @@ void AnimBlenderBirdy::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -2623,15 +2711,7 @@ void AnimBlenderSlime::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Slime_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Slime_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Slime_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -2642,6 +2722,25 @@ void AnimBlenderSlime::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Slime::applySlimeConfig / TacticalSlime와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 3.0f;   // 미측정 — 기본값
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Slime_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -2683,12 +2782,12 @@ void AnimBlenderSlime::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Slime_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -2699,7 +2798,7 @@ void AnimBlenderSlime::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {
@@ -2786,15 +2885,7 @@ void AnimBlenderTreant::update(Seconds deltaTime, void* pVoidOwner) {
 	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 	tIdle_ = 1.f - tWalk_;
 
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Treant_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) animTimeIdle_ -= durationIdle;
-
-	if (tWalk_ > 0.f) {
-		animTimeWalk_ += deltaTime;
-		const auto durationWalk = targetClip("Treant_Walk")->duration;
-		while (animTimeWalk_ > durationWalk) animTimeWalk_ -= durationWalk;
-	}
+	advanceClipTime("Treant_Idle", animTimeIdle_, deltaTime);
 
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
@@ -2805,6 +2896,25 @@ void AnimBlenderTreant::update(Seconds deltaTime, void* pVoidOwner) {
 	else {
 		animTimeAttack_ = 0s;
 		tAttack_ = 0.f;
+	}
+
+	// walk 클립의 재생 배속을 이동 속력에 맞춘다 (발 미끄러짐 저감).
+	// tAttack_이 확정된 뒤에 계산해야 하므로 공격 오버레이 처리 다음에 위치한다.
+	if (tWalk_ > 0.f) {
+		// walk 클립이 저작된 기준 이동 속력(m/s). 서버 Treant::applyTreantConfig / TacticalTreant와 반드시 같은 값이어야
+		// 피격 BVH가 화면과 맞는다 — 한쪽만 바꾸지 말 것.
+		constexpr float kRefSpeedWalk = 7.8f;   // Treant_Walk 저작 보속. Grandbaum도 같은 클립셋
+
+		// 몬스터는 플레이어와 달리 상하체 마스크가 없어 공격 오버레이가 전 본에 걸린다.
+		// 따라서 공격 중에는 다리의 보폭이 (1 - tAttack_)만큼만 남는다.
+		const float wLegs = tWalk_ * (1.f - tAttack_);
+
+		walkRate_ = solveLocomotionRate(walkRate_, pOwner->horizontalSpeed(), kRefSpeedWalk,
+			wLegs, deltaTime);
+		advanceClipTime("Treant_Walk", animTimeWalk_, deltaTime, walkRate_);
+	}
+	else {
+		walkRate_ = 1.f;
 	}
 
 	if (dead_) {
@@ -2846,12 +2956,12 @@ void AnimBlenderTreant::onCalcLocal(PassKey<AnimSystem>) {
 		if (tDeath_ > 0.01f) {
 			auto& deathClip = targetClip("Treant_Death");
 			finalBakedClipId_    = deathClip->id;
-			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*deathClip, animTimeDeath_);
 		}
 		else if (hasAttack && tAttack_ > 0.01f) {
 			auto& attackClip = targetClip(currentAttackClip_);
 			finalBakedClipId_    = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
+			finalBakedClipFrame_ = bakedFrameOf(*attackClip, animTimeAttack_);
 		}
 		else {
 			float   weights[]   = { tIdle_, tWalk_ };
@@ -2862,7 +2972,7 @@ void AnimBlenderTreant::onCalcLocal(PassKey<AnimSystem>) {
 			};
 			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
 			finalBakedClipId_    = clips[i]->id;
-			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+			finalBakedClipFrame_ = bakedFrameOf(*clips[i], animTimes[i]);
 		}
 	}
 	else /* if (mode_ == Mode::Keyframe) */ {

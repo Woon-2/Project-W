@@ -29,8 +29,9 @@ class Object;
 // ---------------------------------------------------------------------------
 
 struct ResolvedAttach {
-    AttachType type    = AttachType::Bone;
-    i32t       boneIdx = -1;
+    AttachType type          = AttachType::Bone;
+    i32t       boneIdx       = -1;
+    bool       applyAimPitch = true;  // Body: tilt the rest frame by the caster's aim pitch
     // VFXParticle: pSystem always null on server
 };
 

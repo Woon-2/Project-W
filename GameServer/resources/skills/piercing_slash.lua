@@ -57,7 +57,7 @@ for i = 0, count - 1 do
         slot                = i,
         -- center on the ring; halfExtents: tangential X, height Y, radial Z.
         localOBBs           = { OBB(0.0, 0.75 * radius * s, 0.75 * radius * c, 0.45, 1.5, 1.2, 0, deg, 0) },
-        attach              = BoneAttach("spine_01"),
+        attach              = BodyAttach("spine_01"),
         applyAttachRotation = true,
         hitGroup            = 0,
         hitGroupCooldownMs  = 300,

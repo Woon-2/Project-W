@@ -13,6 +13,7 @@
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
     if (s == "Ground")      return AttachType::Ground;
+    if (s == "Body")        return AttachType::Body;
     return AttachType::Bone;
 }
 
@@ -215,6 +216,8 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         // Ground attach: anchor = registered SetGroundAnchor id (>=0) -> place OBBs rigidly in
         // that frame (point impact). Omitted/-1 -> each OBB snaps independently (eruption).
         def.attach.groundAnchorRef = (*attach).get_or("anchor", -1);
+        // Body attach: rotate the rest frame by the caster's aim pitch (default true).
+        def.attach.bodyAimPitch = (*attach).get_or("pitch", true);
     }
 
     // onHit

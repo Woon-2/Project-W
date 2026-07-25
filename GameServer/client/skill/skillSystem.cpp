@@ -371,7 +371,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
 
-        if (def.attach.type == AttachType::Bone) {
+        if (def.attach.type == AttachType::Bone || def.attach.type == AttachType::Body) {
+            // Bone (animated) and Body (rest frame + aim pitch) share the dynamic
+            // per-frame update path; computeAttachTransform branches on the resolved type.
             // Free existing bone hitbox in this slot
             int oldH = inst.getBoneHandle(slot);
             if (oldH >= 0) { freeHitbox(oldH); }
@@ -727,7 +729,8 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
     for (AttachedHitbox& hb : hitboxPool_) {
         if (!hb.active) continue;
-        if (hb.resolvedAttach.type != AttachType::Bone) continue;
+        if (hb.resolvedAttach.type != AttachType::Bone &&
+            hb.resolvedAttach.type != AttachType::Body) continue;
 
         Object* owner = lookupObject(ctx, hb.ownerObjectId);
         if (!owner) { hb.active = false; continue; }
@@ -843,9 +846,12 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
 ResolvedAttach SkillSystem::resolveAttach(const AttachTarget&        attach,
                                           const Object&              owner,
                                           const SkillDispatchContext& ctx) const {
-    if (attach.type == AttachType::Bone) {
+    if (attach.type == AttachType::Bone || attach.type == AttachType::Body) {
+        // Bone: follow the animated pose. Body: anchor to the same bone's REST frame
+        // + aim pitch (animation independent). Both resolve the bone index by name.
         ResolvedAttach ra{};
-        ra.type = AttachType::Bone;
+        ra.type          = attach.type;
+        ra.applyAimPitch = attach.bodyAimPitch;
         if (!owner.model()) { ra.boneIdx = -1; return ra; }
         const auto& bones = *owner.model()->skeleton.bones;
         for (i32t i = 0; i < (i32t)bones.size(); ++i) {
@@ -873,9 +879,27 @@ mu::Mat4x4 SkillSystem::computeAttachTransform(const Object& owner,
                                                 const AttachedHitbox& hb) const {
     const i32t idx        = hb.resolvedAttach.boneIdx;
     const RenderState& rs = owner.renderState();
-    if (idx < 0 || !rs.animBlender || !rs.pModel)
-        return rs.world;
+    if (!rs.pModel) return rs.world;
     const auto& bones = *rs.pModel->skeleton.bones;
+
+    if (hb.resolvedAttach.type == AttachType::Body) {
+        // Animation-independent anchor: the bone's REST (bind) frame plus the caster's
+        // aim pitch about the bone origin. Never reads the playing clip, so the hitbox
+        // stays put when the weapon (and thus the attack clip) changes. Deterministic on
+        // client and server (both use toDress + the synced aim pitch).
+        if (idx < 0 || idx >= (i32t)bones.size()) return rs.world;
+        const mu::Mat4x4 rest = bones[static_cast<size_t>(idx)].toDress;
+        if (!hb.resolvedAttach.applyAimPitch || owner.aimPitch() == 0.f)
+            return rest * rs.world;
+        const mu::Vec3 pivot = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * rest);
+        const mu::Mat4x4 K = mu::translate(-pivot)
+                           * mu::rotateXH(mu::Radian{ owner.aimPitch() })
+                           * mu::translate(pivot);
+        return rest * K * rs.world;
+    }
+
+    if (idx < 0 || !rs.animBlender)
+        return rs.world;
     const Bone& bone  = bones[static_cast<size_t>(idx)];
     return bone.toDress
          * rs.animBlender->finalXformData()[static_cast<size_t>(idx)]
@@ -1131,7 +1155,9 @@ void SkillSystem::collectActiveHitboxes(std::vector<ActiveHitboxRef>& out) const
     out.clear();
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
-        if (!hb.active || hb.resolvedAttach.type != AttachType::Bone) continue;
+        if (!hb.active) continue;
+        if (hb.resolvedAttach.type != AttachType::Bone &&
+            hb.resolvedAttach.type != AttachType::Body) continue;
         if (hb.worldOBBs.empty()) continue;
         out.push_back(ActiveHitboxRef{
             hi, hb.ownerObjectId, hb.slot, hb.defIdx, &hb.worldOBBs });

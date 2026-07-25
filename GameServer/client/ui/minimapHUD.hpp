@@ -10,6 +10,7 @@
 
 #include "../mathUtil.hpp"
 
+#include <span>
 #include <vector>
 
 class GFX;
@@ -18,6 +19,15 @@ struct MinimapEntityIcon {
     enum class Kind { Self, Party, Monster, Boss };
     mu::Vec3 worldPos{};
     Kind     kind = Kind::Monster;
+};
+
+// Optional path-guidance overlay: the active route drawn as a polyline, plus an edge
+// arrow toward the look-ahead target when it falls outside the current view radius.
+// polyline is a non-owning view of world-space sample points (north-up XZ projected).
+struct MinimapGuide {
+    bool                      active = false;
+    std::span<const mu::Vec3> polyline{};
+    mu::Vec3                  target{};   // look-ahead point (edge-arrow aim)
 };
 
 class MinimapHUD {
@@ -35,7 +45,8 @@ public:
     void render(GFX& gfx, mu::Vec3 playerWorldPos,
                 mu::Vec3 bakedCenter, float bakedCoverage,
                 const std::vector<MinimapEntityIcon>& entities,
-                float screenW, float screenH) const;
+                float screenW, float screenH,
+                const MinimapGuide& guide = {}) const;
 
 private:
     bool  visible_ = true;

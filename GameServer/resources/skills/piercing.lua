@@ -36,7 +36,7 @@ local onHit = OnHit({
 skill:addEvent(130, "SpawnHitbox", {
     slot                = 0,
     localOBBs           = { OBB(0.0, -2.0, 0.0, 0.5, 3.4, 0.85, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 500,
@@ -49,7 +49,7 @@ onHitTip.impulseStrength = 500.0
 skill:addEvent(300, "SpawnHitbox", {
     slot                = 1,
     localOBBs           = { OBB(0.0, -5.8, 0.0, 0.5, 1.4, 0.7, 0, 0, 0) },
-    attach              = BoneAttach("spine_01"),
+    attach              = BodyAttach("spine_01"),
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 500,

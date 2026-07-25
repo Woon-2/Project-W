@@ -8,6 +8,7 @@
 static AttachType parseAttachType(std::string_view s) {
     if (s == "VFXParticle") return AttachType::VFXParticle;
     if (s == "Ground")      return AttachType::Ground;
+    if (s == "Body")        return AttachType::Body;
     return AttachType::Bone;
 }
 
@@ -197,6 +198,8 @@ SkillHitboxDef ServerSkillCompiler::tableToHitboxDef(const sol::table& tbl) {
         def.attach.particleSystemIdx = (*attach).get_or("systemIdx", 0);
         def.attach.groundAlign = (*attach).get_or("align", false);
         def.attach.groundAnchorRef = (*attach).get_or("anchor", -1);
+        // Body attach: rotate the rest frame by the caster's aim pitch (default true).
+        def.attach.bodyAimPitch = (*attach).get_or("pitch", true);
     }
 
     sol::optional<sol::table> onHit = tbl["onHit"];

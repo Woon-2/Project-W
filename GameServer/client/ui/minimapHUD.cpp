@@ -2,8 +2,10 @@
 #include "minimapHUD.hpp"
 #include "../gfx.hpp"
 #include "../uiPipeline.hpp"
+#include "uiShapes.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -42,7 +44,8 @@ void MinimapHUD::zoomOut() { zoom_ = std::max(zoom_ / kZoomStep, kZoomMin); }
 void MinimapHUD::render(GFX& gfx, mu::Vec3 playerWorldPos,
                          mu::Vec3 bakedCenter, float bakedCoverage,
                          const std::vector<MinimapEntityIcon>& entities,
-                         float screenW, float screenH) const
+                         float screenW, float screenH,
+                         const MinimapGuide& guide) const
 {
     if (!visible_) return;
 
@@ -98,6 +101,31 @@ void MinimapHUD::render(GFX& gfx, mu::Vec3 playerWorldPos,
         });
     }
 
+    // Guidance route polyline (under the entity icons). North-up player-relative
+    // projection, same mapping as the icons; only segments fully inside the map are
+    // drawn so the line never spills past the frame (the edge arrow covers beyond).
+    const XMFLOAT4 guideCol{ 0.42f, 0.90f, 1.f, 0.92f };
+    if (guide.active && guide.polyline.size() >= 2u) {
+        auto toMap = [&](const mu::Vec3& wp, float& x, float& y, bool& inside) {
+            const float u = (wp.x() - playerWorldPos.x()) / viewRadius;
+            const float v = (wp.z() - playerWorldPos.z()) / viewRadius;
+            x = pivotX + u * halfPx;
+            y = pivotY + v * halfPx;
+            inside = (u > -0.98f && u < 0.98f && v > -0.98f && v < 0.98f);
+        };
+        for (std::size_t i = 0; i + 1u < guide.polyline.size(); ++i) {
+            float ax, ay, bx, by; bool ain, bin;
+            toMap(guide.polyline[i],      ax, ay, ain);
+            toMap(guide.polyline[i + 1u], bx, by, bin);
+            if (!ain || !bin) continue;
+            const float dx = bx - ax, dy = by - ay;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len < 0.5f) continue;
+            uiShapes::quad(gfx, gfx.solidColorTex(), (ax + bx) * 0.5f, (ay + by) * 0.5f,
+                           len, 2.2f * uiScale, std::atan2(dy, dx), guideCol);
+        }
+    }
+
     // Entity icons: player-relative North-up projection at the current view radius.
     for (const auto& e : entities) {
         const float localU = (e.worldPos.x() - playerWorldPos.x()) / viewRadius;
@@ -112,5 +140,23 @@ void MinimapHUD::render(GFX& gfx, mu::Vec3 playerWorldPos,
             .pTex     = gfx.solidColorTex(),
             .colorMul = iconColor(e.kind)
         });
+    }
+
+    // Edge arrow toward the guidance look-ahead when it lies outside the view radius.
+    if (guide.active) {
+        float tu = (guide.target.x() - playerWorldPos.x()) / viewRadius;
+        float tv = (guide.target.z() - playerWorldPos.z()) / viewRadius;
+        if (std::fabs(tu) > 1.f || std::fabs(tv) > 1.f) {
+            float len = std::sqrt(tu * tu + tv * tv);
+            if (len < 1e-4f) { tu = 0.f; tv = 1.f; len = 1.f; }
+            tu /= len; tv /= len;
+            const float inset = 0.9f;
+            const float sc    = inset / std::max(std::fabs(tu), std::fabs(tv));
+            const float ax    = pivotX + tu * sc * halfPx;
+            const float ay    = pivotY + tv * sc * halfPx;
+            uiShapes::arrow(gfx, gfx.solidColorTex(), ax, ay,
+                            16.f * uiScale, std::atan2(tv, tu),
+                            XMFLOAT4{ 0.72f, 0.97f, 1.f, 1.f });
+        }
     }
 }

@@ -5,6 +5,7 @@ void Mushroom::applyMushroomConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 100.f;
     cfg.moveSpeed      = 2.5f;
+    cfg.animRefSpeed   = 4.5f;   // authored speed of Mushroom_Walk
     cfg.attackRange    = 1.6f;
     cfg.detectionRange = 9.f;
     cfg.attackDamage   = 18.f;
