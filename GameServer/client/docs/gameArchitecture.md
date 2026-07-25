@@ -256,7 +256,7 @@ rate = clamp( speedXZ / (refSpeed × max(locoWeight, 0.05)), 0.35, 2.0 )   // + 
 | Mushroom | **4.5** | 3.06 | **0.68×** | `AnimBlenderMushroom` | `Mushroom::applyMushroomConfig` |
 | Treant (+Grandbaum) | **7.8** | 3.06 | **0.39×** | `AnimBlenderTreant` | `Treant::applyTreantConfig`, `TacticalTreant::trooperConfig`, `Room.cpp` Grandbaum bossCfg |
 | Goblin(+Hobgoblin) / Snake / Slime / Birdy(+Isys) / Bomber | 3.0 (미측정) | 3.06 | 1.02× | 각 블렌더 | `apply*Config`, `Tactical*::trooper/bossConfig`, `Room.cpp` Isys bossCfg |
-| FinalBoss (walk **2.4** / run **7.2**) | — | 가중 블렌드 | **0.66~0.83** | `AnimBlenderBoss::kRefSpeedWalk`·`kRefSpeedRun` | `FinalBoss::applyBossConfig`(근사 6.4) |
+| FinalBoss (walk **4.8** / run **9.6**) | 4.0~7.0 | gait별 독립 | 걷기 **0.729×** / 질주 **0.911×** | `AnimBlenderBoss::kRefSpeedWalk`·`kRefSpeedRun` | `FinalBoss::applyBossConfig`(근사 9.6) |
 
 **클라·서버 값이 어긋나면 피격 BVH가 화면과 안 맞는다. 한쪽만 바꾸지 말 것.**
 서버는 `NpcConfig::animRefSpeed`+`animBandEnd` / `TacticalNpcConfig`의 같은 두 필드로 config 주도이며,
@@ -291,12 +291,31 @@ locoRate_  = solve(speedXZ, refBlended, tMove · (1 - tAttack_))
 가중치로 나누는 대상은 **전체 로코모션 가중치(tMove)** 하나뿐이다 — 보폭 없는 파트너는 idle뿐이므로.
 배속을 공유하므로 크로스페이드 구간에서 두 클립의 케이던스도 어긋나지 않는다.
 
-수정 전후(보스): 3.5 m/s에서 walk 2.00× / run 0.76×(가중평균 1.38) → 4.5 m/s에서 **0.70× 단일 배속**.
-전 속도 구간 0.66~0.83으로 평탄하다.
+수정 전후(보스, 걷기 3.5 m/s): walk 2.00× / run 0.76×(가중평균 1.38) → **0.729× 단일 배속**.
+
+##### 보스의 걷기/질주 — 배속이 아니라 **이동 속도**로 만든다
+
+클라는 클립을 속도로 추론하므로(run 밴드 2.0~5.0), 보스가 "달려 보이게" 하려면
+재생 배속이 아니라 **실제 이동 속도**가 그 밴드를 넘어야 한다.
+BT의 `BossChaseAction`이 거리로 gait를 고른다(`FinalBoss::updateChaseGait`, 히스테리시스 6.0/4.5m):
+
+| gait | 속도 | 클라 블렌드 | 배속 |
+|---|---|---|---|
+| 걷기 | `moveSpeed` 3.5 | walk 1.00 | 0.729× |
+| 질주 | `× RUN_SPEED_MULT(2.5)` = 8.75 | run 1.00 | 0.911× |
+
+**run 밴드는 두 gait 사이에 놓아야 한다(4.0~7.0).** 종전 2.0~5.0은 걷기 속도 3.5를 밴드 한가운데
+(`tRunBand=0.5`)에 두어, 걷기 배속의 절반이 `kRefSpeedRun`에서 나왔다 — 상수는 walk/run으로 분리돼
+있어도 **블렌드를 통해 결합**되므로, run 발 속도만 낮추면 걷기까지 같이 느려진다(0.729 → 0.583).
+밴드를 두 gait 사이로 올리면 각 gait가 자기 클립 하나만 읽어 완전히 독립된다.
+
+> 종전에는 `switchClip("Run")`만 하고 속도는 계속 `moveSpeed`였다 — 서버 본만 run 포즈였고
+> 클라는 3.5 m/s를 보고 walk/run을 반반 섞었다. **클립 전환은 서버 본(피격 BVH)용이고,
+> 클라의 gait를 바꾸는 것은 브로드캐스트되는 속도다.** 둘을 같이 움직여야 한다.
 
 > **서버 근사:** 보스는 3-way 블렌드라 `max(bandEnd, speed)/refSpeed` 유도가 정확하지 않다.
-> 클라 배속이 전 구간 0.7 근처로 평탄하다는 점을 이용해 `refSpeed=6.4`, `bandEnd=4.5`(=chase 속도)로
-> 근사한다 — 보스가 대부분 머무는 chase 속도에서 정확히 일치하고, 그 밖에서 최대 ~19% 어긋난다.
+> `refSpeed=9.6`, `bandEnd=7.0`은 **두 gait 모두에서 정확히 일치**하도록 고른 값이다
+> (3.5 → 0.729, 8.75 → 0.911, 오차 0). 그 사이 구간에서만 어긋나며,
 > 공격 중에는 서버가 attack 클립으로 전환하므로 히트 판정 구간은 이 근사의 영향을 받지 않는다.
 
 #### 서버 미러링

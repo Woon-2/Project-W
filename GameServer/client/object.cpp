@@ -1070,9 +1070,13 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto moveRangeEnd   = moveThreshold + 1.5f;
 	const auto tMove = std::clamp((speed - moveRangeStart) / (moveRangeEnd - moveRangeStart), 0.f, 1.f);
 
-	// Run band: fades in once the boss is clearly moving fast.
-	const auto runRangeStart = 2.0f;
-	const auto runRangeEnd   = 5.0f;
+	// Run band. Straddles the gap between the boss's two authored gaits (walk 3.5, run 8.75 --
+	// FinalBoss::RUN_SPEED_MULT) so each gait lands cleanly on one side: pure walk while
+	// walking, pure run while running. It used to start at 2.0, which put the walk gait at a
+	// 50/50 crossfade and tied the walk playback rate to kRefSpeedRun -- tuning one gait's
+	// foot speed then dragged the other along with it.
+	const auto runRangeStart = 4.0f;
+	const auto runRangeEnd   = 7.0f;
 	const auto tRunBand = std::clamp((speed - runRangeStart) / (runRangeEnd - runRangeStart), 0.f, 1.f);
 
 	tIdle_ = 1.f - tMove;
@@ -1127,8 +1131,10 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	// Sharing the rate also keeps the two clips' cadence consistent through the crossfade.
 	// Computed after the attack overlay because the boss rig has no upper/lower body mask --
 	// an attack dilutes the whole pose, legs included.
-	constexpr float kRefSpeedWalk = 2.4f;   // Boss_Walk_* authored speed
-	constexpr float kRefSpeedRun  = 7.2f;   // Boss_Run authored speed (server: applyBossConfig)
+	// The run band above keeps each gait on one clip, so these two are now independent:
+	// walk speed 3.5 reads only kRefSpeedWalk, run speed 8.75 only kRefSpeedRun.
+	constexpr float kRefSpeedWalk = 4.8f;   // Boss_Walk_* authored speed -> 3.5 m/s at 0.729x
+	constexpr float kRefSpeedRun  = 9.6f;   // Boss_Run authored speed   -> 8.75 m/s at 0.911x
 	const float speedXZ = pOwner->horizontalSpeed();
 	if (tMove > 0.f) {
 		// tRunBand is run's share of the locomotion weight (tRun_ = tMove * tRunBand,

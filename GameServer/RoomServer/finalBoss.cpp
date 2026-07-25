@@ -23,14 +23,17 @@ struct BtContext {
 void FinalBoss::applyBossConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 2000.f;
-    cfg.moveSpeed      = 4.5f;
+    // Walk speed. The chase leg runs at moveSpeed * RUN_SPEED_MULT (= 8.75) when there is a
+    // real gap to close -- see updateChaseGait / BossChaseAction.
+    cfg.moveSpeed      = 3.5f;
     // The client blends Boss_Walk_* against Boss_Run, so its playback rate runs off a
     // weight-blended reference speed (AnimBlenderBoss::update) rather than a single clip's.
-    // Across the boss's whole speed range that blended value stays near 6.4, and the BT only
-    // ever plays "Run"/"Idle" here anyway -- so approximate it with a constant and pin the
-    // band end at the chase speed, where the two sides then agree exactly.
-    cfg.animRefSpeed   = 6.4f;
-    cfg.animBandEnd    = 4.5f;
+    // The server has no blend weight, so it approximates with max(bandEnd, speed)/refSpeed.
+    // These two values are picked so the approximation is *exact* at both gaits -- 3.5 (walk,
+    // pure Boss_Walk_* -> 0.729x) and 8.75 (run, pure Boss_Run -> 0.911x) -- which is where
+    // the boss actually spends its time.
+    cfg.animRefSpeed   = 9.6f;
+    cfg.animBandEnd    = 7.0f;
     cfg.attackRange    = 3.0f;
     cfg.detectionRange = 30.f;   // unused by the BT (boss arena has no detection gate)
     cfg.attackDamage   = 40.f;   // legacy fallback only; skill hitboxes are authoritative
@@ -86,12 +89,20 @@ public:
         const float dist     = ctx.boss.distanceToTarget(ctx.room);
         const bool  approach = dist > ctx.boss.bossAttackRange() * 0.9f;
         if (approach) {
-            ctx.boss.moveToward(t->player()->estimatedPos(ctx.room.getElapsedMs()), 1.f);
+            // Run to close a real gap, walk once already on top of the target. Clients infer
+            // the gait from the broadcast velocity, so the speed multiplier is what actually
+            // makes the boss look like it is running -- the clip switch only keeps the
+            // server's own bone poses (and the hit BVH built from them) in step.
+            const bool running = ctx.boss.updateChaseGait(dist);
+            ctx.boss.moveToward(t->player()->estimatedPos(ctx.room.getElapsedMs()),
+                                running ? ctx.boss.runSpeedMult() : 1.f);
+            ctx.boss.animController().switchClip(running ? "Run" : "Walk");
         } else {
+            ctx.boss.resetChaseGait();
             ctx.boss.faceToward(t->player()->pos());
             ctx.boss.setLinearVel(mu::Vec3(0.f, ctx.boss.body().linearVel().y(), 0.f));
+            ctx.boss.animController().switchClip("Idle");
         }
-        ctx.boss.animController().switchClip(approach ? "Run" : "Idle");
         return bt::BtStatus::Running;
     }
 };
@@ -251,6 +262,15 @@ float FinalBoss::scoreTarget(GameSession* s, const std::vector<int32>& recentDam
     return TARGET_W_PROXIMITY * prox
          + TARGET_W_LOWHP     * lowHp
          + TARGET_W_THREAT    * threat;
+}
+
+bool FinalBoss::updateChaseGait(float distToTarget) {
+    if (running_) {
+        if (distToTarget < RUN_EXIT_DISTANCE)  running_ = false;
+    } else {
+        if (distToTarget > RUN_ENTER_DISTANCE) running_ = true;
+    }
+    return running_;
 }
 
 void MU_CALLCONV FinalBoss::moveToward(mu::Vec3 dest, float speedMult) {
