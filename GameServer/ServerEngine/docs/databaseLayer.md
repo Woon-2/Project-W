@@ -86,8 +86,11 @@ DB 진단은 전부 `dbLogW( const WCHAR* )`를 거친다 (`DBConnection.hpp`에
 Visual Studio가 설치해주는 **SQL Server Express LocalDB**를 쓴다.
 
 ```
-Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\MSSQLLocalDB;Database=master;Trusted_Connection=Yes;
+Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\MSSQLLocalDB;Database=ProjectW;Trusted_Connection=Yes;
 ```
+
+연결 문자열은 솔루션 루트 `db_config.json`에서 로드한다 (`common/dbConfig.hpp` — 서버 전용,
+클라이언트가 읽는 `network_config.json`과 분리).
 
 - **LocalDB는 네트워크 접속이 안 된다.** 같은 PC의 로컬 프로세스만 붙는다.
   로비/룸 서버를 한 PC에서 돌리는 현재 구성에서는 문제없지만, 서버를 다른 PC로 나누면
@@ -98,16 +101,20 @@ Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\MSSQLLocalDB;Database=ma
 - `odbc32.lib`는 `lspch.hpp`/`rspch.hpp`에서 `#pragma comment`로 링크한다.
   ServerEngine은 StaticLibrary라 링크 단계가 없어서, EXE 쪽에서 해결해야 한다.
 
-## 현재 상태
+## 현재 상태 (2026-07-25 갱신)
 
-레이어 자체는 검증됐다(연결/파라미터/컬럼 왕복, 한글 nvarchar 길이, 빈 문자열,
-varbinary, 풀 고갈, 정리 시 에러 없음). 다만 **아직 게임 로직에 연결되지 않았다.**
+레이어 검증 완료(연결/파라미터/컬럼 왕복, 한글 nvarchar 길이, 빈 문자열, varbinary,
+풀 고갈, 정리 시 에러 없음). **첫 사용처인 계정 시스템(가입/로그인)이 로비서버에 연결됐다** —
+상세는 [accountSystem.md](accountSystem.md) 참조.
 
-다음 단계에 필요한 것:
-- `protocol.hpp`에 계정 패킷 타입 (`C_Login` / `C_Register` 등) — 현재 하나도 없다
-- `LobbyServer/PacketManager`에 로그인 핸들러 — 현재 `GameSession::onConnected()`는
-  인증 없이 `IdPool`의 휘발성 세션 ID만 발급한다. 영속 계정 개념이 없다
-- `db/schema.sql` (Account / Inventory 테이블)
-- 전역 `DBConnectionPool` 인스턴스와 `lobbyServerMain.cpp`의 초기화 지점
-  (`IdPool::init()` 다음이 자연스럽다)
-- 비밀번호 저장 방식 결정 (해시 권장 — Windows BCrypt API로 외부 의존성 없이 가능)
+이 레이어 위에 추가된 것:
+- `DBExecutor` — 전용 DB 스레드 + 작업 큐. ODBC 블로킹 호출을 IOCP 워커에서 격리한다.
+  풀도 내부에서 소유한다 (`DBExecutor::pool()`)
+- `PasswordHash` — BCrypt(CNG) 기반 SHA-256 + 솔트
+- `db/schema.sql` — ProjectW DB, Account/Inventory 테이블 (멱등 스크립트)
+- `common/dbConfig.hpp` + `db_config.json` — 연결 설정 로더
+
+다음 단계:
+- 룸서버 인벤토리 로드/저장 (Inventory 테이블은 선반영됨)
+- 로비→룸 계정 정보 전달 (룸 입장 시 accountId 핸드셰이크)
+- DB 커넥션 끊김 시 재연결 (현재는 기동 시 1회 연결, 실패 쿼리는 DbError로 응답)

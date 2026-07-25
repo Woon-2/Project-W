@@ -129,6 +129,12 @@
     <ClInclude Include="DBBinder.hpp">
       <Filter>DB</Filter>
     </ClInclude>
+    <ClInclude Include="DBExecutor.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="PasswordHash.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sepch.cpp">
@@ -165,6 +171,12 @@
       <Filter>DB</Filter>
     </ClCompile>
     <ClCompile Include="DBConnectionPool.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="DBExecutor.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="PasswordHash.cpp">
       <Filter>DB</Filter>
     </ClCompile>
   </ItemGroup>

@@ -69,6 +69,12 @@ enum class PacketType : uint16 {
 	// Append-only: room-server monotonic clock synchronization.
 	C_TimeSync,
 	S_TimeSync,
+
+	// Append-only: account system (register/login).
+	C_Register,
+	S_Register,
+	C_Login,
+	S_Login,
 };
 
 enum class ObjectType : uint16 {
@@ -95,6 +101,23 @@ enum class PlayerWeaponType : uint8 {
 	CrystalWand,
 	HeavyArrow,
 };
+
+// Append-only (서수가 클라·서버 공유 wire 값이므로 중간 삽입 금지).
+enum class AccountResult : uint8 {
+	Ok,
+	InvalidInput,        // 빈 값이거나 허용 길이 초과 등 형식 오류
+	DuplicateId,         // 가입: 이미 존재하는 ID
+	NoSuchAccount,       // 로그인: 없는 ID
+	WrongPassword,       // 로그인: 비밀번호 불일치
+	AlreadyLoggedIn,     // 로그인: 이미 접속 중인 계정
+	DbError,             // 서버 내부 오류 (클라이언트는 "잠시 후 다시 시도" 안내)
+	DuplicateNickname,   // 가입: 이미 사용 중인 닉네임. ID·닉네임 둘 다 중복이면 DuplicateId를 먼저 응답한다
+};
+
+// 계정 문자열 최대 크기(널 종료 포함). 클라 입력 UI와 DB 스키마(NVARCHAR)가 이 값에 맞춘다.
+constexpr int32 kLoginIdMax = 24;     // ASCII
+constexpr int32 kPasswordMax = 32;    // ASCII
+constexpr int32 kNicknameMax = 16;    // wchar_t — 한글 지원
 
 struct PacketHeader {
 	uint16 size;
@@ -483,6 +506,32 @@ struct STimeSyncPacket : public PacketHeader {
 	uint64 clientSendMs;      // t0 (echo)
 	uint64 serverReceiveMs;   // t1
 	uint64 serverSendMs;      // t2
+};
+
+// --- 계정 시스템 (가입/로그인, 로비서버 전용) ---
+// 흐름: 접속 직후 C_Register 또는 C_Login을 보낸다. 로그인 성공(S_Login: Ok) 전에는
+// 방 생성 등 다른 C_* 패킷이 서버에서 무시된다(인증 게이트).
+// 문자열은 전부 널 종료 고정 배열이다. 비밀번호는 평문으로 전송되고 서버가 해시해 저장한다.
+
+struct CRegisterPacket : public PacketHeader {
+	char loginId[kLoginIdMax];
+	char password[kPasswordMax];
+	wchar_t nickname[kNicknameMax];
+};
+
+struct SRegisterPacket : public PacketHeader {
+	AccountResult result;
+};
+
+struct CLoginPacket : public PacketHeader {
+	char loginId[kLoginIdMax];
+	char password[kPasswordMax];
+};
+
+struct SLoginPacket : public PacketHeader {
+	AccountResult result;
+	int64 accountId;                  // 실패 시 0
+	wchar_t nickname[kNicknameMax];   // 실패 시 빈 문자열
 };
 
 #pragma pack(pop)

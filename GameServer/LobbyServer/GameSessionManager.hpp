@@ -17,9 +17,15 @@ public:
 	static std::shared_ptr<GameSession> find( uint16 id );
 	static int32 count();
 
+	// 중복 로그인 차단: 계정당 세션 하나만 허용한다.
+	// bindAccount가 false면 이미 다른 세션이 그 계정으로 로그인 중이다.
+	static bool bindAccount( int64 accountId, uint16 sessionId );
+	static void unbindAccount( int64 accountId );
+
 private:
 	static std::mutex mutex_;
 	static std::unordered_map<uint16, std::shared_ptr<GameSession>> sessions_;
+	static std::unordered_map<int64, uint16> loginMap_;
 };
 
 #endif // game_session_manager_hpp
