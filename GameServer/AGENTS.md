@@ -2,6 +2,7 @@
 
 - 이 프로젝트에서 사용자에게 답변할 때는 한국어로 작성한다.
 - 사용자는 현재 `standalone` 클라이언트를 Visual Studio에서 직접 실행하며 확인한다.
-- 전체 솔루션 빌드는 `LobbyServer`, `DummyClient`의 생성 파일 또는 include 문제로 실패할 수 있다. 이 실패만으로 작업 실패로 판단하지 않는다.
+- 전체 솔루션 빌드는 `LobbyServer`의 생성 파일 또는 include 문제로 실패할 수 있다. 이 실패만으로 작업 실패로 판단하지 않는다. (`DummyClient`는 `c96eaac0`에서 제거됐다.)
+- 서버 링크가 `DBExecutor`/`PasswordHash` 등에서 LNK2019로 실패하면 `ServerEngine.lib`이 낡은 것이다. 커밋된 바이너리라 git 조작으로 mtime이 obj보다 최신이 되면 MSBuild가 링크를 건너뛴다 → `/t:ServerEngine:Rebuild`로 강제한다.
 - `client.vcxproj` 단독 CLI 빌드도 환경별 include 경로, 예를 들어 `sepch.hpp`, 문제로 실패할 수 있다. 사용자가 Visual Studio에서는 정상 실행된다고 알려준 경우 이 문제를 기존 환경 차이로 취급한다.
 - 렌더링/클라이언트 작업 검증은 가능한 경우 수정 파일의 정적 확인, HLSL 직접 컴파일, 관련 코드 경로 점검을 우선하고, 솔루션 전체 빌드 실패는 별도 기존 이슈로 보고한다.

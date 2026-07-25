@@ -475,14 +475,14 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     applyRect(roomSelectionRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
         contentX, 24.f, contentW, roomRowY + roomRowH);
 
-    // Temporary local profile presentation. The framed square and placeholder
-    // name reserve the final server-backed portrait/nickname area.
+    // The nickname comes from the S_Login response through ViewState; the framed
+    // square is still a placeholder reserving the future portrait area.
     constexpr float profileBoxSize = 116.f;
     profileImageBox_ = stylePanel(makeSolid(roomSelectionRoot_, "profileImageBox",
         0.f, 0.f, profileBoxSize, profileBoxSize, surfaceSoft, 1));
     makeLabel(roomSelectionRoot_, L"닉네임", 140.f, 16.f, 18.f,
         contentW - 140.f, 26.f, muted);
-    profileNicknameLabel_ = makeLabel(roomSelectionRoot_, L"PLAYER",
+    profileNicknameLabel_ = makeLabel(roomSelectionRoot_, L"",
         140.f, 44.f, 36.f, contentW - 140.f, 54.f, ink);
 
     // Room-code input + join (joinRoomForm in the prototype), paired with the
@@ -1130,8 +1130,7 @@ void LobbyUI::refresh(const ViewState& s) {
     if (authRoot_) authRoot_->visible = inMain && !s.isAuthenticated;
     if (roomSelectionRoot_) roomSelectionRoot_->visible = inMain && s.isAuthenticated;
     if (profileNicknameLabel_) {
-        profileNicknameLabel_->setText(
-            s.nickname.empty() ? std::wstring(L"PLAYER") : s.nickname);
+        profileNicknameLabel_->setText(s.nickname);
     }
 
     if (!s.inLobbyScene || !inMain || s.isAuthenticated) {

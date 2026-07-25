@@ -5156,7 +5156,7 @@ void Game::refreshLobbyUI() {
 	vs.isAuthenticated    = isAuthenticated_;
 	vs.waitingRoom3DReady = stageVisualReady_.load(std::memory_order_acquire);
 	vs.isHost             = isHost_;
-	vs.nickname           = L"PLAYER";
+	vs.nickname           = myNickname_;
 	vs.roomCode           = roomCode_;
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
@@ -5494,51 +5494,104 @@ std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
 	return L"Player_" + std::to_wstring(sessionId);
 }
 
+namespace {
+
+// 입력 가능 길이. protocol.hpp의 고정 배열 크기에서 널 종료 1자를 뺀 값이며,
+// db/schema.sql의 NVARCHAR 길이와 짝이다.
+constexpr size_t kLoginIdLenMax  = kLoginIdMax - 1;
+constexpr size_t kPasswordLenMax = kPasswordMax - 1;
+constexpr size_t kNicknameLenMax = kNicknameMax - 1;
+
+// loginId/password는 wire 상 char[]다. 비ASCII가 섞이면 변환에서 깨지므로 아예 보내지 않는다.
+// (닉네임은 wchar_t[]라 변환 없이 그대로 나간다 — 한글 가능.)
+bool toAscii(const std::wstring& src, std::string& out) {
+	out.clear();
+	out.reserve(src.size());
+	for (const wchar_t ch : src) {
+		if (ch < 0x20 || ch > 0x7E) {
+			return false;
+		}
+		out.push_back(static_cast<char>(ch));
+	}
+	return true;
+}
+
+const wchar_t* accountResultMessage(AccountResult result) {
+	switch (result) {
+	case AccountResult::InvalidInput:      return L"입력 형식이 올바르지 않습니다.";
+	case AccountResult::DuplicateId:       return L"이미 사용 중인 아이디입니다.";
+	case AccountResult::DuplicateNickname: return L"이미 사용 중인 닉네임입니다.";
+	case AccountResult::NoSuchAccount:     return L"존재하지 않는 아이디입니다.";
+	case AccountResult::WrongPassword:     return L"비밀번호가 일치하지 않습니다.";
+	case AccountResult::AlreadyLoggedIn:   return L"이미 접속 중인 계정입니다.";
+	case AccountResult::DbError:           return L"서버 오류입니다. 잠시 후 다시 시도해 주세요.";
+	default:                               return L"알 수 없는 오류가 발생했습니다.";
+	}
+}
+
+}   // namespace
+
 void Game::lobbyLogin(const std::wstring& id, const std::wstring& password) {
+	if (authPending_) {
+		return;   // 응답 대기 중. 중복 전송하면 두 번째가 AlreadyLoggedIn으로 튕긴다.
+	}
+
 	if (id.empty() || password.empty()) {
 		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호를 입력하세요.");
-		gSharedLog << "[Auth] 로그인 실패: 빈 아이디 또는 비밀번호\n";
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 로그인 성공 (id=" << id
-		<< L", passwordLength=" << password.size() << L")\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax) {
+		lobbyUI_.setMainMenuMessage(L"아이디는 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호는 " + std::to_wstring(kPasswordLenMax) + L"자까지 입력할 수 있습니다.");
+		return;
+	}
 
-	isAuthenticated_ = true;
-	lobbyUI_.clearLoginPassword();
-	lobbyUI_.setMainMenuMessage(L"");
-	uiManager_.resetInteractionState();
-	refreshLobbyUI();
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
+		return;
+	}
+
+	authPending_ = true;
+	INet::ClientApp::addSendBuffer(PacketManager::makeCLoginPacket(asciiId, asciiPassword));
+	INet::ClientApp::send();
+	lobbyUI_.setMainMenuMessage(L"로그인 중...", false);
+	gSharedLog << "[Auth] 로그인 요청 전송\n";
 }
 
 void Game::lobbyRegister(const std::wstring& id, const std::wstring& password,
 	const std::wstring& nickname) {
+	if (authPending_) {
+		return;
+	}
+
 	if (id.empty() || password.empty() || nickname.empty()) {
 		lobbyUI_.setSignupMessage(L"아이디, 비밀번호, 닉네임을 모두 입력하세요.");
-		gSharedLog << "[Auth] 회원가입 실패: 빈 필드\n";
 		return;
 	}
 
-	if (localRegisteredIds_.contains(id)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 아이디입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 아이디 중복\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax
+		|| nickname.size() > kNicknameLenMax) {
+		lobbyUI_.setSignupMessage(L"아이디 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호 " + std::to_wstring(kPasswordLenMax)
+			+ L"자, 닉네임 " + std::to_wstring(kNicknameLenMax) + L"자까지 입력할 수 있습니다.");
 		return;
 	}
 
-	if (localRegisteredNicknames_.contains(nickname)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 닉네임입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 닉네임 중복\n";
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setSignupMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 회원가입 완료 (id=" << id
-		<< L", nickname=" << nickname
-		<< L", passwordLength=" << password.size() << L")\n";
-
-	localRegisteredIds_.insert(id);
-	localRegisteredNicknames_.insert(nickname);
-	uiManager_.resetInteractionState();
-	lobbyUI_.completeRegistration(id);
+	authPending_       = true;
+	pendingRegisterId_ = id;   // 가입 성공 응답에 loginId가 없어, 로그인 칸을 채우려면 필요하다.
+	INet::ClientApp::addSendBuffer(
+		PacketManager::makeCRegisterPacket(asciiId, asciiPassword, nickname));
+	INet::ClientApp::send();
+	lobbyUI_.setSignupMessage(L"회원가입 요청 중...");
+	gSharedLog << "[Auth] 회원가입 요청 전송\n";
 }
 
 void Game::lobbyCreateRoom() {
@@ -5646,6 +5699,42 @@ void Game::lobbySelectWeapon(int direction) {
 }
 
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
+
+void Game::onRegisterResult(AccountResult result) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setSignupMessage(accountResultMessage(result));
+		pendingRegisterId_.clear();
+		gSharedLog << "[Auth] 회원가입 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	uiManager_.resetInteractionState();
+	lobbyUI_.completeRegistration(pendingRegisterId_);
+	pendingRegisterId_.clear();
+	gSharedLog << "[Auth] 회원가입 성공\n";
+}
+
+void Game::onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setMainMenuMessage(accountResultMessage(result));
+		gSharedLog << "[Auth] 로그인 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	accountId_       = accountId;
+	myNickname_      = nickname;
+	isAuthenticated_ = true;
+
+	lobbyUI_.clearLoginPassword();
+	lobbyUI_.setMainMenuMessage(L"");
+	uiManager_.resetInteractionState();
+	refreshLobbyUI();
+	gSharedLog << "[Auth] 로그인 성공. accountId: " << accountId << '\n';
+}
 
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;

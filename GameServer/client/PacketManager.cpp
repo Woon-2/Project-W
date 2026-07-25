@@ -125,6 +125,14 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSInventoryActionResultPacket(buffer, len);
 		break;
 
+	case PacketType::S_Register:
+		handleSRegisterPacket( buffer, len );
+		break;
+
+	case PacketType::S_Login:
+		handleSLoginPacket( buffer, len );
+		break;
+
 	case PacketType::S_CreateRoom:
 		handleSCreateRoomPacket( buffer, len );
 		break;
@@ -504,6 +512,21 @@ void PacketManager::handleSPlayerKnockbackPacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onPlayerKnockback( pkt->playerId, pkt->dirX, pkt->dirZ, pkt->speed, pkt->knockMs, pkt->postLockMs );
 }
 
+void PacketManager::handleSRegisterPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SRegisterPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onRegisterResult( pkt->result );
+}
+
+void PacketManager::handleSLoginPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SLoginPacket*>(buffer);
+
+	// 서버가 널 종료를 보장하지만, 손상된 패킷이 라벨 렌더링까지 흘러가지 않게 여기서 자른다.
+	const size_t nickLen = wcsnlen( pkt->nickname, kNicknameMax );
+	std::wstring nickname( pkt->nickname, nickLen );
+
+	INet::ClientApp::onlineGame()->onLoginResult( pkt->result, pkt->accountId, nickname );
+}
+
 void PacketManager::handleSCreateRoomPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SCreateRoomPacket*>(buffer);
 	std::string code( pkt->code, strnlen( pkt->code, sizeof( pkt->code ) ) );
@@ -674,6 +697,48 @@ std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& l
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_Enter;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCRegisterPacket(
+	const std::string& loginId, const std::string& password, const std::wstring& nickname) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CRegisterPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CRegisterPacket>();
+	// reserve()는 0 초기화를 하지 않는다. 서버가 널 종료를 요구하고(없으면 InvalidInput),
+	// 남은 바이트에 이전 전송의 잔재(특히 비밀번호)가 실려 나가지 않도록 먼저 지운다.
+	std::memset(pkt->loginId, 0, sizeof(pkt->loginId));
+	std::memset(pkt->password, 0, sizeof(pkt->password));
+	std::memset(pkt->nickname, 0, sizeof(pkt->nickname));
+
+	strncpy_s(pkt->loginId, loginId.c_str(), _TRUNCATE);
+	strncpy_s(pkt->password, password.c_str(), _TRUNCATE);
+	wcsncpy_s(pkt->nickname, nickname.c_str(), _TRUNCATE);
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_Register;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCLoginPacket(
+	const std::string& loginId, const std::string& password) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CLoginPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CLoginPacket>();
+	std::memset(pkt->loginId, 0, sizeof(pkt->loginId));
+	std::memset(pkt->password, 0, sizeof(pkt->password));
+
+	strncpy_s(pkt->loginId, loginId.c_str(), _TRUNCATE);
+	strncpy_s(pkt->password, password.c_str(), _TRUNCATE);
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_Login;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

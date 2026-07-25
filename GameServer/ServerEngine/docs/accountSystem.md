@@ -84,6 +84,29 @@ sqlcmd -S "(localdb)\MSSQLLocalDB" -i db\schema.sql     # 멱등 — 반복 실�
 - LocalDB는 정지 상태여도 연결 시도가 인스턴스를 자동 기동시킨다. 서버 기동 시 연결이
   아예 불가능하면(드라이버 없음 등) SQLSTATE를 출력하고 exit 1.
 
+## 클라이언트 배선 (2026-07-26)
+
+UI(`client/online/lobbyUI.*`)와 서버가 실제로 연결됐다. 그 전까지 `Game::lobbyLogin`/`lobbyRegister`는
+빈 값만 검사하고 `isAuthenticated_`를 직접 세우는 로컬 목업이라, 로그인은 "성공"하는데 이후
+`C_CreateRoom`이 인증 게이트에 걸려 방 생성이 무응답으로 멈췄다. 목업(프로세스 메모리 중복 집합,
+하드코딩 닉네임 `PLAYER`)은 제거됐다.
+
+```
+LobbyUI 버튼/Enter → Game::lobbyLogin/lobbyRegister   (로컬 검사만: 빈 값·길이·ASCII)
+  → PacketManager::makeCLoginPacket/makeCRegisterPacket → ClientApp::send()
+  ← S_Login/S_Register
+  → PacketManager::handleSLoginPacket/handleSRegisterPacket
+  → Game::onLoginResult/onRegisterResult   (상태 전환 + AccountResult → 한국어 안내)
+```
+
+- 응답 처리는 `LobbyScene()`의 `SleepEx(1, true)` alertable APC, 즉 **메인 스레드**에서 돈다.
+  기존 `onLobbyCreated`와 같은 경로라 UI를 직접 만져도 된다.
+- `authPending_`가 응답 대기 중 재전송을 막는다 — 로그인 버튼 연타 시 두 번째가
+  `AlreadyLoggedIn`으로 튕기는 것을 방지한다.
+- 클라는 `loginId`/`password`에 비ASCII가 섞이면 **보내지 않고 로컬에서 거절**한다.
+  wire 타입이 `char[]`라 변환에서 깨지기 때문. 닉네임은 `wchar_t[]`라 한글이 그대로 간다.
+- 입력창 자체의 `setMaxLength`/ASCII 필터는 아직 없다. 길이 초과는 전송 전 로컬 메시지로 거절된다.
+
 ## 검증 이력 (2026-07-25)
 
 TCP 루프백 스모크 테스트 14항목 전부 통과: 가입 Ok/중복 DuplicateId/빈 값 InvalidInput,
@@ -91,9 +114,33 @@ TCP 루프백 스모크 테스트 14항목 전부 통과: 가입 Ok/중복 Dupli
 로그인 Ok + 한글 닉네임 왕복, 중복 접속 AlreadyLoggedIn, 세션 종료 후 재로그인 Ok.
 DB에 32바이트 해시 + 16바이트 솔트 저장 확인. 테스트 코드는 저장소에서 제거됨.
 
+## 검증 이력 — 클라이언트 통합 (2026-07-26)
+
+실제 `client.exe` GUI로 왕복 확인. 위 스모크 테스트가 서버 단독이었다면 이쪽은 UI→DB 전 구간이다.
+
+| 항목 | 결과 |
+|---|---|
+| 빈 값 로그인 | 전송 없이 로컬 안내 |
+| 회원가입 모달(아이디/비밀번호/닉네임) | 정상 |
+| 아이디·닉네임 중복 | `DuplicateId`/`DuplicateNickname` 안내 표시 |
+| 정상 가입 → 로그인 | 성공 |
+| **로그인 후 방 만들기** | 성공 — 인증 게이트 통과 |
+| **틀린 비밀번호 / 없는 아이디** | 거부 |
+| **같은 계정 2개 클라 동시 로그인** | `AlreadyLoggedIn` 거부 |
+
+DB 확인: 클라로 가입한 계정이 `dbo.Account`에 적재되고 `pwHash` 32B / `pwSalt` 16B.
+
+**앞의 세 항목(굵게)이 목업과의 판별점이다.** 목업은 빈 값만 아니면 무조건 로그인을
+통과시켰고, 서버 인증 게이트에 걸려 방 생성이 무응답으로 멈췄다. 가입 성공·중복 안내만으로는
+목업과 구분되지 않으니, 회귀 확인 시에도 이 셋을 봐야 한다.
+
+미확인(문제 징후는 없음): 한글 닉네임의 클라 왕복, 클라 재시작 후 재로그인,
+프로필 라벨 닉네임 표시 정확성.
+
 ## 남은 것 (다음 단계)
 
 - 룸서버 인벤토리 로드/저장 (`Inventory` 테이블은 스키마에 선반영됨)
 - 로비→룸 계정 정보 전달 (룸 입장 시 accountId 핸드셰이크 — 현재 룸서버는 계정을 모른다)
-- 클라이언트 로그인/가입 UI (클라 담당자 진행 중)
+- 클라 입력창 `setMaxLength`(23/31/15) + 아이디·비밀번호 ASCII 입력 필터
+- 응답 대기 중 버튼 비활성/스피너 (현재는 `authPending_` 플래그로 재전송만 차단)
 - DB 커넥션 끊김 시 재연결 없음 — 쿼리는 `DbError`로 응답 (풀은 기동 시 1회 연결)

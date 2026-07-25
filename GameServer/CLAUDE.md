@@ -4,16 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System
 
-This is a **Visual Studio 2022** solution (C++20, Windows only). Open `GameServer.sln` to build all projects.
+A Visual Studio solution (C++20, Windows only). Open `GameServer.sln` to build all projects.
+PlatformToolset is **v145** (VS 18) — building from the command line needs VS 18's MSBuild, not VS 2022's.
+Only the **x64** configurations are used (the `x86` ones map to `Win32` and produce nothing).
 
 **Projects and their output types:**
-- `ServerEngine` — Static library shared by all servers
-- `LobbyServer` — Matchmaking server executable
+- `ServerEngine` — Static library shared by all servers (`lib\$(Configuration)\ServerEngine.lib`)
+- `LobbyServer` — Matchmaking + account/login server executable (`x64\$(Configuration)\`)
 - `RoomServer` — Game room server executable
-- `DummyClient` — Server test client executable
 - `client` — DirectX 12 game client executable
 
-There are no automated tests — `DummyClient` is used for manual server validation.
+**`ServerEngine`를 항상 먼저 빌드할 것.** 솔루션에 `ProjectReference`가 없어 빌드 의존성이
+등록돼 있지 않다(링크는 각 pch의 `#pragma comment(lib, ...)`로 이뤄진다). `ServerEngine.lib`는
+저장소에 커밋된 바이너리라, git 체크아웃으로 파일 mtime이 obj보다 최신이 되면 MSBuild가 링크를
+건너뛰고 **낡은 lib을 그대로 남긴다** — 서버가 LNK2019로 터지면 `/t:ServerEngine:Rebuild`로 강제한다.
+
+There are no automated tests. Server validation is manual: run `LobbyServer` + `RoomServer` and
+drive them with the `client`. (`DummyClient` was removed in `c96eaac0`.)
 
 ## Architecture Overview
 
@@ -40,7 +47,14 @@ Shared utilities not tied to any single project:
 
 ## Networking Protocol
 
-All packets start with `PacketHeader { uint16 size; PacketType type; }`. Packet types are defined in `ServerEngine/protocol.hpp`. Current types include `C_Enter` (client→server) and `S_Enter` (server→client).
+All packets start with `PacketHeader { uint16 size; PacketType type; }`. Packet types are defined in
+`ServerEngine/protocol.hpp`, which the client includes as-is — the structs *are* the wire format
+(`#pragma pack(1)`, no serializer). `PacketType` and the enums on the wire are **append-only**:
+the ordinal is the wire value, so never insert in the middle.
+
+**LobbyServer requires login first.** `C_Register`/`C_Login` are the only packets accepted before
+`S_Login(Ok)`; everything else from an unauthenticated session is silently dropped
+(`LobbyServer/PacketManager.cpp`, 인증 게이트). See `ServerEngine/docs/accountSystem.md`.
 
 ## Concurrency Model
 
@@ -51,7 +65,7 @@ All packets start with `PacketHeader { uint16 size; PacketType type; }`. Packet 
 
 ## Language & Platform Notes
 
-- C++20 (`/std:c++latest`), MSVC toolset v143
+- C++20 (`/std:c++latest`), MSVC toolset v145
 - Windows-only: Winsock2, IOCP, DirectX 12, DirectXMath
 - Comments and identifiers are often in **Korean**
 

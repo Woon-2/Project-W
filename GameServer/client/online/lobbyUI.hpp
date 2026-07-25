@@ -58,10 +58,10 @@ public:
     struct ViewState {
         bool        inLobbyScene       = true;   // scene_ == Scene::Lobby
         bool        inMainMenu         = true;   // lobbyState_ == LobbyState::MainMenu
-        bool        isAuthenticated    = false;  // local-only gate until auth server exists
+        bool        isAuthenticated    = false;  // set from the LobbyServer S_Login response
         bool        waitingRoom3DReady = false;  // stageVisualReady_
         bool        isHost             = false;
-        std::wstring nickname          = L"PLAYER";
+        std::wstring nickname;                   // account nickname from S_Login
         std::string roomCode;
         std::vector<PlayerSlot> players;
         int         maxPlayers         = kMaxLobbyPlayers;

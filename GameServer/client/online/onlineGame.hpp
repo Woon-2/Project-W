@@ -241,7 +241,8 @@ private:
 	// 창모드/전체화면 전환 + 윈도우/스왑체인/GBuffer/HiZ 재생성 + UIManager 재설정 + 로비/설정 UI 재빌드.
 	void applyDisplaySettings();
 
-	// 로비 mock 액션 (script.js 프로토타입 이식).
+	// 로비 액션. 인증(로그인/회원가입)은 요청만 보내고, 상태 전환은 LobbyServer 응답
+	// (onLoginResult/onRegisterResult)에서 수행한다.
 	void lobbyLogin(const std::wstring& id, const std::wstring& password);
 	void lobbyRegister(const std::wstring& id, const std::wstring& password,
 		const std::wstring& nickname);
@@ -253,6 +254,8 @@ private:
 
 public:
 	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
+	void onRegisterResult(AccountResult result);
+	void onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname);
 	void onLobbyCreated(const std::string& code, uint16 myId);
 	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos);
 	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
@@ -718,9 +721,13 @@ private:
 
 	Scene      scene_      = Scene::Lobby;
 	LobbyState lobbyState_ = LobbyState::MainMenu;
-	bool       isAuthenticated_ = false;
-	std::unordered_set<std::wstring> localRegisteredIds_{};
-	std::unordered_set<std::wstring> localRegisteredNicknames_{};
+	// 계정 상태. 전부 S_Login/S_Register 수신 시점에만 갱신된다(메인 스레드).
+	bool         isAuthenticated_ = false;
+	bool         authPending_     = false;   // 응답 대기 중 재전송 차단
+	int64        accountId_       = 0;
+	std::wstring myNickname_{};
+	// 가입 성공 응답에 loginId가 없어, 로그인 칸을 채워주려면 보낸 값을 들고 있어야 한다.
+	std::wstring pendingRegisterId_{};
 
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
