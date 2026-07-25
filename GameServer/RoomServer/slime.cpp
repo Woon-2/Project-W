@@ -5,6 +5,7 @@ void Slime::applySlimeConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 110.f;
     cfg.moveSpeed      = 2.0f;
+    cfg.animRefSpeed   = 3.0f;   // authored speed of Slime_Walk (not measured -- default)
     cfg.attackRange    = 1.5f;
     cfg.detectionRange = 8.f;
     cfg.attackDamage   = 9.f;

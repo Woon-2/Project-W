@@ -5,6 +5,7 @@ void Bomber::applyBomberConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 70.f;
     cfg.moveSpeed      = 3.0f;
+    cfg.animRefSpeed   = 3.0f;   // authored speed of Bomber_Walk (not measured -- default)
     cfg.attackRange    = 1.6f;
     cfg.detectionRange = 10.f;
     cfg.attackDamage   = 18.f;

@@ -331,12 +331,75 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 		return;
 	}
 
+	// Baked 모드는 프레임 캐시를 쓰지 않는다(파생 블렌더가 클립 id/프레임만 넘긴다).
 	if (mode_ == Mode::Keyframe) {
 		updateFramesKeyframeMode(key, elapsed);
 	}
-	else /* if (mode_ == Mode::Baked) */ {
-		updateFramesBakedMode(key, elapsed);
+}
+
+// key 클립의 재생 시간을 rate배로 진행시키고 클립 길이로 랩한다.
+void AnimBlender::advanceClipTime(const std::string& key, Seconds& time, Seconds deltaTime,
+	float rate) const {
+
+	time += deltaTime * rate;
+
+	auto it = frameInfoMap_.find(key);
+	if (it == frameInfoMap_.end() || !it->second.targetClip) {
+		return;
 	}
+
+	const float duration = it->second.targetClip->duration.count();
+	if (duration <= 1e-5f) {
+		// 길이가 0인 클립(단일 포즈)은 랩할 것이 없다. 시간이 무한정 커지지 않게 고정한다.
+		time = 0s;
+		return;
+	}
+
+	float t = std::fmod(time.count(), duration);
+	// rate가 음수이거나 시작 시간이 음수인 경우에도 [0, duration)에 들어오게 한다.
+	if (t < 0.f) {
+		t += duration;
+	}
+	time = Seconds(t);
+}
+
+// 이동 속력을 로코모션 클립의 재생 배속으로 환산한다. (수식 유도는 헤더 주석 참조)
+float AnimBlender::solveLocomotionRate(float prevRate, float speedXZ, float refSpeed,
+	float locoWeight, Seconds deltaTime) {
+
+	// 클립이 정지 직전에 얼어붙지 않게 하는 하한.
+	// Treant는 밴드 안 정상상태가 3.06/9.0 ≈ 0.34라 0.35로 두면 상시 클램프된다 — 저작 보속이
+	// 느린(=클립이 크게 성큼 걷는) 리그를 담을 수 있게 여유를 둔 값.
+	constexpr float kMinRate   = 0.25f;
+	// 상한. 플레이어 최대 속도(10) / 기준 속도(5) = 2.0을 딱 담는 값이다.
+	// 이 위(전술 NPC는 walk 클립 기준의 수 배로 달린다)는 배속이 아니라 run 클립으로 풀 문제다.
+	constexpr float kMaxRate   = 2.00f;
+	// 0 나눗셈 및 폭주 방지. 최종 clamp가 실질적인 방어선이므로 작게 잡는다.
+	// (여기를 크게 잡으면 저속에서 보정이 모자라 오히려 종전보다 미끄러진다.)
+	constexpr float kMinWeight = 0.05f;
+	// 배속 평활 시정수. 원격 캐릭터는 속도가 20Hz 패킷으로 들어와 계단지므로 반드시 필요하다.
+	constexpr float kSmoothTau = 0.10f;
+
+	// 한 번에 나눈 뒤 한 번만 clamp한다. 중간 clamp를 끼우면 그 오차가 1/locoWeight로
+	// 증폭되어 저속 구간이 종전보다 나빠진다.
+	const float denom = std::max(refSpeed, 1e-3f) * std::max(locoWeight, kMinWeight);
+	const float target = std::clamp(speedXZ / denom, kMinRate, kMaxRate);
+
+	const float alpha = 1.f - std::exp(-deltaTime.count() / kSmoothTau);
+	return prevRate + (target - prevRate) * alpha;
+}
+
+// baked 모드에서 time에 해당하는 샘플 프레임 인덱스를 구한다.
+int AnimBlender::bakedFrameOf(const AnimClip& clip, Seconds time) {
+	const int frame = static_cast<int>(clip.bakedSampleRate * time.count());
+
+	// bakedSamplesOfBones의 마지막 항목은 sentinel이므로 유효 샘플은 size()-1개다.
+	// 본이 없는(=baked 데이터가 없는) 클립은 0으로 떨어뜨린다.
+	int maxFrame = 0;
+	if (!clip.bakedSamplesOfBones.empty() && clip.bakedSamplesOfBones[0].size() > 1u) {
+		maxFrame = static_cast<int>(clip.bakedSamplesOfBones[0].size()) - 2;
+	}
+	return std::clamp(frame, 0, maxFrame);
 }
 
 // key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
@@ -363,16 +426,6 @@ void AnimBlender::updateFramesKeyframeMode(const std::string& key, Seconds elaps
 			(elapsed - itCurKeyFrame->time) / (itNextKeyFrame->time - itCurKeyFrame->time)	
 		);
 	}
-}
-
-// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
-void AnimBlender::updateFramesBakedMode(const std::string& key, Seconds elapsed) {
-	auto& frameInfo = frameInfoMap_.at(key);
-	frameInfo.bakedSampleIdx = static_cast<std::size_t>(
-		std::min( elapsed.count() * frameInfo.targetClip->bakedSampleRate,
-			frameInfo.targetClip->duration.count() * frameInfo.targetClip->bakedSampleRate
-		)
-	);
 }
 
 void AnimBlender::updatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos) {

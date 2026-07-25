@@ -5,6 +5,7 @@ void Goblin::applyGoblinConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 90.f;
     cfg.moveSpeed      = 3.f;
+    cfg.animRefSpeed   = 3.0f;   // Goblin_Walk 저작 보속(미측정 — 기본값). Hobgoblin도 같은 클립셋을 쓴다
     cfg.attackRange    = 1.5f;
     cfg.detectionRange = 10.f;
     cfg.attackDamage   = 15.f;

@@ -319,9 +319,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `WeightedAnimFrame` struct | `animation.hpp #17-20` | frame + 가중치 w |
 | `convertAnimFrameToMatrix()` | `animation.hpp #25` | AnimFrame → Mat4x4 |
 | `lerpAnimFrames()` | `animation.hpp #30` | lerp(translation/scale) + slerp(rotation). slerp=`XMQuaternionSlerp`가 최단호 부호 보정을 하므로 반구 문제 없음 |
-| `sumWeightedAnimFrames()` | `animation.hpp #33` / `animation.cpp #27` | 가중합 (nlerp). **가중치 최댓값 프레임을 기준으로 각 항의 쿼터니언 부호를 정렬한 뒤 합산**한다 — 클립별 추출 부호가 제각각이라(플레이어 pelvis: `Combat_2H/Bow/Cast_Ready`가 `Run_*`와 반대 부호, dot≈-0.95) 정렬 없이 더하면 idle↔run이 비슷한 가중치일 때 상쇄되어 최대 180° 회전 튐이 발생했다 |
-| `AnimClip` struct | `animation.hpp #42-54` | 키프레임, duration, skeletonEnum, flags |
-| `loadAnimClipsFromFile()` | `animation.hpp #56` | 바이너리 → AnimClip 벡터 |
+| `sumWeightedAnimFrames()` | `animation.hpp #33` / `animation.cpp #36` | 가중합 (nlerp). **가중치 최댓값 프레임을 기준으로 각 항의 쿼터니언 부호를 정렬한 뒤 합산**한다 — 클립별 추출 부호가 제각각이라(플레이어 pelvis: `Combat_2H/Bow/Cast_Ready`가 `Run_*`와 반대 부호, dot≈-0.95) 정렬 없이 더하면 idle↔run이 비슷한 가중치일 때 상쇄되어 최대 180° 회전 튐이 발생했다 |
+| `AnimClip` struct | `animation.hpp #42-62` | 키프레임, duration, skeletonEnum, flags. **재생 배속 필드는 없다** — 클립은 추출 바이너리에서 `shared_ptr<const>`로 공유되므로 기준 속력은 각 블렌더의 지역 `constexpr`로 둔다 |
+| `loadAnimClipsFromFile()` | `animation.hpp #64` | 바이너리 → AnimClip 벡터 |
 | `AnimBlender` class | `animation.hpp #92` | 추상 base; 상속 필수 |
 | `AnimBlender::update()` | `animation.hpp #138` | priority_ 갱신 (오브젝트가 호출) |
 | `AnimBlender::setCulled()/isCulled()` | `animation.hpp #123` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
@@ -330,19 +330,22 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 스파인 조준 pitch에 사용 — `docs/aimPitchUpperBodyMask.md` |
 | `AnimBlender::onCalcFinal()` | `animation.hpp #156` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #160-161` | 셰이더 입력용 최종 행렬 배열 |
-| `AnimBlender::updatePriority()` | `animation.cpp #378` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
-| `AnimSystem` class | `animation.hpp #256` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.cpp #415` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
+| `AnimBlender::advanceClipTime()` | `animation.hpp #198` / `animation.cpp #341` | 루프 클립 시간을 `rate`배로 진행 + fmod 랩. 파생 블렌더가 복붙하던 `t += dt; while (t > dur) t -= dur;`의 단일 구현. **루프 로코모션 전용** — 공격/피격/사망은 랩하면 안 되므로 각자 clamp 방식 유지 |
+| `AnimBlender::solveLocomotionRate()` | `animation.hpp #215` / `animation.cpp #367` | 이동 속력 → 로코모션 재생 배속. `clamp(speedXZ / (refSpeed·max(locoWeight, 0.05)), 0.25, 2.0)` + 지수 평활(τ=0.1s, 원격 20Hz 패킷 지터 흡수). **가중치로 나누는 것이 핵심** — 블렌드 밴드가 이미 보폭을 깎아놨으므로 그냥 speed/refSpeed를 쓰면 중속이 더 미끄러진다. refSpeed는 **클립셋별·반비례 레버**(올리면 느려짐: Mushroom 4.5 / Treant 7.8 / Boss walk 2.4·run 7.2 / 나머지 3.0)이며 **서버 `animRefSpeed`+`animBandEnd`와 반드시 일치**. 단 클램프에 걸린 고속 구간에서는 발 속도가 `kMaxRate×refSpeed`라 refSpeed 방향이 뒤집힌다(전술 NPC). 상세: `docs/gameArchitecture.md` |
+| `AnimBlender::bakedFrameOf()` | `animation.hpp #220` / `animation.cpp #391` | baked 샘플 인덱스(샘플 수로 클램프). 9개 블렌더에 복붙돼 있던 **클램프 없는** `bakedSampleRate * animTime`을 대체(텍스처 범위 초과 방지) |
+| `AnimBlender::updatePriority()` | `animation.cpp #429` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
+| `AnimSystem` class | `animation.hpp #281` | 스케줄링 / 로드밸런싱 |
+| `AnimSystem::update()` | `animation.cpp #466` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #98` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): `buildAttackMask()`=`object.cpp #26`(spine_01 서브트리 마스크+스파인 체인, init 시 1회), 공격 lerp에 `tAttack_*(mask+(1-mask)*tIdle_)` 적용, `onPostDress()`=`object.cpp #391`(스파인 피벗-공액 pitch, 사망 페이드) |
-| `AnimBlenderGoblin` | `object.hpp #110` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백 |
-| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #158` / `#197` — 고블린과 동일 구조·다중 공격 지원(클립 접두어만 다름) |
-| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #236`/`#271`/`#306`/`#341` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
-| `AnimBlenderBoss` | `object.hpp #380`/`object.cpp #1000` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드) |
+| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #98` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): `buildAttackMask()`=`object.cpp #26`(spine_01 서브트리 마스크+스파인 체인, init 시 1회), 공격 lerp에 `tAttack_*(mask+(1-mask)*tIdle_)` 적용, `onPostDress()`=`object.cpp #397`(스파인 피벗-공액 pitch, 사망 페이드). **run 배속**: `runRate_`+지역 `kRefSpeedRun=5`, 가중치 `tRun*(1-tAttack_*tIdle_)`(하체 마스크 몫 차감), 공격 오버레이 처리 **다음**에 계산 |
+| `AnimBlenderGoblin` | `object.hpp #112` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백. **walk 배속**: `walkRate_`+지역 `kRefSpeedWalk=3`, 가중치 `tWalk_*(1-tAttack_)`(마스크 없음 → 공격이 전 본에 걸림) |
+| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #162` / `#203` — 고블린과 동일 구조·다중 공격·walk 배속(클립 접두어만 다름). Snake는 idle 슬롯에도 `Snake_Walk`를 쓰므로 배속은 walk 슬롯에만 적용 |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #244`/`#281`/`#318`/`#355` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #396`/`object.cpp #1059` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드). **배속은 walk/run 공유 단일값**(`locoRate_`) — walk↔run은 양쪽 다 보폭이 있어 클립별 가중치 나눗셈이 이중 보정이 된다. `kRefSpeedWalk=2.4`/`kRefSpeedRun=7.2`를 `tRunBand`로 블렌드해 기준 속도를 만들고 `tMove`로 한 번만 나눈다(`docs/gameArchitecture.md` "예외: 보스") |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---

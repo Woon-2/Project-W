@@ -180,6 +180,159 @@ render():
 
 ---
 
+### 로코모션 재생 배속 (발 미끄러짐 저감)
+
+클립은 전부 제자리(in-place)다 — root motion도 foot IK도 없다. 따라서 발 접지는
+**"클립이 만들어내는 보폭 속도"와 "실제 이동 속도"가 얼마나 맞는가**로만 결정된다.
+
+#### 왜 기존 구조가 중저속에서는 그럭저럭 맞았나
+
+이 시스템은 원래 속도를 **블렌드 가중치**로만 표현했다. idle 포즈는 발이 고정이므로
+블렌딩된 포즈의 보폭은 대략 `w × (클립 기준 보속)`에 비례한다. 그리고 `w ≈ speed / 밴드끝`이다.
+즉 **"기준 속도 ≈ 블렌드 밴드 끝값"이 암묵적으로 인코딩**되어 있었고, 밴드 안에서는 대충 맞았다.
+
+깨지는 곳은 밴드가 포화한 위쪽이다.
+
+| 대상 | 밴드 끝 | 실제 최대 속도 | 결과 |
+|---|---|---|---|
+| 플레이어 | 5.1 m/s | 10 (`kPlayerMaxSpeed`), F8 부스트 시 ×5 | 5.1 위로는 애니메이션이 완전히 동일한 채 최대 2배 빨리 미끄러짐 |
+| 전술 NPC | 3.06 m/s | `moveSpeed × TACTICAL_SPEED_MULT(3.0)` = 최대 12 | 약 4배 미끄러짐 |
+| 보스 | walk 1.56 / run 5.0 | 3.5 | walk↔run 크로스페이드 구간 |
+
+#### 수식
+
+```
+rate = clamp( speedXZ / (refSpeed × max(locoWeight, 0.05)), 0.35, 2.0 )   // + 지수 평활 τ=0.1s
+```
+
+**`locoWeight`로 나누는 것이 핵심이다.** 블렌드 밴드는 유지하기로 했으므로(중저속 룩 보존),
+가중치가 이미 깎아놓은 보폭을 배속이 되돌려줘야 한다. `speed / refSpeed`를 그대로 쓰면
+2.5 m/s에서 이미 `w≈0.49`(포즈 절반이 idle)인데 배속까지 0.55배로 낮춰 **지금보다 더 미끄러진다.**
+
+밴드 안에서는 `locoWeight ≈ speed/밴드끝`, `refSpeed ≈ 밴드끝`이라 이 값이 **1 근처로 수렴**한다
+(= 기존 룩 보존, 회귀 판정 기준). 가중치가 포화한 뒤부터 `speed/refSpeed`가 그대로 붙는다.
+
+- **중간 clamp 금지.** `strideRate`를 먼저 clamp하고 그 결과를 가중치로 나누면 clamp 오차가
+  `1/locoWeight`로 증폭되어 저속 구간이 종전보다 나빠진다. 한 번에 나누고 한 번만 clamp한다.
+- **`kMinWeight`는 작게(0.05).** 크게 잡으면 저속에서 보정이 모자란다. 폭주 방어는 최종 clamp가 한다.
+- **범위 `[0.25, 2.0]`.** 상한은 플레이어 `10/5 = 2.0`을 딱 담는 값이고, 하한은 Treant(0.34)를
+  담기 위해 내린 값이다. **클램프에 걸리면 지정한 refSpeed가 무력화되므로, 값을 조정할 때마다
+  밴드 내 배속(`밴드끝/refSpeed`)이 이 범위 안인지 확인할 것.**
+  전술 NPC(`moveSpeed × 3.0`)는 상한에 걸리며,
+  **남는 미끄러짐은 배속이 아니라 run 클립으로 풀 문제**다(현재 walk 클립만 있음).
+- **평활은 필수.** 원격 플레이어·몬스터의 속도는 물리가 아니라 20Hz 서버 패킷 값이다
+  (`movePlayer`/`moveGoblin`). 평활 없이는 배속이 패킷 주기로 계단진다.
+
+#### `locoWeight`에 상하체 마스크를 반영한다
+
+다리가 실제로 드러내는 가중치는 `tRun`/`tWalk_`가 아니다.
+
+| 대상 | `locoWeight` | 근거 |
+|---|---|---|
+| 플레이어 | `tRun × (1 - tAttack_ × tIdle_)` | 하체(mask=0)의 공격 오버레이 비중이 `tAttack_ × tIdle_` (`aimPitchUpperBodyMask.md`). 고속 이동 중(tIdle_→0)에는 이 항이 사라져 다리는 순수 run |
+| 몬스터·보스 | `t이동 × (1 - tAttack_)` | 마스크가 없어 공격 오버레이가 전 본에 걸린다 |
+
+그래서 배속 계산은 **`tAttack_`이 확정된 뒤**(공격 오버레이 처리 다음)에 와야 한다.
+
+`tHit_`(최대 0.75)·`tDeath_`도 마스크 없이 보폭을 깎지만 **보정 대상에서 제외**한다 —
+넉백·입력잠금 상태라 접지 정확도가 의미 없고, 비틀거리는 포즈 위에서 다리만 빨리 돌리면 어색하다.
+
+#### 기준 속도 — 값은 "엔티티"가 아니라 "클립셋"의 속성이다
+
+같은 클립셋을 쓰는 변종은 `moveSpeed`가 달라도 **같은 기준 속도**를 써야 한다.
+서버 `Room::setupTacticalNpc*`의 objType 스위치가 그 대응을 정의한다:
+**Hobgoblin→Goblin, Grandbaum→Treant, Isys→Birdy** (모델만 다르고 anim은 공유).
+
+클라는 `AnimClip`에 필드로 넣지 않는다. 클립은 추출 바이너리에서 로드되어
+`shared_ptr<const AnimClip>`로 공유되므로 필드 추가는 포맷 변경 + 전 에셋 재추출을 부른다.
+클립 이름을 아는 쪽은 각 블렌더이므로 **각 블렌더 `update()`의 지역 `constexpr`**로 둔다.
+
+**refSpeed는 반비례 레버다 — 값을 올리면 애니메이션이 느려진다.**
+밴드 안 정상상태 배속은 대략 `밴드끝 / refSpeed`이므로, "이 캐릭터 걸음을 느리게"는 refSpeed를 **올리는** 것이다.
+
+| 클립셋 | refSpeed | 밴드끝 | 밴드 내 배속 | 클라 (`client/object.cpp`) | 서버 |
+|---|---|---|---|---|---|
+| Player run | 5.0 | 5.10 | 1.02× | `AnimBlenderPlayer::kRefSpeedRun` | `Room::setupPlayerAnimClips` |
+| Mushroom | **4.5** | 3.06 | **0.68×** | `AnimBlenderMushroom` | `Mushroom::applyMushroomConfig` |
+| Treant (+Grandbaum) | **7.8** | 3.06 | **0.39×** | `AnimBlenderTreant` | `Treant::applyTreantConfig`, `TacticalTreant::trooperConfig`, `Room.cpp` Grandbaum bossCfg |
+| Goblin(+Hobgoblin) / Snake / Slime / Birdy(+Isys) / Bomber | 3.0 (미측정) | 3.06 | 1.02× | 각 블렌더 | `apply*Config`, `Tactical*::trooper/bossConfig`, `Room.cpp` Isys bossCfg |
+| FinalBoss (walk **2.4** / run **7.2**) | — | 가중 블렌드 | **0.66~0.83** | `AnimBlenderBoss::kRefSpeedWalk`·`kRefSpeedRun` | `FinalBoss::applyBossConfig`(근사 6.4) |
+
+**클라·서버 값이 어긋나면 피격 BVH가 화면과 안 맞는다. 한쪽만 바꾸지 말 것.**
+서버는 `NpcConfig::animRefSpeed`+`animBandEnd` / `TacticalNpcConfig`의 같은 두 필드로 config 주도이며,
+새 몬스터를 추가하면 `applyXXXConfig`에서 명시적으로 지정한다(기본값에 기대지 말 것).
+
+**클램프가 의도한 배율을 삼키지 않는지 확인할 것.** 하한 0.25는 Treant(0.39)를 담기 위한 값이다 —
+0.35였을 때 Treant는 전 속도 구간에서 상시 클램프되어 지정한 값이 무력화됐다.
+상한 2.0은 플레이어(10/5)를 담는 값이며, 전술 NPC(`moveSpeed × 3.0`)는 여전히 여기 걸린다.
+
+> **함정 — 클램프 위에서는 refSpeed의 방향이 뒤집힌다.**
+> 가중치가 포화한 뒤(고속) 실제 발 속도는 `rate × refSpeed`인데, rate가 상한에 걸려 고정되면
+> 발 속도 = `kMaxRate × refSpeed`가 된다. 즉 **refSpeed를 낮추면 발이 오히려 더 느려진다.**
+> 전술 고블린(12 m/s)에서 refSpeed를 3.0 → 2.5로 낮췄더니 발 속도가 6.0 → 5.0 m/s로 떨어져
+> 미끄러짐이 악화된 사례가 있다. 클램프 구간의 미끄러짐은 refSpeed가 아니라
+> `kMaxRate`(또는 run 클립 추가)로 풀어야 한다.
+
+#### 예외: 보스는 클립별이 아니라 **가중 블렌드된 기준 속도**를 쓴다
+
+§1의 가중치 나눗셈은 **로코모션 클립이 idle과 섞인다**는 전제 위에 있다. idle은 발이 고정된
+포즈라 블렌딩된 보폭이 정확히 `w × 클립보폭`이고, 그래서 `w`로 되나누는 것이 옳다.
+
+보스는 walk와 run을 서로 크로스페이드한다 — **양쪽 다 보폭을 가진다.** 여기서 각 클립을
+자기 가중치로 나누면 이중 보정이 되어, 50/50 구간에서 walk 클립이 4.7배를 요구하고 상한에
+박혀버렸다. 보스 발놀림이 경박해 보이던 원인이 이것이다.
+
+```cpp
+// AnimBlenderBoss::update — 두 클립이 하나의 배속을 공유한다
+refBlended = (1 - tRunBand)·kRefSpeedWalk + tRunBand·kRefSpeedRun
+locoRate_  = solve(speedXZ, refBlended, tMove · (1 - tAttack_))
+```
+
+가중치로 나누는 대상은 **전체 로코모션 가중치(tMove)** 하나뿐이다 — 보폭 없는 파트너는 idle뿐이므로.
+배속을 공유하므로 크로스페이드 구간에서 두 클립의 케이던스도 어긋나지 않는다.
+
+수정 전후(보스): 3.5 m/s에서 walk 2.00× / run 0.76×(가중평균 1.38) → 4.5 m/s에서 **0.70× 단일 배속**.
+전 속도 구간 0.66~0.83으로 평탄하다.
+
+> **서버 근사:** 보스는 3-way 블렌드라 `max(bandEnd, speed)/refSpeed` 유도가 정확하지 않다.
+> 클라 배속이 전 구간 0.7 근처로 평탄하다는 점을 이용해 `refSpeed=6.4`, `bandEnd=4.5`(=chase 속도)로
+> 근사한다 — 보스가 대부분 머무는 chase 속도에서 정확히 일치하고, 그 밖에서 최대 ~19% 어긋난다.
+> 공격 중에는 서버가 attack 클립으로 전환하므로 히트 판정 구간은 이 근사의 영향을 받지 않는다.
+
+#### 서버 미러링
+
+서버는 단일 클립을 재생하고 그 본 변환으로 피격 BVH를 만든다(`Object::updateAnimBones`).
+클라만 배속을 바꾸면 걷는 몬스터의 팔·다리 피격 위치가 화면과 어긋난다.
+
+서버가 맞춰야 하는 것은 **클립 위상**이다(양쪽이 같은 클립을 돌린다). 서버에는 블렌드 가중치가
+없지만, 그 가중치는 속력만의 함수이므로 대입하면 가중치가 통째로 소거된다:
+
+```
+w = clamp((speed - bandStart) / (bandEnd - bandStart), 0, 1) ≈ min(speed / bandEnd, 1)
+  ⇒ speed / (refSpeed · w) = max(bandEnd, speed) / refSpeed
+```
+
+```cpp
+// RoomServer/serverAnimation.cpp
+ServerAnimState::locomotionRate = clamp(max(bandEnd, speedXZ) / refSpeed, 0.25, 2.0)
+```
+
+플레이어·몬스터 블렌더에 대해 **1.5 m/s 이상에서는 클라와 정확히 일치**하고, 그 아래에서만
+`bandStart`(0.03~0.05)를 생략한 만큼 최대 6% 어긋난다.
+`speed/refSpeed`로 단순화하면 **안 된다** — 그건 `refSpeed ≈ bandEnd`일 때만 성립했고,
+지금은 최대 3배까지 벌어져 있다(Treant refSpeed 9.0 vs bandEnd 3.06).
+보스는 3-way 블렌드(idle/walk/run)라 이 유도가 정확하지 않다 — run 밴드 끝(5.0)에서만 일치하고
+크로스페이드 구간(2~5 m/s)에서는 어긋난다.
+
+- 배속은 `Object::updateAnimBones`의 **단일 진입점**에서 매 프레임 설정한다.
+  `AnimController::isPlayingLocomotion()`(등록 시 캐시한 포인터 비교)이 true일 때만 적용하고,
+  공격/피격/사망 클립은 항상 1x다 — 스킬 타임라인과 히트 윈도우가 실시간 재생을 전제한다.
+- `AnimController::switchClip`은 같은 포인터면 early-return하므로 **배속은 반드시 `setPlaybackRate`로** 설정한다.
+- 기준 속도·밴드 끝은 `NpcConfig` / `TacticalNpcConfig`의 `animRefSpeed`·`animBandEnd`(`moveSpeed` 옆),
+  플레이어는 `Room::setupPlayerAnimClips`, 보스는 `FinalBoss::applyBossConfig`.
+
+---
+
 ### 이벤트 시스템
 파일: `event.hpp`
 

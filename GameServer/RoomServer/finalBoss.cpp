@@ -23,7 +23,14 @@ struct BtContext {
 void FinalBoss::applyBossConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 2000.f;
-    cfg.moveSpeed      = 3.5f;
+    cfg.moveSpeed      = 4.5f;
+    // The client blends Boss_Walk_* against Boss_Run, so its playback rate runs off a
+    // weight-blended reference speed (AnimBlenderBoss::update) rather than a single clip's.
+    // Across the boss's whole speed range that blended value stays near 6.4, and the BT only
+    // ever plays "Run"/"Idle" here anyway -- so approximate it with a constant and pin the
+    // band end at the chase speed, where the two sides then agree exactly.
+    cfg.animRefSpeed   = 6.4f;
+    cfg.animBandEnd    = 4.5f;
     cfg.attackRange    = 3.0f;
     cfg.detectionRange = 30.f;   // unused by the BT (boss arena has no detection gate)
     cfg.attackDamage   = 40.f;   // legacy fallback only; skill hitboxes are authoritative

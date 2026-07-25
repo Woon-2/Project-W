@@ -1211,6 +1211,12 @@ static void registerPlayerAnimClips(Player& player, const std::vector<ServerAnim
 	ac.registerClip("Death",        findServerAnimClip(anims, "Death"));
 	for (const char* a : attacks)
 		ac.registerClip(a, findServerAnimClip(anims, a));
+
+	// run 클립 세트는 무기와 무관하게 같은 리그·같은 보속으로 제작되어 있으므로
+	// 기준 속력도 무기별로 다르지 않다. 클라 AnimBlenderPlayer::kRefSpeedRun과 같은 값.
+	player.setAnimRefSpeed(5.f);
+	// 클라 AnimBlenderPlayer의 run 블렌드 밴드 끝(runThreshold 0.1 + 5.f).
+	player.setAnimBandEnd(5.1f);
 }
 
 void Room::enter(GameSession* session) {
@@ -2370,7 +2376,9 @@ void Room::spawnGrandbaumEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	// 부대별 config는 몬스터별 Tactical 클래스에서(단일 출처). 보스 config는 인카운터 고유.
 	const TacticalNpcConfig slimeCfg = TacticalSlime::trooperConfig();
 	TacticalNpcConfig bossCfg{
-		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.maxHp = 2000.f, .moveSpeed = 4.f,
+		.animRefSpeed = 7.8f,   // Grandbaum은 Treant 클립셋을 그대로 쓴다(setupTacticalNpc* objType 스위치)
+		.attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
 		.separationRadius = 4.f, .separationWeight = 0.3f,
 		.attackDamageScale = 5.0f   // 보스 공격력 레버(Treant 스킬 × scale, 주 위협). attackDamage는 레거시 폴백(미사용). 튜닝값.
@@ -2440,7 +2448,9 @@ void Room::spawnIsysEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos)
 	const TacticalNpcConfig buddyCfg  = TacticalBirdy::trooperConfig();
 	const TacticalNpcConfig bomberCfg = TacticalBomber::trooperConfig();
 	TacticalNpcConfig bossCfg{
-		.maxHp = 2000.f, .moveSpeed = 4.f, .attackRange = 3.5f, .attackDamage = 40.f,
+		.maxHp = 2000.f, .moveSpeed = 4.f,
+		.animRefSpeed = 3.0f,   // Isys reuses the Birdy clip set (see the objType switch in setupTacticalNpc*)
+		.attackRange = 3.5f, .attackDamage = 40.f,
 		.attackWindupTime = 0.5s, .attackRecoverTime = 1.0s,
 		.separationRadius = 4.f, .separationWeight = 0.3f,
 		.attackDamageScale = 3.0f   // boss reuses the Birdy skill roster but hits ~3x harder
@@ -2672,6 +2682,10 @@ void Room::registerTacticalNpcBody(TacticalNpc& obj, ObjectType type) {
 	case ObjectType::Goblin:
 	default:                    model = assetManager_->modelGoblin();    anims = &assetManager_->goblinAnimations();   prefix = "Goblin";  break;
 	}
+	// NOTE: the anim set is picked here by objType, but the locomotion playback reference
+	// speed rides on TacticalNpcConfig::animRefSpeed, set at the spawn call site. The two must
+	// agree -- a variant that reuses another monster's clips (Hobgoblin/Grandbaum/Isys above)
+	// needs that monster's animRefSpeed, not one derived from its own moveSpeed.
 
 	obj.setId(IdPool::pop());
 	obj.setFaction(Faction::Monsters);
