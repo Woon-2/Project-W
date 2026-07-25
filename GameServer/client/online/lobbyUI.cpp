@@ -408,14 +408,18 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     const float accountInputW = contentW - accountInputX;
     const float authRowGap = 18.f;
     const float authInputH = 62.f;
-    const float authButtonH = 88.f;
+    const float menuButtonGap = 18.f;
+    const float menuButtonInset = 8.f;
+    const float smallButtonH = 64.f;
+    const float smallButtonW = (contentW - menuButtonGap) * 0.5f;
 
     // Authentication and room selection occupy the same panel region. refresh()
     // exposes exactly one root so hidden controls cannot receive pointer input.
     authRoot_ = mainPanel->addChild(std::make_unique<UI::UIElement>());
     authRoot_->name = "authRoot";
+    const float authRootY = 52.f;
     applyRect(authRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
-        contentX, 24.f, contentW, 270.f);
+        contentX, authRootY, contentW, 270.f);
 
     // Account inputs stay local until the authentication server is implemented.
     makeLabel(authRoot_, L"아이디", 0.f, 8.f, 24.f, 132.f, 54.f, ink);
@@ -442,30 +446,59 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     loginPasswordInput_->onSubmit = [this](const std::wstring&) { submitLogin(); };
     styleInput(loginPasswordInput_);
 
-    const float authButtonGap = authRowGap;
-    const float authButtonInset = 8.f;
-    const float authButtonW = (contentW - authButtonGap - 2.f * authButtonInset) * 0.5f;
-    const float authButtonY = 4.f + 2.f * authInputH + 2.f * authRowGap;
-    auto* loginButton = makeButton(authRoot_, L"", authButtonInset, authButtonY,
-        authButtonW, authButtonH,
+    const float authButtonX = 0.f;
+    const float loginButtonY = 182.f;
+    auto* loginButton = makeButton(authRoot_, L"", authButtonX, loginButtonY,
+        smallButtonW, smallButtonH,
         primary, primaryDark, primaryDark, 24.f,
         [this]() { submitLogin(); }, { 1.f, 1.f, 1.f, 1.f });
     loginButton->name = "loginButton";
     stylePrimary(loginButton);
-    makeLabel(loginButton, L"로그인", 0.f, 23.f, 26.f, authButtonW, 42.f,
+    makeLabel(loginButton, L"로그인", 0.f, 13.f, 24.f, smallButtonW, 38.f,
         { 1.f, 1.f, 1.f, 1.f }, UI::TextHAlign::Center);
 
     auto* signupButton = makeButton(authRoot_, L"",
-        authButtonInset + authButtonW + authButtonGap, authButtonY, authButtonW, authButtonH,
+        authButtonX + smallButtonW + menuButtonGap, loginButtonY,
+        smallButtonW, smallButtonH,
         surfaceSoft, primarySoft, primarySoft, 24.f,
         [this]() { openSignup(); }, ink);
+    signupButton_ = signupButton;
     signupButton->name = "openSignupButton";
     styleSecondary(signupButton);
-    makeLabel(signupButton, L"회원가입", 0.f, 23.f, 26.f, authButtonW, 42.f,
+    makeLabel(signupButton, L"회원가입", 0.f, 13.f, 24.f, smallButtonW, 38.f,
         ink, UI::TextHAlign::Center);
 
+    // A thin divider separates the account fields from the primary action, as in
+    // the reference login screen.
+    makeSolid(authRoot_, "authDivider", 0.f, loginButtonY - 18.f,
+        contentW, 1.f, { 0.49f, 0.37f, 0.19f, 0.55f }, 1);
+
+    const float bottomMenuButtonY = 392.f;
+    auto* settingsButton = makeButton(mainPanel, L"",
+        contentX, bottomMenuButtonY, smallButtonW, smallButtonH,
+        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
+        [this]() { if (callbacks_.onOpenSettings) callbacks_.onOpenSettings(); }, ink);
+    settingsButton->name = "settingsButton";
+    styleSecondary(settingsButton);
+    makeLabel(settingsButton, L"설정", 0.f, 13.f, 24.f, smallButtonW, 38.f,
+        ink, UI::TextHAlign::Center);
+
+    auto* quitButton = makeButton(mainPanel, L"",
+        contentX + smallButtonW + menuButtonGap, bottomMenuButtonY,
+        smallButtonW, smallButtonH,
+        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
+        [this]() { if (callbacks_.onQuit) callbacks_.onQuit(); }, ink);
+    quitButton->name = "quitButton";
+    styleSecondary(quitButton);
+    makeLabel(quitButton, L"종료", 0.f, 13.f, 24.f, smallButtonW, 38.f,
+        ink, UI::TextHAlign::Center);
+
+    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, bottomMenuButtonY + smallButtonH + 8.f,
+        19.f, contentW, 30.f,
+        { 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
+
     const float roomRowH = 128.f;
-    const float roomRowY = 134.f;
+    const float roomRowY = 180.f;
     const float roomActionGap = 18.f;
     const float createRoomW = 190.f;
     const float joinBoxW = contentW - createRoomW - roomActionGap;
@@ -541,29 +574,6 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     makeLabel(createBtn, L"CREATE ROOM", 0.f, 78.f, 14.f, createRoomW, 24.f,
         { 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Center);
 
-    const float quietW = (contentW - authButtonGap) * 0.5f;
-    const float quietY = authButtonY + authButtonH + authRowGap;
-    const float quietH = 64.f;
-    auto* settingsButton = makeButton(mainPanel, L"", contentX, quietY, quietW, quietH,
-        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
-        [this]() { if (callbacks_.onOpenSettings) callbacks_.onOpenSettings(); }, ink);
-    settingsButton->name = "settingsButton";
-    styleSecondary(settingsButton);
-    makeLabel(settingsButton, L"설정", 0.f, 13.f, 24.f, quietW, 38.f,
-        ink, UI::TextHAlign::Center);
-
-    auto* quitButton = makeButton(mainPanel, L"",
-        contentX + quietW + authButtonGap, quietY, quietW, quietH,
-        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
-        [this]() { if (callbacks_.onQuit) callbacks_.onQuit(); }, ink);
-    quitButton->name = "quitButton";
-    styleSecondary(quitButton);
-    makeLabel(quitButton, L"종료", 0.f, 13.f, 24.f, quietW, 38.f,
-        ink, UI::TextHAlign::Center);
-
-    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, quietY + quietH + authRowGap,
-        19.f, contentW, 30.f,
-        { 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
     // ---- Registration modal ----
     // Every interactive child uses a zOrder above the scrim because UIManager's
@@ -1129,6 +1139,7 @@ void LobbyUI::refresh(const ViewState& s) {
 
     if (authRoot_) authRoot_->visible = inMain && !s.isAuthenticated;
     if (roomSelectionRoot_) roomSelectionRoot_->visible = inMain && s.isAuthenticated;
+    if (signupButton_) signupButton_->visible = inMain && !s.isAuthenticated;
     if (profileNicknameLabel_) {
         profileNicknameLabel_->setText(
             s.nickname.empty() ? std::wstring(L"PLAYER") : s.nickname);
