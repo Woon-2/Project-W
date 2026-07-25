@@ -1,45 +1,90 @@
 ﻿#include "sepch.hpp"
 #include "DBConnection.hpp"
 
+#include <sstream>
+
 /*--------------------
      DBConnection
 --------------------*/
 
-bool DBConnection::connect( SQLHENV hEnv, const WCHAR* connStr ) {
-    if( ::SQLAllocHandle( SQL_HANDLE_DBC, hEnv, &hConn_) != SQL_SUCCESS ) {
-        return false;
+namespace {
+	// 여러 IOCP 워커가 동시에 에러를 찍으면 출력이 뒤섞이므로 직렬화한다.
+	std::mutex gDbLogMutex;
+}
+
+void dbLogW( const WCHAR* msg ) {
+	if ( msg == nullptr ) {
+		return;
 	}
 
-	WCHAR str[ MAX_PATH ]{};
-	wcscpy_s( str, connStr );
+	// 콘솔이 CP949든 UTF-8이든 그 코드페이지로 직접 변환한다.
+	// 리다이렉션되어 콘솔이 없으면 GetConsoleOutputCP()가 0을 주므로 UTF-8로 떨어뜨린다.
+	UINT codePage = ::GetConsoleOutputCP();
+	if ( codePage == 0 ) {
+		codePage = CP_UTF8;
+	}
 
-    WCHAR resultStr[ MAX_PATH ]{};
+	const int32 len = ::WideCharToMultiByte( codePage, 0, msg, -1, nullptr, 0, nullptr, nullptr );
+	if ( len <= 1 ) {
+		return;
+	}
+
+	std::string out( static_cast<size_t>( len ) - 1, '\0' );
+	::WideCharToMultiByte( codePage, 0, msg, -1, out.data(), len, nullptr, nullptr );
+
+	std::lock_guard lock( gDbLogMutex );
+	std::cerr << out << std::endl;
+}
+
+bool DBConnection::connect( SQLHENV hEnv, const WCHAR* connStr ) {
+	SQLRETURN ret = ::SQLAllocHandle( SQL_HANDLE_DBC, hEnv, &hConn_ );
+	if ( !SQL_SUCCEEDED( ret ) ) {
+		handleError( SQL_HANDLE_ENV, hEnv, ret );
+		return false;
+	}
+
+	WCHAR resultStr[ MAX_PATH ]{};
 	SQLSMALLINT resultStrLen{};
 
-    SQLRETURN ret = ::SQLDriverConnect(
-        hConn_, nullptr,
-        reinterpret_cast<SQLWCHAR*>(str), _countof( str ),
-        reinterpret_cast<SQLWCHAR*>(resultStr), _countof( resultStr ),
-        &resultStrLen, SQL_DRIVER_NOPROMPT
-    );
+	// 연결 문자열을 지역 버퍼에 복사하지 않는다.
+	// MAX_PATH를 넘는 문자열이 들어오면 wcscpy_s가 프로세스를 즉시 죽였다.
+	// SQL_NTS를 주면 드라이버가 널 종료까지 알아서 읽는다.
+	ret = ::SQLDriverConnect(
+		hConn_, nullptr,
+		const_cast<SQLWCHAR*>( reinterpret_cast<const SQLWCHAR*>( connStr ) ), SQL_NTS,
+		reinterpret_cast<SQLWCHAR*>( resultStr ), _countof( resultStr ),
+		&resultStrLen, SQL_DRIVER_NOPROMPT
+	);
 
-    if ( ::SQLAllocHandle( SQL_HANDLE_STMT, hConn_, &hStmt_ ) != SQL_SUCCESS ) {
+	// 연결 실패 원인(SQLSTATE/네이티브 에러)은 DBC 핸들에만 남는다.
+	// STMT 할당을 시도하기 전에 여기서 빠져나가야 원인을 볼 수 있다.
+	if ( !SQL_SUCCEEDED( ret ) ) {
+		handleError( SQL_HANDLE_DBC, hConn_, ret );
 		return false;
-    }
+	}
 
-    return ( ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO );
+	ret = ::SQLAllocHandle( SQL_HANDLE_STMT, hConn_, &hStmt_ );
+	if ( !SQL_SUCCEEDED( ret ) ) {
+		handleError( SQL_HANDLE_DBC, hConn_, ret );
+		return false;
+	}
+
+	return true;
 }
 
 void DBConnection::clear() {
-    if ( hConn_ != SQL_NULL_HANDLE ) {
+	// ODBC 규약상 자식(STMT)부터 해제하고, 연결을 끊은 뒤 DBC를 해제해야 한다.
+	// 순서를 어기면 SQLFreeHandle이 HY010으로 실패해서 핸들이 그대로 샌다.
+	if ( hStmt_ != SQL_NULL_HANDLE ) {
+		::SQLFreeHandle( SQL_HANDLE_STMT, hStmt_ );
+		hStmt_ = SQL_NULL_HANDLE;
+	}
+
+	if ( hConn_ != SQL_NULL_HANDLE ) {
+		::SQLDisconnect( hConn_ );
 		::SQLFreeHandle( SQL_HANDLE_DBC, hConn_ );
 		hConn_ = SQL_NULL_HANDLE;
-    }
-
-    if ( hStmt_ != SQL_NULL_HANDLE ) {
-        ::SQLFreeHandle( SQL_HANDLE_STMT, hStmt_ );
-        hStmt_ = SQL_NULL_HANDLE;
-    }
+	}
 }
 
 bool DBConnection::execute( const WCHAR* query ) {
@@ -50,7 +95,7 @@ bool DBConnection::execute( const WCHAR* query ) {
         return true;
 	}
 
-	handleError( ret );
+	handleError( SQL_HANDLE_STMT, hStmt_, ret );
 	return false;
 }
 
@@ -66,7 +111,7 @@ bool DBConnection::fetch() {
         return false;
 
     case SQL_ERROR:
-		handleError( ret );
+		handleError( SQL_HANDLE_STMT, hStmt_, ret );
         return false;
 
     default:
@@ -126,6 +171,12 @@ bool DBConnection::bindParam( int32 paramIdx, TIMESTAMP_STRUCT* val, SQLLEN* idx
 bool DBConnection::bindParam( int32 paramIdx, const WCHAR* str, SQLLEN* idx ) {
 	SQLULEN size = wcslen( str );
     *idx = SQL_NTSL;
+
+	// ColumnSize 0은 드라이버가 "invalid precision value"로 거부할 수 있다.
+	// 빈 문자열도 정상 파라미터이므로 최소 1로 올린다.
+	if ( size == 0 ) {
+		size = 1;
+	}
 
 	// ODBC는 const를 모르는 C API다. SQL_PARAM_INPUT으로만 바인딩하므로 드라이버는 이 버퍼를 읽기만 한다.
 	// SQLPOINTER는 void*이고 객체 포인터 -> void*는 암시적 변환이므로, 벗겨낼 것은 const뿐이다.
@@ -196,8 +247,8 @@ bool DBConnection::bindColumn( int32 columnIdx, byte* bin, int32 size, SQLLEN* i
 
 bool DBConnection::bindParam( SQLUSMALLINT paramIdx, SQLSMALLINT cType, SQLSMALLINT sqlType, SQLULEN len, SQLPOINTER ptr, SQLLEN* idx ) {
     SQLRETURN ret = ::SQLBindParameter( hStmt_, paramIdx, SQL_PARAM_INPUT, cType, sqlType, len, 0, ptr, 0, idx );
-    if ( ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO ) {
-        handleError( ret );
+    if ( !SQL_SUCCEEDED( ret ) ) {
+        handleError( SQL_HANDLE_STMT, hStmt_, ret );
         return false;
     }
 
@@ -206,40 +257,39 @@ bool DBConnection::bindParam( SQLUSMALLINT paramIdx, SQLSMALLINT cType, SQLSMALL
 
 bool DBConnection::bindColumn( SQLUSMALLINT columnIdx, SQLSMALLINT cType, SQLULEN len, SQLPOINTER value, SQLLEN* idx ) {
 	SQLRETURN ret = ::SQLBindCol( hStmt_, columnIdx, cType, value, len, idx );
-    if ( ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO ) {
-        handleError( ret );
+    if ( !SQL_SUCCEEDED( ret ) ) {
+        handleError( SQL_HANDLE_STMT, hStmt_, ret );
         return false;
 	}
 
 	return true;
 }
 
-void DBConnection::handleError( SQLRETURN ret ) {
-    if ( ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO ) {
+void DBConnection::handleError( SQLSMALLINT handleType, SQLHANDLE handle, SQLRETURN ret ) {
+    if ( SQL_SUCCEEDED( ret ) || handle == SQL_NULL_HANDLE ) {
         return;
     }
 
     SQLSMALLINT idx{ 1 };
-    SQLWCHAR sqlState[ MAX_PATH ]{};
+    SQLWCHAR sqlState[ 6 ]{};       // SQLSTATE는 5글자 + 널
     SQLINTEGER nativeErr{};
 	SQLWCHAR errMsg[ MAX_PATH ]{};
 	SQLSMALLINT errMsgLen{};
-	SQLRETURN errRet{};
 
     while ( true ) {
-		errRet = ::SQLGetDiagRec( SQL_HANDLE_STMT, hStmt_, idx, sqlState,
+		SQLRETURN errRet = ::SQLGetDiagRec( handleType, handle, idx, sqlState,
             &nativeErr, errMsg, _countof( errMsg ), &errMsgLen );
 
-        if ( errRet == SQL_NO_DATA ) {
-            break;
-        }
-        if( errRet != SQL_SUCCESS && errRet != SQL_SUCCESS_WITH_INFO ) {
+		// SQL_NO_DATA(진단 레코드 소진)와 실제 실패를 함께 걸러낸다.
+        if ( !SQL_SUCCEEDED( errRet ) ) {
             break;
 		}
 
-        // Log
-		std::wcout.imbue( std::locale( "kor" ) );
-		std::wcout << errMsg << std::endl;
+		std::wostringstream oss;
+		oss << L"[DB] SQLSTATE=" << reinterpret_cast<const WCHAR*>( sqlState )
+			<< L" native=" << nativeErr
+			<< L" : " << reinterpret_cast<const WCHAR*>( errMsg );
+		dbLogW( oss.str().c_str() );
 
 		++idx;
     }

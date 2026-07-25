@@ -9,6 +9,9 @@
 #pragma comment(lib, "Release/lua54.lib")
 #endif
 
+// ServerEngine은 static library라서 ODBC import는 EXE 쪽에서 해결해야 한다.
+#pragma comment(lib, "odbc32.lib")
+
 #include "sepch.hpp"
 
 #include <fstream>
