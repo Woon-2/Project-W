@@ -583,6 +583,8 @@ struct SLoginPacket : public PacketHeader {
 	AccountResult result;
 	int64 accountId;                  // 실패 시 0
 	wchar_t nickname[kNicknameMax];   // 실패 시 빈 문자열
+};
+
 struct STacticalDialoguePacket : public PacketHeader {
 	uint16               zoneId;
 	TacticalDialogueId   dialogueId;
