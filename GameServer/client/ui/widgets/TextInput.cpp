@@ -45,6 +45,19 @@ void TextInput::setFontSize(float size) {
     if (label_) label_->setFontSize(size);
 }
 
+void TextInput::setFontFamily(const std::wstring& family) {
+    if (label_) label_->setFontFamily(family);
+}
+
+void TextInput::setTextPaddingX(float pixels) {
+    if (label_) label_->offsetX = DimValue::px(pixels);
+}
+
+void TextInput::setPasswordMode(bool enabled) {
+    passwordMode_ = enabled;
+    refreshDisplay();
+}
+
 void TextInput::onFocus() {
     focused_ = true;
     refreshDisplay();
@@ -131,7 +144,9 @@ void TextInput::refreshDisplay() {
     }
 
     // Editing/filled: show text with a simple caret when focused.
-    std::wstring shown = text_;
+    std::wstring shown = passwordMode_
+        ? std::wstring(text_.size(), L'\x25CF')
+        : text_;
     if (focused_) shown += L"|";
     label_->setTextColor(textColor.x, textColor.y, textColor.z, textColor.w);
     label_->setText(shown.empty() ? L" " : shown);
