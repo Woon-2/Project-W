@@ -21,6 +21,28 @@
 - `physicsWorld_.step()` 내 `integrate()`에서 VelocityMotor가 실행되어 AI가 선언한 `desiredVel` 방향으로 수렴 impulse를 적용한다.
 - AI는 `setLinearVel()` 대신 `setDesiredVel()`를 호출하므로 실제 속도를 덮어쓰지 않는다. knockback impulse는 motor가 여러 프레임에 걸쳐 점진적으로 보정한다.
 
+### 틱 케이던스 — 절대 데드라인 (2026-07-26)
+
+`update()`는 자기 자신을 재예약하며 60Hz를 유지한다. **반드시 절대 데드라인으로 예약한다:**
+
+```cpp
+nextTickTime_ += kTickPeriod;                 // 직전 목표시각 기준 (상대 지연 아님)
+if (nextTickTime_ + kMaxCatchUp < tickNow)    // 3틱(50ms) 초과 지연 시 리싱크
+    nextTickTime_ = tickNow;
+doTimerAt(nextTickTime_, [this]{ update(); });
+```
+
+- **불변식: 시뮬 1스텝(`dt`) = 실시간 1주기.** `kTickPeriod`는 `dt`에서 파생시켜 이를 코드로 강제한다.
+- 상대 지연(`doTimer(dt, ...)`)으로 재예약하면 주기 = `dt` + `update()` 처리 시간이 되어 처리 시간이
+  **매 틱 영구 누적**된다. 실제로 이 버그로 서버가 60Hz가 아닌 약 50Hz로 돌았고(시뮬 클럭 = 실시간의
+  0.83배), 스킬 타임라인·서버 애니메이션이 그 비율만큼 늦게 진행해 **클라 예측 히트와 서버 권위 판정이
+  어긋났다**(NPC 공격에서 200~300ms 지연).
+- 밀린 데드라인은 `JobTimer::distribute()`가 즉시 디스패치하므로 짧은 hitch는 자동 catch-up된다.
+  상한을 둔 이유는 과부하 시 백로그가 쌓여 틱 버스트(브로드캐스트 폭풍)가 되는 것을 막기 위함.
+- 일회성 지연 작업은 기존 `doTimer`/`JobTimer::addJob`을 그대로 쓴다. **고정 주기 반복만 `addJobAt`.**
+
+> 진단 과정·측정 데이터·설계 결정 근거: **`docs/roomTickCadence.md`**
+
 ---
 
 ## 물리 시스템

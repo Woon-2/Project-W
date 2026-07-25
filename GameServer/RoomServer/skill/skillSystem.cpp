@@ -231,6 +231,11 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     inst.damageScale = damageScale;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
 
+    // NOTE: events in [0, initialElapsed] are dispatched here without any collision pass
+    // (checkHitboxCollisions only runs from update()). A hitbox whose Spawn AND Destroy both
+    // fall inside this window therefore never gets tested -- a guaranteed server miss at high
+    // ping. Not reproduced locally (measured fast-forward was 6-13ms); see
+    // docs/roomTickCadence.md section 7 for the proposed fix.
     while (inst.nextEventIdx < (int)asset->timeline.size()) {
         if (asset->timeline[inst.nextEventIdx].time > initialElapsed) break;
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);

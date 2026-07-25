@@ -944,7 +944,24 @@ void Room::update() {
 	updateSkillSystem(dt);
 	updatePlayerRegen(dt);
 
-	doTimer(dt, [this]() {
+	// 다음 틱을 '절대 데드라인'으로 예약한다. 상대 지연(지금부터 dt)으로 재예약하면
+	// 주기 = dt + update() 처리 시간이 되어, 처리 시간만큼 매 틱 밀린다(실측 4ms → 60Hz가 약 50Hz로,
+	// 시뮬 클럭이 실시간의 0.83배). 스킬 타임라인과 서버 애니메이션이 그 비율만큼 늦게 진행하므로
+	// 클라 예측 히트와 서버 권위 판정이 어긋난다(NPC 공격에서 200~300ms 지연으로 관측).
+	// 배경·설계 근거: docs/roomTickCadence.md
+	static constexpr auto kTickPeriod = std::chrono::duration_cast<HighResolutionClock::duration>(dt);
+	// 밀린 데드라인은 JobTimer가 즉시 디스패치하므로 짧은 hitch는 자동으로 따라잡힌다.
+	// 다만 과부하가 지속되면 백로그가 무한정 쌓여 틱 버스트가 되므로, 상한을 넘으면 리싱크한다.
+	static constexpr auto kMaxCatchUp = kTickPeriod * 3;
+
+	const auto tickNow = HighResolutionClock::now();
+	if (nextTickTime_.time_since_epoch().count() == 0)
+		nextTickTime_ = tickNow;              // 첫 틱: 케이던스 기준점 확립
+	nextTickTime_ += kTickPeriod;
+	if (nextTickTime_ + kMaxCatchUp < tickNow)
+		nextTickTime_ = tickNow;              // 과부하: 따라잡기 포기하고 현재 시각 기준 재동기화
+
+	doTimerAt(nextTickTime_, [this]() {
 		update();
 	});
 }
@@ -1558,6 +1575,8 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 // Debug-only: broadcast every active skill hitbox OBB to all clients each frame
 // for visualization. Off by default — it allocates + serializes + fans out per
 // frame, which is pure overhead in production.
+// 클라의 kDebugSkillHitboxOverlay(onlineGame.cpp)와 짝: 서버=빨강, 클라 예측=초록으로 겹쳐 렌더된다.
+// 피격 동기화 검증용. 상세: docs/roomTickCadence.md §8.2
 static constexpr bool kBroadcastDebugHitboxes = false;
 
 void Room::updateSkillSystem(Milliseconds dt) {
@@ -2001,6 +2020,11 @@ void Room::notifyTacticalDialogue(TacticalDialogueId dialogueId) {
 void Room::doTimer(Milliseconds delay, CallbackType&& callback) {
 	auto job = ObjectPool<Job>::pop(std::move(callback));
 	JobTimer::addJob(delay, id_, job);
+}
+
+void Room::doTimerAt(HighResolutionClock::time_point executionTime, CallbackType&& callback) {
+	auto job = ObjectPool<Job>::pop(std::move(callback));
+	JobTimer::addJobAt(executionTime, id_, job);
 }
 
 // ── Tactical AI ──────────────────────────────────────────────────────────────

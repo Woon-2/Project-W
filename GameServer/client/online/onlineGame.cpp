@@ -3974,7 +3974,9 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 				mu::Vec3(DirectX::XMLoadFloat3(&info.halfExtents)),
 				mu::NQuat(DirectX::XMLoadFloat4(&info.orient), mu::NQuat::NoNormalize_t{})
 			},
-			Milliseconds{ 100.f }
+			Milliseconds{ 100.f },
+			BVPipeline::BVModel::Box,
+			mu::Vec4{ 1.f, 0.2f, 0.2f, 1.f }   // 빨강 = 서버 권위 히트박스 (클라 예측은 초록)
 		);
 	}
 }
@@ -4137,6 +4139,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
+
+	// 클라 예측 히트박스(초록)를 서버 권위 히트박스(빨강, onDebugHitboxes)와 나란히 렌더해
+	// 포즈/타이밍 오프셋을 육안 비교한다. 서버의 kBroadcastDebugHitboxes(Room.cpp)와 짝으로 켠다.
+	// 상세: RoomServer/docs/roomTickCadence.md §8.2
+	static constexpr bool kDebugSkillHitboxOverlay = false;
+	if constexpr (kDebugSkillHitboxOverlay)
+		skillSystem_.renderDebugHitboxes(debugBVView_);
 
 	// 이벤트 디스패치
 	//

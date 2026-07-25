@@ -129,6 +129,7 @@ public:
 	}
 
 	void doTimer(Milliseconds delay, CallbackType&& callback);
+	void doTimerAt(HighResolutionClock::time_point executionTime, CallbackType&& callback);
 
 	int32 id() const { return id_; }
 	const std::string& code() const { return code_; }
@@ -290,6 +291,10 @@ private:
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
+
+	// 다음 룸 틱의 절대 데드라인. 고정 케이던스를 유지해 시뮬 시간이 실시간에서 이탈하지 않게 한다
+	// (상대 지연 재예약은 처리 시간을 매 틱 누적시킨다 — Room::update 주석 참조).
+	HighResolutionClock::time_point nextTickTime_{};
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

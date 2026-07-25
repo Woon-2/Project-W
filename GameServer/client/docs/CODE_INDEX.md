@@ -1132,7 +1132,8 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillSystem::collectActiveHitboxes` | `skillSystem.cpp` | 활성 bone 히트박스 열거(`ActiveHitboxRef`) |
 | `SkillSystem::pickHitbox` | `skillSystem.cpp` | ray로 최근접 활성 히트박스 OBB 선택 |
 | `SkillSystem::setHitboxLocalOBBs/setHitboxOnHit` | `skillSystem.cpp` | 활성 히트박스 live override (pause 중 즉시 반영) |
-| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
+| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색. 호출부 2곳: 에디터(`editorController.cpp`), **online 오버레이**(`onlineGame.cpp` `kDebugSkillHitboxOverlay`, 기본 off) |
+| 피격 동기화 히트박스 오버레이 | `onlineGame.cpp` `kDebugSkillHitboxOverlay`(초록=클라 예측) + `RoomServer/Room.cpp` `kBroadcastDebugHitboxes`(빨강=서버 권위) | 둘 다 기본 off. 짝으로 켜면 클라 예측 vs 서버 판정 히트박스를 겹쳐 렌더 → 포즈/타이밍 오프셋 육안 비교. `RoomServer/docs/roomTickCadence.md` §8.2 |
 | `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
 | `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
 | `SkillHitboxDef::penetrate` | `skillTypes.hpp` (클라/서버) | VFXParticle 전용: false=비관통(첫 피격 시 소스 파티클 소멸). 서버: `ParticleHitboxSource::consumedKeys`/`consumeAnchor`로 권위 처리. `particleHitboxDeterminism.md` §8 |

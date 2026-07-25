@@ -61,6 +61,11 @@
      **주의:** 물리 step 클럭(`tPhysicInterpolation`)으로 보간하면 매 step마다 t가 0→1을 반복해, 이동이
      드물거나 멈춘 객체가 prev↔curr를 진동(땅속↔공중 깜빡임)한다 — 몬스터가 이 버그를 겪다가 원격
      플레이어와 동일한 tNet으로 통일해 해결.
+     **⚠ 상수 불일치(미해결):** `netInterpDuration_`은 50ms(20Hz, 원격 플레이어 `S_Move` 기준)인데
+     몬스터의 `S_NpcMoveBatch`는 서버 **매 틱(60Hz, 16.7ms)** 전송이다. 매 패킷 `netInterpAcc_`가
+     리셋되므로 `tNet`이 0.33을 넘지 못해 몬스터 메시는 항상 최신 서버 위치 못 미쳐 렌더된다
+     (판정용 BVH는 curr=최신). 해소안: 서버 `S_NpcMoveBatch`를 20Hz로 스로틀(대역폭 1/3 + 상수 정합)
+     또는 몬스터 한정 `netInterpDuration_`을 16.7ms로. `RoomServer/docs/roomTickCadence.md` §7-2.
 9. animSystem_.updatePriorities() / camera_ / dirLight_
 10. animSystem_.update()
 11. Ragdoll 활성화/동기화  — standalone과 동일한 패턴

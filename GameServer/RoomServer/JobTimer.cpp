@@ -8,13 +8,19 @@
 	 JobTimer
 ----------------*/
 
-void JobTimer::addJob(Milliseconds delay, uint32 roomId, Job* job) {
-	const auto now = HighResolutionClock::now();
-	const auto executionTime = now + std::chrono::duration_cast<std::chrono::milliseconds>(delay);
+void JobTimer::addJobAt(HighResolutionClock::time_point executionTime, uint32 roomId, Job* job) {
 	auto jobData = ObjectPool<JobData>::pop(roomId, job);
 
 	std::lock_guard<std::mutex> lock(jobTimerMtx_);
 	timerQueue_.push({executionTime, jobData});
+}
+
+void JobTimer::addJob(Milliseconds delay, uint32 roomId, Job* job) {
+	// 클럭 native duration(ns)으로 변환한다. 예전처럼 std::chrono::milliseconds로 캐스팅하면
+	// 60Hz 주기(16.667ms)가 16ms로 절삭돼 모든 반복 타이머가 한쪽으로 치우쳤다.
+	addJobAt(HighResolutionClock::now()
+	         + std::chrono::duration_cast<HighResolutionClock::duration>(delay),
+	         roomId, job);
 }
 
 void JobTimer::distribute() {

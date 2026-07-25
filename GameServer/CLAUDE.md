@@ -28,6 +28,10 @@ Refer to: `LobbyServer/CLAUDE.md`- Claude reads this on-demand
 ### RoomServer
 Refer to: `RoomServer/CLAUDE.md`- Claude reads this on-demand
 
+**틱 케이던스 불변식:** Room 틱은 절대 데드라인으로 재예약된다(`JobTimer::addJobAt`). 고정 주기
+반복을 상대 지연(`addJob`)으로 잡으면 처리 시간이 매 틱 누적돼 시뮬 클럭이 실시간에서 이탈하고,
+스킬 히트 판정이 클라 예측과 어긋난다. 배경·설계 근거: `RoomServer/docs/roomTickCadence.md`
+
 ### Client
 Refer to: `client/CLAUDE.md`- Claude reads this on-demand
 
