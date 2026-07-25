@@ -977,6 +977,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 			if (npc.hp() > 0) {
 				moveInfos.push_back({
 					static_cast<uint16>(npc.getId()),
+					npcStatusMask(NpcStatusFlag::None),
 					npc.pos().getXmf(),
 					npc.orient().getXmf(),
 					npc.linearVel().getXmf()
@@ -1005,6 +1006,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 		if (finalBoss_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(finalBoss_->getId()),
+				npcStatusMask(NpcStatusFlag::None),
 				finalBoss_->pos().getXmf(),
 				finalBoss_->orient().getXmf(),
 				finalBoss_->linearVel().getXmf()
@@ -2013,6 +2015,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (platoonLeader_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(platoonLeader_->getId()),
+				npcStatusMask(NpcStatusFlag::None),
 				platoonLeader_->pos().getXmf(),
 				platoonLeader_->orient().getXmf(),
 				platoonLeader_->linearVel().getXmf()
@@ -2041,6 +2044,10 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (npc->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(npc->getId()),
+				npcStatusMask(
+					npc->getDisplayState() == TacticalNpcState::Confused
+						? NpcStatusFlag::Confused
+						: NpcStatusFlag::None),
 				npc->pos().getXmf(),
 				npc->orient().getXmf(),
 				npc->linearVel().getXmf()

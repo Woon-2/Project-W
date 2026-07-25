@@ -97,6 +97,22 @@ enum class ObjectType : uint16 {
 	Boss,        // final boss: 1:1 combat (NOT tactical), own 14-clip rig
 };
 
+// Server-authoritative, repeatedly synchronized NPC presentation states.
+// This is a bit mask on the wire so new independent status indicators can be
+// appended without changing the movement packet shape again.
+enum class NpcStatusFlag : uint8 {
+	None     = 0,
+	Confused = 1 << 0,
+};
+
+constexpr uint8 npcStatusMask(NpcStatusFlag flag) {
+	return static_cast<uint8>(flag);
+}
+
+constexpr bool hasNpcStatusFlag(uint8 flags, NpcStatusFlag flag) {
+	return (flags & npcStatusMask(flag)) != 0;
+}
+
 enum class PlayerWeaponType : uint8 {
 	Katana,
 	SpearHook,
@@ -249,6 +265,7 @@ struct SMouseMovePacket : public PacketHeader {
 
 struct SNpcMovePacket : public PacketHeader {
 	uint16 npcId;
+	uint8 statusFlags;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
@@ -256,6 +273,7 @@ struct SNpcMovePacket : public PacketHeader {
 
 struct SNpcMoveInfo {
 	uint16              npcId;
+	uint8               statusFlags;
 	DirectX::XMFLOAT3   pos;
 	DirectX::XMFLOAT4   orient;
 	DirectX::XMFLOAT3   velocity;
@@ -557,5 +575,8 @@ struct SInventoryActionResultPacket : public PacketHeader {
 };
 
 #pragma pack(pop)
+
+static_assert(sizeof(SNpcMoveInfo) == 43, "SNpcMoveInfo wire layout changed");
+static_assert(sizeof(SNpcMovePacket) == 47, "SNpcMovePacket wire layout changed");
 
 #endif // protocol_hpp

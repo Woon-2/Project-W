@@ -377,6 +377,15 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "ConfusionStatusIcon",
+		.texturePath     = "../resources/UI/confusion_status.dds",
+		.pDest           = &confusionStatusIcon_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "TacticalZoneTitleBanner",
 		.texturePath     = "../resources/UI/title_banner_mask.dds",
 		.pDest           = &tacticalZoneTitleBanner_,

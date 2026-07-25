@@ -26,7 +26,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSLeavePacket(uint16 playerId);
 	static std::shared_ptr<SendBuffer> makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSMouseMovePacket(uint16 playerId, float yawRad, float pitchRad);
-	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos);
 	static std::shared_ptr<SendBuffer> makeSNpcSpawnBatchPacket(const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSNpcBarrierPacket(
