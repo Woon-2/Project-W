@@ -12,6 +12,8 @@ namespace Online {
 
 namespace {
 
+constexpr const wchar_t* kLobbyFontFamily = L"넥슨Lv2고딕";
+
 // Self-contained UTF-8 -> UTF-16 decoder. The Windows NLS path (MultiByteToWideChar)
 // is unavailable here because pch.hpp defines NONLS, so winnls.h (CP_UTF8 and the
 // NLS prototypes) is excluded. Invalid byte sequences are skipped defensively.
@@ -238,8 +240,8 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 
     const float screenW = uiManager.layoutWidth();
     const float screenH = uiManager.layoutHeight();
-    const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
-    const float mainPanelH = 500.f;
+    const float mainPanelW = std::min(720.f, std::max(520.f, screenW - 40.f));
+    const float mainPanelH = 494.f;
 
     // The waiting room is a wide squad-stage layout over the 3D map. It fills the
     // whole screen (full-bleed) instead of the centered 4:3 safe area, so wide
@@ -293,15 +295,22 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
                         float x, float y, float fontSize, float w, float h,
                         XMFLOAT4 color, UI::TextHAlign hAlign = UI::TextHAlign::Leading,
                         int zOrder = 1) -> UI::Label* {
-        return UI::Build::addLabel(parent, text, x, y, fontSize, w, h, color, hAlign, zOrder);
+        auto* label = UI::Build::addLabel(parent, text, x, y, fontSize, w, h, color, hAlign, zOrder);
+        label->setFontFamily(kLobbyFontFamily);
+        return label;
     };
     auto makeButton = [](UI::UIElement* parent, const std::wstring& text,
                          float x, float y, float w, float h,
                          XMFLOAT4 normal, XMFLOAT4 hovered, XMFLOAT4 pressed,
                          float fontSize, std::function<void()> onClick,
                          XMFLOAT4 textColor) -> UI::Button* {
-        return UI::Build::addButton(parent, text, x, y, w, h, normal, hovered, pressed,
-                                    fontSize, std::move(onClick), textColor);
+        auto* button = UI::Build::addButton(parent, text, x, y, w, h, normal, hovered, pressed,
+                                             fontSize, std::move(onClick), textColor);
+        if (!button->children().empty()) {
+            auto* label = static_cast<UI::Label*>(button->children().front().get());
+            label->setFontFamily(kLobbyFontFamily);
+        }
+        return button;
     };
 
     // 9-slice texture style helpers. On load failure the solid color is kept.
@@ -328,6 +337,24 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
             b->sliceCornerX = 22.f;    b->sliceCornerY = 22.f;
         }
         return b;
+    };
+    auto styleInput = [&](UI::TextInput* input) -> UI::TextInput* {
+        if (!input) return input;
+        input->bgColor          = { 1.f, 1.f, 1.f, 1.f };
+        input->bgColorFocused   = surfaceSoft;
+        input->textColor        = ink;
+        input->placeholderColor = muted;
+        input->setFontFamily(kLobbyFontFamily);
+        input->setTextPaddingX(15.f);
+        if (lobbyInputTex_.res) {
+            input->backgroundTex  = &lobbyInputTex_;
+            input->sliceUvBorderX = 0.15f;
+            input->sliceUvBorderY = 0.42f;
+            input->sliceCornerX   = 18.f;
+            input->sliceCornerY   = 18.f;
+            input->texTintFocused = { 1.10f, 1.10f, 1.10f, 1.f };
+        }
+        return input;
     };
 
     // Background: solid sky at the very back (-11), key art cover-scaled on top (-10).
@@ -361,7 +388,7 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     // Game logo (OutLander) above the main panel (transparent-PNG-based texture).
     if (lobbyLogoTex_.res) {
         const float logoAspect = 2172.f / 724.f;          // ui_lobby_logo.dds source ratio (~3:1)
-        const float logoH = 110.f;
+        const float logoH = 84.f;
         const float logoW = logoH * logoAspect;
         auto* logo = static_cast<UI::Image*>(mainMenuRoot_->addChild(std::make_unique<UI::Image>()));
         logo->name    = "lobbyLogoImage";
@@ -374,20 +401,95 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
 
     auto* mainPanel = makeGroup(mainMenuRoot_, "mainPanel", mainPanelW, mainPanelH);
     stylePanel(makeSolid(mainPanel, "mainPanelBg", 0.f, 0.f, mainPanelW, mainPanelH, surface));
-    makeLabel(mainPanel, L"PROJECT-W MULTIPLAYER", 34.f, 30.f, 13.f, mainPanelW - 68.f, 24.f, primary);
-    makeLabel(mainPanel, L"비공개 로비", 34.f, 56.f, 42.f, mainPanelW - 68.f, 58.f, ink);
 
-    auto* createBtn = makeButton(mainPanel, L"", 34.f, 132.f, mainPanelW - 68.f, 72.f,
-        primary, primaryDark, primaryDark, 22.f, [this]() { if (callbacks_.onCreateRoom) callbacks_.onCreateRoom(); },
-        { 1.f, 1.f, 1.f, 1.f });
-    stylePrimary(createBtn);
-    makeLabel(createBtn, L"방 만들기", 18.f, 0.f, 24.f, 220.f, 72.f, { 1.f, 1.f, 1.f, 1.f });
-    makeLabel(createBtn, L"Create Room", mainPanelW - 220.f, 0.f, 13.f, 130.f, 72.f,
-        { 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Trailing);
+    const float contentX = 40.f;
+    const float contentW = mainPanelW - 2.f * contentX;
+    const float accountInputX = 150.f;
+    const float accountInputW = contentW - accountInputX;
+    const float authRowGap = 18.f;
+    const float authInputH = 62.f;
+    const float authButtonH = 88.f;
 
-    // Room-code input + join (joinRoomForm in the prototype).
+    // Authentication and room selection occupy the same panel region. refresh()
+    // exposes exactly one root so hidden controls cannot receive pointer input.
+    authRoot_ = mainPanel->addChild(std::make_unique<UI::UIElement>());
+    authRoot_->name = "authRoot";
+    applyRect(authRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        contentX, 24.f, contentW, 270.f);
+
+    // Account inputs stay local until the authentication server is implemented.
+    makeLabel(authRoot_, L"아이디", 0.f, 8.f, 24.f, 132.f, 54.f, ink);
+    loginIdInput_ = static_cast<UI::TextInput*>(
+        authRoot_->addChild(std::make_unique<UI::TextInput>()));
+    loginIdInput_->name = "loginIdInput";
+    applyRect(loginIdInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        accountInputX, 4.f, accountInputW, authInputH);
+    loginIdInput_->setFontSize(22.f);
+    loginIdInput_->setPlaceholder(L"아이디 입력");
+    loginIdInput_->zOrder = 2;
+    styleInput(loginIdInput_);
+
+    makeLabel(authRoot_, L"비밀번호", 0.f, 8.f + authInputH + authRowGap, 24.f, 132.f, 54.f, ink);
+    loginPasswordInput_ = static_cast<UI::TextInput*>(
+        authRoot_->addChild(std::make_unique<UI::TextInput>()));
+    loginPasswordInput_->name = "loginPasswordInput";
+    applyRect(loginPasswordInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        accountInputX, 4.f + authInputH + authRowGap, accountInputW, authInputH);
+    loginPasswordInput_->setFontSize(22.f);
+    loginPasswordInput_->setPlaceholder(L"비밀번호 입력");
+    loginPasswordInput_->setPasswordMode(true);
+    loginPasswordInput_->zOrder = 2;
+    loginPasswordInput_->onSubmit = [this](const std::wstring&) { submitLogin(); };
+    styleInput(loginPasswordInput_);
+
+    const float authButtonGap = authRowGap;
+    const float authButtonInset = 8.f;
+    const float authButtonW = (contentW - authButtonGap - 2.f * authButtonInset) * 0.5f;
+    const float authButtonY = 4.f + 2.f * authInputH + 2.f * authRowGap;
+    auto* loginButton = makeButton(authRoot_, L"", authButtonInset, authButtonY,
+        authButtonW, authButtonH,
+        primary, primaryDark, primaryDark, 24.f,
+        [this]() { submitLogin(); }, { 1.f, 1.f, 1.f, 1.f });
+    loginButton->name = "loginButton";
+    stylePrimary(loginButton);
+    makeLabel(loginButton, L"로그인", 0.f, 23.f, 26.f, authButtonW, 42.f,
+        { 1.f, 1.f, 1.f, 1.f }, UI::TextHAlign::Center);
+
+    auto* signupButton = makeButton(authRoot_, L"",
+        authButtonInset + authButtonW + authButtonGap, authButtonY, authButtonW, authButtonH,
+        surfaceSoft, primarySoft, primarySoft, 24.f,
+        [this]() { openSignup(); }, ink);
+    signupButton->name = "openSignupButton";
+    styleSecondary(signupButton);
+    makeLabel(signupButton, L"회원가입", 0.f, 23.f, 26.f, authButtonW, 42.f,
+        ink, UI::TextHAlign::Center);
+
+    const float roomRowH = 128.f;
+    const float roomRowY = 134.f;
+    const float roomActionGap = 18.f;
+    const float createRoomW = 190.f;
+    const float joinBoxW = contentW - createRoomW - roomActionGap;
+
+    roomSelectionRoot_ = mainPanel->addChild(std::make_unique<UI::UIElement>());
+    roomSelectionRoot_->name = "roomSelectionRoot";
+    applyRect(roomSelectionRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        contentX, 24.f, contentW, roomRowY + roomRowH);
+
+    // Temporary local profile presentation. The framed square and placeholder
+    // name reserve the final server-backed portrait/nickname area.
+    constexpr float profileBoxSize = 116.f;
+    profileImageBox_ = stylePanel(makeSolid(roomSelectionRoot_, "profileImageBox",
+        0.f, 0.f, profileBoxSize, profileBoxSize, surfaceSoft, 1));
+    makeLabel(roomSelectionRoot_, L"닉네임", 140.f, 16.f, 18.f,
+        contentW - 140.f, 26.f, muted);
+    profileNicknameLabel_ = makeLabel(roomSelectionRoot_, L"PLAYER",
+        140.f, 44.f, 36.f, contentW - 140.f, 54.f, ink);
+
+    // Room-code input + join (joinRoomForm in the prototype), paired with the
+    // create-room action on the right as in the reference layout.
     {
-        auto* joinBox = makeSolid(mainPanel, "joinBox", 34.f, 220.f, mainPanelW - 68.f, 116.f, surface);
+        auto* joinBox = makeSolid(roomSelectionRoot_, "joinBox", 0.f, roomRowY,
+            joinBoxW, roomRowH, surface);
         if (lobbyPanelTex_.res) {
             joinBox->texNormal     = &lobbyPanelTex_;
             joinBox->sliceUvBorderX = 0.30f; joinBox->sliceUvBorderY = 0.30f;
@@ -396,52 +498,151 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
             joinBox->bgColor = surfaceSoft;
         }
     }
-    makeLabel(mainPanel, L"방 코드로 참가", 52.f, 234.f, 18.f, 240.f, 28.f, ink);
+    makeLabel(roomSelectionRoot_, L"방 코드로 참가", 20.f, roomRowY + 12.f,
+        20.f, joinBoxW - 40.f, 30.f, ink);
     {
         roomCodeInput_ = static_cast<UI::TextInput*>(
-            mainPanel->addChild(std::make_unique<UI::TextInput>()));
+            roomSelectionRoot_->addChild(std::make_unique<UI::TextInput>()));
         roomCodeInput_->name    = "roomCodeInput";
         applyRect(roomCodeInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
-            52.f, 274.f, mainPanelW - 232.f, 48.f);
-        roomCodeInput_->bgColor        = { 1.f, 1.f, 1.f, 1.f };
-        roomCodeInput_->bgColorFocused = { 0.953f, 0.976f, 0.992f, 1.f };
-        roomCodeInput_->textColor        = ink;
-        roomCodeInput_->placeholderColor = muted;
+            20.f, roomRowY + 58.f, joinBoxW - 152.f, 60.f);
         roomCodeInput_->uppercase = true;
         roomCodeInput_->alnumOnly = true;
         roomCodeInput_->setMaxLength(6);
-        roomCodeInput_->setPlaceholder(L"JOIN01");
+        roomCodeInput_->setFontSize(20.f);
+        roomCodeInput_->setPlaceholder(L"방 코드 입력 (예: JOIN01)");
+        roomCodeInput_->zOrder = 2;
         roomCodeInput_->onSubmit = [this](const std::wstring& code) {
             if (callbacks_.onJoinRoom) callbacks_.onJoinRoom(std::string(code.begin(), code.end()));
         };
-        if (lobbyInputTex_.res) {
-            roomCodeInput_->backgroundTex  = &lobbyInputTex_;
-            roomCodeInput_->sliceUvBorderX = 0.15f;
-            roomCodeInput_->sliceUvBorderY = 0.42f;
-            roomCodeInput_->sliceCornerX   = 18.f;
-            roomCodeInput_->sliceCornerY   = 18.f;
-            roomCodeInput_->texTintFocused = { 1.10f, 1.10f, 1.10f, 1.f };
-        }
+        styleInput(roomCodeInput_);
 
-        auto* joinBtn = makeButton(mainPanel, L"참가", mainPanelW - 146.f, 274.f, 94.f, 48.f,
-            primary, primaryDark, primaryDark, 20.f, [this]() {
+        auto* joinBtn = makeButton(roomSelectionRoot_, L"",
+            joinBoxW - 124.f, roomRowY + 58.f, 104.f, 60.f,
+            primary, primaryDark, primaryDark, 22.f, [this]() {
                 const std::wstring& w = roomCodeInput_->text();
                 if (callbacks_.onJoinRoom) callbacks_.onJoinRoom(std::string(w.begin(), w.end()));
             }, { 1.f, 1.f, 1.f, 1.f });
         joinBtn->name    = "joinButton";
         stylePrimary(joinBtn);
+        makeLabel(joinBtn, L"참가", 0.f, 15.f, 22.f, 104.f, 30.f,
+            { 1.f, 1.f, 1.f, 1.f }, UI::TextHAlign::Center);
     }
 
-    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", 34.f, 348.f, 18.f, mainPanelW - 68.f, 30.f,
+    auto* createBtn = makeButton(roomSelectionRoot_, L"",
+        joinBoxW + roomActionGap, roomRowY, createRoomW, roomRowH,
+        primary, primaryDark, primaryDark, 24.f,
+        [this]() { if (callbacks_.onCreateRoom) callbacks_.onCreateRoom(); },
+        { 1.f, 1.f, 1.f, 1.f });
+    createBtn->name = "createRoomButton";
+    stylePrimary(createBtn);
+    makeLabel(createBtn, L"방 만들기", 0.f, 26.f, 26.f, createRoomW, 44.f,
+        { 1.f, 1.f, 1.f, 1.f }, UI::TextHAlign::Center);
+    makeLabel(createBtn, L"CREATE ROOM", 0.f, 78.f, 14.f, createRoomW, 24.f,
+        { 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Center);
+
+    const float quietW = (contentW - authButtonGap) * 0.5f;
+    const float quietY = authButtonY + authButtonH + authRowGap;
+    const float quietH = 64.f;
+    auto* settingsButton = makeButton(mainPanel, L"", contentX, quietY, quietW, quietH,
+        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
+        [this]() { if (callbacks_.onOpenSettings) callbacks_.onOpenSettings(); }, ink);
+    settingsButton->name = "settingsButton";
+    styleSecondary(settingsButton);
+    makeLabel(settingsButton, L"설정", 0.f, 13.f, 24.f, quietW, 38.f,
+        ink, UI::TextHAlign::Center);
+
+    auto* quitButton = makeButton(mainPanel, L"",
+        contentX + quietW + authButtonGap, quietY, quietW, quietH,
+        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 24.f,
+        [this]() { if (callbacks_.onQuit) callbacks_.onQuit(); }, ink);
+    quitButton->name = "quitButton";
+    styleSecondary(quitButton);
+    makeLabel(quitButton, L"종료", 0.f, 13.f, 24.f, quietW, 38.f,
+        ink, UI::TextHAlign::Center);
+
+    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, quietY + quietH + authRowGap,
+        19.f, contentW, 30.f,
         { 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
-    const float quietW = (mainPanelW - 80.f) * 0.5f;
-    styleSecondary(makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
-        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
-        [this]() { if (callbacks_.onOpenSettings) callbacks_.onOpenSettings(); }, ink));
-    styleSecondary(makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
-        surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
-        [this]() { if (callbacks_.onQuit) callbacks_.onQuit(); }, ink));
+    // ---- Registration modal ----
+    // Every interactive child uses a zOrder above the scrim because UIManager's
+    // hit test compares interactive widgets globally rather than accumulating
+    // their parents' zOrder.
+    signupRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
+    signupRoot_->name = "signupRoot";
+    applyRect(signupRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        0.f, 0.f, screenW, screenH);
+    signupRoot_->zOrder  = 40;
+    signupRoot_->visible = false;
+
+    auto* signupScrim = makeSolid(signupRoot_, "signupScrim", 0.f, 0.f, screenW, screenH,
+        { 0.04f, 0.07f, 0.10f, 0.52f }, 90);
+    signupScrim->interactive = true;
+
+    const float signupPanelW = std::min(460.f, std::max(340.f, screenW - 80.f));
+    const float signupPanelH = 432.f;
+    auto* signupPanel = makeGroup(signupRoot_, "signupPanel", signupPanelW, signupPanelH);
+    signupPanel->zOrder = 91;
+    stylePanel(makeSolid(signupPanel, "signupPanelBg", 0.f, 0.f,
+        signupPanelW, signupPanelH, surface));
+
+    makeLabel(signupPanel, L"회원가입", 34.f, 20.f, 32.f, signupPanelW - 68.f, 44.f, ink);
+    makeLabel(signupPanel, L"아이디", 34.f, 68.f, 18.f, signupPanelW - 68.f, 24.f, ink);
+    signupIdInput_ = static_cast<UI::TextInput*>(
+        signupPanel->addChild(std::make_unique<UI::TextInput>()));
+    signupIdInput_->name = "signupIdInput";
+    applyRect(signupIdInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        34.f, 96.f, signupPanelW - 68.f, 52.f);
+    signupIdInput_->setFontSize(19.f);
+    signupIdInput_->setPlaceholder(L"아이디 입력");
+    signupIdInput_->zOrder = 94;
+    styleInput(signupIdInput_);
+
+    makeLabel(signupPanel, L"비밀번호", 34.f, 154.f, 18.f, signupPanelW - 68.f, 24.f, ink);
+    signupPasswordInput_ = static_cast<UI::TextInput*>(
+        signupPanel->addChild(std::make_unique<UI::TextInput>()));
+    signupPasswordInput_->name = "signupPasswordInput";
+    applyRect(signupPasswordInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        34.f, 182.f, signupPanelW - 68.f, 52.f);
+    signupPasswordInput_->setFontSize(19.f);
+    signupPasswordInput_->setPlaceholder(L"비밀번호 입력");
+    signupPasswordInput_->setPasswordMode(true);
+    signupPasswordInput_->zOrder = 94;
+    signupPasswordInput_->onSubmit = [this](const std::wstring&) { submitRegistration(); };
+    styleInput(signupPasswordInput_);
+
+    makeLabel(signupPanel, L"닉네임", 34.f, 240.f, 18.f, signupPanelW - 68.f, 24.f, ink);
+    signupNicknameInput_ = static_cast<UI::TextInput*>(
+        signupPanel->addChild(std::make_unique<UI::TextInput>()));
+    signupNicknameInput_->name = "signupNicknameInput";
+    applyRect(signupNicknameInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+        34.f, 268.f, signupPanelW - 68.f, 52.f);
+    signupNicknameInput_->setFontSize(19.f);
+    signupNicknameInput_->setPlaceholder(L"닉네임 입력");
+    signupNicknameInput_->zOrder = 94;
+    signupNicknameInput_->onSubmit = [this](const std::wstring&) { submitRegistration(); };
+    styleInput(signupNicknameInput_);
+
+    signupMsgLabel_ = makeLabel(signupPanel, L"", 34.f, 326.f, 15.f,
+        signupPanelW - 68.f, 22.f, { 0.70f, 0.24f, 0.24f, 1.f },
+        UI::TextHAlign::Center, 94);
+
+    const float signupButtonW = (signupPanelW - 80.f) * 0.5f;
+    auto* submitSignupButton = makeButton(signupPanel, L"가입", 34.f, 354.f,
+        signupButtonW, 48.f, primary, primaryDark, primaryDark, 20.f,
+        [this]() { submitRegistration(); }, { 1.f, 1.f, 1.f, 1.f });
+    submitSignupButton->name = "submitSignupButton";
+    submitSignupButton->zOrder = 94;
+    stylePrimary(submitSignupButton);
+
+    auto* closeSignupButton = makeButton(signupPanel, L"닫기",
+        46.f + signupButtonW, 354.f, signupButtonW, 48.f,
+        surfaceSoft, primarySoft, primarySoft, 20.f,
+        [this]() { closeSignup(); }, ink);
+    closeSignupButton->name = "closeSignupButton";
+    closeSignupButton->zOrder = 94;
+    styleSecondary(closeSignupButton);
 
     // ---- Waiting room (lobbyView): a translucent squad stage over the 3D map ----
     const XMFLOAT4 textLight   = { 0.95f, 0.97f, 1.00f, 1.f };
@@ -782,6 +983,7 @@ void LobbyUI::buildLoadingScreen(UI::UIManager& uiManager) {
     loadingTextLabel_->setTextHAlign(UI::TextHAlign::Center);
     loadingTextLabel_->setTextVAlign(UI::TextVAlign::Center);
     loadingTextLabel_->setFontSize(18.f);
+    loadingTextLabel_->setFontFamily(kLobbyFontFamily);
     loadingTextLabel_->setTextColor(0.92f, 0.95f, 1.f, 1.f);
     loadingTextLabel_->setText(L"loading...");
     loadingTextLabel_->zOrder = kZ + 1;
@@ -850,6 +1052,56 @@ void LobbyUI::hideAllSlotBays() {
     }
 }
 
+void LobbyUI::openSignup() {
+    setSignupMessage(L"");
+    if (signupRoot_) signupRoot_->visible = true;
+}
+
+void LobbyUI::closeSignup() {
+    if (signupRoot_) signupRoot_->visible = false;
+}
+
+void LobbyUI::submitLogin() {
+    if (callbacks_.onLogin && loginIdInput_ && loginPasswordInput_) {
+        callbacks_.onLogin(loginIdInput_->text(), loginPasswordInput_->text());
+    }
+}
+
+void LobbyUI::submitRegistration() {
+    if (callbacks_.onRegister && signupIdInput_ &&
+        signupPasswordInput_ && signupNicknameInput_) {
+        callbacks_.onRegister(signupIdInput_->text(),
+            signupPasswordInput_->text(), signupNicknameInput_->text());
+    }
+}
+
+void LobbyUI::setMainMenuMessage(const std::wstring& msg, bool isError) {
+    if (!mainMenuMsgLabel_) return;
+
+    mainMenuMsgLabel_->setText(msg);
+    if (isError) {
+        mainMenuMsgLabel_->setTextColor(0.70f, 0.24f, 0.24f, 1.f);
+    } else {
+        mainMenuMsgLabel_->setTextColor(0.10f, 0.42f, 0.27f, 1.f);
+    }
+}
+
+void LobbyUI::setSignupMessage(const std::wstring& msg) {
+    if (signupMsgLabel_) signupMsgLabel_->setText(msg);
+}
+
+void LobbyUI::completeRegistration(const std::wstring& id) {
+    if (loginIdInput_) loginIdInput_->setText(id);
+    clearLoginPassword();
+
+    if (signupIdInput_) signupIdInput_->clear();
+    if (signupPasswordInput_) signupPasswordInput_->clear();
+    if (signupNicknameInput_) signupNicknameInput_->clear();
+    setSignupMessage(L"");
+    closeSignup();
+    setMainMenuMessage(L"회원가입이 완료되었습니다. 로그인해 주세요.", false);
+}
+
 void LobbyUI::setFlatBackgroundVisible(bool v) {
     if (lobbySkyBg_)   lobbySkyBg_->visible   = v;
     if (lobbyBgImage_) lobbyBgImage_->visible = v;
@@ -874,6 +1126,17 @@ void LobbyUI::refresh(const ViewState& s) {
 
     if (mainMenuRoot_)    mainMenuRoot_->visible    = inMain;
     if (waitingRoomRoot_) waitingRoomRoot_->visible = !inMain;
+
+    if (authRoot_) authRoot_->visible = inMain && !s.isAuthenticated;
+    if (roomSelectionRoot_) roomSelectionRoot_->visible = inMain && s.isAuthenticated;
+    if (profileNicknameLabel_) {
+        profileNicknameLabel_->setText(
+            s.nickname.empty() ? std::wstring(L"PLAYER") : s.nickname);
+    }
+
+    if (!s.inLobbyScene || !inMain || s.isAuthenticated) {
+        closeSignup();
+    }
 
     if (inMain) {
         return;

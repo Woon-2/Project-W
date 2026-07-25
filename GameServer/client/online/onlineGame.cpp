@@ -5153,8 +5153,10 @@ void Game::refreshLobbyUI() {
 	LobbyUI::ViewState vs{};
 	vs.inLobbyScene       = (scene_ == Scene::Lobby);
 	vs.inMainMenu         = (lobbyState_ == LobbyState::MainMenu);
+	vs.isAuthenticated    = isAuthenticated_;
 	vs.waitingRoom3DReady = stageVisualReady_.load(std::memory_order_acquire);
 	vs.isHost             = isHost_;
+	vs.nickname           = L"PLAYER";
 	vs.roomCode           = roomCode_;
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
@@ -5175,6 +5177,13 @@ void Game::refreshLobbyUI() {
 
 LobbyUI::Callbacks Game::makeLobbyCallbacks() {
 	LobbyUI::Callbacks cb{};
+	cb.onLogin = [this](const std::wstring& id, const std::wstring& password) {
+		lobbyLogin(id, password);
+	};
+	cb.onRegister = [this](const std::wstring& id, const std::wstring& password,
+		const std::wstring& nickname) {
+		lobbyRegister(id, password, nickname);
+	};
 	cb.onCreateRoom   = [this]() { lobbyCreateRoom(); };
 	cb.onJoinRoom     = [this](const std::string& code) { lobbyJoinRoom(code); };
 	cb.onLeaveRoom    = [this]() { lobbyLeaveRoom(); };
@@ -5485,7 +5494,60 @@ std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
 	return L"Player_" + std::to_wstring(sessionId);
 }
 
+void Game::lobbyLogin(const std::wstring& id, const std::wstring& password) {
+	if (id.empty() || password.empty()) {
+		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호를 입력하세요.");
+		gSharedLog << "[Auth] 로그인 실패: 빈 아이디 또는 비밀번호\n";
+		return;
+	}
+
+	gwSharedLog << L"[Auth] 로컬 로그인 성공 (id=" << id
+		<< L", passwordLength=" << password.size() << L")\n";
+
+	isAuthenticated_ = true;
+	lobbyUI_.clearLoginPassword();
+	lobbyUI_.setMainMenuMessage(L"");
+	uiManager_.resetInteractionState();
+	refreshLobbyUI();
+}
+
+void Game::lobbyRegister(const std::wstring& id, const std::wstring& password,
+	const std::wstring& nickname) {
+	if (id.empty() || password.empty() || nickname.empty()) {
+		lobbyUI_.setSignupMessage(L"아이디, 비밀번호, 닉네임을 모두 입력하세요.");
+		gSharedLog << "[Auth] 회원가입 실패: 빈 필드\n";
+		return;
+	}
+
+	if (localRegisteredIds_.contains(id)) {
+		lobbyUI_.setSignupMessage(L"이미 사용 중인 아이디입니다.");
+		gSharedLog << "[Auth] 회원가입 실패: 아이디 중복\n";
+		return;
+	}
+
+	if (localRegisteredNicknames_.contains(nickname)) {
+		lobbyUI_.setSignupMessage(L"이미 사용 중인 닉네임입니다.");
+		gSharedLog << "[Auth] 회원가입 실패: 닉네임 중복\n";
+		return;
+	}
+
+	gwSharedLog << L"[Auth] 로컬 회원가입 완료 (id=" << id
+		<< L", nickname=" << nickname
+		<< L", passwordLength=" << password.size() << L")\n";
+
+	localRegisteredIds_.insert(id);
+	localRegisteredNicknames_.insert(nickname);
+	uiManager_.resetInteractionState();
+	lobbyUI_.completeRegistration(id);
+}
+
 void Game::lobbyCreateRoom() {
+	if (!isAuthenticated_) {
+		lobbyUI_.setMainMenuMessage(L"로그인 후 이용할 수 있습니다.");
+		gSharedLog << "[Lobby] 방 생성 차단: 로그인 필요\n";
+		return;
+	}
+
 	// 방 생성 요청만 보낸다. 대기실 전환은 S_CreateRoom 수신(onLobbyCreated) 시 수행.
 	INet::ClientApp::addSendBuffer(PacketManager::makeCCreateRoomPacket());
 	INet::ClientApp::send();
@@ -5493,6 +5555,12 @@ void Game::lobbyCreateRoom() {
 }
 
 void Game::lobbyJoinRoom(const std::string& code) {
+	if (!isAuthenticated_) {
+		lobbyUI_.setMainMenuMessage(L"로그인 후 이용할 수 있습니다.");
+		gSharedLog << "[Lobby] 방 참가 차단: 로그인 필요\n";
+		return;
+	}
+
 	// 코드 정규화: 대문자 + 영숫자만 (TextInput에서 이미 필터되지만 방어적으로 한 번 더).
 	std::string norm;
 	for (char c : code) {

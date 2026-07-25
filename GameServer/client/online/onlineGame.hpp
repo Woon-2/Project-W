@@ -242,6 +242,9 @@ private:
 	void applyDisplaySettings();
 
 	// 로비 mock 액션 (script.js 프로토타입 이식).
+	void lobbyLogin(const std::wstring& id, const std::wstring& password);
+	void lobbyRegister(const std::wstring& id, const std::wstring& password,
+		const std::wstring& nickname);
 	void lobbyCreateRoom();
 	void lobbyJoinRoom(const std::string& code);
 	void lobbyLeaveRoom();
@@ -715,6 +718,9 @@ private:
 
 	Scene      scene_      = Scene::Lobby;
 	LobbyState lobbyState_ = LobbyState::MainMenu;
+	bool       isAuthenticated_ = false;
+	std::unordered_set<std::wstring> localRegisteredIds_{};
+	std::unordered_set<std::wstring> localRegisteredNicknames_{};
 
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
