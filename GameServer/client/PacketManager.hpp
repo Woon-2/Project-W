@@ -39,6 +39,10 @@ public:
 	static void handleSInventorySnapshotPacket(byte* buffer, int32 len);
 	static void handleSInventoryActionResultPacket(byte* buffer, int32 len);
 
+	// 계정
+	static void handleSRegisterPacket( byte* buffer, int32 len );
+	static void handleSLoginPacket( byte* buffer, int32 len );
+
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );
 	static void handleSJoinRoomPacket( byte* buffer, int32 len );
@@ -57,7 +61,13 @@ public:
 	static std::shared_ptr<SendBuffer> makeCInventoryActionPacket(
 		uint32 revision, uint8 slotIndex, InventoryAction action);
 
-	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType);
+	static std::shared_ptr<SendBuffer> makeCEnterPacket(const EntryTicket& ticket, PlayerWeaponType weaponType);
+
+	// 계정. loginId/password는 프로토콜상 ASCII(char[])라 호출부가 변환·검증을 끝낸 뒤 넘긴다.
+	static std::shared_ptr<SendBuffer> makeCRegisterPacket(
+		const std::string& loginId, const std::string& password, const std::wstring& nickname);
+	static std::shared_ptr<SendBuffer> makeCLoginPacket(
+		const std::string& loginId, const std::string& password);
 
 	// 로비
 	static std::shared_ptr<SendBuffer> makeCCreateRoomPacket();

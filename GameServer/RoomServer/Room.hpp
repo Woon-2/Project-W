@@ -4,6 +4,7 @@
 #include "IdPool.hpp"
 #include "JobQueue.hpp"
 #include "GameSession.hpp"
+#include "InventoryStore.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
 #include "finalBoss.hpp"
@@ -106,6 +107,13 @@ public:
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 	void inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 		InventoryAction action);
+
+	// --- 인벤토리 영속화 (전부 이 방의 JobQueue 위에서만 실행된다) ---
+	// DB 잡 완료 시 콜백. DB 스레드가 아니라 doAsync로 되돌아온 잡에서 호출해야 한다.
+	void onInventoryLoaded(GameSession* session, InventoryStore::LoadStatus status,
+		const std::vector<ItemStack>& slots);
+	// 모든 DB 잡의 마지막에 호출. 지연된 방 제거를 마무리한다.
+	void onDbJobFinished();
 
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
 	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
@@ -217,6 +225,16 @@ private:
 	std::vector<GameSession*> sessions_;
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
+
+	// 진행 중인 DB 잡 수. 마지막 플레이어가 나가도 이게 0이 아니면 방을 즉시 지우지 않고
+	// closePending_으로 미룬다 — Room*은 ObjectPool로 재활용되므로, 완료 잡이 되돌아올 방이
+	// 사라져 있으면 안 된다. 둘 다 이 방의 JobQueue 전용이라 락이 필요 없다.
+	int32 pendingDbJobs_ = 0;
+	bool  closePending_ = false;
+
+	// 인벤토리 로드/저장 잡을 건다. persistInventory는 변경이 없으면 아무것도 하지 않는다.
+	void requestInventoryLoad(GameSession* session);
+	void persistInventory(GameSession* session);
 
 	void registerObject(Object* obj);
 	void unregisterObject(Object* obj);

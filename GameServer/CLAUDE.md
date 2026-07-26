@@ -4,22 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System
 
-Visual Studio solution (C++20, Windows only). Open `GameServer.sln` to build all projects.
+A Visual Studio solution (C++20, Windows only). Open `GameServer.sln` to build all projects.
+PlatformToolset is **v145** (VS 18) — building from the command line needs VS 18's MSBuild, not VS 2022's.
+Only the **x64** configurations are used (the `x86` ones map to `Win32` and produce nothing).
 
-**Projects in the solution:**
-- `ServerEngine` — Static library shared by all servers (`lib/<Config>/ServerEngine.lib`)
-- `LobbyServer` — Matchmaking server executable
+**Projects and their output types:**
+- `ServerEngine` — Static library shared by all servers (`lib\$(Configuration)\ServerEngine.lib`)
+- `LobbyServer` — Matchmaking + account/login server executable (`x64\$(Configuration)\`)
 - `RoomServer` — Game room server executable
 - `client` — DirectX 12 game client executable
 
-`LobbyServer`/`RoomServer`/`client` link `ServerEngine.lib` via `#pragma comment(lib, ...)`, **not**
-a project reference — so a change to `ServerEngine` requires building it first, and building the
-solution with `/m` can hit `C1090` (PDB contention on the shared `ServerEngine.pdb`). Build
-`ServerEngine` alone, then the rest.
+**`ServerEngine`를 항상 먼저 빌드할 것.** 솔루션에 `ProjectReference`가 없어 빌드 의존성이
+등록돼 있지 않다(링크는 각 pch의 `#pragma comment(lib, ...)`로 이뤄진다). `ServerEngine.lib`는
+저장소에 커밋된 바이너리라, git 체크아웃으로 파일 mtime이 obj보다 최신이 되면 MSBuild가 링크를
+건너뛰고 **낡은 lib을 그대로 남긴다** — 서버가 LNK2019로 터지면 `/t:ServerEngine:Rebuild`로 강제한다.
 
-The `DummyClient/` directory still exists on disk but is **no longer part of the solution**.
-There is no automated test suite; `tests/inventoryModelSelfTest.cpp` is a standalone self-test
-(see `client/docs/inventorySystem.md`). Validation is manual, by running the servers + client.
+Building `client` is what places the runtime DLLs (`dxcompiler.dll`, `dxil.dll`, `lua54.dll`) into
+`x64\$(Configuration)\` — its PostBuildEvent copies them. **Build servers only and `RoomServer`
+won't start**, because `lua54.dll` is missing.
+
+The servers and the client resolve assets through `../resources/...`, so the **working directory
+must be each project's own folder**. No project sets `LocalDebuggerWorkingDirectory`, so this
+relies on VS's default of `$(ProjectDir)` — launching the exe from `x64\Debug\` directly fails.
+
+There are no automated tests. Server validation is manual: run `LobbyServer` + `RoomServer` and
+drive them with the `client`. (`DummyClient` was removed in `c96eaac0`.)
+
+**새 PC에서 시연 준비: `docs/demoSetup.md`** — 설치 목록(ODBC Driver 17 함정 포함), 스키마 적용,
+실행 순서, 증상별 진단표.
 
 ## Architecture Overview
 
@@ -56,10 +68,21 @@ Shared by client + servers (not tied to one project):
 
 ## Networking Protocol
 
-All packets start with `PacketHeader { uint16 size; PacketType type; }`. Every packet type is
-defined in `ServerEngine/protocol.hpp` (~49 and growing: enter/leave, movement, NPC batches,
-skills, charge/combo, inventory, zones, strongholds, debug). **`protocol.hpp` is the single
-source of truth — read it rather than any list in a doc.** Wire ordinals are append-only.
+All packets start with `PacketHeader { uint16 size; PacketType type; }`. Packet types are defined in
+`ServerEngine/protocol.hpp`, which the client includes as-is — the structs *are* the wire format
+(`#pragma pack(1)`, no serializer). `PacketType` and the enums on the wire are **append-only**:
+the ordinal is the wire value, so never insert in the middle.
+
+**LobbyServer requires login first.** `C_Register`/`C_Login` are the only packets accepted before
+`S_Login(Ok)`; everything else from an unauthenticated session is silently dropped
+(`LobbyServer/PacketManager.cpp`, 인증 게이트). See `ServerEngine/docs/accountSystem.md`.
+
+**RoomServer requires a signed entry ticket.** `C_Enter` is the only packet accepted before the
+ticket verifies; everything else is dropped (`RoomServer/PacketManager.cpp`, 입장 게이트). The
+lobby mints the ticket (HMAC-SHA256) at `C_GameStart` and the client relays it — there is **no
+lobby↔room socket**, so anything the client carries must be signed. The shared key lives in
+`security_config.json` (server-only, next to `db_config.json`; **never add it to `client.vcxproj`**).
+See `ServerEngine/docs/entryTicket.md`.
 
 ## Concurrency Model
 

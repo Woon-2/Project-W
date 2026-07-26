@@ -4,6 +4,7 @@
 #include "GameSession.hpp"
 #include "SendBuffer.hpp"
 #include "PacketManager.hpp"
+#include "EntryTicket.hpp"
 
 bool LobbyRoom::enter( const std::shared_ptr<GameSession>& session ) {
 	std::lock_guard lock( mutex_ );
@@ -21,6 +22,7 @@ bool LobbyRoom::enter( const std::shared_ptr<GameSession>& session ) {
 		.sessionId = static_cast<uint16>(session->id()),
 		.weaponType = session->selectedWeaponType_,
 	};
+	wcsncpy_s( info.nickname, session->nickname_, _TRUNCATE );
 	auto pkt = PacketManager::makeSLobbyRoomPlayerJoinedPacket( info );
 
 	for ( const auto& p : players_ ) {
@@ -86,8 +88,27 @@ void LobbyRoom::leave( GameSession* session ) {
 
 void LobbyRoom::startGame() {
 	std::lock_guard lock( mutex_ );
-	broadcast( PacketManager::makeSGameStartPacket(
-		roomServerEndpoint_.ip, roomServerEndpoint_.port, code_ ) );
+
+	// 티켓이 플레이어마다 다르므로 broadcast()를 쓸 수 없다. 한 명씩 발급해 각자에게 보낸다.
+	// 발급은 CNG 해시 한 번(수십 µs)이고 방 정원이 4명이라, 락 안에서 돌아도 무방하다.
+	for ( const auto& p : players_ ) {
+		// 인증 게이트(PacketManager.cpp 인증 게이트) 덕에 정상 경로에선 항상 참이지만,
+		// 티켓에 실리는 계정 정보의 유일한 근거이므로 여기서 한 번 더 확인한다.
+		if ( !p->authenticated_.load( std::memory_order_acquire ) ) {
+			std::cout << "[GameStart] 미인증 세션 건너뜀. id: " << p->id() << '\n';
+			continue;
+		}
+
+		EntryTicket ticket{};
+		if ( !EntryTicketAuthority::mint(
+			p->accountId_.load( std::memory_order_relaxed ), p->nickname_, code_, ticket ) ) {
+			std::cout << "[GameStart] 티켓 발급 실패. id: " << p->id() << '\n';
+			continue;
+		}
+
+		p->send( PacketManager::makeSGameStartPacket(
+			roomServerEndpoint_.ip, roomServerEndpoint_.port, code_, ticket ) );
+	}
 }
 
 uint16 LobbyRoom::hostId() const {
@@ -114,10 +135,12 @@ std::vector<LobbyPlayerInfo> LobbyRoom::playerInfos() const {
 	infos.reserve( players_.size() );
 
 	for ( const auto& p : players_ ) {
-		infos.push_back( LobbyPlayerInfo{
-			static_cast<uint16>(p->id()),
-			p->selectedWeaponType_
-		} );
+		auto info = LobbyPlayerInfo{
+			.sessionId = static_cast<uint16>(p->id()),
+			.weaponType = p->selectedWeaponType_,
+		};
+		wcsncpy_s( info.nickname, p->nickname_, _TRUNCATE );
+		infos.push_back( info );
 	}
 	return infos;
 }

@@ -1,0 +1,6 @@
+{
+  "db": {
+    "connectionString": "Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\\MSSQLLocalDB;Database=ProjectW;Trusted_Connection=Yes;",
+    "connectionCount": 2
+  }
+}

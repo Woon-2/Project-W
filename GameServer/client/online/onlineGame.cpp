@@ -589,15 +589,26 @@ void Game::updatePlayerHpHudLayout() {
 	updatePartyHpHudLayout();
 }
 
-void Game::registerInGamePartyPlayer(uint16 playerId) {
+void Game::registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
-		// Freeze the name at registration: index-based names would shift on every
-		// leave, and my own label (refreshed per frame) would diverge from the
-		// stale labels other clients keep showing for me. Join order is identical
-		// on every client (server fills the S_Enter objList from sessions_ in
-		// enter order, later joins append via S_Enter_Other), so the numbering
-		// stays cross-client consistent.
+
+		// The account nickname is authoritative when the server sent one. The roster
+		// (S_Enter names section / S_Enter_Other) is seeded before the object list is
+		// walked, and this function is a no-op for ids already present, so the later
+		// nickname-less createOtherPlayer(ObjectInfo) path cannot clobber it.
+		const size_t nickLen = nickname ? wcsnlen(nickname, kNicknameMax) : 0;
+		if (nickLen > 0) {
+			inGamePartyNameById_[playerId] = std::wstring(nickname, nickLen);
+			return;
+		}
+
+		// Fallback for sessions with no nickname. Freeze the name at registration:
+		// index-based names would shift on every leave, and my own label (refreshed
+		// per frame) would diverge from the stale labels other clients keep showing
+		// for me. Join order is identical on every client (server fills the S_Enter
+		// objList from sessions_ in enter order, later joins append via
+		// S_Enter_Other), so the numbering stays cross-client consistent.
 		inGamePartyNameById_[playerId] = L"player" + std::to_wstring(++inGamePartyNameSeq_);
 	}
 }
@@ -2163,14 +2174,14 @@ void Game::setParticle()
 	}
 }
 
-void Game::prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds) {
+void Game::prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster) {
 	inGamePartyPlayerIds_.clear();
 	inGamePartyNameById_.clear();
 	inGamePartyNameSeq_ = 0;
-	for (uint16 id : existingPlayerIds) {
-		registerInGamePartyPlayer(id);
+	for (const PlayerNameInfo& info : roster) {
+		registerInGamePartyPlayer(info.playerId, info.nickname);
 	}
-	registerInGamePartyPlayer(myPlayerId);
+	registerInGamePartyPlayer(myInfo.playerId, myInfo.nickname);
 }
 
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
@@ -2212,7 +2223,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
-	registerInGamePartyPlayer(playerInfo.playerId);
+	registerInGamePartyPlayer(playerInfo.playerId, playerInfo.nickname);
 
 	setParticle();
 
@@ -2381,7 +2392,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	registerInGamePartyPlayer(otherPlayerInfo.playerId);
+	// S_Enter_Other(뒤늦게 합류한 플레이어)는 PlayerInfo에 닉네임이 실려 온다.
+	registerInGamePartyPlayer(otherPlayerInfo.playerId, otherPlayerInfo.nickname);
 	createOtherPlayerHud(otherPlayerInfo.playerId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
@@ -5139,7 +5151,7 @@ void Game::refreshLobbyUI() {
 	vs.isAuthenticated    = isAuthenticated_;
 	vs.waitingRoom3DReady = stageVisualReady_.load(std::memory_order_acquire);
 	vs.isHost             = isHost_;
-	vs.nickname           = L"PLAYER";
+	vs.nickname           = myNickname_;
 	vs.roomCode           = roomCode_;
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
@@ -5258,7 +5270,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		pendingHandoff_ = false;
 		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
-		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_, selectedLobbyWeapon_));
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffTicket_, selectedLobbyWeapon_));
 		INet::ClientApp::send();
 		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
 		return;
@@ -5470,58 +5482,116 @@ void Game::enterInGame() {
 	// 이전 플레이어의 물리 바디가 물리월드에 dangling으로 남아 크래시한다.
 }
 
-std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
+std::wstring Game::lobbyDisplayName(uint16 sessionId, const wchar_t* nickname) const {
+	// 본인 슬롯은 계속 "나"로 표시한다 — 4칸 대기실에서 어느 쪽이 나인지가 닉네임보다 중요하다.
 	if (sessionId == myLobbyId_) {
 		return L"나";
+	}
+	// 로그인으로 확정된 계정 닉네임. 서버가 못 채운 경우에만 sessionId로 폴백한다.
+	if (const size_t nickLen = nickname ? wcsnlen(nickname, kNicknameMax) : 0; nickLen > 0) {
+		return std::wstring(nickname, nickLen);
 	}
 	return L"Player_" + std::to_wstring(sessionId);
 }
 
+namespace {
+
+// 입력 가능 길이. protocol.hpp의 고정 배열 크기에서 널 종료 1자를 뺀 값이며,
+// db/schema.sql의 NVARCHAR 길이와 짝이다.
+constexpr size_t kLoginIdLenMax  = kLoginIdMax - 1;
+constexpr size_t kPasswordLenMax = kPasswordMax - 1;
+constexpr size_t kNicknameLenMax = kNicknameMax - 1;
+
+// loginId/password는 wire 상 char[]다. 비ASCII가 섞이면 변환에서 깨지므로 아예 보내지 않는다.
+// (닉네임은 wchar_t[]라 변환 없이 그대로 나간다 — 한글 가능.)
+bool toAscii(const std::wstring& src, std::string& out) {
+	out.clear();
+	out.reserve(src.size());
+	for (const wchar_t ch : src) {
+		if (ch < 0x20 || ch > 0x7E) {
+			return false;
+		}
+		out.push_back(static_cast<char>(ch));
+	}
+	return true;
+}
+
+const wchar_t* accountResultMessage(AccountResult result) {
+	switch (result) {
+	case AccountResult::InvalidInput:      return L"입력 형식이 올바르지 않습니다.";
+	case AccountResult::DuplicateId:       return L"이미 사용 중인 아이디입니다.";
+	case AccountResult::DuplicateNickname: return L"이미 사용 중인 닉네임입니다.";
+	case AccountResult::NoSuchAccount:     return L"존재하지 않는 아이디입니다.";
+	case AccountResult::WrongPassword:     return L"비밀번호가 일치하지 않습니다.";
+	case AccountResult::AlreadyLoggedIn:   return L"이미 접속 중인 계정입니다.";
+	case AccountResult::DbError:           return L"서버 오류입니다. 잠시 후 다시 시도해 주세요.";
+	default:                               return L"알 수 없는 오류가 발생했습니다.";
+	}
+}
+
+}   // namespace
+
 void Game::lobbyLogin(const std::wstring& id, const std::wstring& password) {
+	if (authPending_) {
+		return;   // 응답 대기 중. 중복 전송하면 두 번째가 AlreadyLoggedIn으로 튕긴다.
+	}
+
 	if (id.empty() || password.empty()) {
 		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호를 입력하세요.");
-		gSharedLog << "[Auth] 로그인 실패: 빈 아이디 또는 비밀번호\n";
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 로그인 성공 (id=" << id
-		<< L", passwordLength=" << password.size() << L")\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax) {
+		lobbyUI_.setMainMenuMessage(L"아이디는 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호는 " + std::to_wstring(kPasswordLenMax) + L"자까지 입력할 수 있습니다.");
+		return;
+	}
 
-	isAuthenticated_ = true;
-	lobbyUI_.clearLoginPassword();
-	lobbyUI_.setMainMenuMessage(L"");
-	uiManager_.resetInteractionState();
-	refreshLobbyUI();
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
+		return;
+	}
+
+	authPending_ = true;
+	INet::ClientApp::addSendBuffer(PacketManager::makeCLoginPacket(asciiId, asciiPassword));
+	INet::ClientApp::send();
+	lobbyUI_.setMainMenuMessage(L"로그인 중...", false);
+	gSharedLog << "[Auth] 로그인 요청 전송\n";
 }
 
 void Game::lobbyRegister(const std::wstring& id, const std::wstring& password,
 	const std::wstring& nickname) {
+	if (authPending_) {
+		return;
+	}
+
 	if (id.empty() || password.empty() || nickname.empty()) {
 		lobbyUI_.setSignupMessage(L"아이디, 비밀번호, 닉네임을 모두 입력하세요.");
-		gSharedLog << "[Auth] 회원가입 실패: 빈 필드\n";
 		return;
 	}
 
-	if (localRegisteredIds_.contains(id)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 아이디입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 아이디 중복\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax
+		|| nickname.size() > kNicknameLenMax) {
+		lobbyUI_.setSignupMessage(L"아이디 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호 " + std::to_wstring(kPasswordLenMax)
+			+ L"자, 닉네임 " + std::to_wstring(kNicknameLenMax) + L"자까지 입력할 수 있습니다.");
 		return;
 	}
 
-	if (localRegisteredNicknames_.contains(nickname)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 닉네임입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 닉네임 중복\n";
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setSignupMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 회원가입 완료 (id=" << id
-		<< L", nickname=" << nickname
-		<< L", passwordLength=" << password.size() << L")\n";
-
-	localRegisteredIds_.insert(id);
-	localRegisteredNicknames_.insert(nickname);
-	uiManager_.resetInteractionState();
-	lobbyUI_.completeRegistration(id);
+	authPending_       = true;
+	pendingRegisterId_ = id;   // 가입 성공 응답에 loginId가 없어, 로그인 칸을 채우려면 필요하다.
+	INet::ClientApp::addSendBuffer(
+		PacketManager::makeCRegisterPacket(asciiId, asciiPassword, nickname));
+	INet::ClientApp::send();
+	lobbyUI_.setSignupMessage(L"회원가입 요청 중...");
+	gSharedLog << "[Auth] 회원가입 요청 전송\n";
 }
 
 void Game::lobbyCreateRoom() {
@@ -5630,6 +5700,42 @@ void Game::lobbySelectWeapon(int direction) {
 
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
 
+void Game::onRegisterResult(AccountResult result) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setSignupMessage(accountResultMessage(result));
+		pendingRegisterId_.clear();
+		gSharedLog << "[Auth] 회원가입 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	uiManager_.resetInteractionState();
+	lobbyUI_.completeRegistration(pendingRegisterId_);
+	pendingRegisterId_.clear();
+	gSharedLog << "[Auth] 회원가입 성공\n";
+}
+
+void Game::onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setMainMenuMessage(accountResultMessage(result));
+		gSharedLog << "[Auth] 로그인 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	accountId_       = accountId;
+	myNickname_      = nickname;
+	isAuthenticated_ = true;
+
+	lobbyUI_.clearLoginPassword();
+	lobbyUI_.setMainMenuMessage(L"");
+	uiManager_.resetInteractionState();
+	refreshLobbyUI();
+	gSharedLog << "[Auth] 로그인 성공. accountId: " << accountId << '\n';
+}
+
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;
 	myLobbyId_     = myId;
@@ -5637,7 +5743,8 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	isHost_   = true;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId), selectedLobbyWeapon_ });
+	// 방 생성 응답(S_CreateRoom)에는 LobbyPlayerInfo가 없다. 어차피 본인 슬롯이라 "나"로 나온다.
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId, nullptr), selectedLobbyWeapon_ });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
 	applyCursorPolicy();
@@ -5659,7 +5766,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 
 	lobbyPlayers_.clear();
 	for (const LobbyPlayerInfo& info : playerInfos) {
-		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId, info.nickname), info.weaponType });
 		if (info.sessionId == myLobbyId_) {
 			selectedLobbyWeapon_ = info.weaponType;
 		}
@@ -5675,7 +5782,7 @@ void Game::onLobbyPlayerJoined(const LobbyPlayerInfo& info) {
 	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
 		[&info](const LobbyPlayer& p) { return p.sessionId == info.sessionId; });
 	if (!exists) {
-		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId, info.nickname), info.weaponType });
 	}
 	refreshLobbyUI();
 	gSharedLog << "[Lobby] 플레이어 입장: " << info.sessionId << "\n";
@@ -5712,12 +5819,13 @@ void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) 
 	refreshLobbyUI();
 }
 
-void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
+void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket) {
 	// 이 함수는 로비 recv APC 안에서 실행되므로 여기서 소켓을 건드리지 않고, 핸드오프 요청만 적재한다.
 	// 실제 재접속/씬 전환은 LobbyScene이 APC 밖(안전 지점)에서 에셋 로드 완료 후 수행한다.
 	handoffIp_     = roomServerIp;
 	handoffPort_   = roomServerPort;
 	handoffCode_   = lobbyCode;
+	handoffTicket_ = ticket;   // POD 복사라 APC 안에서도 안전하다.
 	pendingHandoff_ = true;
 	gSharedLog << "[Lobby] 게임 시작 신호 수신: RoomServer " << roomServerIp << ":" << roomServerPort
 		<< " (code=" << lobbyCode << ")\n";

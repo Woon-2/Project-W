@@ -77,7 +77,7 @@ public:
 	// 대기실 3D 배경과 인게임이 공유하며, stageVisualReady_로 중복 init을 막는다.
 	void setupStageVisual();
 
-	void prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds);
+	void prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster);
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void setParticle();
 	void setupGround(const ObjectInfo& groundInfo);
@@ -213,7 +213,7 @@ private:
 	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
-	void registerInGamePartyPlayer(uint16 playerId);
+	void registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname = nullptr);
 	void unregisterInGamePartyPlayer(uint16 playerId);
 	std::wstring partyDisplayName(uint16 playerId) const;
 	void refreshSkillCtx();
@@ -268,7 +268,8 @@ private:
 	// 창모드/전체화면 전환 + 윈도우/스왑체인/GBuffer/HiZ 재생성 + UIManager 재설정 + 로비/설정 UI 재빌드.
 	void applyDisplaySettings();
 
-	// 로비 mock 액션 (script.js 프로토타입 이식).
+	// 로비 액션. 인증(로그인/회원가입)은 요청만 보내고, 상태 전환은 LobbyServer 응답
+	// (onLoginResult/onRegisterResult)에서 수행한다.
 	void lobbyLogin(const std::wstring& id, const std::wstring& password);
 	void lobbyRegister(const std::wstring& id, const std::wstring& password,
 		const std::wstring& nickname);
@@ -280,16 +281,18 @@ private:
 
 public:
 	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
+	void onRegisterResult(AccountResult result);
+	void onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname);
 	void onLobbyCreated(const std::string& code, uint16 myId);
 	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos);
 	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
 	void onLobbyPlayerLeft(uint16 sessionId);
 	void onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType);
-	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
+	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket);
 
 private:
 	// sessionId → 표시 이름(본인은 "나", 그 외 "Player_<id>").
-	std::wstring lobbyDisplayName(uint16 sessionId) const;
+	std::wstring lobbyDisplayName(uint16 sessionId, const wchar_t* nickname) const;
 
 	void cullObjects();
 	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
@@ -745,9 +748,13 @@ private:
 
 	Scene      scene_      = Scene::Lobby;
 	LobbyState lobbyState_ = LobbyState::MainMenu;
-	bool       isAuthenticated_ = false;
-	std::unordered_set<std::wstring> localRegisteredIds_{};
-	std::unordered_set<std::wstring> localRegisteredNicknames_{};
+	// 계정 상태. 전부 S_Login/S_Register 수신 시점에만 갱신된다(메인 스레드).
+	bool         isAuthenticated_ = false;
+	bool         authPending_     = false;   // 응답 대기 중 재전송 차단
+	int64        accountId_       = 0;
+	std::wstring myNickname_{};
+	// 가입 성공 응답에 loginId가 없어, 로그인 칸을 채워주려면 보낸 값을 들고 있어야 한다.
+	std::wstring pendingRegisterId_{};
 
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
@@ -790,6 +797,9 @@ private:
 	std::string handoffIp_{};
 	uint16      handoffPort_ = 0;
 	std::string handoffCode_{};
+	// Signed by the lobby server; relayed verbatim in C_Enter. The room server trusts
+	// the account id and lobby code inside it, so it must not be modified here.
+	EntryTicket handoffTicket_{};
 
 	// 로비 UI 텍스처/위젯/설정 상태는 lobbyUI_ · settingsPanel_ · settings_로 이동했다.
 	// 대기실 3D 준비(stageVisualReady_) 후, 로딩 오버레이 뒤에서 실제로 렌더된 프레임 수.

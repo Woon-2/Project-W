@@ -71,11 +71,13 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
   프레임 펜스와 분리.
 
 ## 로비 네트워킹(LobbyServer 연동)
-방 생성/참가/퇴장/플레이어 슬롯/게임시작 신호를 **실제 LobbyServer**(127.0.0.1:8000)와 연동한다.
+방 생성/참가/퇴장/플레이어 슬롯/게임시작 신호를 **실제 LobbyServer**와 연동한다.
 mock 상태(`script.js` 프로토타입 이식)는 제거됨.
 
-- **접속**: 클라이언트는 startup에서 `ServerSession`으로 `lobbyServerPort`(8000)에 접속한다(`ServerSession.hpp`
-  생성자). 접속 실패 시 기존대로 StandAlone 폴백.
+- **접속**: 클라이언트는 startup에서 `ServerSession`으로 로비 엔드포인트에 접속한다(`ServerSession.hpp`
+  생성자). 주소/포트는 하드코딩이 아니라 저장소 루트의 `network_config.json`에서 읽는다
+  (`common/networkConfig.cpp`; 현재 값은 로비 `127.0.0.1:8888`, 룸 `127.0.0.1:9000`).
+  접속 실패 시 기존대로 StandAlone 폴백 — **로비서버가 안 떠 있으면 로그인 화면 자체가 안 나온다.**
 - **펌핑**: 로비 수신은 APC 완료 루틴(`ServerSession::completionCallback`) 기반이라 alertable 대기가 필요하다.
   `LobbyScene()` 진입부에서 `SleepEx(1, true)`(수신 APC) + `INet::ClientApp::send()`(송신 flush)를 매 프레임 호출한다
   (InGameScene와 동일 단일 스레드 모델 → 패킷 핸들러가 메인 스레드에서 실행되어 UI/상태 변경에 락 불필요).
@@ -89,7 +91,10 @@ mock 상태(`script.js` 프로토타입 이식)는 제거됨.
   - `S_LobbyRoomPlayerJoined`→`onLobbyPlayerJoined(sessionId)`: 슬롯 추가(중복 방지).
   - `S_LobbyRoomPlayerLeft`→`onLobbyPlayerLeft(sessionId)`: 슬롯 제거. 떠난 자가 호스트면 남은 목록의 front를
     새 호스트로(서버 규칙과 일치).
-  - `S_GameStart`→`onGameStart(ip, port, code)`: **현재 범위에선 로그만**. RoomServer 접속/인게임 전환은 후속.
+  - `S_GameStart`→`onGameStart(ip, port, code, ticket)`: 핸드오프 요청과 **서명된 입장 티켓**을 적재만 한다.
+    이 핸들러는 로비 recv APC 안에서 돌기 때문에 여기서 소켓을 건드리면 안 된다. 실제 재접속은
+    `LobbyScene`이 APC 밖에서, 인게임 에셋 로드가 끝난 뒤 `ClientApp::reconnectToRoomServer` →
+    `C_Enter(ticket, weapon)`으로 수행한다. 티켓 상세는 `ServerEngine/docs/entryTicket.md`.
 - **자기 식별**: `protocol.hpp`의 `S_CreateRoom`/`S_JoinRoom`에 `myId`(수신자 본인 sessionId)를 추가해
   본인 슬롯 표시("나")와 호스트 판별/이양을 정확히 처리한다. `LobbyPlayer.id`(string)는 `sessionId`(uint16)로 변경.
 
@@ -235,9 +240,16 @@ B-2는 캐릭터를 배경 카메라(`lobbyCamera_`) 기준 월드 좌표에 놓
 - **정리**: `clearLobbyCharacters()`(대기실 이탈/인게임 진입의 공통 chokepoint)에서 `setLobbyPortraitActive(false)`
   + 슬롯 이미지 숨김/텍스처 해제. 포트레이트 RT는 공용 리소스로 상주(재입장 시 재사용).
 
+## 구현 완료(과거 "후속" 항목)
+- **RoomServer 핸드오프** — 구현됨. LobbyServer 소켓 해제 → RoomServer(ip/port) 재접속 →
+  `C_Enter(ticket, weapon)` → `enterInGame()`. `ClientApp::reconnectToRoomServer`가 옛 세션을
+  `retiredSession_`에 남겨둬 잔여 완료 APC가 유효한 소유자에 대해 소진되게 한다.
+- **lobbyCode 기반 방 그룹화** — 구현됨. `RoomManager::findOrCreateRoomByCode`가 코드로 묶는다
+  (접속 순서 `totalSessions % 4` 방식은 폐기됨).
+- **계정 핸드오프** — `S_GameStart`가 서명된 입장 티켓을 실어 보내고, 룸서버가 검증해
+  `accountId`/닉네임을 확정한다. 슬롯 이름도 `Player_<id>`가 아니라 계정 닉네임으로 표시된다
+  (본인 슬롯은 계속 "나").
+
 ## 후속(범위 밖)
-- `S_GameStart` 수신 후 RoomServer 핸드오프: LobbyServer 연결 해제 → RoomServer(ip/port) 재접속 →
-  `enterInGame()`. ServerSession 재타게팅(소켓 재생성/recvBuf 리셋) 필요. RoomServer는 현재 lobbyCode가 아닌
-  접속 순서(`totalSessions % 4`)로 방을 묶으므로, lobbyCode 기반 그룹화도 함께 설계 필요.
 - 호스트 이양 시 비-퇴장 클라이언트가 새 호스트를 명시적으로 통보받는 패킷(현재는 left 패킷의 leaver id로 추론).
 - TextInput 캐럿 블링킹/텍스트 선택/클립보드 등 고급 편집

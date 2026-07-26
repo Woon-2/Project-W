@@ -1,6 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "Room.hpp"
 #include "RoomManager.hpp"
+#include "DBExecutor.hpp"
 #include "GameSession.hpp"
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
@@ -1263,9 +1264,12 @@ void Room::enter(GameSession* session) {
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
 	player->resetSkillState();
+	// 인벤토리는 비운 채로 입장한다. 스타터 지급은 DB 로드가 끝난 뒤 "기록이 없는 계정"에만
+	// onInventoryLoaded에서 1회 한다 — 여기서 미리 넣으면 DB에 근거 없는 아이템이 화면에
+	// 먼저 보이고, 저장 실패를 무기한 가려버린다.
 	std::string inventoryError;
 	ASSERT_CRASH(assetManager_ != nullptr);
-	ASSERT_CRASH(player->inventory().initialize(assetManager_->itemCatalog(), &inventoryError));
+	ASSERT_CRASH(player->inventory().initializeEmpty(assetManager_->itemCatalog(), &inventoryError));
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -1284,10 +1288,15 @@ void Room::enter(GameSession* session) {
 		.orient = player->orient().getXmf(),
 		.scale = player->scale().getXmf(),
 	};
+	wcsncpy_s(newPlayerInfo.nickname, session->nickname(), _TRUNCATE);
 
 	// 기존 플레이어들 및 기타 object들에 대한 snapshot 만들기
 	auto objInfos = std::vector<ObjectInfo>();
 	objInfos.reserve(sessions_.size() + cubes_.size() + tacticalNpcs_.size() + 1);
+
+	// 기존 플레이어의 닉네임은 ObjectInfo가 아니라 별도 배열로 나른다(ObjectInfo는 NPC와 공유).
+	auto nameInfos = std::vector<PlayerNameInfo>();
+	nameInfos.reserve(sessions_.size());
 
 	for (auto session : sessions_) {
 		auto playerInfo = ObjectInfo{
@@ -1302,6 +1311,10 @@ void Room::enter(GameSession* session) {
 			.scale = session->player()->scale().getXmf(),
 		};
 		objInfos.emplace_back(playerInfo);
+
+		auto nameInfo = PlayerNameInfo{ .playerId = static_cast<uint16>(session->id()) };
+		wcsncpy_s(nameInfo.nickname, session->nickname(), _TRUNCATE);
+		nameInfos.emplace_back(nameInfo);
 	}
 
 	for (const auto& g : goblins_) {
@@ -1420,7 +1433,7 @@ void Room::enter(GameSession* session) {
 	// **재접속이나 전투 중 입장을 도입하면 즉시 재무장된다** — docs/objectIdLifecycle.md H4.
 
 	// 패킷 생성 후 새로 들어온 플레이어에게 전송
-	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
+	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos, nameInfos);
 	session->send(enterPkt);
 	session->send(PacketManager::makeSInventorySnapshotPacket(player->inventory()));
 
@@ -1434,9 +1447,111 @@ void Room::enter(GameSession* session) {
 	sessions_.push_back(session);
 	idSessionMap_[session->id()] = session;
 	registerObject(player);
+
+	// 스타터 로드아웃으로 이미 플레이 가능한 상태다. DB 로드는 비동기로 돌려
+	// 입장이 DB 왕복을 기다리지 않게 하고, 결과가 오면 그때 교체한다.
+	requestInventoryLoad(session);
+}
+
+void Room::requestInventoryLoad(GameSession* session) {
+	session->setInventoryReady(false);
+	session->setInventoryLoaded(false);
+
+	ASSERT_CRASH(assetManager_ != nullptr);
+	const int64 accountId = session->accountId();
+	const uint8 slotCount = assetManager_->itemCatalog().slotCount();
+	const int32 roomId = id_;
+
+	// 잡이 끝날 때까지 세션이 살아 있어야 하므로 shared_ptr을 값으로 캡처한다.
+	auto self = std::static_pointer_cast<GameSession>(session->shared_from_this());
+
+	++pendingDbJobs_;
+	DBExecutor::post([self, accountId, slotCount, roomId]() {
+		std::vector<ItemStack> loaded;
+		const InventoryStore::LoadStatus status = InventoryStore::load(accountId, slotCount, loaded);
+
+		// Room*을 캡처하지 않고 roomId로 다시 찾는다 — 방은 ObjectPool로 재활용되므로
+		// 잡이 도는 동안 원래 포인터가 다른 방이 돼 있을 수 있다.
+		Room* room = RoomManager::findRoom(roomId);
+		if (!room) {
+			// 방이 이미 사라졌다면 되돌릴 곳이 없다. pendingDbJobs_도 그 방과 함께 소멸했다.
+			return;
+		}
+		room->doAsync([room, self, status, loaded = std::move(loaded)]() {
+			room->onInventoryLoaded(self.get(), status, loaded);
+		});
+	});
+}
+
+void Room::onInventoryLoaded(GameSession* session, InventoryStore::LoadStatus status,
+	const std::vector<ItemStack>& slots) {
+
+	// 로드가 도는 사이에 퇴장했을 수 있다.
+	if (idSessionMap_.find(session->id()) != idSessionMap_.end()) {
+		Player* player = session->player();
+		Inventory& inventory = player->inventory();
+
+		switch (status) {
+		case InventoryStore::LoadStatus::Ok: {
+			std::string error;
+			// applySnapshot은 현재 revision 이상을 요구한다(common/inventory.cpp).
+			// +1로 올려 클라 미러가 새 스냅샷을 확실히 받아들이게 한다.
+			if (inventory.applySnapshot(assetManager_->itemCatalog(), inventory.revision() + 1,
+				slots, &error)) {
+				player->setPersistedRevision(inventory.revision());
+				session->setInventoryLoaded(true);
+				session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+			}
+			else {
+				// 인벤토리를 빈 채로 두고 저장도 하지 않는다(DB의 진짜 인벤토리 보호).
+				std::cout << "[Inventory] 로드 적용 실패: " << error << '\n';
+			}
+			break;
+		}
+		case InventoryStore::LoadStatus::NewAccount: {
+			// 저장된 기록이 없는 계정이다. 스타터를 여기서 1회 지급하고 곧바로 저장해,
+			// 그 순간부터 DB와 인게임이 일치하게 만든다.
+			std::string error;
+			if (inventory.initialize(assetManager_->itemCatalog(), &error)) {
+				session->setInventoryLoaded(true);
+				session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+			}
+			else {
+				std::cout << "[Inventory] 스타터 지급 실패: " << error << '\n';
+			}
+			break;
+		}
+
+		case InventoryStore::LoadStatus::DbError:
+			// 스타터를 주지 않는다. 주면 다시 "DB에 없는 아이템"이 생겨, 저장이 망가져도
+			// 화면상 멀쩡해 보이는 상태로 되돌아간다. 인벤토리만 비고 전투·진행은 정상이다.
+			std::cout << "[Inventory] 로드 실패(DB). accountId: " << session->accountId() << '\n';
+			break;
+		}
+
+		// 성공/실패와 무관하게 조작은 다시 허용한다. 실패해도 게임은 정상 플레이돼야 한다.
+		session->setInventoryReady(true);
+
+		// onDbJobFinished보다 "먼저" 호출해야 한다. 그래야 pendingDbJobs_가
+		// 1(load) → 2(load+save) → 1 → 0으로 내려가며 중간에 0을 찍지 않아,
+		// 저장 잡이 떠 있는 동안 방이 제거되지 않는다.
+		persistInventory(session);
+	}
+
+	onDbJobFinished();
+}
+
+void Room::onDbJobFinished() {
+	--pendingDbJobs_;
+	if (pendingDbJobs_ == 0 && closePending_ && sessions_.empty()) {
+		RoomManager::removeRoom(id_);
+	}
 }
 
 void Room::leave(GameSession* session) {
+	// sessions_에서 빼기 전에 저장한다 — session->player()가 아직 유효해야 한다.
+	persistInventory(session);
+
 	// Terminate this player's active skills before dropping the object, so a
 	// lingering instance can't rebind to a recycled object id (new player).
 	{
@@ -1459,8 +1574,15 @@ void Room::leave(GameSession* session) {
 	// 마지막 ref(이 leave 잡의 self 캡처 등)가 소멸할 때 자동으로 ~GameSession + 풀 반환된다.
 	// 여기서 push하면 deleter와 겹쳐 double-free가 된다.
 
-	if (sessions_.size() == 0) {
-		RoomManager::removeRoom(id_);
+	if (sessions_.empty()) {
+		// DB 잡이 남아 있으면 방 제거를 미룬다. 지금 지우면 Room이 풀로 반환돼,
+		// 되돌아올 완료 잡이 재활용된 다른 방을 건드리게 된다.
+		if (pendingDbJobs_ == 0) {
+			RoomManager::removeRoom(id_);
+		}
+		else {
+			closePending_ = true;
+		}
 	}
 }
 
@@ -1850,6 +1972,15 @@ void Room::inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 			inventory.revision(), slotIndex, action, result, currentSlotInfo()));
 	};
 
+	// DB 로드가 끝나기 전 조작은 거절한다. 허용하면 뒤늦게 도착한 로드 스냅샷이
+	// 방금 소비한 아이템을 되살린다. StaleRevision을 재사용하므로 클라 변경이 필요 없다
+	// (클라는 이미 뒤따르는 스냅샷으로 재동기화한다).
+	if (!session->inventoryReady()) {
+		reply(InventoryActionResult::StaleRevision);
+		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+		return;
+	}
+
 	if (revision != inventory.revision()) {
 		reply(InventoryActionResult::StaleRevision);
 		session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
@@ -1887,6 +2018,42 @@ void Room::inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 		broadcast(PacketManager::makeSPlayerHpPacket(
 			static_cast<uint16>(sessionId), outcome.resultingHp));
 	}
+
+	if (outcome.result == InventoryCommandResult::Success) {
+		persistInventory(session);
+	}
+}
+
+void Room::persistInventory(GameSession* session) {
+	// DB에서 읽어오지 못했다면(장애) 스타터 로드아웃으로 진짜 인벤토리를 덮어쓰면 안 된다.
+	if (!session->inventoryLoaded()) {
+		return;
+	}
+
+	Player* player = session->player();
+	const uint32 revision = player->inventory().revision();
+	if (revision == player->persistedRevision()) {
+		return;   // 마지막 저장 이후 변경 없음
+	}
+	player->setPersistedRevision(revision);
+
+	const int32 roomId = id_;
+	const int64 accountId = session->accountId();
+	auto slots = player->inventory().slots();   // DB 스레드로 넘길 스냅샷(값 복사)
+	auto self = std::static_pointer_cast<GameSession>(session->shared_from_this());
+
+	++pendingDbJobs_;
+	DBExecutor::post([self, roomId, accountId, slots = std::move(slots)]() {
+		if (!InventoryStore::save(accountId, slots)) {
+			std::cout << "[Inventory] 저장 실패. accountId: " << accountId << '\n';
+		}
+
+		Room* room = RoomManager::findRoom(roomId);
+		if (!room) {
+			return;
+		}
+		room->doAsync([room]() { room->onDbJobFinished(); });
+	});
 }
 
 const SkillAsset* Room::findSkillAsset(uint32 id) const {

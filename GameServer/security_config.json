@@ -1,0 +1,7 @@
+{
+  "_comment": "Server-only. Never add this file to client.vcxproj — the client must not know secretHex.",
+  "entryTicket": {
+    "secretHex": "e4f4978dd8b48c9e40aa0fd89f8d9a752ae761241a38e12b15db7c0ff600718a",
+    "ttlSeconds": 120
+  }
+}
