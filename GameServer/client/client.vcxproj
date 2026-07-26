@@ -658,7 +658,6 @@
     <None Include="..\resources\fonts\*.ttf" />
     <None Include="..\resources\fonts\*.otf" />
     <None Include="..\resources\fonts\*.ttc" />
-    <None Include="..\resources\skills\aoe_slash_green.lua" />
     <None Include="..\resources\skills\arrow.lua" />
     <None Include="..\resources\skills\arrow_rain.lua" />
     <None Include="..\resources\skills\arrow_volley.lua" />
@@ -690,7 +689,6 @@
     <None Include="..\resources\skills\snake_attack1.lua" />
     <None Include="..\resources\skills\spikes.lua" />
     <None Include="..\resources\skills\sword_slash.lua" />
-    <None Include="..\resources\skills\tornado_shot.lua" />
     <None Include="..\resources\skills\treant_clap.lua" />
     <None Include="..\resources\skills\treant_punch.lua" />
     <None Include="..\resources\skills\treant_spinkick.lua" />

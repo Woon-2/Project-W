@@ -1,5 +1,18 @@
 ﻿#include "rspch.hpp"
 #include "physicsWorld.hpp"
+#include <cmath>     // std::isfinite (integrator NaN guard, [SAFETY 1])
+#include <iostream>  // [TEMP DIAGNOSTIC] trace logging
+
+namespace {
+    // [SAFETY 1] helpers -- see client/docs/ragdollSafety.md.
+    inline bool isFiniteV(mu::Vec3 v) {
+        return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
+    }
+    inline bool isFiniteQ(mu::NQuat q) {
+        return std::isfinite(q.x()) && std::isfinite(q.y())
+            && std::isfinite(q.z()) && std::isfinite(q.w());
+    }
+}
 
 // Vertical air resistance coefficient (y-axis only).
 // linearDamping is used for horizontal ground friction.
@@ -72,6 +85,7 @@ void PhysicsWorld::unregisterBody(RigidBody* body)
     if (it != entries_.end())
         entries_.erase(it);
     broadPhase_->remove(body);
+    if (traceBody_ == body) traceBody_ = nullptr;   // [TEMP DIAGNOSTIC]
 }
 
 void PhysicsWorld::step(Seconds dt)
@@ -83,9 +97,21 @@ void PhysicsWorld::step(Seconds dt)
 
     for (int s = 0; s < n; ++s) {
         currentSubDt_ = subDt;
+
+        // [TEMP DIAGNOSTIC] per-stage vertical attribution for traceBody_.
+        const float ty0 = traceBody_ ? traceBody_->pos().y()          : 0.f;
+        const float tv0 = traceBody_ ? traceBody_->linearVel().y()    : 0.f;
+
         integrate(subDt);
+
+        const float ty1 = traceBody_ ? traceBody_->pos().y()       : 0.f;
+        const float tv1 = traceBody_ ? traceBody_->linearVel().y() : 0.f;
+
         generateContacts();
         solveConstraints(subDt);
+
+        const float ty2 = traceBody_ ? traceBody_->pos().y()       : 0.f;
+        const float tv2 = traceBody_ ? traceBody_->linearVel().y() : 0.f;
 
         // Static obstacles (scatter props) get the final word on position: after
         // the dynamic solver so a monster squeezed against a tree ends up outside
@@ -97,6 +123,44 @@ void PhysicsWorld::step(Seconds dt)
             auto it = std::ranges::find(entries_, b, &Entry::body);
             if (it != entries_.end() && it->onRebuildBVH)
                 it->onRebuildBVH();
+        }
+
+        // [TEMP DIAGNOSTIC] Report whenever the traced body gains height or upward
+        // speed. "int" = integrate (linearVel), "solve" = split-impulse position
+        // correction, "stat" = resolveStaticPenetration. Whichever column is large
+        // owns the levitation.
+        if (traceBody_) {
+            const float ty3 = traceBody_->pos().y();
+            if ((ty3 - ty0) > 0.02f || tv2 > 0.5f) {
+                std::cout << "[TRACE-Y] sub=" << s
+                          << " int="   << (ty1 - ty0)
+                          << " solve=" << (ty2 - ty1)
+                          << " stat="  << (ty3 - ty2)
+                          << " | y="   << ty3
+                          << " vy "    << tv0 << "->" << tv1 << "->" << tv2
+                          << " cc="    << contactConstraints_.size()
+                          << " sc="    << staticContacts_.size() << '\n';
+            }
+            // [TEMP DIAGNOSTIC] The velocity solver is what raises vy. Dump every
+            // contact touching the traced body when it gained upward speed, so the
+            // culprit can be identified by its normal and accumulated impulse.
+            if ((tv2 - tv1) > 0.5f) {
+                for (const auto& c : contactConstraints_) {
+                    const bool isA = (c->bodyA == traceBody_);
+                    if (!isA && c->bodyB != traceBody_) continue;
+                    const RigidBody* other = isA ? c->bodyB : c->bodyA;
+                    for (int i = 0; i < c->count; ++i) {
+                        const mu::Vec3 n = c->contacts[i].normal;
+                        std::cout << "    n=(" << n.x() << ',' << n.y() << ',' << n.z() << ')'
+                                  << " depth="   << c->contacts[i].depth
+                                  << " accN="    << c->contacts[i].accNormal
+                                  << " terrain=" << c->isTerrainContact()
+                                  << " char="    << c->isCharacterContact()
+                                  << " otherMotion=" << static_cast<int>(other->motionType())
+                                  << " tracedIsA=" << isA << '\n';
+                    }
+                }
+            }
         }
     }
 }
@@ -178,10 +242,39 @@ void PhysicsWorld::integrate(Seconds dt)
                 b.setOmega(b.omega() + (torqDir * (b.uprightStiffness() * dtf)) * b.invInertiaWorld());
             }
 
+            // [SAFETY 1] Speed clamps + NaN guards, mirrored from the client integrator.
+            // setMass() gives every body a fixed 0.5 m box inertia regardless of its real
+            // size, so a contact impulse applied high on a large character's BVH produces
+            // an oversized omega; the clamps bound both channels so a bad contact can't
+            // catapult a body or cascade into NaN.
+            {
+                static constexpr float kMaxAngularSpeed = 50.f;
+                const float omegaLen2 = b.omega().len2();
+                if (omegaLen2 > kMaxAngularSpeed * kMaxAngularSpeed)
+                    b.setOmega(b.omega() * (kMaxAngularSpeed / std::sqrt(omegaLen2)));
+            }
+            {
+                static constexpr float kMaxLinearSpeed = 40.f;
+                const float velLen2 = b.linearVel().len2();
+                if (velLen2 > kMaxLinearSpeed * kMaxLinearSpeed)
+                    b.setLinearVel(b.linearVel() * (kMaxLinearSpeed / std::sqrt(velLen2)));
+            }
+            if (!isFiniteV(b.linearVel())) b.setLinearVel(mu::Vec3{});
+            if (!isFiniteV(b.omega()))     b.setOmega(mu::Vec3{});
+
             b.setPos(b.pos() + b.linearVel() * dtf);
             const auto wq = mu::Quat(b.omega(), 0.f);
             auto newOrient = mu::Quat(b.orient()) + mu::Quat(b.orient()) * wq * 0.5f * dtf;
             b.setOrient(mu::NQuat{ newOrient });
+
+            // [SAFETY 1] If integration still produced a non-finite state, restore the
+            // previous (finite) transform and kill velocity instead of corrupting it.
+            if (!isFiniteV(b.pos()) || !isFiniteQ(b.orient())) {
+                b.setPos(b.prev().pos);
+                b.setOrient(b.prev().orient);
+                b.setLinearVel(mu::Vec3{});
+                b.setOmega(mu::Vec3{});
+            }
 
             b.clearAccumulators();
             break;
@@ -234,21 +327,32 @@ void PhysicsWorld::generateContacts()
         // separating velocity along the contact normal, so a +Y-tilted normal (two
         // upright characters whose bone-boxes touch at different heights) launches
         // them upward. Project the normal and penetration onto the horizontal plane
-        // for non-Static pairs (agents). Static obstacles (stronghold) keep their true
-        // normal so bodies are blocked by / rest on them. Terrain is a separate path.
+        // for agent pairs. Static obstacles (stronghold) keep their true normal so
+        // bodies are blocked by / rest on them. Terrain is a separate path. Free
+        // rigid bodies (isCharacterBody() == false) also keep their true normal so
+        // they can stack.
+        // setCharacterContact() is raised in the SAME branch that horizontalizes, and
+        // only when the projection actually succeeded: ContactConstraint::prepare()
+        // relies on "normal has no Y component" to drop the vertical friction axis.
+        const bool characterPair =
+               a->motionType() != MotionType::Static && b->motionType() != MotionType::Static
+            && a->isCharacterBody() && b->isCharacterBody();
         float depth = res.depth;
-        if (a->motionType() != MotionType::Static && b->motionType() != MotionType::Static) {
+        if (characterPair) {
             const mu::Vec3 n3 = mu::Vec3(normal);
             const mu::Vec3 horiz(n3.x(), 0.f, n3.z());
             const float horizLen = horiz.len();
             if (horizLen > 1e-3f) {
                 normal = mu::normalize(horiz);
                 depth *= horizLen;            // horizontal component of the MTV
+                cc->setCharacterContact(true);
             } else {
                 // Near-vertical normal (rare): use horizontal center-to-center.
                 const mu::Vec3 sepXZ(a->pos().x() - b->pos().x(), 0.f, a->pos().z() - b->pos().z());
-                if (sepXZ.len2() > 1e-6f)
+                if (sepXZ.len2() > 1e-6f) {
                     normal = mu::normalize(sepXZ);
+                    cc->setCharacterContact(true);
+                }
             }
         }
 

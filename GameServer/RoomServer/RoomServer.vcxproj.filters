@@ -102,6 +102,12 @@
     <ClCompile Include="RoomServer.cpp">
       <Filter>network\Server</Filter>
     </ClCompile>
+    <ClCompile Include="AccountRegistry.cpp">
+      <Filter>network\GameSession</Filter>
+    </ClCompile>
+    <ClCompile Include="InventoryStore.cpp">
+      <Filter>contents\Room</Filter>
+    </ClCompile>
     <ClCompile Include="GameSession.cpp">
       <Filter>network\GameSession</Filter>
     </ClCompile>
@@ -266,6 +272,12 @@
     </ClInclude>
     <ClInclude Include="RoomServer.hpp">
       <Filter>network\Server</Filter>
+    </ClInclude>
+    <ClInclude Include="AccountRegistry.hpp">
+      <Filter>network\GameSession</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryStore.hpp">
+      <Filter>contents\Room</Filter>
     </ClInclude>
     <ClInclude Include="GameSession.hpp">
       <Filter>network\GameSession</Filter>

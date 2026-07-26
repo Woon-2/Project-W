@@ -155,29 +155,31 @@ static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
 static constexpr float   kPlayerHpUiX               = 20.f;
 static constexpr float   kPlayerHpUiY               = 20.f;
-static constexpr float   kPlayerHpHeartSize         = 60.f;
-static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 하트 크기 대비 % (해상도 무관, 부모 비율로 스케일)
-static constexpr float   kPlayerHpHeartBarOverlap   = 12.f;
+static constexpr float   kPlayerWeaponBadgeSize     = 60.f;
+static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 배지 크기 대비 % (해상도 무관, 부모 비율로 스케일)
+static constexpr float   kPlayerWeaponBadgeBarOverlap = 12.f;
 static constexpr float   kPlayerHpBarHeight         = 18.f;
-static constexpr float   kPlayerNameLabelHeight     = 22.f;
+static constexpr float   kPlayerNameLabelHeight     = 20.f;
+static constexpr float   kPlayerNameBadgeGap        = 4.f;
 static constexpr float   kPartyHpStartYOffset       = 165.f;
 static constexpr float   kPartyHpRowHeight          = 56.f;
-static constexpr float   kPartyHpHeartSize          = 48.f;
+static constexpr float   kPartyWeaponBadgeSize      = 48.f;
 static constexpr float   kPartyWeaponIconScale      = 50.f;
-static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
+static constexpr float   kPartyWeaponBadgeBarOverlap = 8.f;
+static constexpr float   kPartyNameBadgeGap         = 4.f;
 static constexpr float   kPartyHpBarWidth           = 230.f;
 static constexpr float   kPartyHpBarHeight          = 14.f;
 static constexpr float   kPartyHpNameHeight         = 20.f;
-static constexpr float   kBossHpHudWidth            = 768.f;
-static constexpr float   kBossHpHudHeight           = 128.f;
-static constexpr float   kBossHpHudTop              = 52.f;
-static constexpr float   kBossHpFillX               = 136.f;
-static constexpr float   kBossHpFillY               = 13.f;
-static constexpr float   kBossHpFillWidth           = 580.f;
-static constexpr float   kBossHpFillHeight          = 100.f;
-static constexpr float   kBossHpEmblemX              = 42.f;
-static constexpr float   kBossHpEmblemY              = 22.f;
-static constexpr float   kBossHpEmblemSize           = 84.f;
+static constexpr float   kBossHpHudWidth            = 614.f;
+static constexpr float   kBossHpHudHeight           = 66.f;
+static constexpr float   kBossHpHudTop              = 28.f;
+static constexpr float   kBossHpFillX               = 109.f;
+static constexpr float   kBossHpFillY               = 8.f;
+static constexpr float   kBossHpFillWidth           = 464.f;
+static constexpr float   kBossHpFillHeight          = 56.f;
+static constexpr float   kBossHpEmblemX              = 46.f;
+static constexpr float   kBossHpEmblemY              = 12.f;
+static constexpr float   kBossHpEmblemSize           = 41.f;
 static const DirectX::XMFLOAT4 kNamedMonsterHpColor{ 0.62f, 0.24f, 0.90f, 1.f };
 static constexpr float   kConfusionIconBaseSize      = 40.f;
 static constexpr float   kConfusionIconWorldGap      = 0.65f;
@@ -274,7 +276,8 @@ void Game::setupStageVisual() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
+	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(122.f), mu::Degree(66.f)));
+	// dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
 	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -377,22 +380,21 @@ void Game::setupStage() {
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
-	playerHpHeart_ = static_cast<UI::Image*>(
+	playerWeaponBadge_ = static_cast<UI::Image*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Image>())
 	);
-	playerHpHeart_->name    = "playerHpHeart";
-	playerHpHeart_->anchor  = UI::Anchors::TopLeft;
-	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
-	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->zOrder  = 2;
-	playerHpHeart_->texture = assetManager_.playerHpHeart();
+	playerWeaponBadge_->name    = "playerWeaponBadge";
+	playerWeaponBadge_->anchor  = UI::Anchors::TopLeft;
+	playerWeaponBadge_->pivot   = UI::Pivots::TopLeft;
+	playerWeaponBadge_->width   = UI::DimValue::px(kPlayerWeaponBadgeSize);
+	playerWeaponBadge_->height  = UI::DimValue::px(kPlayerWeaponBadgeSize);
+	playerWeaponBadge_->zOrder  = 3;
+	playerWeaponBadge_->texture = assetManager_.playerWeaponIconBackground();
+	playerWeaponBadge_->colorMul = { 2.0f, 2.0f, 2.0f, 1.0f };
 
-	// 하트 위에 겹쳐 그리는 무기 아이콘. 하트의 자식으로 두어 부모(하트) 대비 비율로
-	// 크기를 잡고 중앙 정렬한다 → 하트가 해상도에 맞게 스케일되면 아이콘도 같은 비율로 따라가
-	// 항상 하트 안쪽에 들어간다. 렌더 순서상 부모 다음에 그려지므로 자연히 하트 위에 겹쳐진다.
+	// 내부 배경 위에 무기 아이콘을 그리고, 투명 중앙을 가진 외곽 프레임을 마지막에 겹친다.
 	playerWeaponIcon_ = static_cast<UI::Image*>(
-		playerHpHeart_->addChild(std::make_unique<UI::Image>())
+		playerWeaponBadge_->addChild(std::make_unique<UI::Image>())
 	);
 	playerWeaponIcon_->name    = "playerWeaponIcon";
 	playerWeaponIcon_->anchor  = UI::Anchors::Center;
@@ -400,6 +402,18 @@ void Game::setupStage() {
 	playerWeaponIcon_->width   = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->height  = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(PlayerWeaponType::Katana);
+	playerWeaponIcon_->zOrder  = 1;
+
+	auto* playerWeaponFrame = static_cast<UI::Image*>(
+		playerWeaponBadge_->addChild(std::make_unique<UI::Image>())
+	);
+	playerWeaponFrame->name    = "playerWeaponFrame";
+	playerWeaponFrame->anchor  = UI::Anchors::TopLeft;
+	playerWeaponFrame->pivot   = UI::Pivots::TopLeft;
+	playerWeaponFrame->width   = UI::DimValue::pct(100.f);
+	playerWeaponFrame->height  = UI::DimValue::pct(100.f);
+	playerWeaponFrame->texture = assetManager_.playerWeaponIconFrame();
+	playerWeaponFrame->zOrder  = 2;
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -409,8 +423,9 @@ void Game::setupStage() {
 	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
 	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
+	playerHpBar_->backgroundTex = assetManager_.playerHpFrame();
+	playerHpBar_->fillTex       = assetManager_.playerHpLine();
+	playerHpBar_->drawBackgroundOnTop = true;
 	playerHpBar_->setProgress(1.f);
 
 	playerHpText_ = static_cast<UI::Label*>(
@@ -436,7 +451,7 @@ void Game::setupStage() {
 	playerNameText_->pivot   = UI::Pivots::TopLeft;
 	playerNameText_->width   = UI::DimValue::px(240.f);
 	playerNameText_->height  = UI::DimValue::px(kPlayerNameLabelHeight);
-	playerNameText_->zOrder  = playerHpBar_->zOrder + 2;
+	playerNameText_->zOrder  = playerWeaponBadge_->zOrder + 1;
 	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
 	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
 	playerNameText_->setFontSize(18.0f);
@@ -517,7 +532,7 @@ void Game::setupBossHpHud() {
 	bossHpEmblem_->width   = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
-	bossHpEmblem_->zOrder  = 2;
+	bossHpEmblem_->zOrder  = -1;
 }
 
 void Game::showBossHpHud() {
@@ -565,13 +580,13 @@ void Game::updateBossHpHud() {
 }
 
 void Game::updatePlayerHpHudLayout() {
-	if (!playerHpHeart_ || !playerHpBar_) return;
+	if (!playerWeaponBadge_ || !playerHpBar_) return;
 
-	const float heartY = kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f;
-	const float barX = kPlayerHpUiX + kPlayerHpHeartSize - kPlayerHpHeartBarOverlap;
+	const float badgeY = kPlayerHpUiY - (kPlayerWeaponBadgeSize - kPlayerHpBarHeight) * 0.5f;
+	const float barX = kPlayerHpUiX + kPlayerWeaponBadgeSize - kPlayerWeaponBadgeBarOverlap;
 
-	playerHpHeart_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
-	playerHpHeart_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(heartY));
+	playerWeaponBadge_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+	playerWeaponBadge_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(badgeY));
 	playerHpBar_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(barX));
 	playerHpBar_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY));
 
@@ -580,23 +595,38 @@ void Game::updatePlayerHpHudLayout() {
 		playerHpText_->offsetY = playerHpBar_->offsetY;
 	}
 	if (playerNameText_) {
-		playerNameText_->offsetX = playerHpBar_->offsetX;
+		const float nameX = kPlayerHpUiX + kPlayerWeaponBadgeSize + kPlayerNameBadgeGap;
+		const float nameY = kPlayerHpUiY - kPlayerNameLabelHeight;
+		playerNameText_->offsetX = UI::DimValue::px(
+			uiManager_.screenLeftInsetToLayoutX(nameX)
+		);
 		playerNameText_->offsetY = UI::DimValue::px(
-			uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY - kPlayerNameLabelHeight * 0.65f)
+			uiManager_.screenTopInsetToLayoutY(nameY)
 		);
 	}
 	updatePartyHpHudLayout();
 }
 
-void Game::registerInGamePartyPlayer(uint16 playerId) {
+void Game::registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
-		// Freeze the name at registration: index-based names would shift on every
-		// leave, and my own label (refreshed per frame) would diverge from the
-		// stale labels other clients keep showing for me. Join order is identical
-		// on every client (server fills the S_Enter objList from sessions_ in
-		// enter order, later joins append via S_Enter_Other), so the numbering
-		// stays cross-client consistent.
+
+		// The account nickname is authoritative when the server sent one. The roster
+		// (S_Enter names section / S_Enter_Other) is seeded before the object list is
+		// walked, and this function is a no-op for ids already present, so the later
+		// nickname-less createOtherPlayer(ObjectInfo) path cannot clobber it.
+		const size_t nickLen = nickname ? wcsnlen(nickname, kNicknameMax) : 0;
+		if (nickLen > 0) {
+			inGamePartyNameById_[playerId] = std::wstring(nickname, nickLen);
+			return;
+		}
+
+		// Fallback for sessions with no nickname. Freeze the name at registration:
+		// index-based names would shift on every leave, and my own label (refreshed
+		// per frame) would diverge from the stale labels other clients keep showing
+		// for me. Join order is identical on every client (server fills the S_Enter
+		// objList from sessions_ in enter order, later joins append via
+		// S_Enter_Other), so the numbering stays cross-client consistent.
 		inGamePartyNameById_[playerId] = L"player" + std::to_wstring(++inGamePartyNameSeq_);
 	}
 }
@@ -659,23 +689,24 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyRoot->name    = "partyPlayerHud";
 	partyRoot->anchor  = UI::Anchors::TopLeft;
 	partyRoot->pivot   = UI::Pivots::TopLeft;
-	partyRoot->width   = UI::DimValue::px(kPartyHpHeartSize + kPartyHpBarWidth);
+	partyRoot->width   = UI::DimValue::px(kPartyWeaponBadgeSize + kPartyHpBarWidth);
 	partyRoot->height  = UI::DimValue::px(kPartyHpRowHeight);
 	partyRoot->zOrder  = 2;
 
-	auto* partyHeart = static_cast<UI::Image*>(
+	auto* partyWeaponBadge = static_cast<UI::Image*>(
 		partyRoot->addChild(std::make_unique<UI::Image>())
 	);
-	partyHeart->name    = "partyHpHeart";
-	partyHeart->anchor  = UI::Anchors::TopLeft;
-	partyHeart->pivot   = UI::Pivots::TopLeft;
-	partyHeart->width   = UI::DimValue::px(kPartyHpHeartSize);
-	partyHeart->height  = UI::DimValue::px(kPartyHpHeartSize);
-	partyHeart->texture = assetManager_.playerHpHeart();
-	partyHeart->zOrder  = 0;
+	partyWeaponBadge->name    = "partyWeaponBadge";
+	partyWeaponBadge->anchor  = UI::Anchors::TopLeft;
+	partyWeaponBadge->pivot   = UI::Pivots::TopLeft;
+	partyWeaponBadge->width   = UI::DimValue::px(kPartyWeaponBadgeSize);
+	partyWeaponBadge->height  = UI::DimValue::px(kPartyWeaponBadgeSize);
+	partyWeaponBadge->texture = assetManager_.playerWeaponIconBackground();
+	partyWeaponBadge->colorMul = { 2.0f, 2.0f, 2.0f, 1.0f };
+	partyWeaponBadge->zOrder  = 3;
 
 	auto* partyWeaponIcon = static_cast<UI::Image*>(
-		partyHeart->addChild(std::make_unique<UI::Image>())
+		partyWeaponBadge->addChild(std::make_unique<UI::Image>())
 	);
 	partyWeaponIcon->name    = "partyWeaponIcon";
 	partyWeaponIcon->anchor  = UI::Anchors::Center;
@@ -683,6 +714,18 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyWeaponIcon->width   = UI::DimValue::pct(kPartyWeaponIconScale);
 	partyWeaponIcon->height  = UI::DimValue::pct(kPartyWeaponIconScale);
 	partyWeaponIcon->texture = assetManager_.playerWeaponIcon(weaponType);
+	partyWeaponIcon->zOrder  = 1;
+
+	auto* partyWeaponFrame = static_cast<UI::Image*>(
+		partyWeaponBadge->addChild(std::make_unique<UI::Image>())
+	);
+	partyWeaponFrame->name    = "partyWeaponFrame";
+	partyWeaponFrame->anchor  = UI::Anchors::TopLeft;
+	partyWeaponFrame->pivot   = UI::Pivots::TopLeft;
+	partyWeaponFrame->width   = UI::DimValue::pct(100.f);
+	partyWeaponFrame->height  = UI::DimValue::pct(100.f);
+	partyWeaponFrame->texture = assetManager_.playerWeaponIconFrame();
+	partyWeaponFrame->zOrder  = 2;
 
 	auto* partyName = static_cast<UI::Label*>(
 		partyRoot->addChild(std::make_unique<UI::Label>())
@@ -690,11 +733,13 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyName->name    = "partyName";
 	partyName->anchor  = UI::Anchors::TopLeft;
 	partyName->pivot   = UI::Pivots::TopLeft;
-	partyName->offsetX = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyName->offsetX = UI::DimValue::px(kPartyWeaponBadgeSize + kPartyNameBadgeGap);
 	partyName->offsetY = UI::DimValue::px(0.f);
-	partyName->width   = UI::DimValue::px(kPartyHpBarWidth);
+	partyName->width   = UI::DimValue::px(
+		kPartyHpBarWidth - kPartyWeaponBadgeBarOverlap - kPartyNameBadgeGap
+	);
 	partyName->height  = UI::DimValue::px(kPartyHpNameHeight);
-	partyName->zOrder  = 2;
+	partyName->zOrder  = partyWeaponBadge->zOrder + 1;
 	partyName->setTextHAlign(UI::TextHAlign::Leading);
 	partyName->setTextVAlign(UI::TextVAlign::Center);
 	partyName->setFontSize(16.0f);
@@ -707,12 +752,13 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyBar->name      = "partyHpBar";
 	partyBar->anchor    = UI::Anchors::TopLeft;
 	partyBar->pivot     = UI::Pivots::TopLeft;
-	partyBar->offsetX   = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyBar->offsetX   = UI::DimValue::px(kPartyWeaponBadgeSize - kPartyWeaponBadgeBarOverlap);
 	partyBar->offsetY   = UI::DimValue::px(kPartyHpNameHeight);
 	partyBar->width     = UI::DimValue::px(kPartyHpBarWidth);
 	partyBar->height    = UI::DimValue::px(kPartyHpBarHeight);
-	partyBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-	partyBar->fillColor = { 1.0f, 0.0f, 0.0f, 1.0f };
+	partyBar->backgroundTex = assetManager_.playerHpFrame();
+	partyBar->fillTex       = assetManager_.playerHpLine();
+	partyBar->drawBackgroundOnTop = true;
 	partyBar->zOrder    = 1;
 	partyBar->setProgress(1.f);
 
@@ -721,7 +767,7 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 		worldBar,
 		weaponType,
 		partyRoot,
-		partyHeart,
+		partyWeaponBadge,
 		partyWeaponIcon,
 		partyName,
 		partyBar
@@ -2162,14 +2208,14 @@ void Game::setParticle()
 	}
 }
 
-void Game::prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds) {
+void Game::prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster) {
 	inGamePartyPlayerIds_.clear();
 	inGamePartyNameById_.clear();
 	inGamePartyNameSeq_ = 0;
-	for (uint16 id : existingPlayerIds) {
-		registerInGamePartyPlayer(id);
+	for (const PlayerNameInfo& info : roster) {
+		registerInGamePartyPlayer(info.playerId, info.nickname);
 	}
-	registerInGamePartyPlayer(myPlayerId);
+	registerInGamePartyPlayer(myInfo.playerId, myInfo.nickname);
 }
 
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
@@ -2211,7 +2257,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
-	registerInGamePartyPlayer(playerInfo.playerId);
+	registerInGamePartyPlayer(playerInfo.playerId, playerInfo.nickname);
 
 	setParticle();
 
@@ -2227,15 +2273,15 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		// Build the bottom-right skill dial from this weapon's loadout metadata.
 		setupSkillDial(playerInfo.weaponType);
 
+		// 256은 상한이 아니라 초기 크기 힌트다(registerSkillObject가 필요한 만큼 늘린다).
+		// 이전 세션 잔재를 지우는 역할도 겸하므로, 아래에서 이미 알고 있는 오브젝트를 복구한다.
 		skillObjectById_.assign(256, nullptr);
 		player_->setFaction(Faction::Players);
-		skillObjectById_[player_->getId()] = player_.get();
-		// Register all monsters that arrived before setupPlayer() was called.
-		for (auto& [id, monster] : idMonsterMap_) {
-			auto sid = static_cast<size_t>(id);
-			if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
-			skillObjectById_[sid] = monster;
-		}
+		registerSkillObject(player_->getId(), player_.get());
+		// setupPlayer 이전에 도착한 오브젝트 복구(패킷 순서는 보장되지 않는다).
+		// 몬스터는 S_NpcSpawnBatch가 S_Enter보다 먼저 올 수 있고, 원격 플레이어도 마찬가지다.
+		for (auto& [id, monster] : idMonsterMap_) registerSkillObject(id, monster);
+		for (auto& [id, other]   : idPlayerMap_)  registerSkillObject(id, other.get());
 
 		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
@@ -2343,11 +2389,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(otherPlayerInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = otherPlayer.get();
-	}
+	registerSkillObject(otherPlayerInfo.objectId, otherPlayer.get());
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
@@ -2384,16 +2426,13 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
 		kLayerPlayer, kPlayerCollisionMask);
 
-	registerInGamePartyPlayer(otherPlayerInfo.playerId);
+	// S_Enter_Other(뒤늦게 합류한 플레이어)는 PlayerInfo에 닉네임이 실려 온다.
+	registerInGamePartyPlayer(otherPlayerInfo.playerId, otherPlayerInfo.nickname);
 	createOtherPlayerHud(otherPlayerInfo.playerId, otherPlayer.get(), otherPlayerInfo.weaponType);
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(otherPlayerInfo.playerId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = otherPlayer.get();
-	}
+	registerSkillObject(otherPlayerInfo.playerId, otherPlayer.get());
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -2456,12 +2495,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	goblin->setRenderObjectId(nextRenderObjId_++);
 
-	// Register goblin in skill system's object lookup table.
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(goblinInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = goblin.get();
-	}
+	registerSkillObject(goblinInfo.objectId, goblin.get());
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId]    = goblin;
@@ -2518,12 +2552,7 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 
 	hobgoblin->setRenderObjectId(nextRenderObjId_++);
 
-	// Register hobgoblin in skill system's object lookup table.
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = hobgoblin.get();
-	}
+	registerSkillObject(hobgoblinInfo.objectId, hobgoblin.get());
 
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
 	bossHeatProfiles_[hobgoblinInfo.objectId] = BossHeatState{
@@ -2585,11 +2614,7 @@ void Game::createSnake(const ObjectInfo& info) {
 
 	snake->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = snake.get();
-	}
+	registerSkillObject(info.objectId, snake.get());
 
 	snakes_.push_back(snake);
 	idSnakeMap_[info.objectId]    = snake;
@@ -2644,11 +2669,7 @@ void Game::createMushroom(const ObjectInfo& info) {
 
 	mushroom->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = mushroom.get();
-	}
+	registerSkillObject(info.objectId, mushroom.get());
 
 	mushrooms_.push_back(mushroom);
 	idMushroomMap_[info.objectId]   = mushroom;
@@ -2709,11 +2730,7 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 
 	obj->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = obj.get();
-	}
+	registerSkillObject(info.objectId, obj.get());
 
 	idMonsterMap_[info.objectId]     = obj.get();
 	respawnKind_[info.objectId]      = kind;
@@ -2877,8 +2894,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		break;
 	}
 	idMonsterMap_.erase(npcId);
-	if (static_cast<size_t>(npcId) < skillObjectById_.size())
-		skillObjectById_[npcId] = nullptr;
+	unregisterSkillObject(npcId);
 
 	// A corpse is not a barrier: drop any stale barrier registration so the raw pointer in
 	// barrierObjects_ can't outlive this object's current role (and so a pooled reuse does
@@ -3006,9 +3022,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	}
 	}
 	idMonsterMap_[npcId] = obj.get();
-	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
-		skillObjectById_.resize(npcId + 1u, nullptr);
-	skillObjectById_[npcId] = obj.get();
+	registerSkillObject(npcId, obj.get());
 	respawnKind_[npcId] = kind;
 	holdEvent(eventList_, EvRespawn(npcId));
 	return true;
@@ -3016,7 +3030,10 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 
 void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 	const float dtSec = std::chrono::duration<float>(deltaTime).count();
-	constexpr float kRagdollSeconds = 1.5f;   // hold the ragdoll before dissolving
+	// 래그돌 물리가 이 프로젝트의 시연 포인트라 유지 구간을 길게 잡는다. 늘린 만큼
+	// 오브 구간(energyOrbSystem.cpp의 kFormingTime·추적 속도)을 줄여 총 흡수 시간을
+	// 보존한다 — 시간 예산 표는 docs/gameArchitecture.md "연출 시간 예산".
+	constexpr float kRagdollSeconds = 2.0f;   // hold the ragdoll before dissolving
 	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
 
 	// Credit queued charges to the most-recent uncharged ragdoll corpse.
@@ -3050,7 +3067,8 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 			// (Otherwise the BV tracks the death animation while the mesh/physics flop.)
 			if (o.ragdoll() && o.ragdoll()->isActive() && o.animBlender() && o.model())
 				o.ragdoll()->syncToFinalXforms(
-					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world);
+					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world,
+					tPhysicInterp);
 			o.update(deltaTime, tPhysicInterp);
 			if (o.ragdoll() && o.ragdoll()->isActive())
 				o.rebuildBodyBVH();
@@ -3412,8 +3430,7 @@ void Game::removePlayer( i32t playerId ) {
 	// skillObjectById_, so re-sync before dispatching into the skill system.
 	refreshSkillCtx();
 	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
-	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
-		skillObjectById_[playerId] = nullptr;
+	unregisterSkillObject(playerId);
 
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
@@ -3711,6 +3728,10 @@ void Game::moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, Di
 	}
 	Object* monster = it->second;
 
+	// 서버가 이 npc의 이동을 마지막으로 보낸 시각. 감사(F12)에서 오래 갱신되지 않은
+	// 개체를 STALE로 표시한다 — 서버가 hp<=0으로 판단해 move 배치에서 제외했다는 신호.
+	lastNpcMoveAt_[npcId] = diagElapsed_;
+
 	if (monster->isDead()) return;
 
 	monster->body().advanceState();
@@ -3950,6 +3971,7 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	// APC-time call: re-sync skillCtx_ in case skillObjectById_ was resized by an
 	// earlier packet in this batch.
 	refreshSkillCtx();
+	debugLogSkillOwnerResolution("remote", skillAssetId, static_cast<i32t>(ownerId));
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
@@ -3978,7 +4000,9 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 				mu::Vec3(DirectX::XMLoadFloat3(&info.halfExtents)),
 				mu::NQuat(DirectX::XMLoadFloat4(&info.orient), mu::NQuat::NoNormalize_t{})
 			},
-			Milliseconds{ 100.f }
+			Milliseconds{ 100.f },
+			BVPipeline::BVModel::Box,
+			mu::Vec4{ 1.f, 0.2f, 0.2f, 1.f }   // 빨강 = 서버 권위 히트박스 (클라 예측은 초록)
 		);
 	}
 }
@@ -4035,6 +4059,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_ == nullptr) {
 		return;
 	}
+
+	// F12 감사의 STALE 판정 기준이 되는 단조 시계.
+	diagElapsed_ += deltaTime;
 
 	// Skill dispatch context: refresh per-frame pointers.
 	refreshSkillCtx();
@@ -4146,6 +4173,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	if (!playerDead_)
 		skillSystem_.update(simulationDeltaTime, skillCtx_);
+
+	// 클라 예측 히트박스(초록)를 서버 권위 히트박스(빨강, onDebugHitboxes)와 나란히 렌더해
+	// 포즈/타이밍 오프셋을 육안 비교한다. 서버의 kBroadcastDebugHitboxes(Room.cpp)와 짝으로 켠다.
+	// 상세: RoomServer/docs/roomTickCadence.md §8.2
+	static constexpr bool kDebugSkillHitboxOverlay = false;
+	if constexpr (kDebugSkillHitboxOverlay)
+		skillSystem_.renderDebugHitboxes(debugBVView_);
 
 	// 이벤트 디스패치
 	//
@@ -4405,23 +4439,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
 
-			// Apply death velocity so the ragdoll flies in the knockback direction.
-			const mu::Vec3 initVel = g.ragdollInitVelocity();
-			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) if (rb.body) rb.body->setLinearVel(initVel);
-				g.setRagdollInitVelocity(mu::Vec3{});
-			}
-			// Per-bone random noise impulse, biased toward the death velocity direction.
-			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f) ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
-			for (const auto& rb : rd.bones()) {
-				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
-				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
-				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
-				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
-				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
-				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
-			}
+			// Momentum hand-off + toppling kick + per-bone noise (see Ragdoll::applyDeathKick).
+			rd.applyDeathKick(g.ragdollInitVelocity());
+			g.setRagdollInitVelocity(mu::Vec3{});
+
 			justDied.emplace_back(objPtr, kind);
 		};
 
@@ -5214,7 +5235,7 @@ void Game::refreshLobbyUI() {
 	vs.isAuthenticated    = isAuthenticated_;
 	vs.waitingRoom3DReady = stageVisualReady_.load(std::memory_order_acquire);
 	vs.isHost             = isHost_;
-	vs.nickname           = L"PLAYER";
+	vs.nickname           = myNickname_;
 	vs.roomCode           = roomCode_;
 	vs.maxPlayers         = kMaxLobbyPlayers;
 	vs.players.reserve(lobbyPlayers_.size());
@@ -5333,7 +5354,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		pendingHandoff_ = false;
 		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
-		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_, selectedLobbyWeapon_));
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffTicket_, selectedLobbyWeapon_));
 		INet::ClientApp::send();
 		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
 		return;
@@ -5546,58 +5567,116 @@ void Game::enterInGame() {
 	// 이전 플레이어의 물리 바디가 물리월드에 dangling으로 남아 크래시한다.
 }
 
-std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
+std::wstring Game::lobbyDisplayName(uint16 sessionId, const wchar_t* nickname) const {
+	// 본인 슬롯은 계속 "나"로 표시한다 — 4칸 대기실에서 어느 쪽이 나인지가 닉네임보다 중요하다.
 	if (sessionId == myLobbyId_) {
 		return L"나";
+	}
+	// 로그인으로 확정된 계정 닉네임. 서버가 못 채운 경우에만 sessionId로 폴백한다.
+	if (const size_t nickLen = nickname ? wcsnlen(nickname, kNicknameMax) : 0; nickLen > 0) {
+		return std::wstring(nickname, nickLen);
 	}
 	return L"Player_" + std::to_wstring(sessionId);
 }
 
+namespace {
+
+// 입력 가능 길이. protocol.hpp의 고정 배열 크기에서 널 종료 1자를 뺀 값이며,
+// db/schema.sql의 NVARCHAR 길이와 짝이다.
+constexpr size_t kLoginIdLenMax  = kLoginIdMax - 1;
+constexpr size_t kPasswordLenMax = kPasswordMax - 1;
+constexpr size_t kNicknameLenMax = kNicknameMax - 1;
+
+// loginId/password는 wire 상 char[]다. 비ASCII가 섞이면 변환에서 깨지므로 아예 보내지 않는다.
+// (닉네임은 wchar_t[]라 변환 없이 그대로 나간다 — 한글 가능.)
+bool toAscii(const std::wstring& src, std::string& out) {
+	out.clear();
+	out.reserve(src.size());
+	for (const wchar_t ch : src) {
+		if (ch < 0x20 || ch > 0x7E) {
+			return false;
+		}
+		out.push_back(static_cast<char>(ch));
+	}
+	return true;
+}
+
+const wchar_t* accountResultMessage(AccountResult result) {
+	switch (result) {
+	case AccountResult::InvalidInput:      return L"입력 형식이 올바르지 않습니다.";
+	case AccountResult::DuplicateId:       return L"이미 사용 중인 아이디입니다.";
+	case AccountResult::DuplicateNickname: return L"이미 사용 중인 닉네임입니다.";
+	case AccountResult::NoSuchAccount:     return L"존재하지 않는 아이디입니다.";
+	case AccountResult::WrongPassword:     return L"비밀번호가 일치하지 않습니다.";
+	case AccountResult::AlreadyLoggedIn:   return L"이미 접속 중인 계정입니다.";
+	case AccountResult::DbError:           return L"서버 오류입니다. 잠시 후 다시 시도해 주세요.";
+	default:                               return L"알 수 없는 오류가 발생했습니다.";
+	}
+}
+
+}   // namespace
+
 void Game::lobbyLogin(const std::wstring& id, const std::wstring& password) {
+	if (authPending_) {
+		return;   // 응답 대기 중. 중복 전송하면 두 번째가 AlreadyLoggedIn으로 튕긴다.
+	}
+
 	if (id.empty() || password.empty()) {
 		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호를 입력하세요.");
-		gSharedLog << "[Auth] 로그인 실패: 빈 아이디 또는 비밀번호\n";
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 로그인 성공 (id=" << id
-		<< L", passwordLength=" << password.size() << L")\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax) {
+		lobbyUI_.setMainMenuMessage(L"아이디는 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호는 " + std::to_wstring(kPasswordLenMax) + L"자까지 입력할 수 있습니다.");
+		return;
+	}
 
-	isAuthenticated_ = true;
-	lobbyUI_.clearLoginPassword();
-	lobbyUI_.setMainMenuMessage(L"");
-	uiManager_.resetInteractionState();
-	refreshLobbyUI();
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setMainMenuMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
+		return;
+	}
+
+	authPending_ = true;
+	INet::ClientApp::addSendBuffer(PacketManager::makeCLoginPacket(asciiId, asciiPassword));
+	INet::ClientApp::send();
+	lobbyUI_.setMainMenuMessage(L"로그인 중...", false);
+	gSharedLog << "[Auth] 로그인 요청 전송\n";
 }
 
 void Game::lobbyRegister(const std::wstring& id, const std::wstring& password,
 	const std::wstring& nickname) {
+	if (authPending_) {
+		return;
+	}
+
 	if (id.empty() || password.empty() || nickname.empty()) {
 		lobbyUI_.setSignupMessage(L"아이디, 비밀번호, 닉네임을 모두 입력하세요.");
-		gSharedLog << "[Auth] 회원가입 실패: 빈 필드\n";
 		return;
 	}
 
-	if (localRegisteredIds_.contains(id)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 아이디입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 아이디 중복\n";
+	if (id.size() > kLoginIdLenMax || password.size() > kPasswordLenMax
+		|| nickname.size() > kNicknameLenMax) {
+		lobbyUI_.setSignupMessage(L"아이디 " + std::to_wstring(kLoginIdLenMax)
+			+ L"자, 비밀번호 " + std::to_wstring(kPasswordLenMax)
+			+ L"자, 닉네임 " + std::to_wstring(kNicknameLenMax) + L"자까지 입력할 수 있습니다.");
 		return;
 	}
 
-	if (localRegisteredNicknames_.contains(nickname)) {
-		lobbyUI_.setSignupMessage(L"이미 사용 중인 닉네임입니다.");
-		gSharedLog << "[Auth] 회원가입 실패: 닉네임 중복\n";
+	std::string asciiId, asciiPassword;
+	if (!toAscii(id, asciiId) || !toAscii(password, asciiPassword)) {
+		lobbyUI_.setSignupMessage(L"아이디와 비밀번호는 영문·숫자만 사용할 수 있습니다.");
 		return;
 	}
 
-	gwSharedLog << L"[Auth] 로컬 회원가입 완료 (id=" << id
-		<< L", nickname=" << nickname
-		<< L", passwordLength=" << password.size() << L")\n";
-
-	localRegisteredIds_.insert(id);
-	localRegisteredNicknames_.insert(nickname);
-	uiManager_.resetInteractionState();
-	lobbyUI_.completeRegistration(id);
+	authPending_       = true;
+	pendingRegisterId_ = id;   // 가입 성공 응답에 loginId가 없어, 로그인 칸을 채우려면 필요하다.
+	INet::ClientApp::addSendBuffer(
+		PacketManager::makeCRegisterPacket(asciiId, asciiPassword, nickname));
+	INet::ClientApp::send();
+	lobbyUI_.setSignupMessage(L"회원가입 요청 중...");
+	gSharedLog << "[Auth] 회원가입 요청 전송\n";
 }
 
 void Game::lobbyCreateRoom() {
@@ -5706,6 +5785,42 @@ void Game::lobbySelectWeapon(int direction) {
 
 // --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
 
+void Game::onRegisterResult(AccountResult result) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setSignupMessage(accountResultMessage(result));
+		pendingRegisterId_.clear();
+		gSharedLog << "[Auth] 회원가입 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	uiManager_.resetInteractionState();
+	lobbyUI_.completeRegistration(pendingRegisterId_);
+	pendingRegisterId_.clear();
+	gSharedLog << "[Auth] 회원가입 성공\n";
+}
+
+void Game::onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname) {
+	authPending_ = false;
+
+	if (result != AccountResult::Ok) {
+		lobbyUI_.setMainMenuMessage(accountResultMessage(result));
+		gSharedLog << "[Auth] 로그인 실패. result: " << static_cast<int>(result) << '\n';
+		return;
+	}
+
+	accountId_       = accountId;
+	myNickname_      = nickname;
+	isAuthenticated_ = true;
+
+	lobbyUI_.clearLoginPassword();
+	lobbyUI_.setMainMenuMessage(L"");
+	uiManager_.resetInteractionState();
+	refreshLobbyUI();
+	gSharedLog << "[Auth] 로그인 성공. accountId: " << accountId << '\n';
+}
+
 void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	roomCode_ = code;
 	myLobbyId_     = myId;
@@ -5713,7 +5828,8 @@ void Game::onLobbyCreated(const std::string& code, uint16 myId) {
 	isHost_   = true;
 	selectedLobbyWeapon_ = PlayerWeaponType::Katana;
 	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId), selectedLobbyWeapon_ });
+	// 방 생성 응답(S_CreateRoom)에는 LobbyPlayerInfo가 없다. 어차피 본인 슬롯이라 "나"로 나온다.
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId, nullptr), selectedLobbyWeapon_ });
 	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
 	applyCursorPolicy();
@@ -5735,7 +5851,7 @@ void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::st
 
 	lobbyPlayers_.clear();
 	for (const LobbyPlayerInfo& info : playerInfos) {
-		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId, info.nickname), info.weaponType });
 		if (info.sessionId == myLobbyId_) {
 			selectedLobbyWeapon_ = info.weaponType;
 		}
@@ -5751,7 +5867,7 @@ void Game::onLobbyPlayerJoined(const LobbyPlayerInfo& info) {
 	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
 		[&info](const LobbyPlayer& p) { return p.sessionId == info.sessionId; });
 	if (!exists) {
-		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId), info.weaponType });
+		lobbyPlayers_.push_back({ info.sessionId, lobbyDisplayName(info.sessionId, info.nickname), info.weaponType });
 	}
 	refreshLobbyUI();
 	gSharedLog << "[Lobby] 플레이어 입장: " << info.sessionId << "\n";
@@ -5788,12 +5904,13 @@ void Game::onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType) 
 	refreshLobbyUI();
 }
 
-void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
+void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket) {
 	// 이 함수는 로비 recv APC 안에서 실행되므로 여기서 소켓을 건드리지 않고, 핸드오프 요청만 적재한다.
 	// 실제 재접속/씬 전환은 LobbyScene이 APC 밖(안전 지점)에서 에셋 로드 완료 후 수행한다.
 	handoffIp_     = roomServerIp;
 	handoffPort_   = roomServerPort;
 	handoffCode_   = lobbyCode;
+	handoffTicket_ = ticket;   // POD 복사라 APC 안에서도 안전하다.
 	pendingHandoff_ = true;
 	gSharedLog << "[Lobby] 게임 시작 신호 수신: RoomServer " << roomServerIp << ":" << roomServerPort
 		<< " (code=" << lobbyCode << ")\n";
@@ -5947,6 +6064,153 @@ void Game::debugTeleportToArena(const std::string& tag) {
 	std::cout << "[DebugTeleport] -> '" << tag << "' (" << center.x() << ", " << center.y() << ", " << center.z() << ")\n";
 }
 
+// ── 스킬 오브젝트 조회 테이블 ────────────────────────────────────────────────────
+// 서버 오브젝트 id로 색인하는 희소 배열. id는 서버 IdPool에서 나오며 룸이 생길 때마다
+// 수백씩 커지므로, 등록은 전부 여기를 거쳐 배열을 필요한 만큼 늘린다.
+// 배경: RoomServer/docs/objectIdLifecycle.md
+
+void Game::registerSkillObject(i32t id, Object* obj) {
+	if (id < 0) return;
+	const auto sid = static_cast<size_t>(id);
+	if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
+	skillObjectById_[sid] = obj;
+}
+
+void Game::unregisterSkillObject(i32t id) {
+	if (id < 0) return;
+	const auto sid = static_cast<size_t>(id);
+	if (sid < skillObjectById_.size()) skillObjectById_[sid] = nullptr;
+}
+
+// ── 오브젝트 id 정합성 감시 ──────────────────────────────────────────────────────
+// 계획 문서: async-launching-quokka.md. 수정이 아니라 관측용이며, 원인이 확정되면
+// 이 두 함수와 lastNpcMoveAt_/diagElapsed_는 제거하거나 정식 디버그 기능으로 승격한다.
+
+void Game::debugLogSkillOwnerResolution(const char* phase, uint32 assetId, i32t ownerId) const {
+	const bool inRange = (ownerId >= 0 &&
+		static_cast<size_t>(ownerId) < skillObjectById_.size());
+	const Object* owner = inRange ? skillObjectById_[static_cast<size_t>(ownerId)] : nullptr;
+
+	// 정상 경로에서 매 시전마다 찍히면 로그가 시끄러우므로, 해석에 실패한 경우만 남긴다.
+	if (owner != nullptr) return;
+
+	std::cout << "[Skill] owner unresolved: " << phase << " asset=" << assetId
+		<< " owner=" << ownerId
+		<< " resolved=0 (" << (inRange ? "slot is null" : "index out of range")
+		<< ") tableSize=" << skillObjectById_.size()
+		<< " -- VFX/SFX will play at world origin\n";
+}
+
+void Game::debugAuditObjectRegistry() const {
+	std::cout << "\n===== [Audit] object registry =====\n";
+
+	const i32t localId = player_ ? player_->getId() : -1;
+	std::cout << "localPlayerId=" << localId
+		<< " skillObjectById_.size=" << skillObjectById_.size()
+		<< " idMonsterMap_=" << idMonsterMap_.size()
+		<< " corpses_=" << corpses_.size()
+		<< " detachedNpcIds_=" << detachedNpcIds_.size() << '\n';
+
+	int issues = 0;
+
+	// ① 로컬 플레이어 슬롯. 여기가 어긋나면 자기 스킬의 VFX/SFX가 통째로 사라진다.
+	if (player_) {
+		const auto pid = static_cast<size_t>(player_->getId());
+		if (pid >= skillObjectById_.size()) {
+			std::cout << "  [PLAYER SLOT MISMATCH] id=" << pid
+				<< " >= tableSize=" << skillObjectById_.size() << " (never registered)\n";
+			++issues;
+		}
+		else if (skillObjectById_[pid] != player_.get()) {
+			std::cout << "  [PLAYER SLOT MISMATCH] id=" << pid
+				<< " slot=" << static_cast<const void*>(skillObjectById_[pid])
+				<< " expected=" << static_cast<const void*>(player_.get()) << '\n';
+			++issues;
+		}
+	}
+
+	// ② 서버 동기 컨테이너 전수 검사. 렌더는 되는데 id 맵에 없으면 이동·피격을
+	//    영영 못 받는 "유령"이다.
+	std::unordered_set<const Object*> seen;
+	auto auditPool = [&](const char* kindName, const auto& pool) {
+		for (const auto& sp : pool) {
+			const Object* obj = sp.get();
+			if (!obj) continue;
+			seen.insert(obj);
+
+			const auto id = static_cast<uint16>(obj->getId());
+			const auto it = idMonsterMap_.find(id);
+			const bool mapped = (it != idMonsterMap_.end() && it->second == obj);
+
+			if (!mapped) {
+				std::cout << "  [ORPHAN] " << kindName << " id=" << obj->getId()
+					<< " pos=(" << obj->pos().x() << ", " << obj->pos().y()
+					<< ", " << obj->pos().z() << ")"
+					<< " hp=" << obj->hp()
+					<< " renderObjId=" << obj->renderObjectId()
+					<< (it == idMonsterMap_.end() ? " (absent from idMonsterMap_)"
+					                              : " (idMonsterMap_ points elsewhere)")
+					<< '\n';
+				++issues;
+			}
+
+			const auto sid = static_cast<size_t>(obj->getId());
+			if (sid >= skillObjectById_.size() || skillObjectById_[sid] != obj) {
+				std::cout << "  [SKILL SLOT MISMATCH] " << kindName << " id=" << obj->getId()
+					<< " tableSize=" << skillObjectById_.size() << '\n';
+				++issues;
+			}
+
+			// STALE: 서버가 이 개체의 이동을 안 보낸 지 오래됐다 = 서버에선 hp<=0
+			// (enter 스냅샷에 사망 몬스터가 실려 온 경우가 대표적).
+			if (mapped) {
+				const auto seenAt = lastNpcMoveAt_.find(id);
+				const float ageSec = (seenAt == lastNpcMoveAt_.end())
+					? std::chrono::duration<float>(diagElapsed_).count()
+					: std::chrono::duration<float>(diagElapsed_ - seenAt->second).count();
+				if (ageSec > 5.f) {
+					std::cout << "  [STALE] " << kindName << " id=" << obj->getId()
+						<< " noMoveFor=" << ageSec << "s"
+						<< " hp=" << obj->hp()
+						<< (seenAt == lastNpcMoveAt_.end() ? " (never moved since spawn)" : "")
+						<< " pos=(" << obj->pos().x() << ", " << obj->pos().y()
+						<< ", " << obj->pos().z() << ")\n";
+					++issues;
+				}
+			}
+		}
+	};
+
+	auditPool("Goblin",   goblins_);
+	auditPool("Snake",    snakes_);
+	auditPool("Mushroom", mushrooms_);
+	auditPool("Bomber",   bombers_);
+	auditPool("Birdy",    birdys_);
+	auditPool("Slime",    slimes_);
+	auditPool("Treant",   treants_);
+	auditPool("Boss",     bosses_);
+
+	// ③ 역방향: 맵에는 있는데 어느 컨테이너에도 없는 항목(해제된 포인터일 수 있다).
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (seen.count(obj) == 0) {
+			std::cout << "  [DANGLING MAP ENTRY] id=" << id
+				<< " ptr=" << static_cast<const void*>(obj)
+				<< " (not in any typed container)\n";
+			++issues;
+		}
+	}
+
+	std::cout << "containers: goblins=" << goblins_.size()
+		<< " snakes=" << snakes_.size()
+		<< " mushrooms=" << mushrooms_.size()
+		<< " bombers=" << bombers_.size()
+		<< " birdys=" << birdys_.size()
+		<< " slimes=" << slimes_.size()
+		<< " treants=" << treants_.size()
+		<< " bosses=" << bosses_.size() << '\n';
+	std::cout << "===== [Audit] done: " << issues << " issue(s) =====\n\n";
+}
+
 void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
@@ -6016,6 +6280,9 @@ void Game::castSkillByName(std::string_view name) {
 	// Per-cast deterministic seed: used locally AND sent to the server
 	// (C_SkillStart) so server hitboxes / remote visuals match exactly.
 	const uint32 skillSeed = std::random_device{}();
+	// owner 해석 실패 = PlayVFX/PlaySound가 월드 원점에서 재생되고 로컬 히트박스가
+	// 캐스터에 붙지 않는다(= "피격은 되는데 VFX/SFX가 없다" 증상의 직접 원인).
+	debugLogSkillOwnerResolution("cast", asset->id, player_->getId());
 	skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_, skillSeed);
 	sendSkillStartPacket(asset->id, skillSeed);
 }
@@ -6283,6 +6550,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Isys" );
 	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) )
 		debugTeleportToArena( "Arena_Boss" );
+
+	// F12: 오브젝트 id 정합성 감사. 유령 몬스터를 목격한 즉시 눌러
+	// ORPHAN / STALE / SLOT MISMATCH 중 무엇인지 콘솔에서 확정한다.
+	if ( (keyboardStateCurr_[VK_F12] & 0x80) && !(keyboardStatePrev_[VK_F12] & 0x80) )
+		debugAuditObjectRegistry();
 
 	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
 	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {

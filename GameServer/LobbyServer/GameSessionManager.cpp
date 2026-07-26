@@ -23,5 +23,16 @@ int32 GameSessionManager::count() {
 	return static_cast<int32>( sessions_.size() );
 }
 
+bool GameSessionManager::bindAccount( int64 accountId, uint16 sessionId ) {
+	std::lock_guard lock( mutex_ );
+	return loginMap_.try_emplace( accountId, sessionId ).second;
+}
+
+void GameSessionManager::unbindAccount( int64 accountId ) {
+	std::lock_guard lock( mutex_ );
+	loginMap_.erase( accountId );
+}
+
 std::mutex GameSessionManager::mutex_;
 std::unordered_map<uint16, std::shared_ptr<GameSession>> GameSessionManager::sessions_;
+std::unordered_map<int64, uint16> GameSessionManager::loginMap_;

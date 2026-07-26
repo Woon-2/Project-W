@@ -259,21 +259,23 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 		.pDest = &modelIsys_
 	} );
 
-	//gfx.addRequestTextureLoad( RequestTextureLoad{
-	//	.name = "PlayerHpLine",
-	//	.texturePath = "../resources/UI/player_hp_line.dds",
-	//	.pDest = &playerHpLine_,
-	//	.pTexHashMap = &texHashMap_,
-	//	.needsUploadInfo = false
-	//} );
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PlayerHpLine",
+		.texturePath     = "../resources/UI/player_hp_line.dds",
+		.pDest           = &playerHpLine_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
 
-	//gfx.addRequestTextureLoad( RequestTextureLoad{
-	//	.name = "PlayerHpFrame",
-	//	.texturePath = "../resources/UI/player_hp_frame.dds",
-	//	.pDest = &playerHpFrame_,
-	//	.pTexHashMap = &texHashMap_,
-	//	.needsUploadInfo = false
-	//} );
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PlayerHpFrame",
+		.texturePath     = "../resources/UI/player_hp_frame.dds",
+		.pDest           = &playerHpFrame_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
 
 	// Terrain is now streamed by TerrainChunkManager (chunks_index.bin), not loaded here.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -305,9 +307,18 @@ void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& confi
 	// Combat feedback UI: damage-number digit atlas + kill-count skull icon.
 	// Clamp sampler avoids UV bleed across atlas cell borders.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
-		.name            = "PlayerHpHeart",
-		.texturePath     = "../resources/UI/hearts.dds",
-		.pDest           = &playerHpHeart_,
+		.name            = "PlayerWeaponIconBackground",
+		.texturePath     = "../resources/UI/player_weapon_icon_background.dds",
+		.pDest           = &playerWeaponIconBackground_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PlayerWeaponIconFrame",
+		.texturePath     = "../resources/UI/player_weapon_icon_frame.dds",
+		.pDest           = &playerWeaponIconFrame_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

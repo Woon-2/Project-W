@@ -25,6 +25,13 @@ public:
 private:
 	ccqueue<Job*> queue_;
 	std::atomic_int32_t jobCount_;
+
+	// Concurrency-invariant probe. A Room assumes its JobQueue is executed by
+	// exactly one thread at a time (that is why Room state needs no locks). If a Room
+	// is destroyed while its own execute() loop is still on the stack, the pooled
+	// memory can be reused by a new Room and the stale loop then corrupts the new
+	// jobCount_, which breaks that invariant. These counters make it observable.
+	std::atomic_int32_t executing_{ 0 };
 };
 
 #endif // job_queue_hpp

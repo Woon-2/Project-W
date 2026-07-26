@@ -329,21 +329,29 @@ void Ragdoll::seedFromFinalXforms(const std::vector<mu::Mat4x4>& finalXforms,
 
 void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
                                  const Skeleton& skel,
-                                 mu::Mat4x4 objectWorldMat) const
+                                 mu::Mat4x4 objectWorldMat,
+                                 float tPhysic) const
 {
     if (!skel.bones) return;
+    // The caller's accumulator ratio can exceed 1 when the physics loop hits its
+    // per-frame step cap; clamp so slerp/lerp never extrapolate.
+    const float t = std::clamp(tPhysic, 0.f, 1.f);
+
     for (const RagdollBone& rb : bones_) {
         if (rb.boneIdx < 0 || rb.boneIdx >= static_cast<int>(skel.bones->size())) continue;
         if (rb.boneIdx >= static_cast<int>(finalXforms.size())) continue;
         const Bone& bone = (*skel.bones)[rb.boneIdx];
 
+        const mu::Vec3  bodyPos    = PhysicsWorld::interpolatePos(*rb.body, t);
+        const mu::NQuat bodyOrient = PhysicsWorld::interpolateOrient(*rb.body, t);
+
         const mu::Vec3 boneOriginWorld =
-            rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
+            mu::Vec3(bodyPos - bodyOrient.rotate(rb.capsuleOffset));
         // Inject model scale so the skinned mesh stays scaled: without it boneWorldMat is rigid
         // and objectWorldMat's scale cancels out in finalXform * world, snapping the mesh back to
         // its unscaled size on ragdoll activation.
         const mu::Mat4x4 boneWorldMat =
-            mu::Mat4x4(mu::scale(modelScale_)) * makeRigidMat(boneOriginWorld, rb.body->orient());
+            mu::Mat4x4(mu::scale(modelScale_)) * makeRigidMat(boneOriginWorld, bodyOrient);
 
         finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / objectWorldMat);
     }
@@ -445,7 +453,69 @@ void Ragdoll::activate(PhysicsWorld& world)
 
     for (auto& body : bodies_)
         body->setMotionType(MotionType::Dynamic);
+
+    // Ragdoll-only gravity. Applied here rather than in build() because it is only
+    // meaningful once the bodies are Dynamic (Kinematic bodies ignore gravity).
+    for (auto& body : bodies_)
+        body->setGravityScale(kGravityScale);
+
     active_ = true;
+}
+
+// ---------------------------------------------------------------------------
+// Ragdoll::applyDeathKick
+// ---------------------------------------------------------------------------
+
+void Ragdoll::applyDeathKick(mu::Vec3 initVel)
+{
+    if (bones_.empty() || !bones_[0].body) return;
+
+    // Toppling axis: horizontal, perpendicular to the knock-back direction, so the
+    // body falls AWAY from whatever hit it. With no knock-back, pick a random
+    // horizontal axis so repeated kills do not all collapse identically.
+    const bool     hasVel = initVel.len2() > 0.01f;
+    const mu::Vec3 velDir = hasVel ? mu::Vec3(mu::normalize(initVel)) : mu::Vec3{};
+    mu::Vec3 axis = hasVel ? mu::Vec3(mu::cross(mu::Vec3(0.f, 1.f, 0.f), velDir))
+                           : mu::Vec3(rand(-1.f, 1.f), 0.f, rand(-1.f, 1.f));
+    axis = safeNormalizeOr(axis, mu::Vec3(1.f, 0.f, 0.f));
+
+    // Pivot: the ground contact under the root body. Rotating about the feet is what
+    // makes the character topple instead of spinning about its waist.
+    mu::Vec3 pivot = bones_[0].body->pos();
+    for (const RagdollBone& rb : bones_)
+        if (rb.body) pivot = mu::Vec3(pivot.x(), std::min(pivot.y(), rb.body->pos().y()), pivot.z());
+
+    const mu::Vec3 omega = mu::Vec3(axis * kTopplingOmega);
+
+    for (const RagdollBone& rb : bones_) {
+        if (!rb.body) continue;
+        // One rigid velocity field over the whole assembly: every joint sees zero
+        // relative velocity, so this cannot blow the constraint chain apart.
+        const mu::Vec3 r = mu::Vec3(rb.body->pos() - pivot);
+        rb.body->setLinearVel(mu::Vec3(initVel + mu::cross(omega, r)));
+        rb.body->setOmega(omega);
+    }
+
+    // Per-bone noise: direction biased toward the death velocity, applied at a random
+    // point INSIDE the bone box rather than at its centre of mass, so it contributes a
+    // little spin. (Applying it at body->pos() produces pure translation and no torque.)
+    constexpr float kNoiseBias = 0.6f;
+    for (const RagdollBone& rb : bones_) {
+        if (rb.noiseImpulse <= 0.f || !rb.body) continue;
+
+        const mu::Vec3 rnd = safeNormalizeOr(
+            mu::Vec3(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f)),
+            mu::Vec3(0.f, 0.f, 1.f));
+        const mu::Vec3 dir = safeNormalizeOr(
+            mu::Vec3(velDir * kNoiseBias + rnd * (1.f - kNoiseBias)),
+            mu::Vec3(0.f, 0.f, 1.f));
+
+        const mu::Vec3 localOff(rand(-1.f, 1.f) * rb.halfExtents.x(),
+                                rand(-1.f, 1.f) * rb.halfExtents.y(),
+                                rand(-1.f, 1.f) * rb.halfExtents.z());
+        rb.body->applyImpulse(mu::Vec3(dir * rb.noiseImpulse),
+                              mu::Vec3(rb.body->pos() + rb.body->orient().rotate(localOff)));
+    }
 }
 
 void Ragdoll::deactivate(PhysicsWorld& world)

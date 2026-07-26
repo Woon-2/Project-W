@@ -42,7 +42,7 @@ repeat S:
 - **`Room`**(`Room.{hpp,cpp}`): `init(const Level*)` **시그니처 불변**.
   - `worldTerrain_ = &levelData->terrainChunks`. `goblins_` 풀 = Σ(Goblin targetCount), `strongholds_` 벡터. **reserve 후** 등록(주소 안정 불변식).
   - 거점별: NpcGroup 생성, 고블린 풀 구간 생성(`setupGoblin` + 랜덤 위치+Y스냅 + spawnPos/activityZone/groupId), `Stronghold` 생성(`setupStronghold`: placeholder 모델/Faction::Monsters/canReceiveDamage/Static).
-  - `updateGoblinAI`: 고블린 update 후 거점 루프 — `updateStructure`(→`S_StrongholdState`), `updatePopulation`(→부활 id별 `S_NpcRespawn`). `result.respawned` 경로 제거.
+  - `updateMonsterAI`: 몬스터 update 후 거점 루프 — `updateStructure`(→`S_StrongholdState`), `updatePopulation`(→부활 id별 `S_NpcRespawn`). `result.respawned` 경로 제거.
   - `enter`: ObjectInfo 리스트에 거점 포함(type=Stronghold). 신규 `groundHeightAtWorld`/`randomSpawnInDisc`.
 - **`Level`/`AssetManager`**: Level의 `goblins`/`goblinSpawners`/`GoblinSpawnerInfo`/`importGoblinSpawner`/`GoblinSpawner` 노드 제거. Level은 `const AssetManager* assetManager` backref 1개만 보유(`loadLevelFromFile`이 설정) → Room이 이를 통해 `modelGoblin()`/`goblinAnimations()`/`modelCube()` 접근(placeholder=cube). Room.cpp는 `AssetManager.hpp` include.
 

@@ -77,7 +77,7 @@ public:
 	// 대기실 3D 배경과 인게임이 공유하며, stageVisualReady_로 중복 init을 막는다.
 	void setupStageVisual();
 
-	void prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds);
+	void prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster);
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void setParticle();
 	void setupGround(const ObjectInfo& groundInfo);
@@ -165,6 +165,33 @@ private:
 	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
 	void debugTeleportToArena(const std::string& tag);
 
+	// ── 스킬 오브젝트 조회 테이블 등록 ────────────────────────────────────────────────
+	// skillObjectById_는 **서버 오브젝트 id로 직접 색인하는 희소 배열**이다. 서버는 단일
+	// IdPool에서 세션·몬스터·거점 id를 모두 발급하고 룸 하나가 수백 개(현재 레벨 242개)를
+	// 삼키므로, id는 세션이 거듭될수록 커진다. 초기 크기(256)는 상한이 아니라 힌트일 뿐이며
+	// **모든 등록은 반드시 이 헬퍼를 거쳐야 한다** — 과거 setupPlayer만 바운드 검사 없이
+	// 직접 쓰다가, 플레이어 id가 256을 넘는 순간 힙 밖에 쓰고 슬롯이 null로 남아 자기 스킬의
+	// owner 해석이 실패했다(VFX/SFX가 월드 원점에서 재생). RoomServer/docs/objectIdLifecycle.md
+	// 주의: 배열이 커지면 data()가 재할당되므로, 등록 후 스킬 시스템에 진입하기 전에
+	// refreshSkillCtx()로 skillCtx_의 포인터를 다시 맞춰야 한다.
+	void registerSkillObject(i32t id, Object* obj);
+	void unregisterSkillObject(i32t id);
+
+	// ── 오브젝트 id 정합성 감시 (RoomServer/docs/objectIdLifecycle.md) ────────────────
+	// 스킬 시전 시 owner가 skillObjectById_에서 해석되는지 1줄로 남긴다. resolved=0이면
+	// PlayVFX/PlaySound가 월드 원점에서 재생되고 로컬 히트박스가 캐스터에 붙지 않는다
+	// (= "몬스터는 피격되는데 VFX/SFX가 안 나온다" 증상의 직접 원인).
+	void debugLogSkillOwnerResolution(const char* phase, uint32 assetId, i32t ownerId) const;
+	// F12: 서버 동기 컨테이너 ↔ id 맵 ↔ 스킬 조회 테이블의 정합성을 전수 감사한다.
+	// 유령 몬스터를 목격한 즉시 눌러 그 개체가 ORPHAN / STALE / SLOT MISMATCH 중
+	// 무엇인지 확정하는 도구(원인 분기표는 계획 파일 "재현·판독 절차" 참조).
+	void debugAuditObjectRegistry() const;
+	// npc id -> 마지막 S_NpcMoveBatch 수신 시각(클라 경과 시간). 감사에서 STALE
+	// (서버가 이동을 안 보내는 = 서버에서 이미 죽은) 몬스터를 가려내는 데 쓴다.
+	// Object에 멤버를 추가하지 않고 Game이 들고 있는다(게임 레이어 국소 상태).
+	std::unordered_map<uint16, Milliseconds> lastNpcMoveAt_{};
+	Milliseconds                             diagElapsed_{ 0.f };
+
 	// [임시 디버그] F8 토글로 켜는 로컬 플레이어 이동 속도 배율(1x↔5x). 서버 C_Move(20Hz)×7m/packet
 	// 클램프 한도(≈140m/s) 안이라 온라인에서도 러버밴딩 없음. 제거 시 이 멤버 + processInput의 적용부/F8 핸들러만 삭제.
 	float debugSpeedMultiplier_{ 1.f };
@@ -186,7 +213,7 @@ private:
 	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
-	void registerInGamePartyPlayer(uint16 playerId);
+	void registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname = nullptr);
 	void unregisterInGamePartyPlayer(uint16 playerId);
 	std::wstring partyDisplayName(uint16 playerId) const;
 	void refreshSkillCtx();
@@ -241,7 +268,8 @@ private:
 	// 창모드/전체화면 전환 + 윈도우/스왑체인/GBuffer/HiZ 재생성 + UIManager 재설정 + 로비/설정 UI 재빌드.
 	void applyDisplaySettings();
 
-	// 로비 mock 액션 (script.js 프로토타입 이식).
+	// 로비 액션. 인증(로그인/회원가입)은 요청만 보내고, 상태 전환은 LobbyServer 응답
+	// (onLoginResult/onRegisterResult)에서 수행한다.
 	void lobbyLogin(const std::wstring& id, const std::wstring& password);
 	void lobbyRegister(const std::wstring& id, const std::wstring& password,
 		const std::wstring& nickname);
@@ -253,16 +281,18 @@ private:
 
 public:
 	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
+	void onRegisterResult(AccountResult result);
+	void onLoginResult(AccountResult result, int64 accountId, const std::wstring& nickname);
 	void onLobbyCreated(const std::string& code, uint16 myId);
 	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos);
 	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
 	void onLobbyPlayerLeft(uint16 sessionId);
 	void onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType);
-	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
+	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket);
 
 private:
 	// sessionId → 표시 이름(본인은 "나", 그 외 "Player_<id>").
-	std::wstring lobbyDisplayName(uint16 sessionId) const;
+	std::wstring lobbyDisplayName(uint16 sessionId, const wchar_t* nickname) const;
 
 	void cullObjects();
 	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
@@ -456,10 +486,10 @@ private:
 
 	// --- Energy orb death FX: client-authored corpse pipeline ---
 	// On death a monster is DETACHED from server sync into a corpse (gets a fresh
-	// RenderObjectId). The corpse stays a ragdoll for kCorpseRagdollSeconds, then
-	// dissolves into energy orbs, and is only removed once all its orbs are absorbed.
-	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
-	// is never cut short by a respawn packet.
+	// RenderObjectId). The corpse stays a ragdoll for kRagdollSeconds (see
+	// updateCorpses), then dissolves into energy orbs, and is only removed once all its
+	// orbs are absorbed. Server respawns borrow a fresh object from a per-kind pool, so
+	// corpse animation is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
 
 	// Path guidance (cosmetic, client-only): flowing HDR ribbon + guiding wisp.
@@ -568,8 +598,8 @@ private:
 	Inventory        inventory_{};
 	UI::InventoryPanel inventoryPanel_{};
 	bool             inventoryUiReady_ = false;
-	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
-	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
+	UI::Image*       playerWeaponBadge_ = nullptr;  // owned by uiManager_
+	UI::Image*       playerWeaponIcon_ = nullptr;   // owned by playerWeaponBadge_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
 	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
@@ -646,8 +676,8 @@ private:
 		UI::ProgressBar* hpBar;        // owned by uiManager_
 		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
 		UI::UIElement*   partyRoot = nullptr;       // owned by uiManager_
-		UI::Image*       partyHeart = nullptr;      // owned by partyRoot
-		UI::Image*       partyWeaponIcon = nullptr; // owned by partyHeart
+		UI::Image*       partyWeaponBadge = nullptr; // owned by partyRoot
+		UI::Image*       partyWeaponIcon = nullptr;  // owned by partyWeaponBadge
 		UI::Label*       partyNameLabel = nullptr;  // owned by partyRoot
 		UI::ProgressBar* partyHpBar = nullptr;      // owned by partyRoot
 	};
@@ -718,9 +748,13 @@ private:
 
 	Scene      scene_      = Scene::Lobby;
 	LobbyState lobbyState_ = LobbyState::MainMenu;
-	bool       isAuthenticated_ = false;
-	std::unordered_set<std::wstring> localRegisteredIds_{};
-	std::unordered_set<std::wstring> localRegisteredNicknames_{};
+	// 계정 상태. 전부 S_Login/S_Register 수신 시점에만 갱신된다(메인 스레드).
+	bool         isAuthenticated_ = false;
+	bool         authPending_     = false;   // 응답 대기 중 재전송 차단
+	int64        accountId_       = 0;
+	std::wstring myNickname_{};
+	// 가입 성공 응답에 loginId가 없어, 로그인 칸을 채워주려면 보낸 값을 들고 있어야 한다.
+	std::wstring pendingRegisterId_{};
 
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
@@ -763,6 +797,9 @@ private:
 	std::string handoffIp_{};
 	uint16      handoffPort_ = 0;
 	std::string handoffCode_{};
+	// Signed by the lobby server; relayed verbatim in C_Enter. The room server trusts
+	// the account id and lobby code inside it, so it must not be modified here.
+	EntryTicket handoffTicket_{};
 
 	// 로비 UI 텍스처/위젯/설정 상태는 lobbyUI_ · settingsPanel_ · settings_로 이동했다.
 	// 대기실 3D 준비(stageVisualReady_) 후, 로딩 오버레이 뒤에서 실제로 렌더된 프레임 수.

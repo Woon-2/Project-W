@@ -112,6 +112,43 @@ grep -rn "\[SAFETY" client/
 각 항목을 끈 뒤 StandAlone에서 **K**로 해당 캐릭터를 래그돌화해 안정성(튐/깨짐) 관찰.
 (K 토글은 `Game::toggleCasterRagdoll`, 중력 토글은 Z.)
 
+## 안정성 ↔ 감쇠는 이제 독립 (2026-07-26)
+`jointSolverExtraIterations_ = 48`(뱀처럼 깊은 체인의 수렴용)이 **관절 감쇠를 13배로 키우는**
+부작용이 있었다 — 감쇠가 solver 반복마다 적용됐기 때문. 지금은 감쇠가 `prepare()`에서 서브스텝당
+1회, 초당 기준(`Constraint::defaultJointDampingRate`)으로 적용되므로 **반복 횟수는 순수 수렴
+파라미터**다. 상세: `physicsArchitecture.md` "Per-Constraint Damping".
+
+→ 실무 함의: 어떤 리그가 불안정하면 **감쇠를 올리기 전에 `jointSolverExtraIterations_`를 먼저
+올릴 것.** 감쇠를 올리는 것은 붕괴 표현을 직접 깎는다(그게 이 버그의 증상이었다).
+
+## 래그돌 연출 노브 (전부 컴파일 타임 상수)
+
+시연용 F10 런타임 튜너를 잠시 뒀다가 값 확정 후 **디버그 조작·로그는 전부 제거**했다
+(2026-07-26). 조정은 아래 상수를 고쳐 재빌드한다.
+
+| 노브 | 현재 값 | 위치 | 올리면 |
+|---|---|---|---|
+| `Ragdoll::kGravityScale` | **1.35** | `ragdoll.hpp` | 전체가 빨리 주저앉음(과하면 "가벼운 인형"처럼 툭 떨어짐) |
+| `Ragdoll::kTopplingOmega` | 2.5 rad/s | `ragdoll.hpp` | 넘어지는 방향성이 강해짐. 머리 높이 h에서 초기 속도 ≈ ω·h |
+| `kJointDampingRate` | 2.5 (1/s) | `jointConstraint.cpp` | **내리면** 사지가 더 흐물거림. 올리면 이 문서 위 §의 굳은 마네킹으로 회귀 |
+| `kRagdollSeconds` | 2.0s | `onlineGame.cpp` `updateCorpses` | 래그돌 노출 시간. 늘리면 오브 구간을 같은 양만큼 줄여 총 시간 유지 |
+| `kFormingTime` | 0.90s | `energyOrbSystem.cpp` | 오브 정지 구간. **체감 지연을 지배** — 오브 구간 조절은 여기부터 |
+| `kNoiseBias` / `noiseImpulse` | 0.6 / 에셋 | `ragdoll.cpp` / Unity | 뼈별 랜덤 kick의 방향 편향과 세기 |
+
+시간 예산(총 ≈3.6s 보존)은 `gameArchitecture.md` "연출 시간 예산" 표 참조.
+
+## "천천히 무너진다"의 남은 레버
+관절 감쇠를 정상화한 뒤에도 붕괴가 둔하면 이 순서로 본다:
+1. 위 표의 `kJointDampingRate`↓ / `kGravityScale`↑ 를 각각 A/B.
+2. **에셋 `angularDamping = 2.0`** (전 모델, Unity `angularDrag` 기본 0.05의 40배, τ ≈ 0.5s).
+   `BoneBoxDef`로 익스포트되는 값이라 **Unity Inspector 수정 → 전 모델 재추출**이 필요하다.
+   코드에서 임시 평가만 하려면 `Ragdoll::build()`의 `setAngularDamping(bd.angularDamping)`에
+   배율을 곱해 보면 된다.
+3. **[SAFETY 4] 관성 half-extent 바닥값 5%** — 위 §의 튜닝 메모대로 1~2%로 낮출 수 있다.
+   관성이 부풀면 각가속도가 작아져 사지가 묵직해진다. 6종 중 유일하게 "둔함"에 직접 기여한다.
+4. `restitution`이 `ContactConstraint`에서 **미사용(dead)** — 모든 접촉이 완전 비탄성이라 시체가
+   전혀 튀지 않는다. 손대려면 접촉 솔버 변경이라 별개 작업.
+
 ## 정공법(엔진 밖)
 안전장치는 안전망일 뿐, 근본은 **추출 데이터 품질**이다:
 - ragdoll body 크기/스케일이 BV·메시와 정합되게 추출(이번 4× 버그처럼).

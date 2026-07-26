@@ -55,7 +55,7 @@
 ```
 Room::update() (60 Hz 고정)
   1. physicsWorld_.step()
-  2. updateGoblinAI(dt)
+  2. updateMonsterAI(dt)
   3. updatePlayerAnimations(dt)
   4. updateSkillSystem(dt)           ← 여기서 스킬 시스템 실행
      └─ skillSystem_.update(dt, ctx)
@@ -67,6 +67,11 @@ Room::update() (60 Hz 고정)
      └─ HP 갱신 + S_SkillHit 브로드캐스트
   6. (선택) S_DebugHitbox 브로드캐스트 — kBroadcastDebugHitboxes 플래그, 기본 off
 ```
+
+> **"60 Hz 고정"은 케이던스에 의존한다.** `inst.elapsed += dt`(고정 16.667ms)로 타임라인을 진행하므로,
+> 틱이 실제로 60Hz로 오지 않으면 **스킬 타임라인 전체가 실시간에서 이탈**한다. 2026-07-26 이전에는
+> 상대 지연 재예약 때문에 서버가 약 50Hz로 돌았고, 히트박스가 클라 예측보다 최대 300ms 늦게 생성돼
+> 피격 판정이 어긋났다. 틱 예약 방식을 바꿀 때는 반드시 `docs/roomTickCadence.md`를 확인할 것.
 
 ---
 
@@ -103,6 +108,14 @@ skillSystem_.startSkill(assetId, ownerId, ctx, Milliseconds{elapsedMs});
 ```
 
 `startSkill()`의 `initialElapsed` 오버로드는 스킬 인스턴스의 `elapsed`를 이미 진행된 시간으로 초기화해, 서버의 히트박스 타이밍이 클라이언트와 동기화되도록 한다.
+
+> **⚠ 미해결 리스크 — fast-forward 구간의 판정 공백**
+> `startSkill()`은 `[0, initialElapsed]`(최대 250ms) 구간의 타임라인 이벤트를 **충돌 검사 없이** 즉시
+> 디스패치한다(`checkHitboxCollisions`는 `update()`에서만 실행). 따라서 히트박스의 Spawn과 Destroy가
+> 모두 이 구간에 들어가는 **짧은 히트 윈도우는 서버에서 판정이 0회 = 확정 미스**가 된다.
+> 로컬 테스트에서는 실측 fast-forward가 6~13ms에 불과해 발현하지 않았으나, 실측 핑 환경에서 재검증이
+> 필요하다. 해결안(fast-forward 중 스폰된 히트박스에 1틱 유예 부여 / 구간 스텝 시뮬레이션):
+> `docs/roomTickCadence.md` §7-4.
 
 ---
 
@@ -222,11 +235,20 @@ if constexpr (kBroadcastDebugHitboxes) {   // Room.cpp, 기본 false
 }
 ```
 
-클라이언트는 `S_DebugHitbox`를 수신하면 `debugBVView_`에 100 ms 유효 기간으로 OBB를 표시한다.
+클라이언트는 `S_DebugHitbox`를 수신하면 `debugBVView_`에 100 ms 유효 기간으로 **빨강** OBB를 표시한다.
+
+**클라 예측 히트박스와 짝으로 쓴다** — `client/online/onlineGame.cpp`의 `kDebugSkillHitboxOverlay`
+(기본 `false`)를 함께 켜면 `SkillSystem::renderDebugHitboxes`가 클라 예측 히트박스를 **초록**으로
+같은 뷰에 렌더한다. 두 색의 위치·생성 타이밍 차이가 곧 클/서 불일치의 정체다:
+
+| 관측 | 해석 |
+|---|---|
+| 위치는 겹치는데 **생성 시점**이 어긋남 | 클럭/케이던스 문제 (`docs/roomTickCadence.md`) |
+| 생성 시점은 같은데 **위치/자세**가 어긋남 | 본 포즈(애니 phase) 또는 타겟 위치 동기화 문제 |
 
 > **주의:** 이 브로드캐스트는 매 프레임 OBB 벡터 할당 + 직렬화 + 전 클라이언트 fan-out이라
 > 순수 오버헤드다. `Room.cpp`의 `kBroadcastDebugHitboxes`(기본 `false`)로 게이팅한다.
-> 시각화가 필요할 때만 `true`로 바꿔 빌드한다.
+> 시각화가 필요할 때만 `true`로 바꿔 빌드한다. **프로덕션에서는 반드시 off.**
 
 ---
 

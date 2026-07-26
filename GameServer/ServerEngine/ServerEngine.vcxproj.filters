@@ -43,6 +43,9 @@
     <Filter Include="utils\Global">
       <UniqueIdentifier>{949455c9-b918-41a7-a67f-9c849f12a739}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Auth">
+      <UniqueIdentifier>{a511eb11-a1ef-4ee3-83de-21d9c3260b11}</UniqueIdentifier>
+    </Filter>
     <Filter Include="DB">
       <UniqueIdentifier>{03d2debd-830d-426f-8de1-23c89ff802ad}</UniqueIdentifier>
     </Filter>
@@ -126,6 +129,21 @@
     <ClInclude Include="DBConnectionPool.hpp">
       <Filter>DB</Filter>
     </ClInclude>
+    <ClInclude Include="DBBinder.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DBExecutor.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="PasswordHash.hpp">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="HmacSha256.hpp">
+      <Filter>Auth</Filter>
+    </ClInclude>
+    <ClInclude Include="EntryTicket.hpp">
+      <Filter>Auth</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sepch.cpp">
@@ -163,6 +181,18 @@
     </ClCompile>
     <ClCompile Include="DBConnectionPool.cpp">
       <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="DBExecutor.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="PasswordHash.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="HmacSha256.cpp">
+      <Filter>Auth</Filter>
+    </ClCompile>
+    <ClCompile Include="EntryTicket.cpp">
+      <Filter>Auth</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

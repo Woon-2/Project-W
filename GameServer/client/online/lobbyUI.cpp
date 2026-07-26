@@ -493,8 +493,12 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     makeLabel(quitButton, L"종료", 0.f, 13.f, 24.f, smallButtonW, 38.f,
         ink, UI::TextHAlign::Center);
 
-    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, bottomMenuButtonY + smallButtonH + 8.f,
-        19.f, contentW, 30.f,
+    // Keep validation/status messages between the main form and the utility
+    // buttons. Placing them below the utility buttons makes the text sit on
+    // the panel edge and overlap the settings/quit row at runtime.
+    constexpr float mainMenuMessageY = 346.f;
+    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, mainMenuMessageY,
+        19.f, contentW, 28.f,
         { 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
     const float roomRowH = 128.f;
@@ -508,14 +512,14 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     applyRect(roomSelectionRoot_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
         contentX, 24.f, contentW, roomRowY + roomRowH);
 
-    // Temporary local profile presentation. The framed square and placeholder
-    // name reserve the final server-backed portrait/nickname area.
+    // The nickname comes from the S_Login response through ViewState; the framed
+    // square is still a placeholder reserving the future portrait area.
     constexpr float profileBoxSize = 116.f;
     profileImageBox_ = stylePanel(makeSolid(roomSelectionRoot_, "profileImageBox",
         0.f, 0.f, profileBoxSize, profileBoxSize, surfaceSoft, 1));
     makeLabel(roomSelectionRoot_, L"닉네임", 140.f, 16.f, 18.f,
         contentW - 140.f, 26.f, muted);
-    profileNicknameLabel_ = makeLabel(roomSelectionRoot_, L"PLAYER",
+    profileNicknameLabel_ = makeLabel(roomSelectionRoot_, L"",
         140.f, 44.f, 36.f, contentW - 140.f, 54.f, ink);
 
     // Room-code input + join (joinRoomForm in the prototype), paired with the
@@ -1141,8 +1145,7 @@ void LobbyUI::refresh(const ViewState& s) {
     if (roomSelectionRoot_) roomSelectionRoot_->visible = inMain && s.isAuthenticated;
     if (signupButton_) signupButton_->visible = inMain && !s.isAuthenticated;
     if (profileNicknameLabel_) {
-        profileNicknameLabel_->setText(
-            s.nickname.empty() ? std::wstring(L"PLAYER") : s.nickname);
+        profileNicknameLabel_->setText(s.nickname);
     }
 
     if (!s.inLobbyScene || !inMain || s.isAuthenticated) {

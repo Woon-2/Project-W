@@ -70,6 +70,11 @@ enum class PacketType : uint16 {
 	C_TimeSync,
 	S_TimeSync,
 
+	// Append-only: account system (register/login).
+	C_Register,
+	S_Register,
+	C_Login,
+	S_Login,
 	// Append-only: server-authoritative tactical boss dialogue presentation.
 	S_TacticalDialogue,
 
@@ -119,6 +124,28 @@ enum class PlayerWeaponType : uint8 {
 	CrystalWand,
 	HeavyArrow,
 };
+
+// Append-only (서수가 클라·서버 공유 wire 값이므로 중간 삽입 금지).
+enum class AccountResult : uint8 {
+	Ok,
+	InvalidInput,        // 빈 값이거나 허용 길이 초과 등 형식 오류
+	DuplicateId,         // 가입: 이미 존재하는 ID
+	NoSuchAccount,       // 로그인: 없는 ID
+	WrongPassword,       // 로그인: 비밀번호 불일치
+	AlreadyLoggedIn,     // 로그인: 이미 접속 중인 계정
+	DbError,             // 서버 내부 오류 (클라이언트는 "잠시 후 다시 시도" 안내)
+	DuplicateNickname,   // 가입: 이미 사용 중인 닉네임. ID·닉네임 둘 다 중복이면 DuplicateId를 먼저 응답한다
+};
+
+// 계정 문자열 최대 크기(널 종료 포함). 클라 입력 UI와 DB 스키마(NVARCHAR)가 이 값에 맞춘다.
+constexpr int32 kLoginIdMax = 24;     // ASCII
+constexpr int32 kPasswordMax = 32;    // ASCII
+constexpr int32 kNicknameMax = 16;    // wchar_t — 한글 지원
+
+// 로비→룸 입장 티켓. 로비서버와 룸서버 사이에는 소켓이 없어 핸드오프를 클라가 중계하므로,
+// 계정 정보를 HMAC-SHA256으로 서명해 위조를 막는다. 상세는 ServerEngine/docs/entryTicket.md.
+constexpr int32  kEntryTicketMacSize = 32;   // HMAC-SHA256 출력 길이
+constexpr uint16 kEntryTicketVersion = 1;    // payload 레이아웃 버전(불일치 시 룸서버가 거부)
 
 enum class TacticalDialogueId : uint8 {
 	HobgoblinTactic,
@@ -174,9 +201,30 @@ constexpr int32 kPlayerMaxHp = 5000;
 
 #pragma pack(push, 1)
 
+// MAC은 이 구조체의 raw 바이트 이미지 위에서 계산된다. 따라서
+//   (1) 반드시 pack(1) 영역 안에 있어야 하고(패딩이 생기면 MAC이 비결정적),
+//   (2) 발급 시 반드시 값 초기화(EntryTicket t{})해야 한다.
+//       nickname 뒷부분이나 reserved에 쓰레기 바이트가 남으면 검증이 무작위로 실패한다.
+struct EntryTicketPayload {
+	uint16  version;                  // kEntryTicketVersion
+	int64   accountId;
+	wchar_t nickname[kNicknameMax];   // 널 종료. 남는 바이트는 반드시 0
+	char    lobbyCode[7];             // 널 종료 6자리. 룸 배정의 권위 출처
+	uint8   reserved;                 // 항상 0
+	int64   issuedAtUtcMs;            // system_clock UTC epoch ms
+	int64   expiresAtUtcMs;
+	uint64  nonce;                    // 발급마다 BCryptGenRandom
+};
+
+struct EntryTicket {
+	EntryTicketPayload payload;
+	byte               mac[kEntryTicketMacSize];   // HMAC-SHA256(secret, payload 전체 바이트)
+};
+
 struct CEnterPacket : public PacketHeader {
-	char lobbyCode[7];   // 로비에서 받은 방 코드(6자리 영숫자 + null). RoomServer가 방 그룹화에 사용.
-	PlayerWeaponType weaponType;
+	// 방 코드는 티켓 안에만 있다. 바깥에 사본을 두면 "서버가 어느 쪽을 믿어야 하나" 함정이 생긴다.
+	EntryTicket      ticket;
+	PlayerWeaponType weaponType;   // 티켓에 묶지 않는다(치팅 가치가 없고 로비에서 이미 클라 선택)
 };
 
 struct PlayerInfo {
@@ -188,7 +236,15 @@ struct PlayerInfo {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
-	// 추후에 player 고유 정보 추가 필요
+	wchar_t nickname[kNicknameMax];   // 룸서버가 입장 티켓에서 확정한 계정 닉네임
+};
+
+// S_Enter에서 "이미 방에 있던" 플레이어들의 닉네임만 따로 나른다.
+// ObjectInfo에 넣지 않는 이유: 그 구조체는 NPC·구조물 수백 개가 공유하므로
+// 32바이트를 더하면 S_Enter와 S_NpcSpawnBatch가 통째로 무거워진다.
+struct PlayerNameInfo {
+	uint16  playerId;
+	wchar_t nickname[kNicknameMax];
 };
 
 struct ObjectInfo {
@@ -209,11 +265,21 @@ struct SEnterPacket : public PacketHeader {
 	uint16 objsOffset;	// objectInfo 배열의 시작 위치
 	uint16 objCnt;
 
+	uint16 namesOffset;	// PlayerNameInfo 배열의 시작 위치
+	uint8  nameCnt;		// 이미 방에 있던 플레이어 수
+
 	using ObjectList = DataList<ObjectInfo>;
 
 	ObjectList getObjectList() {
 		byte* dataStart = reinterpret_cast<byte*>(this) + objsOffset;
 		return ObjectList(reinterpret_cast<ObjectInfo*>(dataStart), objCnt);
+	}
+
+	using NameList = DataList<PlayerNameInfo>;
+
+	NameList getNameList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + namesOffset;
+		return NameList(reinterpret_cast<PlayerNameInfo*>(dataStart), nameCnt);
 	}
 };
 
@@ -478,6 +544,7 @@ struct SDebugHitboxPacket : public PacketHeader {
 struct LobbyPlayerInfo {
 	uint16 sessionId;
 	PlayerWeaponType weaponType;
+	wchar_t nickname[kNicknameMax];   // 로그인으로 확정된 계정 닉네임
 };
 
 struct SCreateRoomPacket : public PacketHeader {
@@ -521,10 +588,13 @@ struct SLobbyWeaponSelectedPacket : public PacketHeader {
 	PlayerWeaponType weaponType;
 };
 
+// 수신자마다 티켓이 다르므로 방 전체에 같은 버퍼를 브로드캐스트할 수 없다.
+// LobbyRoom::startGame이 플레이어별로 만들어 보낸다.
 struct SGameStartPacket : public PacketHeader {
-	char   roomServerIp[16];
-	uint16 roomServerPort;
-	char   lobbyCode[7];
+	char        roomServerIp[16];
+	uint16      roomServerPort;
+	char        lobbyCode[7];   // 클라 로그/UI용. 권위 사본은 ticket.payload.lobbyCode
+	EntryTicket ticket;
 };
 
 // Four-timestamp clock synchronization. The client owns t0/t3 and the room
@@ -538,6 +608,32 @@ struct STimeSyncPacket : public PacketHeader {
 	uint64 clientSendMs;      // t0 (echo)
 	uint64 serverReceiveMs;   // t1
 	uint64 serverSendMs;      // t2
+};
+
+// --- 계정 시스템 (가입/로그인, 로비서버 전용) ---
+// 흐름: 접속 직후 C_Register 또는 C_Login을 보낸다. 로그인 성공(S_Login: Ok) 전에는
+// 방 생성 등 다른 C_* 패킷이 서버에서 무시된다(인증 게이트).
+// 문자열은 전부 널 종료 고정 배열이다. 비밀번호는 평문으로 전송되고 서버가 해시해 저장한다.
+
+struct CRegisterPacket : public PacketHeader {
+	char loginId[kLoginIdMax];
+	char password[kPasswordMax];
+	wchar_t nickname[kNicknameMax];
+};
+
+struct SRegisterPacket : public PacketHeader {
+	AccountResult result;
+};
+
+struct CLoginPacket : public PacketHeader {
+	char loginId[kLoginIdMax];
+	char password[kPasswordMax];
+};
+
+struct SLoginPacket : public PacketHeader {
+	AccountResult result;
+	int64 accountId;                  // 실패 시 0
+	wchar_t nickname[kNicknameMax];   // 실패 시 빈 문자열
 };
 
 struct STacticalDialoguePacket : public PacketHeader {
@@ -580,5 +676,10 @@ struct SInventoryActionResultPacket : public PacketHeader {
 
 static_assert(sizeof(SNpcMoveInfo) == 43, "SNpcMoveInfo wire layout changed");
 static_assert(sizeof(SNpcMovePacket) == 47, "SNpcMovePacket wire layout changed");
+
+// 티켓은 MAC을 raw 이미지 위에서 계산하므로 크기가 곧 계약이다. 필드를 바꾸면
+// kEntryTicketVersion을 올리고 로비·룸을 함께 배포해야 한다.
+static_assert(sizeof(EntryTicketPayload) == 74, "EntryTicketPayload wire layout changed");
+static_assert(sizeof(EntryTicket) == 106, "EntryTicket wire layout changed");
 
 #endif // protocol_hpp

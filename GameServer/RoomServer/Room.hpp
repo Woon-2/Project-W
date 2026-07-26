@@ -4,6 +4,7 @@
 #include "IdPool.hpp"
 #include "JobQueue.hpp"
 #include "GameSession.hpp"
+#include "InventoryStore.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
 #include "finalBoss.hpp"
@@ -39,9 +40,16 @@ public:
 
 	~Room() {
 		std::cout << "Room destroyed. ID: " << id_ << '\n';
-		IdPool::push(id_);
+		// 룸 id는 객체 IdPool이 아니라 RoomIdPool에서 나온다. 예전엔 여기서 IdPool::push(id_)를
+		// 불러 룸 id(0,1,2,…)를 **객체 id 풀에 주입**했고, 그 값들은 실제 객체 id와 중복되거나
+		// 예약 sentinel 0이라 두 객체가 한 id를 갖게 만들었다.
+		// RoomIdPool로 돌려주지도 않는다: JobTimer::distribute는 죽은 룸의 잔여 틱 잡을
+		// roomId 조회 실패로 버리는데, 룸 id를 재사용하면 그 잡이 **같은 id를 받은 새 룸**을
+		// 때린다. 룸 id는 단조 증가로 남긴다(서버 수명당 65536룸 한도).
+		// 배경: docs/objectIdLifecycle.md
 		for (const auto& cube : cubes_) {
-			IdPool::push(cube.getId());
+			// 레벨에서 온 cube는 setId를 받지 않는다(id_ == -1). 반납하면 풀이 오염된다.
+			if (cube.hasId()) IdPool::push(cube.getId());
 		}
 		for (const auto& g : goblins_) {
 			IdPool::push(g.getId());
@@ -100,6 +108,13 @@ public:
 	void inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 		InventoryAction action);
 
+	// --- 인벤토리 영속화 (전부 이 방의 JobQueue 위에서만 실행된다) ---
+	// DB 잡 완료 시 콜백. DB 스레드가 아니라 doAsync로 되돌아온 잡에서 호출해야 한다.
+	void onInventoryLoaded(GameSession* session, InventoryStore::LoadStatus status,
+		const std::vector<ItemStack>& slots);
+	// 모든 DB 잡의 마지막에 호출. 지연된 방 제거를 마무리한다.
+	void onDbJobFinished();
+
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
 	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
 	// (ownerId = NPC id, elapsedMs = 0) so clients play the matching VFX/animation.
@@ -111,8 +126,8 @@ public:
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
-	// Sends a tactical presentation event only to living players currently inside
-	// the active arena volume. Tactic implementations call this at cycle start.
+	// Sends a tactical presentation event only to living players who have entered
+	// the active arena. Tactic implementations call this at cycle start.
 	void notifyTacticalDialogue(TacticalDialogueId dialogueId);
 
 	void pushJob( Job* job ) {
@@ -129,6 +144,7 @@ public:
 	}
 
 	void doTimer(Milliseconds delay, CallbackType&& callback);
+	void doTimerAt(HighResolutionClock::time_point executionTime, CallbackType&& callback);
 
 	int32 id() const { return id_; }
 	const std::string& code() const { return code_; }
@@ -210,6 +226,16 @@ private:
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
 
+	// 진행 중인 DB 잡 수. 마지막 플레이어가 나가도 이게 0이 아니면 방을 즉시 지우지 않고
+	// closePending_으로 미룬다 — Room*은 ObjectPool로 재활용되므로, 완료 잡이 되돌아올 방이
+	// 사라져 있으면 안 된다. 둘 다 이 방의 JobQueue 전용이라 락이 필요 없다.
+	int32 pendingDbJobs_ = 0;
+	bool  closePending_ = false;
+
+	// 인벤토리 로드/저장 잡을 건다. persistInventory는 변경이 없으면 아무것도 하지 않는다.
+	void requestInventoryLoad(GameSession* session);
+	void persistInventory(GameSession* session);
+
 	void registerObject(Object* obj);
 	void unregisterObject(Object* obj);
 
@@ -290,6 +316,10 @@ private:
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
+
+	// 다음 룸 틱의 절대 데드라인. 고정 케이던스를 유지해 시뮬 시간이 실시간에서 이탈하지 않게 한다
+	// (상대 지연 재예약은 처리 시간을 매 틱 누적시킨다 — Room::update 주석 참조).
+	HighResolutionClock::time_point nextTickTime_{};
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

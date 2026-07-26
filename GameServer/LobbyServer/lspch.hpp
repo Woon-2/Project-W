@@ -8,6 +8,10 @@
 #pragma comment(lib, "Release/ServerEngine.lib")
 #endif
 
+// ServerEngine is a static library, so the ODBC/CNG imports must be resolved here in the EXE.
+#pragma comment(lib, "odbc32.lib")
+#pragma comment(lib, "bcrypt.lib")
+
 #include "sepch.hpp"
 
 #endif // lobby_server_pch_hpp

@@ -12,7 +12,7 @@
 
 ```
 1. physicsWorld_.step()       — 물리 적분 + 접촉 생성 + 제약 풀기
-2. updateGoblinAI(dt)         — NPC 상태 머신 실행, AnimController 클립 전환
+2. updateMonsterAI(dt)        — NPC 상태 머신 실행, AnimController 클립 전환
 3. updatePlayerAnimations(dt) — 플레이어 행동 이벤트 기반 AnimController 갱신
 4. updateSkillSystem(dt)      — 히트박스 생명주기, 충돌 판정, 피격 처리
 ```
@@ -20,6 +20,28 @@
 **프레임 순서 주의사항:**
 - `physicsWorld_.step()` 내 `integrate()`에서 VelocityMotor가 실행되어 AI가 선언한 `desiredVel` 방향으로 수렴 impulse를 적용한다.
 - AI는 `setLinearVel()` 대신 `setDesiredVel()`를 호출하므로 실제 속도를 덮어쓰지 않는다. knockback impulse는 motor가 여러 프레임에 걸쳐 점진적으로 보정한다.
+
+### 틱 케이던스 — 절대 데드라인 (2026-07-26)
+
+`update()`는 자기 자신을 재예약하며 60Hz를 유지한다. **반드시 절대 데드라인으로 예약한다:**
+
+```cpp
+nextTickTime_ += kTickPeriod;                 // 직전 목표시각 기준 (상대 지연 아님)
+if (nextTickTime_ + kMaxCatchUp < tickNow)    // 3틱(50ms) 초과 지연 시 리싱크
+    nextTickTime_ = tickNow;
+doTimerAt(nextTickTime_, [this]{ update(); });
+```
+
+- **불변식: 시뮬 1스텝(`dt`) = 실시간 1주기.** `kTickPeriod`는 `dt`에서 파생시켜 이를 코드로 강제한다.
+- 상대 지연(`doTimer(dt, ...)`)으로 재예약하면 주기 = `dt` + `update()` 처리 시간이 되어 처리 시간이
+  **매 틱 영구 누적**된다. 실제로 이 버그로 서버가 60Hz가 아닌 약 50Hz로 돌았고(시뮬 클럭 = 실시간의
+  0.83배), 스킬 타임라인·서버 애니메이션이 그 비율만큼 늦게 진행해 **클라 예측 히트와 서버 권위 판정이
+  어긋났다**(NPC 공격에서 200~300ms 지연).
+- 밀린 데드라인은 `JobTimer::distribute()`가 즉시 디스패치하므로 짧은 hitch는 자동 catch-up된다.
+  상한을 둔 이유는 과부하 시 백로그가 쌓여 틱 버스트(브로드캐스트 폭풍)가 되는 것을 막기 위함.
+- 일회성 지연 작업은 기존 `doTimer`/`JobTimer::addJob`을 그대로 쓴다. **고정 주기 반복만 `addJobAt`.**
+
+> 진단 과정·측정 데이터·설계 결정 근거: **`docs/roomTickCadence.md`**
 
 ---
 
@@ -183,7 +205,22 @@ AI 상태 전환 시점에 `animController_.switchClip()` 호출:
 
 ## 오브젝트 ID 시스템
 
-`Object::id_`는 `IdPool`에서 발급된 전역 고유 ID다. `Room::objectById_` 는 ID로 희소 인덱싱되는 포인터 배열이다.
+`Object::id_`는 `IdPool`에서 발급된 **전역** 고유 ID다(룸 로컬이 아니다).
+`Room::objectById_`는 ID로 희소 인덱싱되는 포인터 배열이다.
+
+**규약** — 상세와 실패 사례는 `objectIdLifecycle.md` / `serverHandoff.md` §3:
+
+- 세션·몬스터·거점 id가 **전부 같은 풀**에서 나온다. 범위는 1..65535이고
+  **0은 "타깃 없음" sentinel로 예약**돼 있다(전술 AI가 `targetId == 0`을 그렇게 읽는다)
+- **발급한 적 없는 id를 반납하면 안 된다.** 다른 id 공간(룸 id)이나 `setId`를 받지 않은 객체
+  (`hasId() == false`, 레벨에서 복사돼 온 cube 등)를 넣으면 풀에 같은 값이 두 개 생겨
+  **두 객체가 한 id를 공유**한다. 풀이 이를 거부하고 `[IdPool] STRAY/INVALID PUSH`로 보고한다
+- 새 오브젝트 타입을 추가하면 **발급 경로와 반납 경로를 짝으로** 만들 것
+  (`~Room`, `cleanupTacticalEncounter`, `~GameSession`)
+- **룸 id는 재사용하지 않는다.** `JobTimer::distribute`가 죽은 룸의 잔여 틱 잡을 roomId 조회
+  실패로 버리는 구조라, 재사용하면 그 잡이 같은 id를 받은 새 룸을 때린다
+- `Room::init` 1회가 **242개**(몬스터 232 + 거점 10, 현재 레벨)를 소비한다. 접속자 세션 id가
+  룸 하나당 그만큼 점프하므로, id 값은 생각보다 훨씬 빨리 커진다
 
 ---
 
@@ -213,4 +250,7 @@ Room::updateSkillSystem()
 - 모든 패킷은 `PacketHeader { uint16 size; PacketType type; }` 로 시작
 - `Room::broadcast()` — 모든 세션에 팬아웃
 - `Room::broadcastExcept()` — 특정 세션 제외 팬아웃
-- `Room` 상태 변경은 `doAsync()` / `JobQueue`를 통해 IOCP 워커 스레드에서 직렬화
+- `Room` 상태 변경은 `doAsync()` / `JobQueue`를 통해 **잡 스레드**(`RoomServer::start`의
+  `DoJob` 풀)에서 직렬화된다. IOCP 스레드는 I/O 완료만 처리하고 잡을 큐에 밀어 넣는다.
+  이 직렬화가 곧 "Room에 락이 없어도 되는" 근거이며, 아직 깨질 수 있는 경로가 하나 남아 있다
+  (`serverHandoff.md` §4-P0)

@@ -7,7 +7,7 @@ skill.name             = "PiercingMulti"
 skill.weapon           = "spear"
 skill.dialSlot         = 2
 skill.chargeCost       = 8
-skill.cooldownMs       = 1500
+skill.cooldownMs       = 1120
 skill.totalDurationMs  = 1100
 skill.interruptible    = true
 
