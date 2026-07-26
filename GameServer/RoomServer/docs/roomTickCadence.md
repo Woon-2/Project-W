@@ -275,6 +275,9 @@ static constexpr auto kTickPeriod = std::chrono::duration_cast<HighResolutionClo
 
 ## 10. 관련 문서
 
+- `RoomServer/docs/serverHandoff.md` — **서버 담당 전달 사항**(이 수정 + id 수명주기 수정의
+  통합 요약, 새 규약, 우선순위별 남은 과제). §7의 후속 조치는 그쪽에 P1~P3으로 정리돼 있다.
+- `RoomServer/docs/objectIdLifecycle.md` — 오브젝트 id 발급·반납 규약과 잠복 UAF
 - `RoomServer/docs/skillArchitecture.md` — 스킬 타임라인·히트박스 생명주기
 - `RoomServer/docs/serverArchitecture.md` — Room 업데이트 루프 전체
 - `client/docs/particleHitboxDeterminism.md` — `skillSeed` 결정론 계약

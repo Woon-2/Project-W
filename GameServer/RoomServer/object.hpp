@@ -123,6 +123,9 @@ public:
 
 	void setId(uint32 id) { id_ = id; }
 	uint32 getId( ) const { return id_; }
+	// id_는 -1로 시작한다. 레벨에서 통째로 복사돼 오는 오브젝트(cube 등)는 setId를 받지 않으므로
+	// getId()가 0xFFFFFFFF다. IdPool에 반납하기 전에 반드시 이걸로 걸러야 풀이 오염되지 않는다.
+	bool hasId( ) const { return id_ >= 0; }
 
 	void setOldPos(float x, float z) {
 		oldX_ = x;

@@ -165,6 +165,33 @@ private:
 	bool findZoneCenter(const std::string& tag, mu::Vec3& out) const;
 	void debugTeleportToArena(const std::string& tag);
 
+	// ── 스킬 오브젝트 조회 테이블 등록 ────────────────────────────────────────────────
+	// skillObjectById_는 **서버 오브젝트 id로 직접 색인하는 희소 배열**이다. 서버는 단일
+	// IdPool에서 세션·몬스터·거점 id를 모두 발급하고 룸 하나가 수백 개(현재 레벨 242개)를
+	// 삼키므로, id는 세션이 거듭될수록 커진다. 초기 크기(256)는 상한이 아니라 힌트일 뿐이며
+	// **모든 등록은 반드시 이 헬퍼를 거쳐야 한다** — 과거 setupPlayer만 바운드 검사 없이
+	// 직접 쓰다가, 플레이어 id가 256을 넘는 순간 힙 밖에 쓰고 슬롯이 null로 남아 자기 스킬의
+	// owner 해석이 실패했다(VFX/SFX가 월드 원점에서 재생). RoomServer/docs/objectIdLifecycle.md
+	// 주의: 배열이 커지면 data()가 재할당되므로, 등록 후 스킬 시스템에 진입하기 전에
+	// refreshSkillCtx()로 skillCtx_의 포인터를 다시 맞춰야 한다.
+	void registerSkillObject(i32t id, Object* obj);
+	void unregisterSkillObject(i32t id);
+
+	// ── 오브젝트 id 정합성 감시 (RoomServer/docs/objectIdLifecycle.md) ────────────────
+	// 스킬 시전 시 owner가 skillObjectById_에서 해석되는지 1줄로 남긴다. resolved=0이면
+	// PlayVFX/PlaySound가 월드 원점에서 재생되고 로컬 히트박스가 캐스터에 붙지 않는다
+	// (= "몬스터는 피격되는데 VFX/SFX가 안 나온다" 증상의 직접 원인).
+	void debugLogSkillOwnerResolution(const char* phase, uint32 assetId, i32t ownerId) const;
+	// F12: 서버 동기 컨테이너 ↔ id 맵 ↔ 스킬 조회 테이블의 정합성을 전수 감사한다.
+	// 유령 몬스터를 목격한 즉시 눌러 그 개체가 ORPHAN / STALE / SLOT MISMATCH 중
+	// 무엇인지 확정하는 도구(원인 분기표는 계획 파일 "재현·판독 절차" 참조).
+	void debugAuditObjectRegistry() const;
+	// npc id -> 마지막 S_NpcMoveBatch 수신 시각(클라 경과 시간). 감사에서 STALE
+	// (서버가 이동을 안 보내는 = 서버에서 이미 죽은) 몬스터를 가려내는 데 쓴다.
+	// Object에 멤버를 추가하지 않고 Game이 들고 있는다(게임 레이어 국소 상태).
+	std::unordered_map<uint16, Milliseconds> lastNpcMoveAt_{};
+	Milliseconds                             diagElapsed_{ 0.f };
+
 	// [임시 디버그] F8 토글로 켜는 로컬 플레이어 이동 속도 배율(1x↔5x). 서버 C_Move(20Hz)×7m/packet
 	// 클램프 한도(≈140m/s) 안이라 온라인에서도 러버밴딩 없음. 제거 시 이 멤버 + processInput의 적용부/F8 핸들러만 삭제.
 	float debugSpeedMultiplier_{ 1.f };

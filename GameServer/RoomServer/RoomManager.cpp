@@ -56,6 +56,15 @@ void RoomManager::removeRoom(int32 roomId) {
 	roomIdMap_.erase(roomId);
 	rmMtx_.unlock();
 
+	// room == nullptr이면 같은 룸에 대해 removeRoom이 두 번 불린 것이다(= 잡 큐 직렬화가
+	// 깨져 leave 잡이 중복 실행됐다는 뜻 — docs/objectIdLifecycle.md H3). 그대로 push하면
+	// nullptr->~Room()으로 크래시하므로 보고만 하고 빠진다.
+	if (room == nullptr) {
+		std::cout << "[RoomManager] DOUBLE REMOVE id=" << roomId
+			<< " (room not in map -- job queue serialization broken?)\n";
+		return;
+	}
+
 	ObjectPool<Room>::push(room);
 }
 

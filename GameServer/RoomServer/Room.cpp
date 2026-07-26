@@ -1414,6 +1414,11 @@ void Room::enter(GameSession* session) {
 		});
 	}
 
+	// 주의: 이 스냅샷에는 hp 필터가 없다. 매 틱 S_NpcMoveBatch는 hp>0만 보내므로, 여기 실린
+	// 사망 몬스터는 클라에서 "이동도 안 하고 때려도 반응 없는" 유령이 된다. 현재 설계
+	// (룸 생성 → 전원 집결 → Start)에서는 전투 시작 전에 모두 입장하므로 발화하지 않는다.
+	// **재접속이나 전투 중 입장을 도입하면 즉시 재무장된다** — docs/objectIdLifecycle.md H4.
+
 	// 패킷 생성 후 새로 들어온 플레이어에게 전송
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
