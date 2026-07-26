@@ -352,6 +352,25 @@ void Room::setupFinalBoss(FinalBoss& b) {
 	b.body().setRestitution(0.0f);
 	b.body().setUprightStiffness(4000.f);
 	b.body().enableMotor(true);
+	// 플레이어는 이 거대한 나무를 밀 수 없다 — 플레이어↔보스 접촉을 아예 제외한다.
+	//
+	// 종전 동작: 플레이어가 파고들면 접촉 해소가 보스를 밀어냈다. 그런데 서버 플레이어 바디는
+	// Kinematic(무한 질량)이고 C_Move(20Hz)마다 setPos로 텔레포트하므로, 한 패킷에 최대 50cm를
+	// 파고든 뒤 보스가 그만큼 튕겨 나갔다 → "한 발자국씩 순간이동".
+	// **질량을 올려도 해결되지 않는다**: 무한 질량 상대와의 접촉에서 보스가 얻는 속도 변화량은
+	// j·invMass = effMass·bias·invMass = bias 로, 질량이 약분돼 사라진다
+	// (bias = kBaumgarteBeta·penetration/dt ≤ 0.2·0.2·60 = 2.4 m/s). 그래서 필터링이 답이다.
+	// 플레이어를 막아주는 책임은 클라의 Game::resolveBossSeparation(위치 보정)이 진다 —
+	// 미드보스(platoonLeader_)는 종전대로 플레이어 충돌을 유지한다.
+	b.body().setCollisionCategory(CollisionLayer::Boss);
+	b.body().setCollisionMask(~CollisionLayer::Player);
+	// 두 번째 밀림 경로도 차단: 스킬 OnHit impulse. 플레이어 근접 스킬의 impulseStrength는
+	// 350~1200이고 보스 질량이 200이므로 **한 방에 1.75~6 m/s**가 실린다(접촉 밀림 상한 2.4 m/s보다 크다).
+	// 임펄스는 updateSkillSystem에서 실리고 다음 틱 AI(halt/moveToward)가 속도를 덮어쓰므로
+	// 정확히 한 물리 step만 이동한다 → 히트마다 6~10cm씩 툭 튀는, 딱 "한 발자국 순간이동"의 모양새다.
+	// (접촉과 달리 임펄스는 질량에 반비례하므로 질량을 올리면 줄지만, 나무가 칼 한 방에 미끄러지는 건
+	//  질량 값 문제가 아니다.) 피격 리액션은 `hitAnimIndex` 경로라 타격감 피드백은 그대로 남는다.
+	b.setHitImpulseImmune(true);
 	// Build the BehaviorTree AFTER addAttack so the BT attack leaves can resolve
 	// their skill ids/clip keys by index (0=Swings,1=Combo,2=BackAttack,3=Smite).
 	b.buildBehaviorTree();

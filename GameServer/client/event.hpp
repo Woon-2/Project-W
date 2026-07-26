@@ -117,12 +117,20 @@ struct EvAttack : BasicEvent {
 	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
 	EvAttack(i32t attackerId, u8t attackIndex)
 		: BasicEvent{EventType::Attack}, attackerId{attackerId}, attackIndex{attackIndex} {}
+	EvAttack(i32t attackerId, u8t attackIndex, Milliseconds skillRemaining)
+		: BasicEvent{EventType::Attack}, attackerId{attackerId}, attackIndex{attackIndex},
+		  skillRemaining{skillRemaining} {}
 
 	i32t attackerId{-1};
 	// 어떤 공격 클립을 재생할지 선택하는 인덱스.
 	// AnimBlender가 보유한 공격 클립 순서 목록(attackClips_)의 인덱스로 해석된다.
 	// PlayAnimation 스킬 이벤트의 attackIndex에서 전파된다. 기본 0(첫 공격).
 	u8t  attackIndex{0};
+	// 이 이벤트를 발생시킨 스킬이 끝날 때까지 남은 시간(0 = 정보 없음).
+	// 공격 오버레이가 스킬보다 오래 살아남지 않게 상한으로 쓴다 — 스킬이 끝나면 캐스터는
+	// 다시 움직일 수 있는데(NPC는 AI가 즉시 이동을 재개한다) 오버레이가 남아 있으면
+	// 다리가 공격 포즈에 붙어 미끄러져 보인다. 캐스터별 채택 여부는 각 블렌더가 정한다.
+	Milliseconds skillRemaining{ 0.f };
 };
 struct EvRespawn : BasicEvent {
 	EvRespawn() : BasicEvent{EventType::Respawn} {}

@@ -60,6 +60,20 @@ static constexpr float kMaxBarrierPushPerStep  = 0.5f;  // step당 최대 보정
 // 죽은 NPC 양옆 간격(~3.2m)·좌우 라인(회랑 폭 ≫)은 안 이어 구멍/탈출구를 보존하는 사이값.
 static constexpr float kBarrierLinkDist        = 2.9f;
 
+// ---------------------------------------------------------------------------
+// 최종 보스 분리 파라미터. 보스는 밀리지 않는 서버 권위 객체(거대한 나무)라 barrier와 동일하게
+// 플레이어가 침투량 전체를 받는다. 서버는 플레이어↔보스 접촉을 필터링하므로(Room::setupFinalBoss)
+// 여기가 유일한 차단 수단이다.
+//
+// ⚠ 불변식: (kPlayerSeparationRadius + kBossSeparationRadius) 는 보스가 접근해 멈추려는
+// 거리보다 작아야 한다 — 서버 `attackCommitRange(1.8m) × PRESS_HOLD_FRACTION(0.7) = 1.26m`.
+// 크면 보스가 목표 거리까지 붙지 못해 플레이어를 계속 밀어붙이며 아레나를 배회한다.
+//   현재: 0.4 + 0.7 = 1.1m  <  1.26m  (여유 0.16m)
+// 몸통 굵기를 키우려면 서버의 두 상수도 같이 올려야 한다.
+// ---------------------------------------------------------------------------
+static constexpr float kBossSeparationRadius   = 0.7f;  // 보스 몸통(trunk) 수평 반경 (m)
+static constexpr float kMaxBossPushPerStep     = 0.5f;  // step당 최대 보정 (m) — 순간이동 방지 상한
+
 static constexpr int     kRenderSkipLagFrames = 4;
 static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
@@ -68,6 +82,16 @@ static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
 static constexpr uint64  kTimeSyncIntervalMs  = 10000;
 static constexpr int64   kMaxAcceptedSyncRttMs = 2000;
+
+// S_NpcMoveBatch cadence: RoomServer broadcasts it once per room tick (60Hz), unlike the
+// 20Hz S_Move stream for remote players. Monster network interpolation must use THIS window,
+// not Object's 20Hz default -- see configureNetMonster.
+static constexpr Seconds kNpcMoveInterval{ 1.f / 60.f };
+// How long a monster may go without a move packet before its velocity is treated as stale and
+// zeroed (stops the anim blender from walking in place forever). Deliberately NOT derived from
+// the interpolation window: at 60Hz that would be a 33ms deadline, so any ordinary network
+// jitter would blink the monster into its idle pose.
+static constexpr Seconds kNpcMoveStaleTimeout{ 0.15f };
 
 static uint64 networkNowMs() {
 	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -2678,6 +2702,16 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 	obj->body().setLinearDamping(0.f);
 	obj->body().setAngularDamping(100.f);
 
+	// Monsters get their own interpolation window: S_NpcMoveBatch is sent on EVERY room tick
+	// (60Hz), not at the 20Hz the Object default was tuned for (remote players' S_Move). With
+	// the 50ms default, each packet resets netInterpAcc_ before tNet can pass 0.33, so only a
+	// third of every server step was ever interpolated and the remaining two thirds arrived as
+	// a per-packet jump. The mesh translated at the right *average* speed but in 60Hz stutters,
+	// which reads as sliding against a smoothly-playing walk cycle (the anim rate is driven by
+	// the true server velocity). Matching the window to the send rate makes tNet reach exactly
+	// 1.0 as the next packet lands. Documented in docs/gameArchitecture.md step 8.
+	obj->netInterpDuration_ = kNpcMoveInterval;
+
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
 			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -3619,6 +3653,57 @@ void Game::resolveBarrierSeparation(Seconds dt) {
 	}
 }
 
+// 최종 보스 분리: 거대한 나무인 보스는 플레이어에게 밀리지 않아야 한다.
+//
+// 종전엔 서버 물리가 이 역할을 대신하고 있었다 — 플레이어가 보스에 파고들면 접촉 해소가 보스를
+// 밀어냈고, 그 반작용이 "단단함"으로 보였다. 문제는 서버 플레이어 바디가 Kinematic(무한 질량)인 데다
+// C_Move(20Hz)마다 setPos로 텔레포트해서, 한 패킷에 최대 50cm를 파고든 뒤 보스가 그만큼 튕겨
+// 나갔다는 것이다(한 발자국씩 순간이동). 질량을 올려도 소용없다 — 무한 질량 상대와의 접촉에서
+// 보스의 속도 변화량은 질량과 무관하게 depenetration bias와 같다.
+// → 서버는 플레이어↔보스 접촉을 필터링하고(Room::setupFinalBoss), 차단은 barrier와 동일한
+//   위치 보정 방식으로 이쪽에서 한다(임펄스 없음 → 튕김 없음).
+void Game::resolveBossSeparation(Seconds dt) {
+	if (!player_ || playerDead_) return;
+	if (bosses_.empty()) return;
+
+	const float sumR  = kPlayerSeparationRadius + kBossSeparationRadius;
+	const float sumR2 = sumR * sumR;
+
+	const mu::Vec3 myPos = player_->pos();
+	mu::Vec3 accumXZ{ 0.f, 0.f, 0.f };
+
+	for (const auto& boss : bosses_) {
+		// 시체/사망 보스는 통과시킨다(래그돌 연출 중 플레이어가 갇히지 않게).
+		if (!boss || boss->hp() <= 0 || boss->isDead()) continue;
+
+		const mu::Vec3 bp = boss->pos();
+		const float dx = myPos.x() - bp.x();
+		const float dz = myPos.z() - bp.z();
+		const float d2 = dx * dx + dz * dz;
+		if (d2 >= sumR2) continue;
+
+		// 중심이 완전히 겹친 축퇴 상황: 방향이 없으므로 보스의 전방 반대로 밀어낸다.
+		if (d2 < 1e-8f) {
+			const mu::Vec3 f = boss->forward();
+			accumXZ += mu::Vec3(-f.x(), 0.f, -f.z()) * sumR;
+			continue;
+		}
+
+		const float d    = std::sqrt(d2);
+		const float push = sumR - d;                  // 침투량 전체
+		accumXZ += mu::Vec3(dx / d, 0.f, dz / d) * push;
+	}
+
+	const float mag2 = accumXZ.len2();
+	if (mag2 > 1e-10f) {
+		const float mag = std::sqrt(mag2);
+		if (mag > kMaxBossPushPerStep)
+			accumXZ = accumXZ * (kMaxBossPushPerStep / mag);
+		player_->setCurrPos(myPos + accumXZ);  // Y 불변
+		moveChange_ = true;
+	}
+}
+
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	// find(): operator[] would insert a null entry for an unknown id, and code
 	// that find()s the map and dereferences without a null check would crash.
@@ -4092,6 +4177,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		resolvePlayerSeparation(effectiveInterval);
 		// 전술 차단벽: barrier 활성 NPC 밖으로 로컬 플레이어를 전체 침투량만큼 밀어낸다.
 		resolveBarrierSeparation(effectiveInterval);
+		// 최종 보스: 서버가 플레이어↔보스 접촉을 필터링하므로 차단은 여기서만 이뤄진다.
+		resolveBossSeparation(effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
@@ -4265,8 +4352,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& m : container) {
 			m->netInterpAcc_ += deltaTime;
 			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
-			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
-				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
+			// Stale check uses its own timeout, not a multiple of the interpolation window:
+			// monsters interpolate over one 60Hz tick, and 2x that (33ms) would trip on
+			// ordinary jitter and blink them into idle mid-stride.
+			if (m->netInterpAcc_ >= kNpcMoveStaleTimeout)
+				m->setVelocity(mu::Vec3{});   // no new packet for a while -> stop drift
 			m->update(deltaTime, tNet);
 		}
 	};

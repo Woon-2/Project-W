@@ -531,7 +531,13 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         // 공격 애니메이션은 trigger* 직접 호출 대신 EventBus로 일원화한다.
         // (standalone/online 모두 ctx.evList == eventList_, 디스패치 루프가 처리)
         // attackIndex로 어떤 공격 클립을 재생할지 선택한다(다중 공격 몬스터 대응).
-        holdEvent((*ctx.evList), EvAttack{ inst.ownerObjectId, ev.payload.playAnimation.attackIndex });
+        // 스킬 잔여 시간도 실어 보낸다: 오버레이가 스킬보다 오래 살면 캐스터가 이미 다시
+        // 움직이는데 다리는 공격 포즈에 남아 미끄러진다(EvAttack::skillRemaining).
+        const Milliseconds remaining = inst.asset
+            ? std::max(Milliseconds{ 0.f }, inst.asset->totalDuration - inst.elapsed)
+            : Milliseconds{ 0.f };
+        holdEvent((*ctx.evList), EvAttack{ inst.ownerObjectId,
+                                           ev.payload.playAnimation.attackIndex, remaining });
         break;
     }
 

@@ -13,20 +13,37 @@
 
 ## 2. 상하체 분리 마스크 (클라 전용)
 
-`AnimBlenderPlayer::onCalcLocal`의 공격 lerp 가중치에 본별 마스크를 곱한다:
+오버레이 클립의 lerp 가중치에 본별 마스크를 곱한다:
 
 ```
-wAttack(i) = tAttack_ * ( mask[i] + (1 - mask[i]) * tIdle_ )
+wOverlay(i) = t * ( mask[i] + (1 - mask[i]) * tIdle_ )
 ```
 
-- **정지(tIdle_=1)**: 전 본 가중치 = `tAttack_` → 종전 전신 공격과 프레임 단위 동일(회귀 0).
-- **이동(tIdle_→0)**: 하체(mask=0)는 run 클립 유지 → 발 미끄러짐 소멸. 상체(mask=1)만 공격.
-- 마스크: `buildAttackMask()`가 init 시 1회 구축. `spine_01` 서브트리=1, 그 외=0,
-  경계 소프트 가중치 `spine_01=0.5, spine_02=0.85`(힙-스파인 시어 방지, `kBoundaryWeights` 튜닝 지점).
-- `spine_01` 미발견 시 전부 1(종전 전신 공격)로 폴백 + 경고 로그.
-- hit/death lerp와 Baked 분기(원거리 원격 LOD)는 종전 유지.
-- **서버는 전신 공격 클립 그대로 판정** — 이동+공격 시 클라(하체 run)와 서버(전신 attack)의 spine_01 앵커
-  위치 오차는 히트박스 OBB 크기 대비 소량으로 허용 오차(§5).
+- **정지(tIdle_=1)**: 전 본 가중치 = `t` → 종전 전신 오버레이와 프레임 단위 동일(회귀 0).
+- **이동(tIdle_→0)**: 하체(mask=0)는 로코모션 클립 유지 → 발 미끄러짐 소멸. 상체(mask=1)만 오버레이.
+- 마스크: **`AnimBlender::buildUpperBodyMask(logTag)`**(`client/animation.cpp`)가 init 시 1회 구축.
+  `spine_01` 서브트리=1, 그 외=0, 경계 소프트 가중치 `spine_01=0.5, spine_02=0.85`
+  (힙-스파인 시어 방지, `kBoundaryWeights` 튜닝 지점). 읽기는 `upperBodyWeight(boneIdx)`
+  (범위 밖이면 1 반환하므로 호출부 크기 검사 불필요).
+- `spine_01` 미발견 시 전부 1(전신 오버레이)로 폴백 + 경고 로그 → 마스크를 지원하지 않는 리그에서도
+  안전하게 호출할 수 있다.
+- Baked 분기(원거리 원격 LOD)는 종전 유지(마스크 미적용).
+
+### 적용 대상
+
+| 블렌더 | 마스킹하는 오버레이 | 비고 |
+|---|---|---|
+| `AnimBlenderPlayer` | 공격 | hit/death는 넉백·입력잠금 상태라 접지 정확도가 무의미해 제외 |
+| `AnimBlenderBoss` | 공격 + **피격** | 보스는 추격 중 피격이 잦다. 서버가 hit 클립을 `switchClip`하지 않으므로(순수 클라 연출) 동기화 리스크 없음. death는 전신 유지 |
+
+플레이어 리그(`spine_01..03`)와 보스 리그(`spine_01..05`)는 둘 다 UE 마네킹 계열 네이밍이라
+같은 규칙·같은 경계 가중치가 성립한다. 리그별로 값을 달리해야 할 필요가 생기면 그때 인자로 뽑는다.
+
+로코모션 배속(`solveLocomotionRate`)에 넘기는 `locoWeight`는 마스크 몫을 반영해야 한다 —
+양쪽 다 `wLegs = t로코모션 * (1 - tAttack_ * tIdle_)`.
+
+- **서버는 전신 공격 클립 그대로 판정** — 이동+공격 시 클라(하체 로코모션)와 서버(전신 attack)의
+  본 앵커 위치 오차는 히트박스 OBB 크기 대비 소량으로 허용 오차(§5).
 
 ## 3. 조준 pitch 파이프라인
 
@@ -62,7 +79,7 @@ k = spine_01, 02, 03 순서로 (pitch/3씩):
 
 - 본 로컬 축 규약과 무관(피벗-공액), 자식 본은 서브트리 곱으로 함께 회전.
 - 사망 페이드: 적용 각 = `aimPitch * (1 - tDeath_)`.
-- 체인 데이터(`spineChainIdx_`/`spineDepth_`)는 `buildAttackMask()`에서 1회 구축.
+- 체인 데이터(`spineChainIdx_`/`spineDepth_`)는 `AnimBlenderPlayer::buildSpineChain()`에서 1회 구축.
 
 ### 판정: 서버 미러
 1. **멜리 본 히트박스**: `RoomServer/object.cpp Object::applySpinePitch()` — `updateAnimBones`에서
@@ -75,12 +92,18 @@ k = spine_01, 02, 03 순서로 (pitch/3씩):
    파티클 히트박스 결정론 유지(`particleHitboxDeterminism.md`).
 
 ## 4. 튜닝 지점
-- 마스크 경계 가중치: `client/object.cpp buildAttackMask()` `kBoundaryWeights`.
+- 마스크 경계 가중치: `client/animation.cpp buildUpperBodyMask()` `kBoundaryWeights`
+  (플레이어·보스 공용이므로 한쪽만 바꿀 수 없다).
 - 스파인 체인 분산: 현재 3관절 균등(pitch/3). 필요 시 가중 분산으로 변경 가능.
 - 원격 pitch 스냅이 거슬리면 `rotatePlayer` 수신부에 지수 평활 추가 검토.
 
 ## 5. 허용 오차 (의도된 비대칭)
-- 이동+공격 시 클라 하체는 run, 서버는 전신 공격 클립 → spine_01 앵커 위치 소량 불일치(합의된 허용 오차).
+- 이동+공격 시 클라 하체는 로코모션, 서버는 전신 공격 클립 → 본 앵커 위치 소량 불일치(합의된 허용 오차).
+  서버 `AnimController`는 단일 클립 재생(블렌딩 없음)이라 서버 마스크는 존재할 수 없다.
+  - 플레이어: 근접 8종이 `AttachType::Body`(rest 포즈 기준)로 이관되어 **이 오차가 소멸**했다(§6.5).
+  - **보스**: 히트박스가 `BoneAttach("weapon_r")`(애니 추종)라 구조적 해소책이 없다. 다만 보스는
+    **시전 중 완전 정지**하므로(§7) 히트박스가 살아 있는 동안에는 `tIdle_=1`이라 마스크가
+    붕괴하고 클라/서버가 같은 전신 공격 포즈를 본다 — 이 오차 자체가 발생하지 않는다.
 - 서버는 사망 페이드 없음(사망자는 판정 대상 아님 — 실질 영향 없음).
 - Baked(원거리 원격) LOD는 마스크/pitch 미적용 — 거리상 시인 불가.
 
@@ -131,4 +154,25 @@ Online `processInputGame`과 동기화:
 - Phase 3: N키 스파인 시각 토글 — 부호/원격 재현/자연스러움 확인.
 - Phase 4: `kBroadcastDebugHitboxes` 임시 활성화 — 화살 궤적=서버 히트박스 일치, 멜리 상하 판정,
   지면 스킬 평탄 유지 확인. 이후 전부 원복.
-- 유지된 진단: `buildAttackMask` init 요약 로그(`spineChain=3` 확인용)와 spine_01 미발견 폴백 경고.
+- 유지된 진단: `buildUpperBodyMask` init 요약 로그(`[UpperBodyMask] <rig> built: ... upperBones=N`,
+  리그별로 한 줄씩)와 spine_01 미발견 폴백 경고, `buildSpineChain`의 `[AimPitch] ... spineChain=3`.
+
+## 7. FinalBoss 확장 (2026-07-27, 인게임 검증 완료)
+
+마스크를 `AnimBlender` 기반 클래스로 올리고 `AnimBlenderBoss`(공격 + 피격)에 적용했다.
+
+**보스는 시전 중 완전 정지한다.** 걸으며 휘두르는 안을 넣었다가 되돌렸다 — 공격 클립의 windup이
+크고 무거워 발이 움직이는 채로 재생하면 부자연스러웠다. 따라서 보스에서 마스크가 실제로 일하는
+구간은 **시전 중이 아니라** 다음 둘이다:
+
+1. **시전 종료 후 오버레이 잔여 구간** — 서버 스킬이 끝나면 보스는 즉시 다시 움직이는데
+   클라 오버레이는 클립이 끝날 때까지 남는다. 마스크가 없으면 그동안 다리가 공격 포즈로 굳는다.
+   (함께 고친 것: 오버레이 길이가 `3000ms` 하드코딩이라 Smite(서버 1200ms) 뒤 약 1.8초를 굳어
+   있었다 → 플레이어와 동일하게 선택 클립 길이로 교체.)
+2. **이동 중 피격** — 보스는 선회/돌진 중 피격이 잦다. 전신 hit(최대 0.75)이면 걷다가 다리까지
+   움찔한다. 서버는 hit 클립을 `switchClip`하지 않으므로 동기화 리스크가 없다.
+
+조준 pitch(스파인 굽힘)는 보스에 **미적용**. 적용하려면 pitch 소스 정의 + `S_NpcMoveBatch`에
+pitch 필드 추가(서버 `applySpinePitch`가 `weapon_r` 히트박스까지 기울이므로 클/서 미러 필수)가 필요하다.
+
+보스의 교전 패턴(선회/돌진/압박), 속도 램프, walk↔run 위상 동기는 `RoomServer/docs/bossCombat.md`.

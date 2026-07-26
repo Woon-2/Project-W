@@ -312,6 +312,12 @@ private:
 	// 다음에 호출된다.
 	void resolveBarrierSeparation(Seconds dt);
 
+	// 최종 보스 분리 (클라 예측). 보스는 거대한 나무이므로 플레이어가 밀 수 없다 —
+	// 서버가 플레이어↔보스 접촉을 아예 필터링하므로(Room::setupFinalBoss), 플레이어를
+	// 막아주는 책임이 전부 이쪽에 있다. barrier와 동일한 규칙: 침투량 100%를 플레이어가
+	// 위치 보정으로 받는다(임펄스 없음 → 튕김 없음). step() 직후 호출된다.
+	void resolveBossSeparation(Seconds dt);
+
 	// 아레나 후방 Wall 일방향 벽 (클라 예측). 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는
 	// 로컬 플레이어만 평면으로 되돌린다. 안쪽 입장·측면 이동은 통과 → 후발 파티원도 합류 가능.
 	// 직전 프레임 위치(arenaPrevPlayerPos_) 대비 횡단 방향으로 일방향 판정. 물리 step 루프 뒤 1회 호출.

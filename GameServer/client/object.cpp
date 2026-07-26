@@ -10,7 +10,8 @@
 void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	setSkeleton(assetManager.modelPlayer()->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
-	buildAttackMask();
+	buildUpperBodyMask("player");
+	buildSpineChain();
 	for (auto& clip : assetManager.playerAnimations()) {
 		pushTargetClip(clip->name, clip);
 	}
@@ -19,50 +20,15 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	setWeaponType(weaponType_);
 }
 
-// 공격 오버레이용 상하체 마스크와 조준 pitch 스파인 체인 데이터를 구축한다.
-// - 마스크: spine_01 서브트리(상체)=1, 그 외(하체/힙)=0, 경계 본은 소프트 가중치로
-//   힙-스파인 전이의 시어를 방지한다. 본 미발견 시 전부 1(종전 전신 공격)로 폴백.
-// - 스파인 체인: spine_01..03 인덱스와 본별 체인 깊이(서브트리 소속 수)를 채운다.
-void AnimBlenderPlayer::buildAttackMask() {
+// 조준 pitch용 스파인 체인 데이터를 구축한다.
+// spine_01..03 인덱스와 본별 체인 깊이(서브트리 소속 수)를 채운다.
+// (상하체 마스크는 기반 클래스의 buildUpperBodyMask가 담당한다.)
+void AnimBlenderPlayer::buildSpineChain() {
 	const auto& bones = *skeleton().bones;
-	attackMask_.assign(bones.size(), 0.f);
 	spineDepth_.assign(bones.size(), 0);
 	spineChainIdx_ = { -1, -1, -1 };
 
-	// 경계 소프트 가중치 (튜닝 지점).
-	static constexpr std::pair<std::string_view, float> kBoundaryWeights[] = {
-		{ "spine_01", 0.5f },
-		{ "spine_02", 0.85f },
-	};
 	static constexpr std::string_view kSpineChain[] = { "spine_01", "spine_02", "spine_03" };
-
-	const Bone* spineRoot = nullptr;
-	for (const auto& b : bones) {
-		if (b.name == kSpineChain[0]) { spineRoot = &b; break; }
-	}
-	if (!spineRoot) {
-		std::ranges::fill(attackMask_, 1.f);
-		gSharedLog << "[UpperBodyMask] spine_01 not found in player skeleton ("
-			<< bones.size() << " bones) -- fallback to full-body attack\n";
-		dumpLog();
-		return;
-	}
-
-	// spine_01 서브트리 전체를 상체로 표시한다.
-	int upperCnt = 0;
-	std::vector<const Bone*> stack{ spineRoot };
-	while (!stack.empty()) {
-		const Bone* b = stack.back();
-		stack.pop_back();
-		attackMask_[b->boneIdx] = 1.f;
-		++upperCnt;
-		for (const auto* pChild : b->children) stack.push_back(pChild);
-	}
-	for (const auto& [name, w] : kBoundaryWeights) {
-		for (const auto& b : bones) {
-			if (b.name == name) { attackMask_[b.boneIdx] = w; break; }
-		}
-	}
 
 	// 스파인 체인: 각 체인 본의 서브트리에 깊이를 누적한다.
 	// 체인이 중첩(spine_01 ⊃ spine_02 ⊃ spine_03)이므로 spineDepth_[b] =
@@ -85,11 +51,8 @@ void AnimBlenderPlayer::buildAttackMask() {
 		}
 	}
 
-	// 검증 로그: 상체 본 수·경계 가중치·스파인 체인 길이 (Phase 1/3 확인용).
-	gSharedLog << "[UpperBodyMask] built: totalBones=" << bones.size()
-		<< " upperBones=" << upperCnt
-		<< " boundary(spine_01=0.5, spine_02=0.85)"
-		<< " spineChain=" << chainCnt << "\n";
+	// 검증 로그: 스파인 체인 길이 (Phase 3 확인용. 상체 본 수는 buildUpperBodyMask가 찍는다).
+	gSharedLog << "[AimPitch] player spine chain built: spineChain=" << chainCnt << "\n";
 	dumpLog();
 }
 
@@ -376,7 +339,7 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 			// 정지(tIdle_=1) 시 전 본 가중치가 tAttack_이 되어 종전 전신 공격과 동일하고,
 			// 이동 시 하체(mask=0)는 run 클립을 유지해 발 미끄러짐이 사라진다.
 			if (framesAttack) {
-				const float m = (i < attackMask_.size()) ? attackMask_[i] : 1.f;
+				const float m = upperBodyWeight(i);
 				const float wAttack = tAttack_ * (m + (1.f - m) * tIdle_);
 				framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], wAttack);
 			}
@@ -1039,6 +1002,9 @@ void AnimBlenderMushroom::EventBus::receive(const BasicEvent* event, Seconds del
 void AnimBlenderBoss::init(const Model* model, const std::vector<std::shared_ptr<AnimClip>>& anims) {
 	setSkeleton(model->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
+	// Upper/lower body split for the attack and hit overlays. The boss rig is the same
+	// UE-mannequin naming as the player (pelvis -> spine_01 -> ...), so the mask resolves.
+	buildUpperBodyMask("boss");
 	for (auto& clip : anims)
 		pushTargetClip(clip->name, clip);
 
@@ -1109,7 +1075,13 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	if (cooldownAttack_ > 0ms && !currentAttackClip_.empty()) {
 		const auto durationAttack = targetClip(currentAttackClip_)->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);
-		tAttack_ = std::clamp(animTimeAttack_ / 100ms, 0.f, 1.f);
+		// Fade in AND out. The overlay is usually cut short by the skill clamp (see
+		// EventBus::receive), so without a fade-out the swing pose would pop off in one
+		// frame at exactly the moment the boss starts walking. Same cooldown-driven shape
+		// the hit overlay already uses below.
+		constexpr Milliseconds kAttackFadeOut = 200ms;
+		tAttack_ = std::min(std::clamp(animTimeAttack_ / 100ms, 0.f, 1.f),
+			std::clamp(cooldownAttack_ / kAttackFadeOut, 0.f, 1.f));
 		cooldownAttack_ -= deltaTime;
 	}
 	else {
@@ -1129,8 +1101,8 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 	// Blend the two authored speeds by their share of the locomotion weight instead, then
 	// divide once by the total locomotion weight (idle is still the only strideless partner).
 	// Sharing the rate also keeps the two clips' cadence consistent through the crossfade.
-	// Computed after the attack overlay because the boss rig has no upper/lower body mask --
-	// an attack dilutes the whole pose, legs included.
+	// Computed after the attack overlay because the overlay's share of the *legs* is what
+	// shortens the stride, and that share depends on tAttack_ (see wLegs below).
 	// The run band above keeps each gait on one clip, so these two are now independent:
 	// walk speed 3.5 reads only kRefSpeedWalk, run speed 8.75 only kRefSpeedRun.
 	constexpr float kRefSpeedWalk = 4.8f;   // Boss_Walk_* authored speed -> 3.5 m/s at 0.729x
@@ -1140,20 +1112,36 @@ void AnimBlenderBoss::update(Seconds deltaTime, void* pVoidOwner) {
 		// tRunBand is run's share of the locomotion weight (tRun_ = tMove * tRunBand,
 		// walkLevel = tMove * (1 - tRunBand)).
 		const float refBlended = (1.f - tRunBand) * kRefSpeedWalk + tRunBand * kRefSpeedRun;
-		locoRate_ = solveLocomotionRate(locoRate_, speedXZ, refBlended,
-			tMove * (1.f - tAttack_), deltaTime);
+		// What the legs actually show. With the upper/lower mask the lower body's share of
+		// the attack overlay is tAttack_ * tIdle_, so the faster the boss moves the more the
+		// legs are pure locomotion. Same convention as AnimBlenderPlayer's wLegs; hit/death
+		// are left out there and here (a flinch is too short for footing to matter).
+		const float wLegs = tMove * (1.f - tAttack_ * tIdle_);
+		locoRate_ = solveLocomotionRate(locoRate_, speedXZ, refBlended, wLegs, deltaTime);
 	}
-	else {
-		locoRate_ = 1.f;
-	}
-	if (walkLevel > 0.f) {
-		advanceClipTime("Boss_Walk_Forward", animTimeWalk_, deltaTime, locoRate_);
-	}
-	if (tRun_ > 0.f) {
-		advanceClipTime("Boss_Run", animTimeRun_, deltaTime, locoRate_);
-	}
-	else {
-		animTimeRun_ = 0s;
+	// Deliberately NOT reset to 1 while stopped. locoRate_ is only read when tMove > 0, so a
+	// reset is invisible while standing -- but it seeds solveLocomotionRate's exponential
+	// smoother, and 1.0 is far from the steady-state walk rate (0.73). The boss halts
+	// constantly (casts, the press hold, idle), so every restart used to spend ~0.3s playing
+	// the walk cycle too fast. Keeping the last rate starts it already near the answer.
+	// Walk and run are driven from ONE normalized cycle phase so their feet stay locked
+	// together through the crossfade. Advancing them independently (and restarting the run
+	// clip at 0 every time it engaged, which is what the old code did) left the two clips at
+	// an arbitrary relative phase, so the blend averaged a planted foot against a swinging
+	// one -- the visible hitch at every walk<->run change. The phase advances at the blended
+	// clip duration, so the cadence is continuous across the band too.
+	// (Assumes both clips are one full stride cycle starting on the same foot. If a gait ever
+	//  reads half a step out, that is a fixed phase offset here, not a bug in the blend.)
+	if (tMove > 0.f) {
+		const Seconds walkDur = targetClip("Boss_Walk_Forward")->duration;
+		const Seconds runDur  = targetClip("Boss_Run")->duration;
+		const Seconds refDur  = walkDur * (1.f - tRunBand) + runDur * tRunBand;
+		if (refDur > 0s) {
+			locoPhase_ += locoRate_ * (deltaTime / refDur);
+			locoPhase_ -= std::floor(locoPhase_);
+		}
+		animTimeWalk_ = walkDur * locoPhase_;
+		animTimeRun_  = runDur  * locoPhase_;
 	}
 
 	// Death (highest priority) and hit reaction, mirroring AnimBlenderGoblin.
@@ -1241,8 +1229,15 @@ void AnimBlenderBoss::onCalcLocal(PassKey<AnimSystem>) {
 				WeightedAnimFrame{ .frame = framesRun[i],   .w = tRun_ },
 			};
 			framesBlended_[i] = sumWeightedAnimFrames(frames);
-			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_);
-			if (framesHit)    framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesHit)[i],    tHit_);
+			// Upper/lower split: both overlays are scaled by the bone's upper-body weight.
+			// Standing still (tIdle_ = 1) makes wUpper 1 for every bone, i.e. frame-identical
+			// to the old full-body overlay; moving drives the legs' share to zero so they
+			// keep the locomotion clip instead of freezing into the swing/flinch pose.
+			const float m = upperBodyWeight(i);
+			const float wUpper = m + (1.f - m) * tIdle_;
+			if (framesAttack) framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesAttack)[i], tAttack_ * wUpper);
+			if (framesHit)    framesBlended_[i] = lerpAnimFrames(framesBlended_[i], (*framesHit)[i],    tHit_    * wUpper);
+			// Death stays full-body on purpose (the boss is not moving any more).
 			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 		}
 		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -1260,7 +1255,16 @@ void AnimBlenderBoss::EventBus::receive(const BasicEvent* event, Seconds deltaTi
 				static_cast<int>(pOwner->attackClips_.size()) - 1);
 			pOwner->currentAttackClip_ = pOwner->attackClips_[idx];
 			pOwner->animTimeAttack_ = 0s;
-			pOwner->cooldownAttack_ = 3000ms;
+			// Overlay length = clip length, but never longer than the skill that started it.
+			// The boss is rooted only for the skill's duration (BossSkillBusyGuard); the moment
+			// it ends the AI walks off, so an overlay outliving the skill leaves the legs stuck
+			// in the swing pose while the body translates -- it slides. The authored clips are
+			// all longer than their skills (Smite 2.27s vs 1.2s, Combo 4.2s vs 3.2s), so this
+			// clamp is what actually bounds the overlay in practice.
+			const auto clipLen = std::chrono::duration_cast<Milliseconds>(
+				pOwner->targetClip(pOwner->currentAttackClip_)->duration);
+			const auto remaining = static_cast<const EvAttack*>(event)->skillRemaining;
+			pOwner->cooldownAttack_ = (remaining > 0ms) ? std::min(clipLen, remaining) : clipLen;
 		}
 		break;
 
