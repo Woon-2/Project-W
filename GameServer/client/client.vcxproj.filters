@@ -309,6 +309,9 @@
     <ClCompile Include="ui\settingsPanel.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\finalScoreboard.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\inventoryPanel.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -747,6 +750,9 @@
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\settingsPanel.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\finalScoreboard.hpp">
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\inventoryPanel.hpp">

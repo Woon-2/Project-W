@@ -2636,10 +2636,11 @@ void Game::update(Milliseconds deltaTime) {
 	// 입력 처리
 	processInput(deltaTime);
 
-	// 에디터 슬로모션/일시정지: 시뮬레이션 계열(물리/스킬/애니메이션)에만 timeScale 적용.
-	// 입력·카메라·UI는 실시간(deltaTime)으로 동작시켜 조작 반응성을 유지한다.
+	// 에디터 배율과 보스 처치 슬로모션을 합성한다. 입력·카메라·UI는
+	// 실시간(deltaTime)으로 동작하므로 처치 연출은 느려진 시간에 갇히지 않는다.
 	const float editorScale = editor_.timeScale();
-	const Milliseconds simDt = deltaTime * editorScale;
+	const float simulationScale = editorScale * camera_.focusCinematicTimeScale();
+	const Milliseconds simDt = deltaTime * simulationScale;
 
 	// debug BV 갱신 (TTL 감소 + 소멸 조건 평가)
 	debugBVView_.update(deltaTime);
@@ -2695,6 +2696,20 @@ void Game::update(Milliseconds deltaTime) {
 			auto* death = static_cast<EvDeath*>(pEv);
 
 			if (death->victimId == goblin_->getId()) {
+				// standalone 에디터는 goblin_ 한 개의 모델/블렌더를 교체해 모든
+				// 몬스터를 시험한다. 현재 리그가 Boss일 때만 처치 연출을 시작한다.
+				if (!goblin_->isDead() && goblin_->model() == assetManager_.modelBoss()) {
+					Camera::FocusCinematicConfig config{};
+					config.duration        = Milliseconds{ 2100.f };
+					config.blendIn         = Milliseconds{ 350.f };
+					config.blendOut        = Milliseconds{ 550.f };
+					config.slowMotionScale = 0.16f;
+					config.focusHeight     = 3.4f;
+					config.shotDistance    = 7.f;
+					config.shotHeight      = 1.1f;
+					config.zoomFovy        = mu::Degree{ 48.f };
+					camera_.playFocusCinematic(goblin_, config);
+				}
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			}
 			else if (death->victimId == player_->getId()) {
@@ -2836,6 +2851,7 @@ void Game::update(Milliseconds deltaTime) {
 	chunkManager_.update(player_->pos(), deltaTime);
 
 	editor_.updateCamera(deltaTime);
+	camera_.updateFocusCinematic(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -2882,8 +2898,10 @@ void Game::update(Milliseconds deltaTime) {
 	inventoryPanel_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
-	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
-	animSystem_.update(Seconds(0.01f * editorScale));
+	// 사망 이벤트는 프레임 중간에 연출을 시작할 수 있으므로 현재 배율을 다시
+	// 조회해 첫 사망 포즈부터 곧바로 슬로모션이 적용되게 한다.
+	animSystem_.update(Seconds(
+		0.01f * editorScale * camera_.focusCinematicTimeScale()));
 
 	// Ragdoll 활성화: 이번 프레임 사망 → finalXformData 확정 후 seed + activate
 	// Ragdoll 동기화: 활성 ragdoll body 위치를 finalXformData에 덮어씀

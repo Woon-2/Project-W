@@ -36,6 +36,13 @@ public:
 
     // Called on the game thread when a monster kill is confirmed.
     void addKill();
+    void reset() {
+        killCount_ = 0;
+        streakCount_ = 0;
+        popAge_ = 1.0e9f;
+        streakTimer_ = 1.0e9f;
+        milestoneFlashAge_ = 1.0e9f;
+    }
 
     int killCount() const { return killCount_; }
     int streak()    const { return streakCount_; }

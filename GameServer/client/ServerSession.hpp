@@ -60,6 +60,7 @@ public:
 
 	const std::string& ip() const { return netAddr_.ip(); }
 	uint16 port() const { return netAddr_.port(); }
+	bool connected() const { return connected_; }
 
 private:
 	void registerRecv();

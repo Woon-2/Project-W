@@ -498,6 +498,13 @@ void Game::setupStage() {
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 	setupBossHpHud();
+	finalScoreboard_.build(
+		uiManager_,
+		UI::FinalScoreboard::Style{
+			.panelTexture = lobbyUI_.panelTexture(),
+			.buttonTexture = lobbyUI_.secondaryButtonTexture()
+		},
+		[this]() { requestLobbyReturnFromScoreboard(); });
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
@@ -557,6 +564,75 @@ void Game::setupBossHpHud() {
 	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
 	bossHpEmblem_->zOrder  = -1;
+}
+
+void Game::hideCombatHudForFinalScoreboard() {
+	if (playerWeaponBadge_) playerWeaponBadge_->visible = false;
+	if (playerHpBar_) playerHpBar_->visible = false;
+	if (playerHpText_) playerHpText_->visible = false;
+	if (playerNameText_) playerNameText_->visible = false;
+	if (killCountWidget_) killCountWidget_->visible = false;
+	hideBossHpHud();
+
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		if (entry.hpBar) entry.hpBar->visible = false;
+		if (entry.partyRoot) entry.partyRoot->visible = false;
+	}
+	auto hideMonsterBars = [](auto& bars) {
+		for (auto& [id, entry] : bars) {
+			if (entry.hpBar) entry.hpBar->visible = false;
+		}
+	};
+	hideMonsterBars(goblinHpBars_);
+	hideMonsterBars(snakeHpBars_);
+	hideMonsterBars(mushroomHpBars_);
+	hideMonsterBars(bomberHpBars_);
+	hideMonsterBars(birdyHpBars_);
+	hideMonsterBars(slimeHpBars_);
+	hideMonsterBars(treantHpBars_);
+	hideMonsterBars(bossHpBars_);
+	hideMonsterBars(strongholdHpBars_);
+	for (auto& [id, entry] : npcStatusIcons_) {
+		if (entry.icon) entry.icon->visible = false;
+	}
+}
+
+void Game::showFinalScoreboard() {
+	if (finalScoreboard_.isVisible()) {
+		return;
+	}
+
+	std::vector<UI::FinalScoreboard::Entry> rows;
+	rows.reserve(inGamePartyPlayerIds_.size());
+	for (const uint16 playerId : inGamePartyPlayerIds_) {
+		const auto scoreIt = inGameMonsterKillsByPlayerId_.find(playerId);
+		rows.push_back(UI::FinalScoreboard::Entry{
+			partyDisplayName(playerId),
+			scoreIt != inGameMonsterKillsByPlayerId_.end() ? scoreIt->second : 0
+		});
+	}
+	std::stable_sort(rows.begin(), rows.end(),
+		[](const UI::FinalScoreboard::Entry& lhs,
+			const UI::FinalScoreboard::Entry& rhs) {
+			return lhs.monsterKills > rhs.monsterKills;
+		});
+
+	settingsPanel_.close();
+	inventoryPanel_.close();
+	if (!finalScoreboard_.show(rows)) {
+		return;
+	}
+	hideCombatHudForFinalScoreboard();
+	finalScoreboardPending_ = false;
+	mouseDeltaX_ = 0;
+	mouseDeltaY_ = 0;
+	applyCursorPolicy();
+}
+
+void Game::requestLobbyReturnFromScoreboard() {
+	if (finalScoreboard_.isVisible()) {
+		pendingLobbyReturn_ = true;
+	}
 }
 
 void Game::showBossHpHud() {
@@ -634,6 +710,7 @@ void Game::updatePlayerHpHudLayout() {
 void Game::registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
+		inGameMonsterKillsByPlayerId_.try_emplace(playerId, 0);
 
 		// The account nickname is authoritative when the server sent one. The roster
 		// (S_Enter names section / S_Enter_Other) is seeded before the object list is
@@ -2336,7 +2413,9 @@ void Game::setParticle()
 void Game::prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster) {
 	inGamePartyPlayerIds_.clear();
 	inGamePartyNameById_.clear();
+	inGameMonsterKillsByPlayerId_.clear();
 	inGamePartyNameSeq_ = 0;
+	if (killCountWidget_) killCountWidget_->reset();
 	for (const PlayerNameInfo& info : roster) {
 		registerInGamePartyPlayer(info.playerId, info.nickname);
 	}
@@ -4248,6 +4327,20 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
+
+	// Button callbacks run inside UIManager's window-message dispatch. The actual
+	// widget-tree rebuild and socket hand-back therefore happen here, at a frame-safe point.
+	if (pendingLobbyReturn_) {
+		pendingLobbyReturn_ = false;
+		if (INet::ClientApp::returnToLobbyServer()) {
+			finalScoreboard_.hide();
+			lobbyLeaveRoom();
+			enterLobby();
+			return;
+		}
+		gSharedLog << "[Result] 인증된 LobbyServer 연결이 없어 로비로 복귀하지 못했습니다.\n";
+	}
+
 	updateServerTimeSync();
 
 	if (player_ == nullptr) {
@@ -4265,6 +4358,12 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 입력 처리 (속도는 프레임 간 유지 - processInputGame이 감속/가속 관리)
 	processInput(deltaTime);
+
+	// 보스 처치 연출은 카메라/UI/네트워크 시계를 늦추지 않고 로컬 시뮬레이션만
+	// 감속한다. 실시간 카메라 시계 덕분에 연출은 항상 정해진 시간 안에 복귀한다.
+	const float simulationScale = finalScoreboard_.isVisible()
+		? 0.f : camera_.focusCinematicTimeScale();
+	const Milliseconds simulationDeltaTime = deltaTime * simulationScale;
 
 	// 현재 속도 저장
 	currVelocity_ = player_->velocity();
@@ -4286,7 +4385,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	const Seconds clampedDt = std::min(Seconds(simulationDeltaTime), kMaxPhysicsDeltaTime);
 	physicUpdateAcc_ += clampedDt;
 
 	// move 패킷 전송 주기 판단
@@ -4363,7 +4462,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& b : bosses_)    b->rebuildBodyBVH();
 
 	if (!playerDead_)
-		skillSystem_.update(deltaTime, skillCtx_);
+		skillSystem_.update(simulationDeltaTime, skillCtx_);
 
 	// 클라 예측 히트박스(초록)를 서버 권위 히트박스(빨강, onDebugHitboxes)와 나란히 렌더해
 	// 포즈/타이밍 오프셋을 육안 비교한다. 서버의 kBroadcastDebugHitboxes(Room.cpp)와 짝으로 켠다.
@@ -4380,7 +4479,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// (서버 권위 게임이므로 데미지 적용은 applyHit이 이미 끝냈고, 여기서는 HP/연출/애니메이션만 다룬다.)
 	// 객체 갱신(아래) 이전에 처리해 같은 프레임에 애니메이션 상태가 반영되도록 한다.
 	{
-		const Seconds evDt = std::chrono::duration_cast<Seconds>(deltaTime);
+		const Seconds evDt = std::chrono::duration_cast<Seconds>(simulationDeltaTime);
 
 		auto resolveObject = [&](i32t id) -> Object* {
 			if (player_ && player_->getId() == id) return player_.get();
@@ -4408,6 +4507,52 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			Object* obj = resolveObject(routeId);
 			if (!obj) continue;
 
+			// 보스/중간보스의 최초 Death만 포커스한다. BossHeatState는 스폰 타입
+			// 기준으로 등록되므로 RTTI 없이 보스 계열을 정확히 구분할 수 있다.
+			if (pEv->type == EventType::Death && !obj->isDead()) {
+				auto heatIt = bossHeatProfiles_.find(static_cast<uint16>(routeId));
+				if (heatIt != bossHeatProfiles_.end()) {
+					auto findOwner = [routeId](const auto& monsters) -> std::shared_ptr<Object> {
+						auto it = std::ranges::find_if(monsters, [routeId](const auto& monster) {
+							return monster && monster->getId() == routeId;
+						});
+						return it != monsters.end()
+							? std::static_pointer_cast<Object>(*it)
+							: std::shared_ptr<Object>{};
+					};
+
+					std::shared_ptr<Object> bossTarget;
+					if (auto it = idGoblinMap_.find(static_cast<uint16>(routeId));
+						it != idGoblinMap_.end()) {
+						bossTarget = std::static_pointer_cast<Object>(it->second);
+					}
+					if (!bossTarget) bossTarget = findOwner(birdys_);
+					if (!bossTarget) bossTarget = findOwner(treants_);
+					if (!bossTarget) bossTarget = findOwner(bosses_);
+
+					if (bossTarget) {
+						const BossHeatState& presentation = heatIt->second;
+						const bool isFinalBoss = std::ranges::any_of(
+							bosses_, [routeId](const std::shared_ptr<Boss>& boss) {
+								return boss && boss->getId() == routeId;
+							});
+						Camera::FocusCinematicConfig config{};
+						config.duration = Milliseconds{ isFinalBoss ? 2300.f : 1950.f };
+						config.blendIn = Milliseconds{ 350.f };
+						config.blendOut = Milliseconds{ 550.f };
+						config.slowMotionScale = isFinalBoss ? 0.14f : 0.18f;
+						config.focusHeight = std::max(0.9f, presentation.heightBias);
+						config.shotDistance = std::max(4.5f, presentation.worldRadius * 1.65f);
+						config.shotHeight = std::max(0.5f, presentation.worldRadius * 0.2f);
+						config.zoomFovy = mu::Degree{ isFinalBoss ? 46.f : 52.f };
+						camera_.playFocusCinematic(bossTarget, config);
+						if (isFinalBoss) {
+							finalScoreboardPending_ = true;
+						}
+					}
+				}
+			}
+
 			// Combat feedback (game thread, no locking): compute damage from the
 			// pre-receive HP since the EvHit/EvDeath handler below mutates hp/dead.
 			if (pEv->type == EventType::Hit || pEv->type == EventType::Death) {
@@ -4432,12 +4577,20 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
 					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
 				}
-				// Kill count is personal: only the local player's killing blow increments this HUD.
-				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()
-					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end()
-					&& player_ && static_cast<const EvDeath*>(pEv)->killerId == player_->getId())
-				{
-					killCountWidget_->addKill();
+				// Every client receives the same server-confirmed lethal hit and killer id.
+				// Count every monster type so the final ranking is identical for the party.
+				if (pEv->type == EventType::Death && !obj->isDead()
+					&& idMonsterMap_.find(static_cast<uint16>(routeId)) != idMonsterMap_.end()) {
+					const i32t killerId = static_cast<const EvDeath*>(pEv)->killerId;
+					const bool isPartyPlayer = killerId >= 0
+						&& std::ranges::find(inGamePartyPlayerIds_, static_cast<uint16>(killerId))
+							!= inGamePartyPlayerIds_.end();
+					if (isPartyPlayer) {
+						++inGameMonsterKillsByPlayerId_[static_cast<uint16>(killerId)];
+						if (killCountWidget_ && player_ && killerId == player_->getId()) {
+							killCountWidget_->addKill();
+						}
+					}
 				}
 			}
 
@@ -4471,10 +4624,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 게임 객체들 갱신
 	// ground_->update(deltaTime, tPhysicInterpolation);
-	player_->update(deltaTime, tPhysicInterpolation );
+	player_->update(simulationDeltaTime, tPhysicInterpolation );
 
 	for ( auto& obj : otherPlayers_ ) {
-		obj->netInterpAcc_ += deltaTime;
+		obj->netInterpAcc_ += simulationDeltaTime;
 		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
 
 		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
@@ -4483,7 +4636,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			obj->setVelocity(mu::Vec3{});
 		}
 
-		obj->update( deltaTime, tNet );
+		obj->update( simulationDeltaTime, tNet );
 	}
 
 	// Monsters are server-position-driven (S_Move) just like remote players, so they use
@@ -4493,14 +4646,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// monsters. (Same shape as the remote-player loop above.)
 	auto updateMonstersNet = [&](auto& container) {
 		for (auto& m : container) {
-			m->netInterpAcc_ += deltaTime;
+			m->netInterpAcc_ += simulationDeltaTime;
 			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
-			// Stale check uses its own timeout, not a multiple of the interpolation window:
-			// monsters interpolate over one 60Hz tick, and 2x that (33ms) would trip on
-			// ordinary jitter and blink them into idle mid-stride.
-			if (m->netInterpAcc_ >= kNpcMoveStaleTimeout)
-				m->setVelocity(mu::Vec3{});   // no new packet for a while -> stop drift
-			m->update(deltaTime, tNet);
+			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
+				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
+			m->update(simulationDeltaTime, tNet);
 		}
 	};
 	updateMonstersNet(goblins_);
@@ -4513,7 +4663,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(bosses_);
 
 	for (auto& sh : strongholds_) {
-		sh->update(deltaTime, tPhysicInterpolation);
+		sh->update(simulationDeltaTime, tPhysicInterpolation);
 	}
 
 	animSystem_.updatePriorities(
@@ -4547,7 +4697,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Energy orb death FX: advance orbs (tracking + absorption) toward the live player.
 	// Charge credits are matched to corpses in updateCorpses(); see below.
-	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
+	orbSystem_.update(
+		std::chrono::duration<float>(simulationDeltaTime).count(),
+		player_->pos());
 
 	// DEBUG fallback: if no "PathPt" markers were authored, synthesize a winding sample
 	// path at the local player so the effect is visible online right away. Auto-disables
@@ -4561,6 +4713,12 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
+	const bool focusCinematicWasActive = camera_.focusCinematicActive();
+	camera_.updateFocusCinematic(deltaTime);
+	if (finalScoreboardPending_ && focusCinematicWasActive
+		&& !camera_.focusCinematicActive()) {
+		showFinalScoreboard();
+	}
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
 		const mu::Vec3 camEye = camera_.eye();
@@ -4570,7 +4728,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	// 애니메이션 업데이트
-	animSystem_.update(0.01s);
+	animSystem_.update(
+		Seconds{ 0.01f * camera_.focusCinematicTimeScale() });
 
 	// Death migration: activate the ragdoll for monsters that died this frame, then
 	// detach them into client-authored corpses so a server respawn can't cut the death
@@ -4610,7 +4769,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	}
 
 	// Advance client-authored corpses: ragdoll hold -> orb dissolve -> pool return.
-	updateCorpses(deltaTime, tPhysicInterpolation);
+	updateCorpses(simulationDeltaTime, tPhysicInterpolation);
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -4771,6 +4930,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			applyCursorPolicy();
 		}
 		inventoryPanel_.update(dtSec);
+		if (finalScoreboard_.isVisible()) {
+			hideCombatHudForFinalScoreboard();
+		}
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4779,38 +4941,36 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_) {
 		flameParticleSystem_.update(deltaTime);
 		smokeParticleSystem_.update(deltaTime);
-		bloodEffect_.update(deltaTime);
-		swordSlash1Effect_.update(deltaTime);
-		swordSlash7Effect_.update(deltaTime);
-		swordSlashComboEffect_.update(deltaTime);
-		slashWaveEffect_.update(deltaTime);
-		spikesAttackEffect_.update(deltaTime);
-		piercingEffect_.update(deltaTime);
-		piercingMultiEffect_.update(deltaTime);
-		piercingSlashEffect_.update(deltaTime);
-		piercingCircleSlashEffect_.update(deltaTime);
-		crystalsFrontAttackEffect_.update(deltaTime);
-		aoESlashGreenEffect_.update(deltaTime);
-		crystalsCrossFadeEffect_.update(deltaTime);
-		earthSpikeWarnEffect_.update(deltaTime);
-		earthSpikeEffect_.update(deltaTime);
-		redEnergyExplosionEffect_.update(deltaTime);
-		arrowEffect_.update(deltaTime);
-		arrowVolleyMuzzleEffect_.update(deltaTime);
-		arrowVolleyEffect_.update(deltaTime);
-		arrowRainMuzzleEffect_.update(deltaTime);
-		arrowRainEffect_.update(deltaTime);
-		energyExplosionArrowEffect_.update(deltaTime);
-		tornadoShotEffect_.update(deltaTime);
-		tornadoMuzzleEffect_.update(deltaTime);
-		tornadoHitEffect_.update(deltaTime);
+		bloodEffect_.update(simulationDeltaTime);
+		swordSlash1Effect_.update(simulationDeltaTime);
+		swordSlash7Effect_.update(simulationDeltaTime);
+		swordSlashComboEffect_.update(simulationDeltaTime);
+		slashWaveEffect_.update(simulationDeltaTime);
+		spikesAttackEffect_.update(simulationDeltaTime);
+		piercingEffect_.update(simulationDeltaTime);
+		piercingMultiEffect_.update(simulationDeltaTime);
+		piercingSlashEffect_.update(simulationDeltaTime);
+		piercingCircleSlashEffect_.update(simulationDeltaTime);
+		crystalsFrontAttackEffect_.update(simulationDeltaTime);
+		aoESlashGreenEffect_.update(simulationDeltaTime);
+		crystalsCrossFadeEffect_.update(simulationDeltaTime);
+		redEnergyExplosionEffect_.update(simulationDeltaTime);
+		arrowEffect_.update(simulationDeltaTime);
+		arrowVolleyMuzzleEffect_.update(simulationDeltaTime);
+		arrowVolleyEffect_.update(simulationDeltaTime);
+		arrowRainMuzzleEffect_.update(simulationDeltaTime);
+		arrowRainEffect_.update(simulationDeltaTime);
+		energyExplosionArrowEffect_.update(simulationDeltaTime);
+		tornadoShotEffect_.update(simulationDeltaTime);
+		tornadoMuzzleEffect_.update(simulationDeltaTime);
+		tornadoHitEffect_.update(simulationDeltaTime);
 		dustParticleSystem_.update(deltaTime);
 		debugBVView_.update(deltaTime);
 
 		if ( tornadoShotActive_ ) {
 			constexpr float kSpeed    = 10.f;
 			constexpr float kDuration = 0.8f;
-			const Seconds dt = deltaTime;
+			const Seconds dt = simulationDeltaTime;
 			tornadoShotElapsed_ += dt;
 			tornadoShotPos_ = tornadoShotPos_ + tornadoShotDir_ * kSpeed * dt.count();
 			tornadoShotEffect_.setOrigin( tornadoShotPos_, tornadoShotOrient_ );
@@ -5089,64 +5249,66 @@ void Game::renderInGame() {
 		}
 	}
 
-	// Floating damage numbers: drawn just before the HUD so they share the UI pass
-	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
-	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
+	if (!finalScoreboard_.isVisible()) {
+		// Floating damage numbers: drawn just before the HUD so they share the UI pass
+		// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
+		damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
 
-	// Skill dial + combo are in-game HUD and must sit BELOW the settings panel,
-	// which is an overlay mounted on uiManager_. UI draw order = submission order,
-	// so submit the dial first; uiManager_.render() (below) then draws the panel's
-	// scrim/popup on top when it is open.
-	skillDial_.render(gfx_,
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top));
+		// Skill dial + combo are in-game HUD and must sit BELOW the settings panel,
+		// which is an overlay mounted on uiManager_. UI draw order = submission order,
+		// so submit the dial first; uiManager_.render() (below) then draws the panel's
+		// scrim/popup on top when it is open.
+		skillDial_.render(gfx_,
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
-	// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
-	// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
-	minimapIcons_.clear();
-	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
-	for (const auto& [id, p] : idPlayerMap_) {
-		if (id == static_cast<uint16>(player_->getId()) || !p) continue;
-		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
-	}
-	for (const auto& [id, obj] : idMonsterMap_) {
-		if (!obj) continue;
-		const bool isBossLike = bossNpcIds_.count(id) != 0;
-		minimapIcons_.push_back(MinimapEntityIcon{
-			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
-		});
-	}
-	// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
-	minimapGuidePoly_.clear();
-	pathGuide_.activePathPoints(minimapGuidePoly_);
-	const MinimapGuide mmGuide{
-		pathGuide_.guidanceActive(),
-		std::span<const mu::Vec3>(minimapGuidePoly_),
-		pathGuide_.guidanceTargetWorld()
-	};
-	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top),
-		mmGuide);
+		// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
+		// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
+		minimapIcons_.clear();
+		minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
+		for (const auto& [id, p] : idPlayerMap_) {
+			if (id == static_cast<uint16>(player_->getId()) || !p) continue;
+			minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
+		}
+		for (const auto& [id, obj] : idMonsterMap_) {
+			if (!obj) continue;
+			const bool isBossLike = bossNpcIds_.count(id) != 0;
+			minimapIcons_.push_back(MinimapEntityIcon{
+				obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
+			});
+		}
+		// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
+		minimapGuidePoly_.clear();
+		pathGuide_.activePathPoints(minimapGuidePoly_);
+		const MinimapGuide mmGuide{
+			pathGuide_.guidanceActive(),
+			std::span<const mu::Vec3>(minimapGuidePoly_),
+			pathGuide_.guidanceTargetWorld()
+		};
+		minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top),
+			mmGuide);
 
-	// On-screen destination indicator: beacon when the look-ahead is on screen, an
-	// edge arrow (+distance) when it is off screen / behind the camera.
-	pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
-		pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top));
+		// On-screen destination indicator: beacon when the look-ahead is on screen, an
+		// edge arrow (+distance) when it is off screen / behind the camera.
+		pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
+			pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
-	// Combo counter above the dial: kill-streak accelerator feedback. Shown while
-	// an active combo (>=2) is within its window; size eases down as it expires.
-	if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
-		const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
-		const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
-		const float frac = (comboWindowMs_ > 0.f)
-			? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
-		DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
-			sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
-			static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
-			DigitAtlas::Align::Center);
+		// Combo counter above the dial: kill-streak accelerator feedback. Shown while
+		// an active combo (>=2) is within its window; size eases down as it expires.
+		if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
+			const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+			const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+			const float frac = (comboWindowMs_ > 0.f)
+				? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
+			DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
+				sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
+				static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
+				DigitAtlas::Align::Center);
+		}
 	}
 
 	uiManager_.render(gfx_);
@@ -5171,6 +5333,18 @@ void Game::renderInGame() {
 // ===========================================================================
 
 void Game::enterLobby() {
+	camera_.cancelFocusCinematic();
+	finalScoreboardPending_ = false;
+	pendingLobbyReturn_ = false;
+	finalScoreboard_.hide();
+
+	// Returning from gameplay leaves many HUD widgets mounted in the shared UI tree.
+	// Hide the old tree first; LobbyUI/SettingsPanel rebuild their own roots below.
+	uiManager_.resetInteractionState();
+	for (const auto& child : uiManager_.root()->children()) {
+		child->visible = false;
+	}
+
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
@@ -5683,6 +5857,10 @@ void Game::renderWaitingRoom() {
 }
 
 void Game::enterInGame() {
+	camera_.cancelFocusCinematic();
+	finalScoreboardPending_ = false;
+	pendingLobbyReturn_ = false;
+	finalScoreboard_.hide();
 	pendingStart_ = false;
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
@@ -6559,6 +6737,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		(keyboardStateCurr_['E'] & 0x80)
 		&& !(keyboardStatePrev_['E'] & 0x80);
 
+	if (finalScoreboard_.isVisible()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	if (inventoryPanel_.isOpen()) {
 		if (escapePressed || inventoryPressed)
 			setInventoryOpen(false);
@@ -7003,8 +7187,10 @@ void Game::applyCursorPolicy() {
 	// 클라이언트 영역 구속을 해제한다. 대화 종료 시 이 함수를 다시 호출해
 	// 현재 씬/모달 상태에 맞는 게임플레이 커서 모드로 복귀한다.
 	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
+		|| finalScoreboard_.isVisible()
 		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	const bool showCursorNow = (scene_ == Scene::Lobby)
+		|| finalScoreboard_.isVisible()
 		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;

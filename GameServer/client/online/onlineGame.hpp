@@ -22,6 +22,7 @@
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/settingsPanel.hpp"
+#include "../ui/finalScoreboard.hpp"
 #include "lobbyUI.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Label.hpp"
@@ -245,6 +246,9 @@ private:
 	void showBossHpHud();
 	void hideBossHpHud();
 	void updateBossHpHud();
+	void showFinalScoreboard();
+	void requestLobbyReturnFromScoreboard();
+	void hideCombatHudForFinalScoreboard();
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -615,6 +619,12 @@ private:
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
 
+	// Final-boss result UI owns its widget references; Game only coordinates
+	// cinematic timing, score collection, and the lobby hand-off.
+	UI::FinalScoreboard finalScoreboard_{};
+	bool finalScoreboardPending_ = false;
+	bool pendingLobbyReturn_ = false;
+
 	// Final-boss HUD. Presentation is armed only by this client's local Arena_Boss
 	// enter callback, so another player entering the room cannot reveal it here.
 	UI::UIElement*   bossHpRoot_    = nullptr;  // owned by uiManager_
@@ -700,6 +710,7 @@ private:
 	// Stable display names ("playerN"), frozen at registration; a member leaving
 	// must never renumber the remaining members (see registerInGamePartyPlayer).
 	std::unordered_map<uint16, std::wstring> inGamePartyNameById_{};
+	std::unordered_map<uint16, int> inGameMonsterKillsByPlayerId_{};
 	uint32 inGamePartyNameSeq_ = 0;
 
 	struct GoblinHpEntry {

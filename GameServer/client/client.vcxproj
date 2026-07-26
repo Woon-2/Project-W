@@ -205,6 +205,10 @@
     <ClCompile Include="sound\miniaudio_impl.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <!-- MSVC 14.51 can ICE in miniaudio's bundled FLAC decoder under /O2 + /GL.
+           Keep the workaround local to this third-party implementation TU. -->
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
+      <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>
     <ClCompile Include="light.cpp" />
     <ClCompile Include="log.cpp">
@@ -217,6 +221,11 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="online\lobbyUI.cpp" />
     <ClCompile Include="ui\settingsPanel.cpp" />
+    <ClCompile Include="ui\finalScoreboard.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="ui\inventoryPanel.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -397,6 +406,7 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="online\lobbyUI.hpp" />
     <ClInclude Include="ui\settingsPanel.hpp" />
+    <ClInclude Include="ui\finalScoreboard.hpp" />
     <ClInclude Include="ui\inventoryPanel.hpp" />
     <ClInclude Include="ui\uiBuild.hpp" />
     <ClInclude Include="particleRenderMode.hpp" />

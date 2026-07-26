@@ -25,8 +25,11 @@ class ClientApp {
 public:
 	static void init(const NetworkEndpoint& lobbyEndpoint);
 	static bool connectToServer() { return serverSession_->connect(); }
-	// S_GameStart 핸드오프: 로비 세션을 은퇴시키고 RoomServer로 새 세션을 맺는다.
+	// S_GameStart 핸드오프: 인증된 로비 세션은 유지하고 RoomServer를 활성 세션으로 전환한다.
 	static void reconnectToRoomServer(const std::string& ip, uint16 port);
+	// 게임 종료 후 유지 중인 인증 로비 세션을 다시 활성화한다.
+	// 복귀할 로비 연결이 남아 있지 않으면 false를 반환한다.
+	static bool returnToLobbyServer();
 	static void release();
 	// Online 모드가 아닐 땐 사용하지 않도록 한다.
 	static void addSendBuffer(const std::shared_ptr<SendBuffer>& sendBuffer) { serverSession_->addSendBuffer(sendBuffer); }
@@ -53,7 +56,9 @@ private:
 	static std::unique_ptr<IGame> game_;
 	static std::unique_ptr<SoundManager> sound_;
 	static std::unique_ptr<ServerSession> serverSession_;
-	// 은퇴한 로비 세션. 닫힌 소켓의 잔여 완료 APC(완료 콜백의 owner 포인터)가 안전히 드레인되도록
+	// 인게임 동안에도 인증/방 소속을 유지하는 LobbyServer 세션.
+	static std::unique_ptr<ServerSession> lobbySession_;
+	// 닫힌 이전 활성 세션. 잔여 완료 APC(완료 콜백의 owner 포인터)가 안전히 드레인되도록
 	// 객체를 살려둔다(release()까지 보관, 1개라 무시 가능).
 	// static 소멸에 맡기면 WSACleanup 이후 closesocket·정적 풀 소멸 순서 경합이 생기므로
 	// 반드시 release()에서 함께 정리한다.
