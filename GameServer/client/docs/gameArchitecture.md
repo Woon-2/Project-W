@@ -495,17 +495,33 @@ activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이�
 시체→풀 반환 시 HP 바도 함께 이동.
 
 **`updateCorpses(dt, tPhysicInterp)` 2-페이즈:**
-- **Ragdoll**(`kRagdollSeconds=2.5s`): 래그돌 물리를 유지(차밍 포인트). 순서 중요 —
-  `ragdoll->syncToFinalXforms` → `Object::update`(여기서 디버그 BV `worldBVs`를 **래그돌 포즈**로
-  재계산) → `rebuildBodyBVH`. update를 sync보다 먼저 부르면 BV가 직전 애니메이션 포즈로 계산돼
-  메시/물리(래그돌)와 어긋난다. 2.5s 경과 시 `spawnFromMonster`로 오브 생성 + 래그돌 비활성화 후
-  Orb 페이즈로 전환.
+- **Ragdoll**(`kRagdollSeconds` = **2.0s**): 래그돌 물리를 유지(차밍 포인트). 순서 중요 —
+  `ragdoll->syncToFinalXforms(..., tPhysicInterp)` → `Object::update`(여기서 디버그 BV `worldBVs`를
+  **래그돌 포즈**로 재계산) → `rebuildBodyBVH`. update를 sync보다 먼저 부르면 BV가 직전 애니메이션
+  포즈로 계산돼 메시/물리(래그돌)와 어긋난다. 경과 시 `spawnFromMonster`로 오브 생성 + 래그돌
+  비활성화 후 Orb 페이즈로 전환.
 - **Orb**: 오브가 모두 흡수될 때까지 대기(`hasActiveOrbs`). 끝나면 `returnMonsterToPool` 후 시체 제거.
 
 **EnergyOrbSystem 라이프사이클:** `spawnFromMonster(model, finalXforms, objWorld, totalCharge,
 slot, corpseId)` — 스키닝된 서브메시마다 1 오브, `totalCharge`를 오브 수로 N분할. 각 오브 상태머신
 `Forming`(morphT 0→1) → `Tracking`(가속 추적, 접근 시 응축) → `Absorbing` → `Dead`. `update(dt,
 playerPos)`가 추적/흡수를 진행하고, 흡수 순간 `onAbsorb(orb)` 콜백 호출.
+
+**연출 시간 예산 (래그돌 ↔ 오브는 제로섬):** 래그돌 물리가 이 프로젝트의 시연 포인트이므로
+래그돌 구간을 늘리고 오브 구간을 그만큼 줄인다 — **총 흡수 시간은 유지하면서 붕괴만 더 길게**
+보인다. 플레이어까지 10m 기준:
+
+| 구간 | 상수 | 위치 | 값 | 소요 |
+|---|---|---|---|---|
+| 래그돌 유지 | `kRagdollSeconds` | `onlineGame.cpp` `updateCorpses` | 2.0 | 2.00s |
+| Forming(정지 모핑) | `kFormingTime` | `energyOrbSystem.cpp` | 0.90 | 0.90s |
+| Tracking | `kStartSpeed` / `kAccel` / `kMaxSpeed` | 〃 | 8 / 45 / 34 | ≈0.50s |
+| Absorbing | `kAbsorbTime` | 〃 | 0.18 | 0.18s |
+| | | | | **≈3.58s** |
+
+`kFormingTime`은 오브가 **완전히 정지**해 있는 구간이라 체감 지연을 지배한다 — 오브 구간을
+줄일 때 여기부터 손대는 게 맞다(속도 상수를 올리는 것보다 효과가 크고 거리에 무관).
+래그돌 쪽 노브 목록은 `ragdollSafety.md` "래그돌 연출 노브".
 
 **charge 매칭(신규 패킷 없음):** charge는 서버 권위(`S_SkillCharge`)지만 HUD는 흡수에 맞춰
 점진적으로 채운다.

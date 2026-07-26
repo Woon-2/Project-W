@@ -40,6 +40,14 @@ struct PassengerBone {
 // destroy() must be called before the Ragdoll is destroyed if build() was called.
 class Ragdoll {
 public:
+    // Ragdoll-only physics profile. Deliberately different from the live-character
+    // settings: a corpse should read as a collapsing body within a second or two, which
+    // real-scale gravity does not deliver for a large model.
+    // Remaining tuning levers for "the collapse looks sluggish" are catalogued in
+    // client/docs/ragdollSafety.md.
+    static constexpr float kGravityScale  = 1.35f;   // x world gravity, applied in activate()
+    static constexpr float kTopplingOmega = 2.5f;    // rad/s, applyDeathKick()
+
     Ragdoll()                            = default;
     ~Ragdoll()                           = default;
     Ragdoll(const Ragdoll&)              = delete;
@@ -81,9 +89,15 @@ public:
     // Overwrite finalXformData entries for ragdoll bones with current physics body positions.
     // Inverse of seedFromFinalXforms: finalXforms[i] = bone.toLocal * (boneWorldMat / objectWorldMat).
     // Call after animSystem_.update() and before rendering when ragdoll is active.
+    //
+    // tPhysic is the render-interpolation factor between the last two physics steps
+    // (the same value every other object is drawn with). Without it a ragdoll updates in
+    // 60Hz steps while the rest of the scene interpolates, which reads as stutter on
+    // fast-swinging limbs -- exactly where the collapse is most visible.
     void syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
                             const Skeleton& skel,
-                            mu::Mat4x4 objectWorldMat) const;
+                            mu::Mat4x4 objectWorldMat,
+                            float tPhysic = 1.f) const;
 
     // Capture passenger bone bindings from the current finalXforms pose.
     // Call after seedFromFinalXforms() and before activate().
@@ -96,6 +110,19 @@ public:
 
     // Switch all bodies back to Kinematic and unregister from world.
     void deactivate(PhysicsWorld& world);
+
+    // Hand the ragdoll the momentum of the character it replaced, then kick it over.
+    // Call once, right after activate().
+    //   1) Every bone inherits initVel (the rigid character's velocity at the killing
+    //      blow) -- momentum is conserved regardless of per-bone mass.
+    //   2) A toppling rotation is added as a CONSISTENT RIGID MOTION about a ground
+    //      pivot: v_i += cross(omega, pos_i - pivot), omega_i = omega. Because the whole
+    //      assembly shares one rigid velocity field, every joint sees zero relative
+    //      velocity, so the body starts falling over without the solver fighting it.
+    //   3) Per-bone noise impulses applied OFF the centre of mass add the small
+    //      asymmetric spin that makes the collapse read as physics rather than a canned
+    //      animation.
+    void applyDeathKick(mu::Vec3 initVel);
 
     bool isActive() const { return active_; }
     bool isBuilt()  const { return !bodies_.empty(); }

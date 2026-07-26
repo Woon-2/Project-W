@@ -274,7 +274,8 @@ void Game::setupStageVisual() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
+	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(122.f), mu::Degree(66.f)));
+	// dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
 	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -2981,7 +2982,10 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 
 void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 	const float dtSec = std::chrono::duration<float>(deltaTime).count();
-	constexpr float kRagdollSeconds = 1.5f;   // hold the ragdoll before dissolving
+	// 래그돌 물리가 이 프로젝트의 시연 포인트라 유지 구간을 길게 잡는다. 늘린 만큼
+	// 오브 구간(energyOrbSystem.cpp의 kFormingTime·추적 속도)을 줄여 총 흡수 시간을
+	// 보존한다 — 시간 예산 표는 docs/gameArchitecture.md "연출 시간 예산".
+	constexpr float kRagdollSeconds = 2.0f;   // hold the ragdoll before dissolving
 	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
 
 	// Credit queued charges to the most-recent uncharged ragdoll corpse.
@@ -3015,7 +3019,8 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 			// (Otherwise the BV tracks the death animation while the mesh/physics flop.)
 			if (o.ragdoll() && o.ragdoll()->isActive() && o.animBlender() && o.model())
 				o.ragdoll()->syncToFinalXforms(
-					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world);
+					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world,
+					tPhysicInterp);
 			o.update(deltaTime, tPhysicInterp);
 			if (o.ragdoll() && o.ragdoll()->isActive())
 				o.rebuildBodyBVH();
@@ -4335,23 +4340,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
 
-			// Apply death velocity so the ragdoll flies in the knockback direction.
-			const mu::Vec3 initVel = g.ragdollInitVelocity();
-			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) if (rb.body) rb.body->setLinearVel(initVel);
-				g.setRagdollInitVelocity(mu::Vec3{});
-			}
-			// Per-bone random noise impulse, biased toward the death velocity direction.
-			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f) ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
-			for (const auto& rb : rd.bones()) {
-				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
-				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
-				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
-				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
-				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
-				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
-			}
+			// Momentum hand-off + toppling kick + per-bone noise (see Ragdoll::applyDeathKick).
+			rd.applyDeathKick(g.ragdollInitVelocity());
+			g.setRagdollInitVelocity(mu::Vec3{});
+
 			justDied.emplace_back(objPtr, kind);
 		};
 

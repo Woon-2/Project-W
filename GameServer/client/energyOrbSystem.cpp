@@ -7,11 +7,16 @@
 
 namespace {
 
-// Lifecycle timing / motion knobs (tuned in M6).
-constexpr float kFormingTime  = 1.25f;  // seconds for vertices -> sphere
-constexpr float kStartSpeed   = 4.5f;   // tracking speed at Forming->Tracking
-constexpr float kAccel        = 30.f;   // tracking acceleration (m/s^2)
-constexpr float kMaxSpeed     = 25.f;   // tracking max speed (m/s)
+// Lifecycle timing / motion knobs.
+// The orb phase is deliberately kept SHORT: the ragdoll hold before it is the part
+// worth watching, so time given back here buys ragdoll screen time at a constant
+// total (death -> fully absorbed ~= 3.6s -- budget table in docs/gameArchitecture.md).
+// kFormingTime dominates the felt delay because the orb is completely stationary for
+// its whole duration, so shorten it before touching the speeds.
+constexpr float kFormingTime  = 0.90f;  // seconds for vertices -> sphere
+constexpr float kStartSpeed   = 8.0f;   // tracking speed at Forming->Tracking
+constexpr float kAccel        = 45.f;   // tracking acceleration (m/s^2)
+constexpr float kMaxSpeed     = 34.f;   // tracking max speed (m/s)
 constexpr float kAbsorbRadius = 0.7f;   // distance to player center that counts as a hit
 constexpr float kAbsorbTime   = 0.18f;  // Absorbing state duration
 constexpr float kTargetHeight = 1.1f;   // aim at the player's chest, not feet

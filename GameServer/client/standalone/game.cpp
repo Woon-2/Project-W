@@ -739,7 +739,7 @@ void Game::setupStage() {
 	skybox_.setModel(assetManager_.modelCube());
 	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
-	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(132.f), mu::Degree(180.f)));
+	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(122.f), mu::Degree(66.f)));
 	dirLight_.color = mu::Vec3(0.9f, 0.86f, 0.66f);
 	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -2816,25 +2816,8 @@ void Game::update(Milliseconds deltaTime) {
 			rd.activate(physicsWorld_);
 			physicsWorld_.unregisterBody(&g.body());
 
-			// Apply death velocity so the ragdoll flies in the knockback direction.
-			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) {
-					if (rb.body) rb.body->setLinearVel(initVel);
-				}
-			}
-
-			// Per-bone random noise impulse, biased toward the death velocity direction.
-			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f)
-			    ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
-			for (const auto& rb : rd.bones()) {
-				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
-				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
-				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
-				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
-				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
-				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
-			}
+			// Momentum hand-off + toppling kick + per-bone noise (see Ragdoll::applyDeathKick).
+			rd.applyDeathKick(initVel);
 		};
 
 		auto syncRagdollToAnim = [&](Object& g) {
@@ -2843,7 +2826,8 @@ void Game::update(Milliseconds deltaTime) {
 			prd->syncToFinalXforms(
 				g.animBlender()->finalXformData(),
 				g.model()->skeleton,
-				g.renderState().world
+				g.renderState().world,
+				static_cast<float>(tPhysicInterpolation)
 			);
 			g.rebuildBodyBVH();
 		};

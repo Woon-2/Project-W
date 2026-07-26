@@ -483,10 +483,10 @@ private:
 
 	// --- Energy orb death FX: client-authored corpse pipeline ---
 	// On death a monster is DETACHED from server sync into a corpse (gets a fresh
-	// RenderObjectId). The corpse stays a ragdoll for kCorpseRagdollSeconds, then
-	// dissolves into energy orbs, and is only removed once all its orbs are absorbed.
-	// Server respawns borrow a fresh object from a per-kind pool, so corpse animation
-	// is never cut short by a respawn packet.
+	// RenderObjectId). The corpse stays a ragdoll for kRagdollSeconds (see
+	// updateCorpses), then dissolves into energy orbs, and is only removed once all its
+	// orbs are absorbed. Server respawns borrow a fresh object from a per-kind pool, so
+	// corpse animation is never cut short by a respawn packet.
 	EnergyOrbSystem orbSystem_{};
 
 	// Path guidance (cosmetic, client-only): flowing HDR ribbon + guiding wisp.

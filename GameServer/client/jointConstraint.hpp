@@ -28,7 +28,6 @@ private:
     RigidBody* bodyB_;
     mu::Vec3   anchorA_;   // pivot in bodyA local space
     mu::Vec3   anchorB_;   // pivot in bodyB local space
-    float damping_;
 
     struct Cache {
         mu::Vec3   rA;            // world-space radius: anchor - bodyA.pos
@@ -72,7 +71,7 @@ private:
     mu::Vec3  anchorA_, anchorB_;
     mu::Vec3  axisA_;              // hinge axis in bodyA local space (unit)
     mu::Vec3  axisB_;              // matching hinge axis in bodyB local space (unit)
-    float     minAngle_, maxAngle_, linearDamping_, angularDamping_;
+    float     minAngle_, maxAngle_;
     mu::NQuat refOrient_;          // bodyB orient relative to bodyA at build time
 
     struct Cache {
@@ -145,9 +144,6 @@ private:
     mu::Vec3  twistAxisLocalA_;
     float     coneHalfAngle_;
     float     twistLimit_;
-    float     linearDamping_;
-    float     coneDamping_;
-    float     twistDamping_;
 
     struct Cache {
         // Translational (BallSocket-identical):
