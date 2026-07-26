@@ -205,6 +205,10 @@
     <ClCompile Include="sound\miniaudio_impl.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <!-- MSVC 14.51 can ICE in miniaudio's bundled FLAC decoder under /O2 + /GL.
+           Keep the workaround local to this third-party implementation TU. -->
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Disabled</Optimization>
+      <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>
     <ClCompile Include="light.cpp" />
     <ClCompile Include="log.cpp">

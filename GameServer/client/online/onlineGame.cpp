@@ -4045,6 +4045,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 입력 처리 (속도는 프레임 간 유지 - processInputGame이 감속/가속 관리)
 	processInput(deltaTime);
 
+	// 보스 처치 연출은 카메라/UI/네트워크 시계를 늦추지 않고 로컬 시뮬레이션만
+	// 감속한다. 실시간 카메라 시계 덕분에 연출은 항상 정해진 시간 안에 복귀한다.
+	const float simulationScale = camera_.focusCinematicTimeScale();
+	const Milliseconds simulationDeltaTime = deltaTime * simulationScale;
+
 	// 현재 속도 저장
 	currVelocity_ = player_->velocity();
 	
@@ -4065,7 +4070,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	const Seconds clampedDt = std::min(Seconds(simulationDeltaTime), kMaxPhysicsDeltaTime);
 	physicUpdateAcc_ += clampedDt;
 
 	// move 패킷 전송 주기 판단
@@ -4140,7 +4145,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	for (auto& b : bosses_)    b->rebuildBodyBVH();
 
 	if (!playerDead_)
-		skillSystem_.update(deltaTime, skillCtx_);
+		skillSystem_.update(simulationDeltaTime, skillCtx_);
 
 	// 이벤트 디스패치
 	//
@@ -4150,7 +4155,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// (서버 권위 게임이므로 데미지 적용은 applyHit이 이미 끝냈고, 여기서는 HP/연출/애니메이션만 다룬다.)
 	// 객체 갱신(아래) 이전에 처리해 같은 프레임에 애니메이션 상태가 반영되도록 한다.
 	{
-		const Seconds evDt = std::chrono::duration_cast<Seconds>(deltaTime);
+		const Seconds evDt = std::chrono::duration_cast<Seconds>(simulationDeltaTime);
 
 		auto resolveObject = [&](i32t id) -> Object* {
 			if (player_ && player_->getId() == id) return player_.get();
@@ -4177,6 +4182,46 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 			Object* obj = resolveObject(routeId);
 			if (!obj) continue;
+
+			// 보스/중간보스의 최초 Death만 포커스한다. BossHeatState는 스폰 타입
+			// 기준으로 등록되므로 RTTI 없이 보스 계열을 정확히 구분할 수 있다.
+			if (pEv->type == EventType::Death && !obj->isDead()) {
+				auto heatIt = bossHeatProfiles_.find(static_cast<uint16>(routeId));
+				if (heatIt != bossHeatProfiles_.end()) {
+					auto findOwner = [routeId](const auto& monsters) -> std::shared_ptr<Object> {
+						auto it = std::ranges::find_if(monsters, [routeId](const auto& monster) {
+							return monster && monster->getId() == routeId;
+						});
+						return it != monsters.end()
+							? std::static_pointer_cast<Object>(*it)
+							: std::shared_ptr<Object>{};
+					};
+
+					std::shared_ptr<Object> bossTarget;
+					if (auto it = idGoblinMap_.find(static_cast<uint16>(routeId));
+						it != idGoblinMap_.end()) {
+						bossTarget = std::static_pointer_cast<Object>(it->second);
+					}
+					if (!bossTarget) bossTarget = findOwner(birdys_);
+					if (!bossTarget) bossTarget = findOwner(treants_);
+					if (!bossTarget) bossTarget = findOwner(bosses_);
+
+					if (bossTarget) {
+						const BossHeatState& presentation = heatIt->second;
+						const bool isFinalBoss = presentation.worldRadius >= 4.f;
+						Camera::FocusCinematicConfig config{};
+						config.duration = Milliseconds{ isFinalBoss ? 2300.f : 1950.f };
+						config.blendIn = Milliseconds{ 350.f };
+						config.blendOut = Milliseconds{ 550.f };
+						config.slowMotionScale = isFinalBoss ? 0.14f : 0.18f;
+						config.focusHeight = std::max(0.9f, presentation.heightBias);
+						config.shotDistance = std::max(4.5f, presentation.worldRadius * 1.65f);
+						config.shotHeight = std::max(0.5f, presentation.worldRadius * 0.2f);
+						config.zoomFovy = mu::Degree{ isFinalBoss ? 46.f : 52.f };
+						camera_.playFocusCinematic(bossTarget, config);
+					}
+				}
+			}
 
 			// Combat feedback (game thread, no locking): compute damage from the
 			// pre-receive HP since the EvHit/EvDeath handler below mutates hp/dead.
@@ -4241,10 +4286,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 게임 객체들 갱신
 	// ground_->update(deltaTime, tPhysicInterpolation);
-	player_->update(deltaTime, tPhysicInterpolation );
+	player_->update(simulationDeltaTime, tPhysicInterpolation );
 
 	for ( auto& obj : otherPlayers_ ) {
-		obj->netInterpAcc_ += deltaTime;
+		obj->netInterpAcc_ += simulationDeltaTime;
 		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
 
 		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
@@ -4253,7 +4298,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			obj->setVelocity(mu::Vec3{});
 		}
 
-		obj->update( deltaTime, tNet );
+		obj->update( simulationDeltaTime, tNet );
 	}
 
 	// Monsters are server-position-driven (S_Move) just like remote players, so they use
@@ -4263,11 +4308,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// monsters. (Same shape as the remote-player loop above.)
 	auto updateMonstersNet = [&](auto& container) {
 		for (auto& m : container) {
-			m->netInterpAcc_ += deltaTime;
+			m->netInterpAcc_ += simulationDeltaTime;
 			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
 			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
 				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
-			m->update(deltaTime, tNet);
+			m->update(simulationDeltaTime, tNet);
 		}
 	};
 	updateMonstersNet(goblins_);
@@ -4280,7 +4325,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	updateMonstersNet(bosses_);
 
 	for (auto& sh : strongholds_) {
-		sh->update(deltaTime, tPhysicInterpolation);
+		sh->update(simulationDeltaTime, tPhysicInterpolation);
 	}
 
 	animSystem_.updatePriorities(
@@ -4314,7 +4359,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// Energy orb death FX: advance orbs (tracking + absorption) toward the live player.
 	// Charge credits are matched to corpses in updateCorpses(); see below.
-	orbSystem_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos());
+	orbSystem_.update(
+		std::chrono::duration<float>(simulationDeltaTime).count(),
+		player_->pos());
 
 	// DEBUG fallback: if no "PathPt" markers were authored, synthesize a winding sample
 	// path at the local player so the effect is visible online right away. Auto-disables
@@ -4328,6 +4375,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
+	camera_.updateFocusCinematic(deltaTime);
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
 		const mu::Vec3 camEye = camera_.eye();
@@ -4337,7 +4385,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	// 애니메이션 업데이트
-	animSystem_.update(0.01s);
+	animSystem_.update(
+		Seconds{ 0.01f * camera_.focusCinematicTimeScale() });
 
 	// Death migration: activate the ragdoll for monsters that died this frame, then
 	// detach them into client-authored corpses so a server respawn can't cut the death
@@ -4390,7 +4439,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	}
 
 	// Advance client-authored corpses: ragdoll hold -> orb dissolve -> pool return.
-	updateCorpses(deltaTime, tPhysicInterpolation);
+	updateCorpses(simulationDeltaTime, tPhysicInterpolation);
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -4559,36 +4608,36 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_) {
 		flameParticleSystem_.update(deltaTime);
 		smokeParticleSystem_.update(deltaTime);
-		bloodEffect_.update(deltaTime);
-		swordSlash1Effect_.update(deltaTime);
-		swordSlash7Effect_.update(deltaTime);
-		swordSlashComboEffect_.update(deltaTime);
-		slashWaveEffect_.update(deltaTime);
-		spikesAttackEffect_.update(deltaTime);
-		piercingEffect_.update(deltaTime);
-		piercingMultiEffect_.update(deltaTime);
-		piercingSlashEffect_.update(deltaTime);
-		piercingCircleSlashEffect_.update(deltaTime);
-		crystalsFrontAttackEffect_.update(deltaTime);
-		aoESlashGreenEffect_.update(deltaTime);
-		crystalsCrossFadeEffect_.update(deltaTime);
-		redEnergyExplosionEffect_.update(deltaTime);
-		arrowEffect_.update(deltaTime);
-		arrowVolleyMuzzleEffect_.update(deltaTime);
-		arrowVolleyEffect_.update(deltaTime);
-		arrowRainMuzzleEffect_.update(deltaTime);
-		arrowRainEffect_.update(deltaTime);
-		energyExplosionArrowEffect_.update(deltaTime);
-		tornadoShotEffect_.update(deltaTime);
-		tornadoMuzzleEffect_.update(deltaTime);
-		tornadoHitEffect_.update(deltaTime);
+		bloodEffect_.update(simulationDeltaTime);
+		swordSlash1Effect_.update(simulationDeltaTime);
+		swordSlash7Effect_.update(simulationDeltaTime);
+		swordSlashComboEffect_.update(simulationDeltaTime);
+		slashWaveEffect_.update(simulationDeltaTime);
+		spikesAttackEffect_.update(simulationDeltaTime);
+		piercingEffect_.update(simulationDeltaTime);
+		piercingMultiEffect_.update(simulationDeltaTime);
+		piercingSlashEffect_.update(simulationDeltaTime);
+		piercingCircleSlashEffect_.update(simulationDeltaTime);
+		crystalsFrontAttackEffect_.update(simulationDeltaTime);
+		aoESlashGreenEffect_.update(simulationDeltaTime);
+		crystalsCrossFadeEffect_.update(simulationDeltaTime);
+		redEnergyExplosionEffect_.update(simulationDeltaTime);
+		arrowEffect_.update(simulationDeltaTime);
+		arrowVolleyMuzzleEffect_.update(simulationDeltaTime);
+		arrowVolleyEffect_.update(simulationDeltaTime);
+		arrowRainMuzzleEffect_.update(simulationDeltaTime);
+		arrowRainEffect_.update(simulationDeltaTime);
+		energyExplosionArrowEffect_.update(simulationDeltaTime);
+		tornadoShotEffect_.update(simulationDeltaTime);
+		tornadoMuzzleEffect_.update(simulationDeltaTime);
+		tornadoHitEffect_.update(simulationDeltaTime);
 		dustParticleSystem_.update(deltaTime);
 		debugBVView_.update(deltaTime);
 
 		if ( tornadoShotActive_ ) {
 			constexpr float kSpeed    = 10.f;
 			constexpr float kDuration = 0.8f;
-			const Seconds dt = deltaTime;
+			const Seconds dt = simulationDeltaTime;
 			tornadoShotElapsed_ += dt;
 			tornadoShotPos_ = tornadoShotPos_ + tornadoShotDir_ * kSpeed * dt.count();
 			tornadoShotEffect_.setOrigin( tornadoShotPos_, tornadoShotOrient_ );
@@ -4947,6 +4996,7 @@ void Game::renderInGame() {
 // ===========================================================================
 
 void Game::enterLobby() {
+	camera_.cancelFocusCinematic();
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
@@ -5459,6 +5509,7 @@ void Game::renderWaitingRoom() {
 }
 
 void Game::enterInGame() {
+	camera_.cancelFocusCinematic();
 	pendingStart_ = false;
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
