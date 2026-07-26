@@ -5742,9 +5742,10 @@ void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, c
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-	// Dialogue input has priority: Enter / left-click advance pages and are
-	// consumed here before any gameplay or UI handling sees them.
-	if (dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
+	// Dialogue input has priority during gameplay, but the topmost settings modal
+	// must receive pointer/key input while it is open.
+	if (!settingsPanel_.isOpen()
+		&& dialogueSystem_.handleWndMsg(msg, wParam, lParam)) {
 		return 0;
 	}
 	if (inventoryPanel_.isOpen()

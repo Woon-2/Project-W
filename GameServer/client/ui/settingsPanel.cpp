@@ -17,6 +17,15 @@ using Build::addSolid;
 using Build::addLabel;
 using Build::addButton;
 
+namespace {
+
+// Keep the settings window above every in-game HUD/overlay. In particular,
+// DialogueSystem uses 10000, while tactical dialogue and status icons use lower
+// values. A distinct value also avoids unstable ordering between equal-z siblings.
+constexpr int kSettingsOverlayZOrder = 20000;
+
+} // namespace
+
 void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
                           const Texture* buttonTex, GameSettings& settings,
                           const std::vector<Resolution>& resolutions,
@@ -36,8 +45,8 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     const float screenW = uiManager.layoutWidth();
     const float screenH = uiManager.layoutHeight();
 
-    // Full-screen overlay root. Hidden until open(); high zOrder so it sits above
-    // the lobby / in-game content (siblings under uiManager.root()).
+    // Full-screen overlay root. Hidden until open(); topmost zOrder keeps every
+    // lobby / in-game overlay behind the settings window.
     root_ = uiManager.root()->addChild(std::make_unique<UIElement>());
     root_->name    = "settingsRoot";
     root_->anchor  = Anchors::TopLeft;
@@ -46,7 +55,7 @@ void SettingsPanel::build(UIManager& uiManager, const Texture* panelTex,
     root_->offsetY = DimValue::px(0.f);
     root_->width   = DimValue::px(screenW);
     root_->height  = DimValue::px(screenH);
-    root_->zOrder  = 50;
+    root_->zOrder  = kSettingsOverlayZOrder;
     root_->visible = false;
 
     // Scrim + 9-slice panel backdrop. Interactive so it absorbs clicks meant for
