@@ -91,13 +91,25 @@ struct EvHit : BasicEvent {
 		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp} {}
 	EvHit(i32t targetId, i32t hp, u8t hitAnimIndex)
 		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp}, hitAnimIndex{hitAnimIndex} {}
+	EvHit(i32t targetId, i32t hp, i32t attackerId, u8t hitAnimIndex)
+		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp},
+		  attackerId{attackerId >= 0 && attackerId < static_cast<i32t>(kInvalidAttackerId)
+			  ? static_cast<u16t>(attackerId)
+			  : kInvalidAttackerId},
+		  hitAnimIndex{hitAnimIndex} {}
 
+	static constexpr u16t kInvalidAttackerId = 0xFFFFu;
 	i32t targetId{-1};
 	i32t hp{-1};
+	// uint16 keeps EvHit within the event pool's 16-byte size limit.
+	// UINT16_MAX means no attributable attacker.
+	u16t attackerId{kInvalidAttackerId};
 	// 어떤 피격 리액션 클립을 재생할지 선택하는 인덱스(서버 권위 선택, S_SkillHit로 전달).
 	// 다중 hit 리그(Boss: Hit1/Hit2)에서만 의미가 있고, 단일 hit 몬스터는 무시한다.
 	u8t hitAnimIndex{0};
 };
+static_assert(sizeof(EvHit) <= 16, "EvHit must fit the 16-byte event pool.");
+
 struct EvBlood : BasicEvent {
 	EvBlood() : BasicEvent{EventType::Blood} {}
 	EvBlood(i32t victimId) : BasicEvent{EventType::Blood}, victimId{victimId} {}

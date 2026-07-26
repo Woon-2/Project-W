@@ -711,6 +711,11 @@ private:
 	// must never renumber the remaining members (see registerInGamePartyPlayer).
 	std::unordered_map<uint16, std::wstring> inGamePartyNameById_{};
 	std::unordered_map<uint16, int> inGameMonsterKillsByPlayerId_{};
+	std::unordered_map<uint16, int> inGameDamageByPlayerId_{};
+	// Reserved for the future drop-item system. Entries stay at zero until its
+	// authoritative pickup event is connected.
+	std::unordered_map<uint16, int> inGamePickedItemsByPlayerId_{};
+	int32 inGameBossLastHitPlayerId_ = -1;
 	uint32 inGamePartyNameSeq_ = 0;
 
 	struct GoblinHpEntry {

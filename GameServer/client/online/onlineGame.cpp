@@ -502,7 +502,8 @@ void Game::setupStage() {
 		uiManager_,
 		UI::FinalScoreboard::Style{
 			.panelTexture = lobbyUI_.panelTexture(),
-			.buttonTexture = lobbyUI_.secondaryButtonTexture()
+			.buttonTexture = lobbyUI_.secondaryButtonTexture(),
+			.titleBannerTexture = assetManager_.tacticalZoneTitleBanner()
 		},
 		[this]() { requestLobbyReturnFromScoreboard(); });
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
@@ -605,16 +606,24 @@ void Game::showFinalScoreboard() {
 	std::vector<UI::FinalScoreboard::Entry> rows;
 	rows.reserve(inGamePartyPlayerIds_.size());
 	for (const uint16 playerId : inGamePartyPlayerIds_) {
-		const auto scoreIt = inGameMonsterKillsByPlayerId_.find(playerId);
+		const auto valueOrZero = [playerId](const auto& values) {
+			const auto it = values.find(playerId);
+			return it != values.end() ? it->second : 0;
+		};
 		rows.push_back(UI::FinalScoreboard::Entry{
 			partyDisplayName(playerId),
-			scoreIt != inGameMonsterKillsByPlayerId_.end() ? scoreIt->second : 0
+			valueOrZero(inGamePickedItemsByPlayerId_),
+			valueOrZero(inGameDamageByPlayerId_),
+			valueOrZero(inGameMonsterKillsByPlayerId_),
+			inGameBossLastHitPlayerId_ == static_cast<int32>(playerId)
+				? UI::FinalScoreboard::kBossLastHitBonus
+				: 0
 		});
 	}
 	std::stable_sort(rows.begin(), rows.end(),
 		[](const UI::FinalScoreboard::Entry& lhs,
 			const UI::FinalScoreboard::Entry& rhs) {
-			return lhs.monsterKills > rhs.monsterKills;
+			return lhs.totalScore() > rhs.totalScore();
 		});
 
 	settingsPanel_.close();
@@ -711,6 +720,8 @@ void Game::registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
 		inGameMonsterKillsByPlayerId_.try_emplace(playerId, 0);
+		inGameDamageByPlayerId_.try_emplace(playerId, 0);
+		inGamePickedItemsByPlayerId_.try_emplace(playerId, 0);
 
 		// The account nickname is authoritative when the server sent one. The roster
 		// (S_Enter names section / S_Enter_Other) is seeded before the object list is
@@ -2414,6 +2425,9 @@ void Game::prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<
 	inGamePartyPlayerIds_.clear();
 	inGamePartyNameById_.clear();
 	inGameMonsterKillsByPlayerId_.clear();
+	inGameDamageByPlayerId_.clear();
+	inGamePickedItemsByPlayerId_.clear();
+	inGameBossLastHitPlayerId_ = -1;
 	inGamePartyNameSeq_ = 0;
 	if (killCountWidget_) killCountWidget_->reset();
 	for (const PlayerNameInfo& info : roster) {
@@ -4164,7 +4178,7 @@ void Game::applyHit( uint16 targetId, int32 newHp, int32 attackerId, uint8 hitAn
 	if ( newHp <= 0 )
 		holdEvent( eventList_, EvDeath( targetId, attackerId ) );
 	else
-		holdEvent( eventList_, EvHit( targetId, newHp, hitAnimIndex ) );
+		holdEvent( eventList_, EvHit( targetId, newHp, attackerId, hitAnimIndex ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
@@ -4548,6 +4562,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						camera_.playFocusCinematic(bossTarget, config);
 						if (isFinalBoss) {
 							finalScoreboardPending_ = true;
+							const i32t killerId = static_cast<const EvDeath*>(pEv)->killerId;
+							if (killerId >= 0
+								&& std::ranges::find(
+									inGamePartyPlayerIds_, static_cast<uint16>(killerId))
+									!= inGamePartyPlayerIds_.end()) {
+								inGameBossLastHitPlayerId_ = killerId;
+							}
 						}
 					}
 				}
@@ -4576,6 +4597,29 @@ void Game::InGameScene(Milliseconds deltaTime) {
 					const mu::Vec3 anchor = obj->renderState().pos
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
 					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
+				}
+				// Attribute only server-confirmed damage actually applied to monsters.
+				// EvHit keeps the attacker id alongside the authoritative post-hit HP;
+				// lethal hits use EvDeath::killerId. Every client therefore derives the
+				// same party totals without counting prediction-only contacts or overkill.
+				i32t damageDealerId = -1;
+				if (pEv->type == EventType::Hit) {
+					const auto* hit = static_cast<const EvHit*>(pEv);
+					if (hit->attackerId != EvHit::kInvalidAttackerId) {
+						damageDealerId = static_cast<i32t>(hit->attackerId);
+					}
+				}
+				else {
+					damageDealerId = static_cast<const EvDeath*>(pEv)->killerId;
+				}
+				const bool isMonsterTarget =
+					idMonsterMap_.find(static_cast<uint16>(routeId)) != idMonsterMap_.end();
+				const bool isPartyDamageDealer = damageDealerId >= 0
+					&& std::ranges::find(
+						inGamePartyPlayerIds_, static_cast<uint16>(damageDealerId))
+						!= inGamePartyPlayerIds_.end();
+				if (dmg > 0 && isMonsterTarget && isPartyDamageDealer) {
+					inGameDamageByPlayerId_[static_cast<uint16>(damageDealerId)] += dmg;
 				}
 				// Every client receives the same server-confirmed lethal hit and killer id.
 				// Count every monster type so the final ranking is identical for the party.
