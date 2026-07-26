@@ -55,7 +55,7 @@
 ```
 Room::update() (60 Hz 고정)
   1. physicsWorld_.step()
-  2. updateGoblinAI(dt)
+  2. updateMonsterAI(dt)
   3. updatePlayerAnimations(dt)
   4. updateSkillSystem(dt)           ← 여기서 스킬 시스템 실행
      └─ skillSystem_.update(dt, ctx)

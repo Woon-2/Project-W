@@ -966,6 +966,18 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
 
+### 오브젝트 id 등록 / 수명주기 감시 (온라인)
+
+**설계·원인 분석·로그 판독표: `RoomServer/docs/objectIdLifecycle.md`**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Game::registerSkillObject(id, obj)` / `unregisterSkillObject(id)` | `online/onlineGame.cpp` (`debugTeleportToArena` 아래) | **`skillObjectById_` 등록 단일 진입점.** 서버 오브젝트 id로 색인하는 희소 배열이라 id가 배열보다 클 수 있다 — 필요한 만큼 `resize` 후 등록. 직접 `skillObjectById_[id] = …` 금지(플레이어 등록만 무검사였다가 id≥256에서 힙 OOB + 슬롯 null → 자기 스킬 VFX/SFX가 월드 원점에서 재생됐다). 등록 후 스킬 시스템 진입 전 `refreshSkillCtx()` 필수(`data()` 재할당) |
+| `Game::debugAuditObjectRegistry()` | `online/onlineGame.cpp` | **F12**. 타입별 컨테이너 ↔ `idMonsterMap_` ↔ `skillObjectById_` 전수 대조. `ORPHAN`(렌더는 되는데 id 맵에 없음=유령) / `STALE`(5초 이상 서버 move 없음=서버에선 이미 사망) / `SKILL SLOT MISMATCH` / `PLAYER SLOT MISMATCH` / `DANGLING MAP ENTRY` 보고 |
+| `Game::debugLogSkillOwnerResolution()` | `online/onlineGame.cpp` | 시전 시 owner 해석 **실패만** 1줄 기록(회귀 트립와이어). 실패 시 `PlayVFX`/`PlaySound`가 월드 원점에서 재생된다(`skill/skillSystem.cpp` PlayVFX/PlaySound의 `owner==nullptr` 분기) |
+| `Game::lastNpcMoveAt_` / `diagElapsed_` | `online/onlineGame.hpp` | npc별 마지막 `S_NpcMoveBatch` 수신 시각(STALE 판정 기준). `moveGoblin`이 갱신, `InGameScene`이 시계 누적 |
+| 서버 측 감시 | `ServerEngine/IdPool.cpp`, `ServerEngine/JobQueue.cpp`, `RoomServer/RoomManager.cpp` | `[IdPool] STRAY/INVALID PUSH … REJECTED`(오염 id를 풀에 안 넣음), `[IdPool] DUPLICATE POP`, `[JobQueue] CONCURRENT EXECUTE / NEGATIVE jobCount`(잠복 UAF), `[RoomManager] DOUBLE REMOVE`. 판독표는 `RoomServer/docs/serverHandoff.md` §5 |
+
 ---
 
 ## 11. UI 시스템
