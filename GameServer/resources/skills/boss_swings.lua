@@ -16,7 +16,7 @@ skill:addEvent(0, "PlayAnimation", {
 
 skill:addEvent(800, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 1.1, 1.25, 2.25, 0, -1, 23) },
     attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 0,
@@ -28,7 +28,7 @@ skill:addEvent(1200, "DestroyHitbox", { slot = 0 })
 
 skill:addEvent(1500, "SpawnHitbox", {
     slot                = 1,
-    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    localOBBs           = { OBB(0.2, 0.15, 0.6, 1.1, 1.25, 2.25, 0, -1, 23) },
     attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 1,
