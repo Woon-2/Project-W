@@ -1862,7 +1862,8 @@ bool Room::npcSkillActive(int32 ownerObjectId) const {
 	return skillSystem_.hasActiveSkill(static_cast<i32t>(ownerObjectId));
 }
 
-void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale) {
+void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale,
+                              const mu::Vec3* castAnchorPos) {
 	if (skillAssetId == 0) return;
 	Object* owner = (ownerObjectId >= 0 && ownerObjectId < static_cast<int32>(objectById_.size()))
 		? objectById_[ownerObjectId] : nullptr;
@@ -1873,19 +1874,24 @@ void Room::skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 s
 	SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
 	bindGroundQueries(ctx);
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerObjectId),
-	                                      ctx, Milliseconds{ 0.f }, skillSeed, damageScale);
+	                                      ctx, Milliseconds{ 0.f }, skillSeed, damageScale,
+	                                      castAnchorPos);
 	clearEvents(skillEvList_);
 	if (instIdx < 0) return;
 
 	// Broadcast to ALL clients (NPC has no session to exclude) so they play the
 	// matching VFX + drive the NPC's AnimBlender via the skill's PlayAnimation.
-	// NPCs have no aim pitch (0.f).
+	// NPCs have no aim pitch (0.f). The cast anchor (targeted ground skills) rides along so
+	// every client plants the effect and its hitbox at the same world XZ the server judged.
 	broadcast(PacketManager::makeSSkillStartPacket(
 		skillAssetId,
 		static_cast<uint16>(ownerObjectId),
 		uint16(0),
 		skillSeed,
-		0.f));
+		0.f,
+		castAnchorPos ? uint8(1) : uint8(0),
+		castAnchorPos ? castAnchorPos->x() : 0.f,
+		castAnchorPos ? castAnchorPos->z() : 0.f));
 }
 
 void Room::attack(int32 sessionId, uint64 actionServerMs) {

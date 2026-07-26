@@ -448,6 +448,12 @@ struct SSkillStartPacket : public PacketHeader {
 	uint16 elapsedMs;
 	uint32 skillSeed;   // relayed caster seed; remote clients reproduce identical VFX params
 	float  aimPitchRadian;   // relayed cast-time aim pitch; remote clients reproduce the pitched trajectory (0 for NPCs)
+	// 시전 앵커 오버라이드(대상 지정형 지면 스킬). 0이면 기존 동작 그대로 = 시전자 pos에서
+	// SkillInstance::castAnchor를 캡처한다. 1이면 아래 XZ가 앵커 위치를 대신하며, yaw는 여전히
+	// 시전자 것을 쓴다(OBB/offset이 시전자 정면 기준 의미를 유지). Y는 Ground attach가 지형에서 다시 뽑는다.
+	uint8  castAnchorValid;
+	float  castAnchorX;
+	float  castAnchorZ;
 };
 
 struct SSkillHitPacket : public PacketHeader {

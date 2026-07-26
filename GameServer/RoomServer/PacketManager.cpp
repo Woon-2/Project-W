@@ -552,7 +552,8 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerHpPacket(uint16 playerId, 
 }
 
 
-std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+	uint8 castAnchorValid, float castAnchorX, float castAnchorZ) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -562,6 +563,9 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->elapsedMs    = elapsedMs;
 	pkt->skillSeed    = skillSeed;
 	pkt->aimPitchRadian = aimPitchRad;
+	pkt->castAnchorValid = castAnchorValid;
+	pkt->castAnchorX     = castAnchorX;
+	pkt->castAnchorZ     = castAnchorZ;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
 

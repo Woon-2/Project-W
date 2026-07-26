@@ -231,7 +231,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `parseVfxSystemOverrides` / `pg::VfxSystemOverrides` | `skillCompiler.cpp` / `../common/particleGameplay.hpp` | lua systems 엔트리의 게임플레이 오버라이드 (speed/lifetime/shape/bursts/volLinear 등) |
 | `SkillSystem::bindVfxGameplayConfigs` | `skillSystem.cpp` | 프리빌드 설정을 ParticleEffect 시스템에 주입 (이펙트 구성 완료 후 1회 호출) |
 | `Online::Game::castSkillByName` | `online/onlineGame.cpp` `processInputGame` | 휠클릭=선택 스킬 사용, 좌클릭=기본 공격(둘 다 스킬 시전). seed 생성+startSkill+C_SkillStart. (구 임시 1~0/Shift 키맵은 제거됨 → 3-C 다이얼) |
-| `Online::Game::skillVfxById_[1..18]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
+| `Online::Game::skillVfxById_[1..20]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
 | `Online::Game::sendSkillStartPacket(assetId, seed)` | `online/onlineGame.cpp` | `C_SkillStart{assetId, clientMs, skillSeed}` 송신 (clientMs=ClientApp::clientMs) |
 | `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
 | `Online::Game::onSkillHit(attackerId, targetId, newHp, assetId, targetVelocity)` | `online/onlineGame.cpp` | `S_SkillHit` 수신: 킬 시 `setRagdollInitVelocity(targetVelocity)` → `applyHit`(EvHit/EvDeath) → 타깃 위치에 hit VFX |
@@ -1184,7 +1184,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | 18종 스킬 lua (slash_wave/slash_combo/.../piercing_multi) | `resources/skills/*.lua` | 이펙트당 기본 스킬(PlayAnimation+PlayVFX+SpawnHitbox/Destroy+OnHit 시작값) |
-| `skillVfxById_` 1~18 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
+| `skillVfxById_` 1~20 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
 
 ---
 
@@ -1210,6 +1210,15 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `SkillInstance::groundAnchors[kMaxGroundAnchors]` | `skill/skillSystem.hpp` | 등록된 지면 앵커 프레임(pos+orient), 여러 별도 히트박스가 공유 |
 | `SetGroundAnchor` dispatch | `skill/skillSystem.cpp` `dispatchEvent` | 시전 yaw 회전+지면 스냅+옵션 align → groundAnchors[id] 등록(서버도 권위적, no-op 아님) |
 | `SkillInstance::CastAnchor` | `skill/skillSystem.hpp` | 시전자 pos+yaw(시전 시점), Ground 히트박스 앵커 |
+| `startSkill(..., anchorPosOverride)` | `skill/skillSystem.{hpp,cpp}` | **대상 지정 앵커 오버라이드**. 위치만 덮고 yaw는 시전자 유지. **XZ 전용(Y=0 강제)** — 소비자는 반드시 ground-snap. null=기존 동작 |
+| `SSkillStartPacket::castAnchorValid/X/Z` | `ServerEngine/protocol.hpp` | 앵커 relay(서버가 정하고 전 클라가 같은 XZ 사용). 0이면 기존 경로 |
+| `Room::skillStartInternal(..., castAnchorPos)` | `RoomServer/Room.cpp` | NPC 앵커 시전 진입점(패킷 빌드 포함) |
+| `PlatoonLeader::castSkillAt` | `RoomServer/PlatoonLeader.cpp` | 지정 스킬 + 앵커 + 명시 damageScale 시전(`castSkillAttack`은 랜덤이라 별도) |
+| PlayVFX Ground attach 브랜치 | `skill/skillSystem.cpp` PlayVFX | `attachType==Ground`면 baseXform을 `rotateYH(anchor.yaw)*translate(anchor.pos)`로 교체 → 이펙트가 앵커에서 재생(연출·판정 동일 프레임). aim pitch skip |
+| `GrandbaumMidBossTactic::updateShieldWallBarrage` | `RoomServer/GrandbaumMidBossTactic.cpp` | ShieldWall 중 원거리 흙 기둥 포격(playerId 순환, 예고 후 작렬). ⚠ 간격 > lua totalDuration |
+| `earthSpikeWarnEffect_`/`earthSpikeEffect_` (vfxId 19/20) | `online/onlineGame.cpp`, `standalone/game.cpp` | 예고 마법진(magic_circle, World 정렬 빌보드) + 갈색 흙 기둥(IceSpikes2 메시+MatTwoSides). **양쪽 미러 필수** |
+| ⚠ 곱셈 tint의 한계 | `particleRenderSubmit.cpp:18` `tint = ctx.tint * mat.color` | 색을 뺄 수만 있다. **채도 0 텍스처만 임의 색 가능**(Stone/Circle/magic_circle/Noise=sat 0.00, CrystalFree1=sat 0.99→갈색 불가) |
+| ⚠ 지면에 눕는 빌보드 | `particleSystem.cpp:991-1003`, `billboard.hlsl:133` | `Alignment::World`는 `billboardRotation3D`(=`main.startRotation3D` 오일러)**만** 쓴다. 이펙트 play 방향(`baseRotation`)·`groundAlign`은 안 탄다 → cfg에서 X -90°로 직접 눕힐 것. 메시는 반대로 `baseRotation` 사용 |
 | `SkillDispatchContext::ground` | `skill/skillSystem.hpp` | `const GroundSampler*` 주입 |
 | `alignQuatYToNormal`/`captureCastAnchor` | `skill/skillSystem.cpp` | 정렬 쿼터니언 / 앵커 캡처 |
 | PlayVFX 지면 스냅 dispatch | `skill/skillSystem.cpp` `dispatchEvent` PlayVFX | worldPos.y 스냅 + `fx->setGroundSampler` |

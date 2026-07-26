@@ -118,7 +118,10 @@ public:
 	// Server-internal skill cast for NPCs (no session / charge gate). Starts an
 	// authoritative skill instance owned by ownerObjectId and broadcasts S_SkillStart
 	// (ownerId = NPC id, elapsedMs = 0) so clients play the matching VFX/animation.
-	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale = 1.0f);
+	// castAnchorPos: non-null이면 시전 앵커(AttachType::Ground 히트박스 + Ground attach PlayVFX의
+	// 기준점)를 시전자가 아니라 이 월드 위치에 심는다(yaw는 시전자 것 유지). 대상 지정형 지면 스킬용.
+	void skillStartInternal(int32 ownerObjectId, uint32 skillAssetId, uint32 skillSeed, float damageScale = 1.0f,
+		const mu::Vec3* castAnchorPos = nullptr);
 	// True while ownerObjectId has a live skill instance (NPC AI holds its attack).
 	bool npcSkillActive(int32 ownerObjectId) const;
 	// Resolve a skill asset id by name from the shared registry (0 if absent).

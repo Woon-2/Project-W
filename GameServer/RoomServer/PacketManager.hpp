@@ -40,7 +40,10 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos);
 	static std::shared_ptr<SendBuffer> makeSStrongholdStatePacket(uint16 strongholdId, int32 hp, uint8 state);
 	static std::shared_ptr<SendBuffer> makeSZoneStatePacket(uint16 zoneId, uint8 state);
-	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad);
+	// castAnchorValid=0(기본)이면 앵커 필드는 무시되고 클라가 시전자 위치에서 castAnchor를 캡처한다
+	// (기존 모든 스킬의 동작). 1이면 castAnchorX/Z가 앵커 위치를 대신한다 — 대상 지정형 지면 스킬용.
+	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+		uint8 castAnchorValid = 0, float castAnchorX = 0.f, float castAnchorZ = 0.f);
 	static std::shared_ptr<SendBuffer> makeSPlayerKnockbackPacket(uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0);
 	static std::shared_ptr<SendBuffer> makeSSkillSelectPacket(uint16 playerId, uint8 slot);

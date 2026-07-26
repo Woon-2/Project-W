@@ -20,6 +20,7 @@
 1. **평상시**: 슬라임 무적(0.0)·보스 취약 → 플레이어가 보스 집중. 슬라임은 `issueStableEngage`로 교전.
 2. **66% / 33% 도달 → ShieldWall 발동**: 플레이어 넉백 + 전 슬라임 부대가 보스를 원형 벽(RingGuard)으로
    감싸 **하드 블로커**가 되고 **보스 DR 0.1(보호)**. 이때 슬라임 DR을 0.5로 풀어 파훼 가능하게 한다.
+   보스는 근접을 멈추고 **원거리 흙 기둥 포격**으로 전환한다(§5).
    HP가 66%와 33%를 서로 다른 시점에 통과하면 각 단계에서 한 번씩 발동한다. 한 번의 전술 업데이트에서
    66%를 건너뛰고 바로 33% 이하가 되면 현재 HP 단계 2를 한 번만 소비하므로 ShieldWall도 한 번만 발동한다.
    첫 ShieldWall 중 33% 이하가 되면 현재 벽 파훼 직후 Cooldown 없이 두 번째로 발동한다. Cooldown 중 33%에
@@ -75,11 +76,71 @@ attackDamageScale`로 산정되며, 레거시 `TacticalNpcConfig::attackDamage`�
 - 보스 공격↑: `bossCfg`(spawnGrandbaumEncounter) `attackDamageScale 5.0`(보스 = Treant 스킬 × 5.0).
 - 수치는 실검증 튜닝용 플레이스홀더.
 
+### 5. ShieldWall 중 원거리 흙 기둥 포격 (2026-07-27)
+
+**해결한 문제**: 벽이 서면 플레이어는 링 바깥(반경 최대 8m)으로 넉백되는데 보스 melee 사거리는
+3.5m다. `enterPhase(ShieldWall)`이 `resetBossMelee`로 보스를 세워 놓기까지 해서, 이 페이즈 동안
+보스는 **문자 그대로 아무것도 하지 않았다**. 파훼 조건도 시간이 아니라 벽 슬라임 20% 처치뿐이라
+페이즈 전체가 위협 없는 노가다 구간이 됐다.
+
+**패턴**: 예고 후 작렬. `Treant_Clap` 모션 → 대상 발밑에 앰버 마법진 예고(t=300ms) → 0.8초 뒤
+갈색 흙 기둥 융기 + 히트박스(t=1100ms). **앵커는 시전 시점에 고정되고 추적하지 않으므로,
+예고를 보고 걸어 나가면 회피된다** — 그 창이 이 패턴의 유일한 대응 수단이므로 텔레그래프 간격을
+줄이지 말 것.
+
+**타겟팅**: 살아있는 플레이어를 **playerId 오름차순 순환**(인덱스가 아니라 id 기준이라 도중에
+누가 죽어도 순번이 어긋나지 않는다). 앵커 = `Player::estimatedPos(room.getElapsedMs())`(lag comp).
+
+**구현**:
+- `GrandbaumMidBossTactic::updateShieldWallBarrage` — `Phase::ShieldWall` 블록에서 매 틱 호출.
+  페이즈를 벗어나면(파훼·보스 사망) 호출 자체가 끊기므로 별도 정지 처리가 없다.
+- `PlatoonLeader::castSkillAt(room, skillId, clipKey, anchorPos, damageScale)` — 기존
+  `castSkillAttack`은 `pickAttack()` **랜덤**이라 지정 시전에 못 쓴다. 앵커 + 명시 damageScale용 별도 경로.
+- 스킬: `resources/skills/grandbaum_earth_spike.lua` (`skill.name = "Grandbaum_EarthSpike"`).
+  VFX 전용 인스턴스 2종 — **vfxId 19 = 앰버 마법진 예고**(`magic_circle.dds`, World 정렬 빌보드),
+  **vfxId 20 = 갈색 흙 기둥**(`IceSpikes2` 메시 + `MatTwoSides`, spikes 스킬과 같은 소재).
+
+  > **⚠ 갈색을 얻으려면 소재 선택이 먼저다 (1차 시도 실패의 원인).** 처음엔 crystal 아트
+  > (`CrystalFree1.dds`)에 갈색 `ps::MatUnlit::color`를 곱했는데 **결과가 거의 검정**이었다.
+  > tint는 곱셈이라 색을 뺄 수만 있고 더할 수 없는데, 그 텍스처는 평균 RGB (0.03, 0.36, 0.73)의
+  > **완전 채도 파랑**이라 R이 0.03이다 — 어떤 갈색 배율을 곱해도 R이 살아나지 않는다.
+  > (원본이 `.color = {1.15, 1.18, 1.41}`처럼 1을 넘는 값을 쓰는 것도 이 텍스처를 *밝히려는* 것이다.)
+  > **곱셈 틴트는 채도 0(그레이스케일) 텍스처에서만 임의 색을 낸다.** 채도 확인:
+  > `Stone/Circle/magic_circle/Noise*` = sat 0.00(틴트 가능), `CrystalFree1` = sat 0.99(불가).
+  > 메시 소재(`MatTwoSides`)는 색이 전부 코드 값(`frontFaces/backFaces/fresnel`)이라 이 문제가 없다.
+
+  > **⚠ 지면에 눕는 빌보드**: `RendererModule::Alignment::World`면 빌보드가 카메라를 향하지 않고
+  > 파티클 회전을 쓴다. 단 그 회전은 **`billboardRotation3D`(= `main.startRotation3D` 오일러)에서만**
+  > 오고 이펙트 play 방향(`baseRotation`)은 안 탄다 — 그래서 lua의 `orient`/`groundAlign`이 아니라
+  > **C++ cfg에서 X축 -90°로 눕혀야 한다**. 반대로 메시 파티클은 `baseRotation`을 쓰므로
+  > `particleConform="SnapAndAlign"`의 슬로프 정렬이 실제로 먹는다.
+- 앵커 배선은 신규 엔진 프리미티브 2개에 얹혀 있다 — `client/docs/terrainInteractingSkills.md`
+  "앵커 오버라이드" / "PlayVFX의 Ground attach".
+
+**함정 / 불변식**:
+- ⚠ `SHIELDWALL_BARRAGE_INTERVAL(1.6s)` > lua `totalDurationMs(1400)`. `skillStartInternal`이
+  `hasActiveSkill` 가드로 중복 캐스트를 **조용히** 버리므로, 간격을 줄이거나 스킬을 늘리면
+  포격이 소리 없이 절반만 나간다.
+- ⚠ `SHIELDWALL_BARRAGE_DAMAGE_SCALE = 1.0`을 **명시로** 넘긴다. 보스의 `attackDamageScale`은
+  5.0(`Room.cpp` bossCfg)이라 그대로 두면 lua의 50이 250이 된다. 전용 스킬은 lua 숫자가 곧 실 데미지다.
+- 히트박스가 `GroundAttach`(정적 OBB)라 **파티클 결정론 계약(`addVFX{systems=...}`)이 불필요**하다.
+  VFX는 순수 연출, 판정은 앵커에 고정된 OBB가 담당한다.
+- 에어본은 `OnHit.impulseDir.y`로 **클라에서** 걸린다. 서버 플레이어는 Kinematic이라 임펄스가
+  no-op이지만, 플레이어 위치 권위는 어차피 클라에 있고 로컬 플레이어 바디만 Dynamic이다.
+
+**밸런스 현황(미검증 플레이스홀더)**: damage 50 = 플레이어 최대 HP 5000의 **1%**. 회피까지
+가능하므로 실질 위협은 사실상 0이다(30초 내내 맞아도 -375, HP 재생이 일부 상쇄). 사용자가
+원안 수치를 유지하기로 선택한 값이며, `grandbaum_earth_spike.lua`의 `damage` 한 줄이라
+플레이 테스트 후 올리기 쉽다.
+
 ## 주요 파일
 
 | 파일 | 내용 |
 |---|---|
-| `GrandbaumMidBossTactic.hpp/.cpp` | DR 토글 전술 전체(보스 melee, ShieldWall 발동/형성/파훼, DR 프로파일). |
+| `GrandbaumMidBossTactic.hpp/.cpp` | DR 토글 전술 전체(보스 melee, ShieldWall 발동/형성/파훼, DR 프로파일, ShieldWall 원거리 포격). |
+| `PlatoonLeader.hpp/.cpp` | `castSkillAt`(지정 스킬 + 앵커 시전). |
+| `resources/skills/grandbaum_earth_spike.lua` | 포격 스킬(예고→융기→히트박스). |
+| `client/online/onlineGame.cpp`, `client/standalone/game.cpp` | 예고 마법진 + 갈색 흙 기둥 이펙트 + vfxId 19/20 (**양쪽 미러 필수**). |
 | `Room.cpp` | `spawnGrandbaumEncounter`(슬라임 4부대 20명씩 + 초기 DR 0.0), `onArenaGrandbaumEnter`, 데미지 경감 적용부(2곳), ShieldWall 넉백/블로커 헬퍼. |
 | `TacticalSlime.cpp` | 슬라임 trooper config(공격력 하향). |
 | `object.hpp` | `damageTakenMultiplier_`. |
@@ -120,5 +181,11 @@ fallback). 해당 아레나 진입만으로 트리거. (마커는 `resources/ter
 3. **치즈 방지**: 틈으로 보스 접근해도 보스 DR로 직접 처치 비효율 → 결국 슬라임 처치로 파훼.
 4. **보스 사후**: 잔여 슬라임 취약 전환 → 정리 → 아레나 벽 해제.
 5. **엣지**: 슬라임 임계 미만이면 ShieldWall 스킵.
+6. **ShieldWall 포격**: 1.6초마다 보스가 Clap을 재생하고 **자기 발밑이 아니라 대상 플레이어 발밑**에
+   갈색 글로우 → 결정이 솟는가. 순환하는가(P1→P2→P3→P4→P1, 중간에 죽어도 순번 유지).
+   예고를 보고 걸어 나가면 0 데미지인가. 맞으면 50 데미지 + 살짝 뜨는가(접지 중력 게이팅이
+   상승을 막지 않는지 확인). 파훼 즉시 포격이 멈추는가. 2인 이상에서 원격 클라도 같은 위치인가.
+7. **회귀**: 플레이어 `spikes`/`crystals_front_attack`/`crystals_cross_fade`, 일반 몬스터 근접,
+   최종 보스 4종이 종전 위치 그대로인가(앵커 오버라이드는 opt-in이라 영향이 없어야 한다).
 
 RoomServer Debug/x64 빌드 통과(경고 0/오류 0). 클라 코드 변경 없음(기존 바이너리 호환).

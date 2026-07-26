@@ -1521,6 +1521,107 @@ void Game::setParticle()
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
 	}
 
+	// ── Earth Spike (Grandbaum ShieldWall 포격) ────────────────────────────────
+	// 갈색을 얻으려면 **소재 선택이 먼저**다. tint는 곱셈이라 색을 뺄 수만 있고 더할 수 없는데,
+	// crystal 아트(CrystalFree1.dds)는 평균 RGB (0.03, 0.36, 0.73)의 **완전 채도 파랑**이라
+	// 어떤 배율을 곱해도 갈색이 안 나온다(R이 0.03이라 갈색 배율 = 거의 검정 = 첫 시도의 실패).
+	// → 색이 전부 코드 구동인 소재로 교체: 기둥은 IceSpikes2 메시 + MatTwoSides(중립 노이즈 텍스처),
+	//   예고는 magic_circle.dds(채도 0 그레이스케일).
+	// MIRROR: client/standalone/game.cpp.
+	{
+		// 예고 마법진: 융기 전 대상 발밑에 깔리는 납작한 표식(= 회피 창).
+		// Unity JSON이 아니라 코드로 구성한다 — 필요한 건 "한 장, 지면에 눕고, 0.85초 뒤 사라짐"뿐이라
+		// 어떤 프리팹 시스템보다 단순하다.
+		const mu::Vec4     kWarnColor{ 1.35f, 0.62f, 0.18f, 1.f };   // 앰버(흙) — 주 튜닝 노브
+		constexpr float    kWarnSize     = 2.6f;    // 지름(m). 히트박스 폭 1.6m보다 크게 잡아 눈에 띄게
+		constexpr float    kWarnLifetime = 0.85f;   // lua의 예고(300ms)~융기(1100ms) 창을 덮는다
+
+		ps::ParticleSystemConfig cfg;
+		cfg.main.looping      = false;
+		cfg.main.duration     = 1.0f;
+		cfg.main.lifetimeMin  = kWarnLifetime;
+		cfg.main.lifetimeMax  = kWarnLifetime;
+		cfg.main.speedMin     = 0.f;
+		cfg.main.speedMax     = 0.f;
+		cfg.main.startSizeMin = kWarnSize;
+		cfg.main.startSizeMax = kWarnSize;
+		cfg.main.gravityModifierMin = 0.f;
+		cfg.main.gravityModifierMax = 0.f;
+		// 지면에 눕히기: World 정렬이면 빌보드가 카메라를 향하지 않고 파티클 회전을 쓴다.
+		// 그 회전은 **`billboardRotation3D`(= startRotation3D 오일러)에서만** 오고 이펙트 play
+		// 방향(baseRotation)은 안 탄다 — 그래서 lua의 orient가 아니라 여기서 눕혀야 한다.
+		// X축 -90°: 쿼드 로컬 +Z(법선)가 월드 +Y로 간다.
+		cfg.main.startRotation3DEnabled = true;
+		cfg.main.startRotation3DMin = { -3.14159265f * 0.5f, 0.f, 0.f };
+		cfg.main.startRotation3DMax = { -3.14159265f * 0.5f, 0.f, 0.f };
+		cfg.emission.enabled  = true;
+		cfg.emission.emitRate = 0.f;    // PlayMode::Emit의 emit(1)로만 스폰
+		cfg.shape.enabled     = true;
+		cfg.shape.type        = ps::ShapeModule::Type::Point;
+		cfg.renderer.mode      = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.alignment = ps::RendererModule::Alignment::World;
+		// 밝은 주간 지형 위라 Additive는 묻힌다 → Alpha 데칼로 또렷하게.
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.magicCircleTex(),
+			.blend   = ps::BlendMode::Alpha,
+			.color   = kWarnColor
+		};
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f,  { 1.f, 1.f, 1.f, 0.f } },   // 페이드 인
+				{ 0.15f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.80f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },   // 융기 직전 페이드 아웃
+			}
+		};
+		earthSpikeWarnEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+	}
+	{
+		// 흙 기둥: spikes(플레이어 스킬)와 같은 IceSpikes2 메시 + MatTwoSides. 이 소재는 색이
+		// 전부 코드 값(frontFaces/backFaces/fresnel)이고 텍스처도 중립 노이즈라 갈색이 그대로 나온다.
+		// 메시라서 지면 SnapAndAlign 정렬도 실제로 먹는다(빌보드는 안 먹는다).
+		const mu::Vec4     kSpikeFrontColor  { 0.40f, 0.24f, 0.11f, 1.f };  // 젖은 흙
+		const mu::Vec4     kSpikeBackColor   { 0.78f, 0.53f, 0.28f, 1.f };  // 속면은 밝게
+		const mu::Vec4     kSpikeFresnelColor{ 1.00f, 0.68f, 0.32f, 1.f };  // 따뜻한 림
+		constexpr float    kSpikeEmission = 2.0f;   // 얼음 원본은 7.0(형광). 흙은 낮춰야 자연스럽다
+		constexpr float    kSpikeSize     = 1.4f;   // 주 튜닝 노브. 히트박스 폭 1.6m에 맞춘 값
+
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Spikes attack_ParticleSystems.json",
+			"Spikes attack/Spikes");
+		cfg.renderer.mode     = ps::RendererModule::Mode::Mesh;
+		cfg.renderer.pMesh    = assetManager_.meshIceSpikes2();
+		cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+		                      ? nullptr
+		                      : &assetManager_.meshIceSpikes2()->subMeshes[0];
+
+		ps::MatTwoSides mat   = assetManager_.spikesMaterial();   // 사본에 색만 덮는다
+		mat.frontFacesColor   = kSpikeFrontColor;
+		mat.backFacesColor    = kSpikeBackColor;
+		mat.fresnelColor      = kSpikeFresnelColor;
+		mat.backFresnelColor  = kSpikeFresnelColor;
+		mat.emission          = kSpikeEmission;
+		cfg.renderer.mat      = mat;
+
+		cfg.main.looping      = false;
+		// 원본 startSize는 TwoConstants(0 ~ 2.3)라 크기가 매번 달라진다. 히트박스가 고정 OBB이므로
+		// 시각 크기도 고정해야 "보이는 것 = 맞는 것"이 된다.
+		cfg.main.startSizeMin = kSpikeSize;
+		cfg.main.startSizeMax = kSpikeSize;
+		cfg.shape.coneRadius  = 0.f;   // 스폰 지터 제거 → 앵커(=히트박스 중심) 정중앙에 솟는다
+		cfg.shape.randomPositionAmount = 0.f;
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f,  { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+			}
+		};
+		earthSpikeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+	}
+
 	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
 	{
 		// System 0: Arrow mesh (parent) — flies in player's forward direction
@@ -2273,10 +2374,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		for (auto& [id, monster] : idMonsterMap_) registerSkillObject(id, monster);
 		for (auto& [id, other]   : idPlayerMap_)  registerSkillObject(id, other.get());
 
-		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
+		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..20 bind 1:1 to each
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
 		// same skill .lua PlayVFX events resolve identically in online mode.
-		skillVfxById_.assign(19, nullptr);
+		skillVfxById_.assign(21, nullptr);
 		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
@@ -2296,6 +2397,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
 		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
 		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
+		skillVfxById_[19] = &earthSpikeWarnEffect_;       // EarthSpike telegraph (Grandbaum)
+		skillVfxById_[20] = &earthSpikeEffect_;           // EarthSpike pillar   (Grandbaum)
 
 		skillCtx_.objectById          = skillObjectById_.data();
 		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
@@ -4006,7 +4109,8 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+                         bool castAnchorValid, float castAnchorX, float castAnchorZ ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
 
@@ -4023,8 +4127,13 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	// earlier packet in this batch.
 	refreshSkillCtx();
 	debugLogSkillOwnerResolution("remote", skillAssetId, static_cast<i32t>(ownerId));
+	// Targeted ground skills relay their cast anchor (world XZ) so this client plants the
+	// effect + its Ground-attach hitbox exactly where the server judged it. Y is re-sampled
+	// from the terrain, and yaw still comes from the caster.
+	const mu::Vec3 anchorPos{ castAnchorX, 0.f, castAnchorZ };
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
-	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
+	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed,
+	                        castAnchorValid ? &anchorPos : nullptr);
 }
 
 void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex ) {
@@ -4649,6 +4758,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		crystalsFrontAttackEffect_.update(deltaTime);
 		aoESlashGreenEffect_.update(deltaTime);
 		crystalsCrossFadeEffect_.update(deltaTime);
+		earthSpikeWarnEffect_.update(deltaTime);
+		earthSpikeEffect_.update(deltaTime);
 		redEnergyExplosionEffect_.update(deltaTime);
 		arrowEffect_.update(deltaTime);
 		arrowVolleyMuzzleEffect_.update(deltaTime);
@@ -4870,6 +4981,8 @@ void Game::renderInGame() {
 	crystalsFrontAttackEffect_.render(gfx_);
 	aoESlashGreenEffect_.render(gfx_);
 	crystalsCrossFadeEffect_.render(gfx_);
+	earthSpikeWarnEffect_.render(gfx_);
+	earthSpikeEffect_.render(gfx_);
 	redEnergyExplosionEffect_.render(gfx_);
 	arrowEffect_.render(gfx_);
 	arrowVolleyMuzzleEffect_.render(gfx_);
