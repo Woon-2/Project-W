@@ -218,6 +218,21 @@ protected:
 	// baked 모드에서 time에 해당하는 샘플 프레임 인덱스를 구한다.
 	// 클립의 샘플 개수로 클램프하므로 배속·랩 타이밍과 무관하게 텍스처 범위를 벗어나지 않는다.
 	static int bakedFrameOf(const AnimClip& clip, Seconds time);
+
+	// 상하체 분리용 본별 가중치(상체=1, 하체=0, 힙-스파인 경계는 소프트)를 구축한다.
+	// setSkeleton 이후 파생 블렌더의 init에서 1회 호출한다.
+	// 공격/피격 같은 "상체 오버레이"의 lerp 가중치에 곱해 쓰면, 이동 중에도 하체가
+	// 로코모션 클립을 유지해 발 미끄러짐이 사라진다 — docs/aimPitchUpperBodyMask.md.
+	// 루트 본(spine_01)이 없는 리그는 전부 1(= 전신 오버레이, 마스크 도입 이전 동작)로
+	// 폴백하므로, 마스크를 지원하지 않는 리그에서도 안전하게 호출할 수 있다.
+	// logTag는 init 요약/경고 로그에서 리그를 구분하기 위한 이름이다.
+	void buildUpperBodyMask(std::string_view logTag);
+
+	// boneIdx 본의 상체 가중치. buildUpperBodyMask를 호출하지 않았거나 범위를 벗어나면
+	// 1(= 전신)을 돌려주므로, 호출부에서 별도의 크기 검사가 필요 없다.
+	float upperBodyWeight(std::size_t boneIdx) const {
+		return (boneIdx < upperBodyMask_.size()) ? upperBodyMask_[boneIdx] : 1.f;
+	}
 	// key에 해당하는 클립의 현재 프레임들을 접근한다.
 	// 현재 프레임들은 updateFrames 함수를 통해서 갱신할 수 있다.
 	std::vector<AnimFrame>& curFrames(const std::string& key) {
@@ -240,6 +255,9 @@ protected:
 	// AnimSystem::updatePriorities에서 priority 계산에 사용된다.
 	mu::Vec3 cachedPos_{};
 	Seconds updateLag_{};
+	// buildUpperBodyMask가 채우는 본별 상체 가중치. 접근은 upperBodyWeight()로 한다.
+	// 마스크를 쓰지 않는 블렌더에서는 비어 있다.
+	std::vector<float> upperBodyMask_{};
 	float priority_{};
 	bool  culled_ = false;
 	bool  hasEverUpdated_ = false;

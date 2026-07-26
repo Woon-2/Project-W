@@ -237,6 +237,57 @@ void AnimBlender::setSkeleton(const Skeleton& skeleton) {
 	boneXformCache_.resize(skeleton_.bones->size());
 }
 
+// 상하체 분리용 본별 가중치를 구축한다.
+// spine_01 서브트리(상체)=1, 그 외(하체/힙)=0, 경계 본은 소프트 가중치로
+// 힙-스파인 전이의 시어를 방지한다. 루트 본 미발견 시 전부 1(전신)로 폴백.
+//
+// 플레이어와 보스는 같은 UE 마네킹 계열 네이밍(pelvis → spine_01 → ...)이라 리그를 가리지 않고
+// 같은 규칙이 성립한다. 리그마다 값을 달리해야 할 필요가 생기면 그때 인자로 뽑는다.
+void AnimBlender::buildUpperBodyMask(std::string_view logTag) {
+	// 경계 소프트 가중치 (튜닝 지점).
+	static constexpr std::string_view kUpperBodyRoot = "spine_01";
+	static constexpr std::pair<std::string_view, float> kBoundaryWeights[] = {
+		{ "spine_01", 0.5f },
+		{ "spine_02", 0.85f },
+	};
+
+	const auto& bones = *skeleton_.bones;
+	upperBodyMask_.assign(bones.size(), 0.f);
+
+	const Bone* upperRoot = nullptr;
+	for (const auto& b : bones) {
+		if (b.name == kUpperBodyRoot) { upperRoot = &b; break; }
+	}
+	if (!upperRoot) {
+		std::ranges::fill(upperBodyMask_, 1.f);
+		gSharedLog << "[UpperBodyMask] " << logTag << ": " << kUpperBodyRoot
+			<< " not found (" << bones.size() << " bones) -- fallback to full-body overlay\n";
+		dumpLog();
+		return;
+	}
+
+	// 루트 서브트리 전체를 상체로 표시한다.
+	int upperCnt = 0;
+	std::vector<const Bone*> stack{ upperRoot };
+	while (!stack.empty()) {
+		const Bone* b = stack.back();
+		stack.pop_back();
+		upperBodyMask_[b->boneIdx] = 1.f;
+		++upperCnt;
+		for (const auto* pChild : b->children) stack.push_back(pChild);
+	}
+	for (const auto& [name, w] : kBoundaryWeights) {
+		for (const auto& b : bones) {
+			if (b.name == name) { upperBodyMask_[b.boneIdx] = w; break; }
+		}
+	}
+
+	gSharedLog << "[UpperBodyMask] " << logTag << " built: totalBones=" << bones.size()
+		<< " upperBones=" << upperCnt
+		<< " boundary(spine_01=0.5, spine_02=0.85)\n";
+	dumpLog();
+}
+
 // 본들의 로컬 변환을 스켈레톤의 본 트리를 순회하며
 // 드레스 공간 변환으로 환원한다.
 // 누적이 끝나면 onPostDress 훅을 호출해, 파생 블렌더가 드레스 공간에서의

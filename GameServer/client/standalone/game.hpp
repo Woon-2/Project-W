@@ -179,6 +179,9 @@ private:
 	ParticleEffect crystalsFrontAttackEffect_{};
 	ParticleEffect aoESlashGreenEffect_{};
 	ParticleEffect crystalsCrossFadeEffect_{};
+	// Grandbaum ShieldWall 포격용 예고 마법진 + 흙 기둥(별도 인스턴스 — vfxId↔ParticleEffect 1:1 유지).
+	ParticleEffect earthSpikeWarnEffect_{};
+	ParticleEffect earthSpikeEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	ParticleEffect redEnergyExplosionEffect_{};
 	ParticleEffect arrowEffect_{};

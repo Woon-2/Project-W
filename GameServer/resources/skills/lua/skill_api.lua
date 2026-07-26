@@ -98,10 +98,17 @@ end
 --   advance    = Vec3(x, y, z)     -- attach-local particle travel direction; omit to derive from orient
 --   groundLock = true/false        -- place on the ground plane (ignore caster pitch/roll)
 --   attach     = BoneAttach(name)  -- follow a bone; omit/empty = caster root
+--   attach     = GroundAttach{}    -- place at the CAST ANCHOR instead of the caster. Normally the
+--                                     anchor is the caster's own pos+yaw, so this only differs for a
+--                                     targeted cast, where the server plants the anchor on the target
+--                                     and relays it (S_SkillStart::castAnchor*). Use it so the effect
+--                                     and its Ground-attach hitboxes share one frame. offset is applied
+--                                     in that frame; combine with groundSnap to sit on the surface.
 -- NOTE: the circle radius / fan radius+angle are authored in the effect prefab's shape config (.json),
 --       not here. PlayVFX only controls placement, orientation, and travel direction.
 -- Example -- forward 4m ground circle:   skill:addEvent(120,"PlayVFX",{ vfxId=7, offset=Vec3(0,0,4), groundLock=true })
 -- Example -- 45-degree fan to the left:   skill:addEvent(120,"PlayVFX",{ vfxId=8, offset=Vec3(0,0,2), orient={45,0,0} })
+-- Example -- erupt at the cast anchor:    skill:addEvent(300,"PlayVFX",{ vfxId=21, attach=GroundAttach{}, groundSnap=true })
 
 -- PlaySound event parameters (skill:addEvent(ms, "PlaySound", { ... })):
 --   sound = <string>  -- logical name in the sound catalog (soundCatalog.cpp), e.g. "sword_slash_1"

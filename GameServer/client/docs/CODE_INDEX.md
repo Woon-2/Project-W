@@ -231,11 +231,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `parseVfxSystemOverrides` / `pg::VfxSystemOverrides` | `skillCompiler.cpp` / `../common/particleGameplay.hpp` | lua systems 엔트리의 게임플레이 오버라이드 (speed/lifetime/shape/bursts/volLinear 등) |
 | `SkillSystem::bindVfxGameplayConfigs` | `skillSystem.cpp` | 프리빌드 설정을 ParticleEffect 시스템에 주입 (이펙트 구성 완료 후 1회 호출) |
 | `Online::Game::castSkillByName` | `online/onlineGame.cpp` `processInputGame` | 휠클릭=선택 스킬 사용, 좌클릭=기본 공격(둘 다 스킬 시전). seed 생성+startSkill+C_SkillStart. (구 임시 1~0/Shift 키맵은 제거됨 → 3-C 다이얼) |
-| `Online::Game::skillVfxById_[1..18]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
+| `Online::Game::skillVfxById_[1..20]` | `online/onlineGame.cpp` | standalone과 동일한 vfxId→ParticleEffect 바인딩 (PlayVFX 해상도) |
 | `Online::Game::sendSkillStartPacket(assetId, seed)` | `online/onlineGame.cpp` | `C_SkillStart{assetId, clientMs, skillSeed}` 송신 (clientMs=ClientApp::clientMs) |
 | `Online::Game::onSkillStart(ownerId, assetId, elapsedMs, seed)` | `online/onlineGame.cpp` | `S_SkillStart` 수신: `EvAttack` post + `refreshSkillCtx` + `startSkill(prediction, elapsedMs, seed)`. seed로 캐스터와 동일 파티클 재현 |
 | `Online::Game::onSkillHit(attackerId, targetId, newHp, assetId, targetVelocity)` | `online/onlineGame.cpp` | `S_SkillHit` 수신: 킬 시 `setRagdollInitVelocity(targetVelocity)` → `applyHit`(EvHit/EvDeath) → 타깃 위치에 hit VFX |
-| PlayVFX aim pitch 합성 | `client/skill/skillSystem.cpp #610` (서버 미러: `RoomServer/skill/skillSystem.cpp` PlayVFX) | `aim = eulerOff·rotateXH(aimPitch)·baseRot` — 캐스터 조준 pitch로 발사 프레임 기울임(활/완드 궤적). YawOnly/GroundSnap/본attach 제외. `C/S_MouseMove.pitchRadian`(연속)+`C/S_SkillStart.aimPitchRadian`(시전 스냅) — `docs/aimPitchUpperBodyMask.md` |
+| PlayVFX aim pitch 합성 | `client/skill/skillSystem.cpp #618` (서버 미러: `RoomServer/skill/skillSystem.cpp` PlayVFX) | `aim = eulerOff·rotateXH(aimPitch)·baseRot` — 캐스터 조준 pitch로 발사 프레임 기울임(활/완드 궤적). YawOnly/GroundSnap/본attach 제외. `C/S_MouseMove.pitchRadian`(연속)+`C/S_SkillStart.aimPitchRadian`(시전 스냅) — `docs/aimPitchUpperBodyMask.md` |
 | `AttachType::Body` (애니 독립 멜리) | `client/skill/skillSystem.cpp computeAttachTransform` Body 분기 (서버 미러 `RoomServer/skill/skillSystem.cpp`) | 본 rest 프레임(`toDress`)+aim pitch(본 원점 피벗), 재생 클립 무관. OBB는 BoneAttach와 동일 본-로컬 공간. resolveAttach/dispatch/updateHitboxes/collectActiveHitboxes가 Bone과 동일 경로로 Body 처리. lua `BodyAttach("spine_01",{pitch=})`. 플레이어 근접 8종이 사용 — `docs/aimPitchUpperBodyMask.md` §6.5 |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
@@ -283,13 +283,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `EventType` enum | `event.hpp #67-78` | Hit, Blood, Death, Attack, Respawn, SkillHit, CameraShake, VFXSpawn |
 | `BasicEvent` struct | `event.hpp #84-86` | 공통 base (type 필드) |
 | `EvHit` struct | `event.hpp #88-100` | targetId, hp, `hitAnimIndex`(u8): 서버 권위 선택 피격 리액션 클립 인덱스(다중 hit 리그 Boss=Hit1/Hit2). 단일 hit 몬스터는 무시. `S_SkillHit`→`onSkillHit`→`applyHit`→`EvHit` 전파 |
-| `EvBlood` struct | `event.hpp #96-101` | victimId |
-| `EvDeath` struct | `event.hpp #102-107` | victimId |
-| `EvAttack` struct | `event.hpp #110` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case). 플레이어도 무기별 `attackClips_`에 동일 적용 |
+| `EvBlood` struct | `event.hpp #101-106` | victimId |
+| `EvDeath` struct | `event.hpp #107-114` | victimId |
+| `EvAttack` struct | `event.hpp #115-134` | attackerId + `attackIndex`(u8): AnimBlender의 `attackClips_` 인덱스로 어떤 공격 클립을 재생할지 선택. `PlayAnimation.attackIndex`에서 전파(skillSystem.cpp PlayAnimation case). 플레이어도 무기별 `attackClips_`에 동일 적용 |
 | `PlayAnimation` 이벤트 | `skill/skillTypes.hpp` | `clipName[32]`(클·서버 미러; 서버가 플레이어 공격 클립을 이 이름으로 `switchClip`)+`blendTime`+`attackIndex`. 클라는 attackIndex로, 서버는 clipName으로 클립 선택. 서버 핸들러는 owner가 `isPlayer()`일 때만 동작(몬스터는 AI 구동, no-op) — `RoomServer/skill/skillSystem.cpp` |
-| `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
-| `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
-| `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
+| `EvRespawn` struct | `event.hpp #135-140` | targetId (부활 애니메이션 트리거) |
+| `IEventBus` interface | `event.hpp #178-195` | `receive()` 순수 가상 |
+| `NullEventBus` | `event.hpp #197-200` | 아무것도 안 하는 기본 버스 |
 
 ### 트리거 존 (Zone)
 
@@ -330,25 +330,26 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::setCulled()/isCulled()` | `animation.hpp #123` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
 | `AnimBlender::onCalcLocal()` | `animation.hpp #143` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
 | `AnimBlender::onCalcDress()` | `animation.hpp #146` | dress 공간으로 환원. 누적 직후 `onPostDress()` 훅 호출 |
-| `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 스파인 조준 pitch에 사용 — `docs/aimPitchUpperBodyMask.md` |
+| `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 스파인 조준 pitch에 사용(보스는 미적용) — `docs/aimPitchUpperBodyMask.md` |
 | `AnimBlender::onCalcFinal()` | `animation.hpp #156` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #160-161` | 셰이더 입력용 최종 행렬 배열 |
-| `AnimBlender::advanceClipTime()` | `animation.hpp #198` / `animation.cpp #341` | 루프 클립 시간을 `rate`배로 진행 + fmod 랩. 파생 블렌더가 복붙하던 `t += dt; while (t > dur) t -= dur;`의 단일 구현. **루프 로코모션 전용** — 공격/피격/사망은 랩하면 안 되므로 각자 clamp 방식 유지 |
-| `AnimBlender::solveLocomotionRate()` | `animation.hpp #215` / `animation.cpp #367` | 이동 속력 → 로코모션 재생 배속. `clamp(speedXZ / (refSpeed·max(locoWeight, 0.05)), 0.25, 2.0)` + 지수 평활(τ=0.1s, 원격 20Hz 패킷 지터 흡수). **가중치로 나누는 것이 핵심** — 블렌드 밴드가 이미 보폭을 깎아놨으므로 그냥 speed/refSpeed를 쓰면 중속이 더 미끄러진다. refSpeed는 **클립셋별·반비례 레버**(올리면 느려짐: Mushroom 4.5 / Treant 7.8 / Boss walk 4.8·run 9.6 / 나머지 3.0)이며 **서버 `animRefSpeed`+`animBandEnd`와 반드시 일치**. 단 클램프에 걸린 고속 구간에서는 발 속도가 `kMaxRate×refSpeed`라 refSpeed 방향이 뒤집힌다(전술 NPC). 상세: `docs/gameArchitecture.md` |
-| `AnimBlender::bakedFrameOf()` | `animation.hpp #220` / `animation.cpp #391` | baked 샘플 인덱스(샘플 수로 클램프). 9개 블렌더에 복붙돼 있던 **클램프 없는** `bakedSampleRate * animTime`을 대체(텍스처 범위 초과 방지) |
-| `AnimBlender::updatePriority()` | `animation.cpp #429` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
-| `AnimSystem` class | `animation.hpp #281` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.cpp #466` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
+| `AnimBlender::advanceClipTime()` | `animation.hpp #198` / `animation.cpp #392` | 루프 클립 시간을 `rate`배로 진행 + fmod 랩. 파생 블렌더가 복붙하던 `t += dt; while (t > dur) t -= dur;`의 단일 구현. **루프 로코모션 전용** — 공격/피격/사망은 랩하면 안 되므로 각자 clamp 방식 유지 |
+| `AnimBlender::solveLocomotionRate()` | `animation.hpp #215` / `animation.cpp #418` | 이동 속력 → 로코모션 재생 배속. `clamp(speedXZ / (refSpeed·max(locoWeight, 0.05)), 0.25, 2.0)` + 지수 평활(τ=0.1s, 원격 20Hz 패킷 지터 흡수). **가중치로 나누는 것이 핵심** — 블렌드 밴드가 이미 보폭을 깎아놨으므로 그냥 speed/refSpeed를 쓰면 중속이 더 미끄러진다. refSpeed는 **클립셋별·반비례 레버**(올리면 느려짐: Mushroom 4.5 / Treant 7.8 / Boss walk 4.8·run 9.6 / 나머지 3.0)이며 **서버 `animRefSpeed`+`animBandEnd`와 반드시 일치**. 단 클램프에 걸린 고속 구간에서는 발 속도가 `kMaxRate×refSpeed`라 refSpeed 방향이 뒤집힌다(전술 NPC). 상세: `docs/gameArchitecture.md` |
+| `AnimBlender::bakedFrameOf()` | `animation.hpp #220` / `animation.cpp #444` | baked 샘플 인덱스(샘플 수로 클램프). 9개 블렌더에 복붙돼 있던 **클램프 없는** `bakedSampleRate * animTime`을 대체(텍스처 범위 초과 방지) |
+| `AnimBlender::buildUpperBodyMask()` / `upperBodyWeight()` | `animation.hpp #229`·`#233` / `animation.cpp #246` | **상하체 분리 마스크**(Player·Boss 공용). `spine_01` 서브트리=1(상체), 그 외=0, 경계 소프트 `kBoundaryWeights{spine_01:0.5, spine_02:0.85}`(**유일한 튜닝 지점**, 양쪽에 동시 적용). init 시 1회 구축, `spine_01` 미발견 시 전부 1(전신)로 폴백+경고 → 미지원 리그에서도 안전. 오버레이 lerp 가중치에 `t*(m+(1-m)*tIdle_)`로 곱해 쓴다 — `docs/aimPitchUpperBodyMask.md` |
+| `AnimBlender::updatePriority()` | `animation.cpp #482` | 거리 LOD로 `mode_` 결정: refPos에서 약 29m(`kDistScale=50`×0.577) 이내 Keyframe, 밖은 Baked. 플레이어·근거리 몬스터는 항상 Keyframe 경로 |
+| `AnimSystem` class | `animation.hpp #299` | 스케줄링 / 로드밸런싱 |
+| `AnimSystem::update()` | `animation.cpp #519` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리. batch 경계에서 힙 끝을 `cntProcessed + i`로 줄여 중복 처리/하위 starvation 방지 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #98` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): `buildAttackMask()`=`object.cpp #26`(spine_01 서브트리 마스크+스파인 체인, init 시 1회), 공격 lerp에 `tAttack_*(mask+(1-mask)*tIdle_)` 적용, `onPostDress()`=`object.cpp #397`(스파인 피벗-공액 pitch, 사망 페이드). **run 배속**: `runRate_`+지역 `kRefSpeedRun=5`, 가중치 `tRun*(1-tAttack_*tIdle_)`(하체 마스크 몫 차감), 공격 오버레이 처리 **다음**에 계산 |
-| `AnimBlenderGoblin` | `object.hpp #112` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백. **walk 배속**: `walkRate_`+지역 `kRefSpeedWalk=3`, 가중치 `tWalk_*(1-tAttack_)`(마스크 없음 → 공격이 전 본에 걸림) |
-| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #162` / `#203` — 고블린과 동일 구조·다중 공격·walk 배속(클립 접두어만 다름). Snake는 idle 슬롯에도 `Snake_Walk`를 쓰므로 배속은 walk 슬롯에만 적용 |
-| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #244`/`#281`/`#318`/`#355` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
-| `AnimBlenderBoss` | `object.hpp #396`/`object.cpp #1059` — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드). **배속은 walk/run 공유 단일값**(`locoRate_`) — walk↔run은 양쪽 다 보폭이 있어 클립별 가중치 나눗셈이 이중 보정이 된다. `kRefSpeedWalk=4.8`/`kRefSpeedRun=9.6`을 `tRunBand`로 블렌드해 기준 속도를 만들고 `tMove`로 한 번만 나눈다. **run 밴드는 4.0~7.0** — 두 gait(걷기 3.5 / 질주 8.75) 사이에 놓아야 각 gait가 자기 클립만 읽어 상수가 독립된다(`docs/gameArchitecture.md` "예외: 보스") |
+| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #61` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): 마스크는 기반 클래스 `buildUpperBodyMask("player")`(위 표), 공격 lerp에만 `tAttack_*(mask+(1-mask)*tIdle_)` 적용(hit/death는 전신). `buildSpineChain()`=`object.cpp #26`(pitch용 spine_01..03 체인, init 시 1회), `onPostDress()`=`object.cpp #360`(스파인 피벗-공액 pitch, 사망 페이드). **run 배속**: `runRate_`+지역 `kRefSpeedRun=5`, 가중치 `tRun*(1-tAttack_*tIdle_)`(하체 마스크 몫 차감), 공격 오버레이 처리 **다음**에 계산 |
+| `AnimBlenderGoblin` | `object.hpp #107` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백. **walk 배속**: `walkRate_`+지역 `kRefSpeedWalk=3`, 가중치 `tWalk_*(1-tAttack_)`(마스크 없음 → 공격이 전 본에 걸림) |
+| `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #157` / `#198` — 고블린과 동일 구조·다중 공격·walk 배속(클립 접두어만 다름). Snake는 idle 슬롯에도 `Snake_Walk`를 쓰므로 배속은 walk 슬롯에만 적용 |
+| `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #239`/`#276`/`#313`/`#350` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
+| `AnimBlenderBoss` | `object.hpp #396`/`object.cpp #1002`(init)·`#1025`(update)·`#1167`(onCalcLocal) — 최종보스 14클립 풀세트. Player식 4방향 walk(`Boss_Walk_*`)+속력 run(`Boss_Run`) 블렌딩 + Goblin식 다중공격(`attackClips_`=Swings/Combo/BackAttack/Smite, EvAttack.attackIndex) + Hit1/Hit2(`hitClips_`, EvHit.hitAnimIndex) + Death. Rage는 등록만(BT 트리거 대기). `class Boss : public Goblin`(object.hpp, EventBus/ragdoll 재사용, setAnimBlender만 오버라이드). **상하체 분리 마스크**: `buildUpperBodyMask("boss")` + **공격·피격 두 오버레이 모두** `t*(m+(1-m)*tIdle_)`(death는 전신). 보스는 시전 중 완전 정지하므로 마스크가 일하는 곳은 **시전 종료 후 오버레이 잔여 구간**과 **이동 중 피격**이다 — `RoomServer/docs/bossCombat.md`. 공격 오버레이 길이 = **min(클립 길이, `EvAttack::skillRemaining`)** + 200ms 페이드아웃 — 저작 클립이 lua `totalDurationMs`보다 길어(Smite 2.27s vs 1.2s) 스킬 종료 후 최대 1초간 다리가 공격 포즈로 굳어 미끄러졌다(`RoomServer/docs/bossCombat.md` "공격 후 미끄러짐"). **walk/run 위상 동기**: 두 클립을 단일 `locoPhase_`로 구동 — 각자 진행+run 0 재시작이면 크로스페이드가 디딘 발과 뻗은 발을 평균내 gait 전환마다 움찔했다. **배속은 walk/run 공유 단일값**(`locoRate_`) — walk↔run은 양쪽 다 보폭이 있어 클립별 가중치 나눗셈이 이중 보정이 된다. `kRefSpeedWalk=4.8`/`kRefSpeedRun=9.6`을 `tRunBand`로 블렌드해 기준 속도를 만들고 `wLegs=tMove*(1-tAttack_*tIdle_)`로 한 번만 나눈다. **run 밴드는 4.0~7.0** — 두 gait(걷기 3.5 / 질주 8.75) 사이에 놓아야 각 gait가 자기 클립만 읽어 상수가 독립된다. 서버가 속도를 램프하므로(`FinalBoss::MOVE_ACCEL`) 밴드를 실제로 훑고 지나간다(`docs/gameArchitecture.md` "예외: 보스") |
 | `AnimBlenderAnubis` 이하 | (인덱스 라인 밀림 — Grep으로 조회) |
 
 ---
@@ -392,13 +393,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
-| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1583,#1591,#1609` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(자유 함수 `equipPlayerWeapon`) |
-| `equipPlayerWeapon(Object&, const AssetManager&, PlayerWeaponType)` (자유 함수) | `object.hpp #1012` / `object.cpp #73` | 무기 모델의 SocketOffset 키로 장착 손 결정 → 양손 disequip 후 equip → `AnimBlenderPlayer::setWeaponType`으로 클립 세트 동기화. online(`onlineGame.cpp` setupPlayer/createOtherPlayer/syncLobbyCharacterWeapons)과 standalone 에디터(`Editor::Controller::applyWeaponToPlayer`) 공용 |
-| `Object::render()` 부속 객체 루프 | `object.cpp #1373` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
-| `Object::renderPortrait()` | `object.cpp #1410` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
-| `Object::renderPortraitEquipment()` | `object.cpp #1448` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
-| `Object::update()` | `object.cpp #1152` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
-| `Object::render()` | `object.cpp #1256` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
+| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1769,#1777,#1795` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(자유 함수 `equipPlayerWeapon`) |
+| `equipPlayerWeapon(Object&, const AssetManager&, PlayerWeaponType)` (자유 함수) | `object.hpp #1072` / `object.cpp #111` | 무기 모델의 SocketOffset 키로 장착 손 결정 → 양손 disequip 후 equip → `AnimBlenderPlayer::setWeaponType`으로 클립 세트 동기화. online(`onlineGame.cpp` setupPlayer/createOtherPlayer/syncLobbyCharacterWeapons)과 standalone 에디터(`Editor::Controller::applyWeaponToPlayer`) 공용 |
+| `Object::render()` 부속 객체 루프 | `object.cpp #1563` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
+| `Object::renderPortrait()` | `object.cpp #1596` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
+| `Object::renderPortraitEquipment()` | `object.cpp #1634` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
+| `Object::update()` | `object.cpp #1338` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
+| `Object::render()` | `object.cpp #1442` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
 | `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
@@ -407,22 +408,22 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::worldCullBounds()` | `object.cpp` | Hi-Z cull용 월드 AABB = worldBVH 본 부착 노드 합집합(+15% 마진), 포즈/랙돌 추종. 비스킨이면 nullopt |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
-| `Object::setAimPitch()/aimPitch()` | `object.hpp #541` | 조준 pitch(+아래, 라디안) — body orient(yaw 전용)와 분리된 상체 조준 채널. 로컬=카메라 pitch, 원격=S_MouseMove/S_SkillStart. AnimBlenderPlayer 스파인 굽힘·PlayVFX aim이 소비. NPC는 0 — `docs/aimPitchUpperBodyMask.md` |
+| `Object::setAimPitch()/aimPitch()` | `object.hpp #569` | 조준 pitch(+아래, 라디안) — body orient(yaw 전용)와 분리된 상체 조준 채널. 로컬=카메라 pitch, 원격=S_MouseMove/S_SkillStart. AnimBlenderPlayer 스파인 굽힘·PlayVFX aim이 소비. NPC는 0 — `docs/aimPitchUpperBodyMask.md` |
 | `Object::adoptAnimBlender()` | `object.cpp` (Object::setModel 직전) | 이미 init된 `unique_ptr<AnimBlender>` 채택(소유권 이전): 기존 블렌더 `animSystem.untrackAnimBlender` 후 교체. `setAnimBlender`(클래스 고정 타입)와 달리 런타임 임의 블렌더 교체용 — 에디터 캐스터 핫스왑(`setMonsterCaster`) |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
-| `Object::updateGroundedGravityGate()` | `object.cpp #1483` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
-| `Object::isGrounded()` | `object.hpp #232` | 접지 판정 결과 (updateGroundedGravityGate가 갱신) |
+| `Object::updateGroundedGravityGate()` | `object.cpp #1669` | 물리 step 직후 호출. terrain 접촉으로 접지 판정(normal.y≥0.7·비상승·2 step 지속) → `body_.setGravityScale(0/1)` + 작은 하강속도 ground-snap. 미세 충돌 피드백(중력↔접촉 솔버 튐) 제거 |
+| `Object::isGrounded()` | `object.hpp #585` | 접지 판정 결과 (updateGroundedGravityGate가 갱신) |
 
 **구체 오브젝트 클래스:**
 
 | 클래스 | 위치 |
 |--------|------|
-| `Cube` | `object.hpp #591` |
-| `Player` | `object.hpp #600` |
+| `Cube` | `object.hpp #757` |
+| `Player` | `object.hpp #766` |
 | `Object` ragdoll 가상 접근자 | `object.hpp #263` 인근 — `ragdoll()`(`Ragdoll*`, 베이스 nullptr)/`ragdollPendingActivation`/`ragdollInitVelocity`; `idMonsterMap_<Object*>` 통합 순회용 |
-| `Goblin` | `object.hpp #454` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
-| `Snake` | `object.hpp #481` : `Object` — 고블린과 동일 패턴 복제 |
-| `Mushroom` | `object.hpp #508` : `Object` — 고블린과 동일 패턴 복제 |
+| `Goblin` | `object.hpp #796` : `Object` — ragdoll 필드·`EventBus`·ragdoll 가상 오버라이드를 클래스마다 복제(공용 `Monster` 베이스 없음) |
+| `Snake` | `object.hpp #834` : `Object` — 고블린과 동일 패턴 복제 |
+| `Mushroom` | `object.hpp #861` : `Object` — 고블린과 동일 패턴 복제 |
 | `Bomber/Birdy/Slime/Treant` | `object.hpp`/`object.cpp` — 몬스터 스킬 캐스터(에디터). Mushroom 패턴 복제, 모두 활성(가드 제거됨). 리소스 클라·서버 `*.bin`+`*Server.bin` 전부 존재 |
 | `Anubis` | `object.hpp #648` |
 | `Bat` | `object.hpp #672` |
@@ -432,9 +433,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Eyeball` | `object.hpp #768` |
 | `Fishman` | `object.hpp #792` |
 | `Gargoyle` | `object.hpp #816` |
-| `TerrainObject` | `object.hpp #845` |
+| `TerrainObject` | `object.hpp #1055` |
 
-**TerrainObject (`object.hpp #845`):**
+**TerrainObject (`object.hpp #1055`):**
 - Object 상속. `const TerrainData*` 보유 (TerrainData/Model 분리 패턴과 동일)
 - `setTerrainData(const TerrainData*)` — 지형 데이터 연결
 - `render()` override — `TerrainPipeline::DrawEvent{ terrain, renderState_.world }` 제출
@@ -822,6 +823,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |------|------|------|
 | `Game::resolvePlayerSeparation()` | `onlineGame.cpp` (`removePlayer` 직후) | 플레이어 간 reciprocal soft separation. 매 물리 step 후 호출. 로컬 플레이어를 XZ 침투량의 절반만큼 `setCurrPos`로 밀어냄. Faction `Players` 게이팅, `getId` 결정론적 tie-break, 적용 시 `moveChange_=true`. 상수: `kPlayerSeparationRadius`/`kMaxSeparationSpeed`/`kSeparationStiffness`, 충돌 레이어 `kLayerPlayer`/`kPlayerCollisionMask` (파일 상단) |
 | `Game::resolveBarrierSeparation()` | `onlineGame.cpp` (`resolvePlayerSeparation` 직후) | 전술 차단벽 분리. 매 물리 step 후 호출. 살아있는 `barrierObjects_`(hp>0)를 인접끼리 **선분(캡슐)으로 이어 "연속 벽"**으로 처리(`closestPointOnSegmentXZ`) → NPC 간격 편차와 무관하게 틈 봉합. 캡슐 안 플레이어를 **전체** 침투량만큼 `setCurrPos`로 밀어냄(절반 아님; barrier는 서버 권위 부동 객체). 누적은 step 상한 클램프. 임펄스 없음 → 튕김 없음. 죽은 벽은 수집 제외 → 연결 끊겨 구멍. 상수: `kBarrierRadius`/`kBarrierLinkDist`/`kMaxBarrierPushPerStep` (파일 상단) |
+| `Game::resolveBossSeparation()` | `onlineGame.cpp` (`resolveBarrierSeparation` 직후) | 최종 보스 분리. barrier와 같은 규칙(원 1개/보스, 전체 침투량 `setCurrPos` 보정, 임펄스 없음, step 상한). **서버가 플레이어↔보스 접촉을 필터링하므로(`Room::setupFinalBoss`) 플레이어를 막는 유일한 수단** — 클라는 몬스터 바디를 PhysicsWorld에 등록하지 않는다는 점이 전제. 사망/시체 보스는 통과. 상수 `kBossSeparationRadius`/`kMaxBossPushPerStep`. ⚠ `kPlayerSeparationRadius + kBossSeparationRadius < attackCommitRange × PRESS_HOLD_FRACTION` 불변식 — `RoomServer/docs/bossCombat.md` "플레이어에게 밀리지 않는다" |
 | `Game::setNpcBarrier(active, ids)` | `onlineGame.cpp` (public) | `S_NpcBarrier` 수신 핸들러(`PacketManager`)가 호출. 대상 NPC의 `Object::setBarrierActive` 토글 + `barrierObjects_` 추가/제거. barrier 모드는 `Object` 베이스 플래그라 몬스터 종류 무관 |
 | `S_NpcBarrier` 패킷 | `protocol.hpp` `SNpcBarrierPacket{active, npcId 목록}`; 서버 `MidBossTactics`(차단선 토글)→`PacketManager::makeSNpcBarrierPacket`; 클라 `PacketManager::handleSNpcBarrierPacket`→`Game::setNpcBarrier` | 전술 중 차단선 NPC를 '플레이어를 막는 벽'으로 on/off |
 | `Game::hideNpcs(ids)` | `onlineGame.cpp` (public) | `S_NpcHide` 수신 핸들러가 호출. id로 NPC 조회 후 `Object::setHidden(true)`(+활성 래그돌 해제). id 기반이라 전용 NPC 타입 분리 시 이 조회만 통합하면 됨 |
@@ -1182,7 +1184,7 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | 18종 스킬 lua (slash_wave/slash_combo/.../piercing_multi) | `resources/skills/*.lua` | 이펙트당 기본 스킬(PlayAnimation+PlayVFX+SpawnHitbox/Destroy+OnHit 시작값) |
-| `skillVfxById_` 1~18 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
+| `skillVfxById_` 1~20 바인딩 | `standalone/game.cpp` | vfxId→ParticleEffect* 1:1, lua PlayVFX의 인덱스원 |
 
 ---
 
@@ -1208,6 +1210,15 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | `SkillInstance::groundAnchors[kMaxGroundAnchors]` | `skill/skillSystem.hpp` | 등록된 지면 앵커 프레임(pos+orient), 여러 별도 히트박스가 공유 |
 | `SetGroundAnchor` dispatch | `skill/skillSystem.cpp` `dispatchEvent` | 시전 yaw 회전+지면 스냅+옵션 align → groundAnchors[id] 등록(서버도 권위적, no-op 아님) |
 | `SkillInstance::CastAnchor` | `skill/skillSystem.hpp` | 시전자 pos+yaw(시전 시점), Ground 히트박스 앵커 |
+| `startSkill(..., anchorPosOverride)` | `skill/skillSystem.{hpp,cpp}` | **대상 지정 앵커 오버라이드**. 위치만 덮고 yaw는 시전자 유지. **XZ 전용(Y=0 강제)** — 소비자는 반드시 ground-snap. null=기존 동작 |
+| `SSkillStartPacket::castAnchorValid/X/Z` | `ServerEngine/protocol.hpp` | 앵커 relay(서버가 정하고 전 클라가 같은 XZ 사용). 0이면 기존 경로 |
+| `Room::skillStartInternal(..., castAnchorPos)` | `RoomServer/Room.cpp` | NPC 앵커 시전 진입점(패킷 빌드 포함) |
+| `PlatoonLeader::castSkillAt` | `RoomServer/PlatoonLeader.cpp` | 지정 스킬 + 앵커 + 명시 damageScale 시전(`castSkillAttack`은 랜덤이라 별도) |
+| PlayVFX Ground attach 브랜치 | `skill/skillSystem.cpp` PlayVFX | `attachType==Ground`면 baseXform을 `rotateYH(anchor.yaw)*translate(anchor.pos)`로 교체 → 이펙트가 앵커에서 재생(연출·판정 동일 프레임). aim pitch skip |
+| `GrandbaumMidBossTactic::updateShieldWallBarrage` | `RoomServer/GrandbaumMidBossTactic.cpp` | ShieldWall 중 원거리 흙 기둥 포격(playerId 순환, 예고 후 작렬). ⚠ 간격 > lua totalDuration |
+| `earthSpikeWarnEffect_`/`earthSpikeEffect_` (vfxId 19/20) | `online/onlineGame.cpp`, `standalone/game.cpp` | 예고 마법진(magic_circle, World 정렬 빌보드) + 갈색 흙 기둥(IceSpikes2 메시+MatTwoSides). **양쪽 미러 필수** |
+| ⚠ 곱셈 tint의 한계 | `particleRenderSubmit.cpp:18` `tint = ctx.tint * mat.color` | 색을 뺄 수만 있다. **채도 0 텍스처만 임의 색 가능**(Stone/Circle/magic_circle/Noise=sat 0.00, CrystalFree1=sat 0.99→갈색 불가) |
+| ⚠ 지면에 눕는 빌보드 | `particleSystem.cpp:991-1003`, `billboard.hlsl:133` | `Alignment::World`는 `billboardRotation3D`(=`main.startRotation3D` 오일러)**만** 쓴다. 이펙트 play 방향(`baseRotation`)·`groundAlign`은 안 탄다 → cfg에서 X -90°로 직접 눕힐 것. 메시는 반대로 `baseRotation` 사용 |
 | `SkillDispatchContext::ground` | `skill/skillSystem.hpp` | `const GroundSampler*` 주입 |
 | `alignQuatYToNormal`/`captureCastAnchor` | `skill/skillSystem.cpp` | 정렬 쿼터니언 / 앵커 캡처 |
 | PlayVFX 지면 스냅 dispatch | `skill/skillSystem.cpp` `dispatchEvent` PlayVFX | worldPos.y 스냅 + `fx->setGroundSampler` |

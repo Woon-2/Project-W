@@ -185,15 +185,42 @@ end
 
 ---
 
-## Primitive 6 — 앵커 스레딩 (프로토콜 변경 없음)
+## Primitive 6 — 앵커 스레딩
 
-조준 방식은 **시전자 상대(전방 고정)**. 양측이 동일 시전자 엔티티에서 앵커(pos+yaw)를 유도하고
+기본 조준 방식은 **시전자 상대(전방 고정)**. 양측이 동일 시전자 엔티티에서 앵커(pos+yaw)를 유도하고
 지면 높이는 XZ에 대해 결정론적이므로, 신규 패킷 없이 클라/서버 스냅 위치가 일치한다. 잔여 차이는
 시전자 XZ 드리프트뿐이며 `kHitboxAABBMargin=0.2`가 완충한다.
 
-> **향후 확장**: 레티클(클릭) 조준으로 바꾸려면 `castAnchor`를 채우는 위치만 패킷
-> (C_/S_SkillStart에 targetX/Z/yaw 추가)로 교체하면 된다. 현재 구조는 이를 위해 `castAnchor`
-> 구조체로 추상화되어 있다.
+### 앵커 오버라이드 (구현됨, 2026-07-27)
+
+여기 "향후 확장"으로 적혀 있던 **대상 지정 조준이 실제로 배선됐다**. 첫 사용처는 Grandbaum의
+ShieldWall 원거리 포격(`RoomServer/docs/grandbaumTactic.md`).
+
+- `SSkillStartPacket`에 `castAnchorValid / castAnchorX / castAnchorZ` 추가.
+  **`castAnchorValid == 0`이면 기존 경로와 완전히 동일**(순수 opt-in).
+- `Room::skillStartInternal(..., const mu::Vec3* castAnchorPos)` →
+  `SkillSystem::startSkill(..., anchorPosOverride)`가 `captureCastAnchor` 직후 **위치만** 덮는다.
+- **yaw는 덮지 않는다.** 시전자 것을 유지해야 OBB/offset의 "시전자 정면 기준" 의미가 보존되고,
+  패킷도 XZ 2개로 끝난다.
+- **불변식: 오버라이드는 XZ 전용이며 Y는 양측에서 0으로 강제된다.** 패킷이 XZ만 나르기 때문이다.
+  소비자는 반드시 ground-snap 해야 한다(`AttachType::Ground` 히트박스와 `groundSnap` PlayVFX는
+  둘 다 자동으로 한다). 호출자를 믿지 않고 `startSkill`에서 0으로 눌러, 스냅을 빠뜨린 스킬이
+  조용히 desync하는 대신 양측에서 똑같이 눈에 띄게 깨지도록 했다.
+- 결정론: 앵커를 **서버가 정해서 relay**하므로 클라 예측과 서버 권위가 같은 XZ를 쓴다
+  (`skillSeed`/`aimPitchRadian`과 동일한 패턴).
+
+### PlayVFX의 Ground attach (구현됨, 2026-07-27)
+
+`SetGroundAnchor` 주석이 밝혀 둔 의도("Ground-attach hitboxes **and, by intent, the impact VFX**")를
+배선했다. `PlayVFX`는 종전에 **항상 `owner->renderState().world` 기준**이라, 앵커를 옮겨도
+히트박스만 따라가고 이펙트는 시전자 발밑에 남았다.
+
+- lua: `attach = GroundAttach{}` (PlayVFX 페이로드의 기존 `attachType` 필드를 쓴다 —
+  **flags는 8비트가 이미 전부 소진**이라 새 플래그를 넣을 자리가 없고, 필요도 없다).
+- 디스패치가 `baseXform`을 `rotateYH(castAnchor.yaw) * translate(castAnchor.pos)`로 교체.
+  앵커 프레임이 순수 yaw+평행이동이라 하위의 yawOnly/basis 계산이 그대로 유효하다.
+- aim pitch는 Ground attach에서 skip(지면 이펙트는 평탄 유지).
+- **클라/서버 미러 필수** — 서버 PlayVFX는 시각적으로 no-op이지만 파티클 히트박스 앵커를 파싱한다.
 
 ---
 

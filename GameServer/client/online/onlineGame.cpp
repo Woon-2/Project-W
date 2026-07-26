@@ -60,6 +60,20 @@ static constexpr float kMaxBarrierPushPerStep  = 0.5f;  // step당 최대 보정
 // 죽은 NPC 양옆 간격(~3.2m)·좌우 라인(회랑 폭 ≫)은 안 이어 구멍/탈출구를 보존하는 사이값.
 static constexpr float kBarrierLinkDist        = 2.9f;
 
+// ---------------------------------------------------------------------------
+// 최종 보스 분리 파라미터. 보스는 밀리지 않는 서버 권위 객체(거대한 나무)라 barrier와 동일하게
+// 플레이어가 침투량 전체를 받는다. 서버는 플레이어↔보스 접촉을 필터링하므로(Room::setupFinalBoss)
+// 여기가 유일한 차단 수단이다.
+//
+// ⚠ 불변식: (kPlayerSeparationRadius + kBossSeparationRadius) 는 보스가 접근해 멈추려는
+// 거리보다 작아야 한다 — 서버 `attackCommitRange(1.8m) × PRESS_HOLD_FRACTION(0.7) = 1.26m`.
+// 크면 보스가 목표 거리까지 붙지 못해 플레이어를 계속 밀어붙이며 아레나를 배회한다.
+//   현재: 0.4 + 0.7 = 1.1m  <  1.26m  (여유 0.16m)
+// 몸통 굵기를 키우려면 서버의 두 상수도 같이 올려야 한다.
+// ---------------------------------------------------------------------------
+static constexpr float kBossSeparationRadius   = 0.7f;  // 보스 몸통(trunk) 수평 반경 (m)
+static constexpr float kMaxBossPushPerStep     = 0.5f;  // step당 최대 보정 (m) — 순간이동 방지 상한
+
 static constexpr int     kRenderSkipLagFrames = 4;
 static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
@@ -68,6 +82,16 @@ static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
 static constexpr uint64  kTimeSyncIntervalMs  = 10000;
 static constexpr int64   kMaxAcceptedSyncRttMs = 2000;
+
+// S_NpcMoveBatch cadence: RoomServer broadcasts it once per room tick (60Hz), unlike the
+// 20Hz S_Move stream for remote players. Monster network interpolation must use THIS window,
+// not Object's 20Hz default -- see configureNetMonster.
+static constexpr Seconds kNpcMoveInterval{ 1.f / 60.f };
+// How long a monster may go without a move packet before its velocity is treated as stale and
+// zeroed (stops the anim blender from walking in place forever). Deliberately NOT derived from
+// the interpolation window: at 60Hz that would be a 33ms deadline, so any ordinary network
+// jitter would blink the monster into its idle pose.
+static constexpr Seconds kNpcMoveStaleTimeout{ 0.15f };
 
 static uint64 networkNowMs() {
 	return static_cast<uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1531,6 +1555,107 @@ void Game::setParticle()
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
 	}
 
+	// ── Earth Spike (Grandbaum ShieldWall 포격) ────────────────────────────────
+	// 갈색을 얻으려면 **소재 선택이 먼저**다. tint는 곱셈이라 색을 뺄 수만 있고 더할 수 없는데,
+	// crystal 아트(CrystalFree1.dds)는 평균 RGB (0.03, 0.36, 0.73)의 **완전 채도 파랑**이라
+	// 어떤 배율을 곱해도 갈색이 안 나온다(R이 0.03이라 갈색 배율 = 거의 검정 = 첫 시도의 실패).
+	// → 색이 전부 코드 구동인 소재로 교체: 기둥은 IceSpikes2 메시 + MatTwoSides(중립 노이즈 텍스처),
+	//   예고는 magic_circle.dds(채도 0 그레이스케일).
+	// MIRROR: client/standalone/game.cpp.
+	{
+		// 예고 마법진: 융기 전 대상 발밑에 깔리는 납작한 표식(= 회피 창).
+		// Unity JSON이 아니라 코드로 구성한다 — 필요한 건 "한 장, 지면에 눕고, 0.85초 뒤 사라짐"뿐이라
+		// 어떤 프리팹 시스템보다 단순하다.
+		const mu::Vec4     kWarnColor{ 1.35f, 0.62f, 0.18f, 1.f };   // 앰버(흙) — 주 튜닝 노브
+		constexpr float    kWarnSize     = 2.6f;    // 지름(m). 히트박스 폭 1.6m보다 크게 잡아 눈에 띄게
+		constexpr float    kWarnLifetime = 0.85f;   // lua의 예고(300ms)~융기(1100ms) 창을 덮는다
+
+		ps::ParticleSystemConfig cfg;
+		cfg.main.looping      = false;
+		cfg.main.duration     = 1.0f;
+		cfg.main.lifetimeMin  = kWarnLifetime;
+		cfg.main.lifetimeMax  = kWarnLifetime;
+		cfg.main.speedMin     = 0.f;
+		cfg.main.speedMax     = 0.f;
+		cfg.main.startSizeMin = kWarnSize;
+		cfg.main.startSizeMax = kWarnSize;
+		cfg.main.gravityModifierMin = 0.f;
+		cfg.main.gravityModifierMax = 0.f;
+		// 지면에 눕히기: World 정렬이면 빌보드가 카메라를 향하지 않고 파티클 회전을 쓴다.
+		// 그 회전은 **`billboardRotation3D`(= startRotation3D 오일러)에서만** 오고 이펙트 play
+		// 방향(baseRotation)은 안 탄다 — 그래서 lua의 orient가 아니라 여기서 눕혀야 한다.
+		// X축 -90°: 쿼드 로컬 +Z(법선)가 월드 +Y로 간다.
+		cfg.main.startRotation3DEnabled = true;
+		cfg.main.startRotation3DMin = { -3.14159265f * 0.5f, 0.f, 0.f };
+		cfg.main.startRotation3DMax = { -3.14159265f * 0.5f, 0.f, 0.f };
+		cfg.emission.enabled  = true;
+		cfg.emission.emitRate = 0.f;    // PlayMode::Emit의 emit(1)로만 스폰
+		cfg.shape.enabled     = true;
+		cfg.shape.type        = ps::ShapeModule::Type::Point;
+		cfg.renderer.mode      = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.alignment = ps::RendererModule::Alignment::World;
+		// 밝은 주간 지형 위라 Additive는 묻힌다 → Alpha 데칼로 또렷하게.
+		cfg.renderer.mat = ps::MatUnlit{
+			.mainTex = assetManager_.magicCircleTex(),
+			.blend   = ps::BlendMode::Alpha,
+			.color   = kWarnColor
+		};
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f,  { 1.f, 1.f, 1.f, 0.f } },   // 페이드 인
+				{ 0.15f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.80f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },   // 융기 직전 페이드 아웃
+			}
+		};
+		earthSpikeWarnEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+	}
+	{
+		// 흙 기둥: spikes(플레이어 스킬)와 같은 IceSpikes2 메시 + MatTwoSides. 이 소재는 색이
+		// 전부 코드 값(frontFaces/backFaces/fresnel)이고 텍스처도 중립 노이즈라 갈색이 그대로 나온다.
+		// 메시라서 지면 SnapAndAlign 정렬도 실제로 먹는다(빌보드는 안 먹는다).
+		const mu::Vec4     kSpikeFrontColor  { 0.40f, 0.24f, 0.11f, 1.f };  // 젖은 흙
+		const mu::Vec4     kSpikeBackColor   { 0.78f, 0.53f, 0.28f, 1.f };  // 속면은 밝게
+		const mu::Vec4     kSpikeFresnelColor{ 1.00f, 0.68f, 0.32f, 1.f };  // 따뜻한 림
+		constexpr float    kSpikeEmission = 2.0f;   // 얼음 원본은 7.0(형광). 흙은 낮춰야 자연스럽다
+		constexpr float    kSpikeSize     = 1.4f;   // 주 튜닝 노브. 히트박스 폭 1.6m에 맞춘 값
+
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Spikes attack_ParticleSystems.json",
+			"Spikes attack/Spikes");
+		cfg.renderer.mode     = ps::RendererModule::Mode::Mesh;
+		cfg.renderer.pMesh    = assetManager_.meshIceSpikes2();
+		cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+		                      ? nullptr
+		                      : &assetManager_.meshIceSpikes2()->subMeshes[0];
+
+		ps::MatTwoSides mat   = assetManager_.spikesMaterial();   // 사본에 색만 덮는다
+		mat.frontFacesColor   = kSpikeFrontColor;
+		mat.backFacesColor    = kSpikeBackColor;
+		mat.fresnelColor      = kSpikeFresnelColor;
+		mat.backFresnelColor  = kSpikeFresnelColor;
+		mat.emission          = kSpikeEmission;
+		cfg.renderer.mat      = mat;
+
+		cfg.main.looping      = false;
+		// 원본 startSize는 TwoConstants(0 ~ 2.3)라 크기가 매번 달라진다. 히트박스가 고정 OBB이므로
+		// 시각 크기도 고정해야 "보이는 것 = 맞는 것"이 된다.
+		cfg.main.startSizeMin = kSpikeSize;
+		cfg.main.startSizeMax = kSpikeSize;
+		cfg.shape.coneRadius  = 0.f;   // 스폰 지터 제거 → 앵커(=히트박스 중심) 정중앙에 솟는다
+		cfg.shape.randomPositionAmount = 0.f;
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f,  { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+			}
+		};
+		earthSpikeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+	}
+
 	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
 	{
 		// System 0: Arrow mesh (parent) — flies in player's forward direction
@@ -2283,10 +2408,10 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		for (auto& [id, monster] : idMonsterMap_) registerSkillObject(id, monster);
 		for (auto& [id, other]   : idPlayerMap_)  registerSkillObject(id, other.get());
 
-		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
+		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..20 bind 1:1 to each
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
 		// same skill .lua PlayVFX events resolve identically in online mode.
-		skillVfxById_.assign(19, nullptr);
+		skillVfxById_.assign(21, nullptr);
 		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
@@ -2306,6 +2431,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
 		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
 		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
+		skillVfxById_[19] = &earthSpikeWarnEffect_;       // EarthSpike telegraph (Grandbaum)
+		skillVfxById_[20] = &earthSpikeEffect_;           // EarthSpike pillar   (Grandbaum)
 
 		skillCtx_.objectById          = skillObjectById_.data();
 		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
@@ -2711,6 +2838,16 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 	obj->body().setMass(mass);
 	obj->body().setLinearDamping(0.f);
 	obj->body().setAngularDamping(100.f);
+
+	// Monsters get their own interpolation window: S_NpcMoveBatch is sent on EVERY room tick
+	// (60Hz), not at the 20Hz the Object default was tuned for (remote players' S_Move). With
+	// the 50ms default, each packet resets netInterpAcc_ before tNet can pass 0.33, so only a
+	// third of every server step was ever interpolated and the remaining two thirds arrived as
+	// a per-packet jump. The mesh translated at the right *average* speed but in 60Hz stutters,
+	// which reads as sliding against a smoothly-playing walk cycle (the anim rate is driven by
+	// the true server velocity). Matching the window to the send rate makes tNet reach exactly
+	// 1.0 as the next packet lands. Documented in docs/gameArchitecture.md step 8.
+	obj->netInterpDuration_ = kNpcMoveInterval;
 
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
@@ -3653,6 +3790,57 @@ void Game::resolveBarrierSeparation(Seconds dt) {
 	}
 }
 
+// 최종 보스 분리: 거대한 나무인 보스는 플레이어에게 밀리지 않아야 한다.
+//
+// 종전엔 서버 물리가 이 역할을 대신하고 있었다 — 플레이어가 보스에 파고들면 접촉 해소가 보스를
+// 밀어냈고, 그 반작용이 "단단함"으로 보였다. 문제는 서버 플레이어 바디가 Kinematic(무한 질량)인 데다
+// C_Move(20Hz)마다 setPos로 텔레포트해서, 한 패킷에 최대 50cm를 파고든 뒤 보스가 그만큼 튕겨
+// 나갔다는 것이다(한 발자국씩 순간이동). 질량을 올려도 소용없다 — 무한 질량 상대와의 접촉에서
+// 보스의 속도 변화량은 질량과 무관하게 depenetration bias와 같다.
+// → 서버는 플레이어↔보스 접촉을 필터링하고(Room::setupFinalBoss), 차단은 barrier와 동일한
+//   위치 보정 방식으로 이쪽에서 한다(임펄스 없음 → 튕김 없음).
+void Game::resolveBossSeparation(Seconds dt) {
+	if (!player_ || playerDead_) return;
+	if (bosses_.empty()) return;
+
+	const float sumR  = kPlayerSeparationRadius + kBossSeparationRadius;
+	const float sumR2 = sumR * sumR;
+
+	const mu::Vec3 myPos = player_->pos();
+	mu::Vec3 accumXZ{ 0.f, 0.f, 0.f };
+
+	for (const auto& boss : bosses_) {
+		// 시체/사망 보스는 통과시킨다(래그돌 연출 중 플레이어가 갇히지 않게).
+		if (!boss || boss->hp() <= 0 || boss->isDead()) continue;
+
+		const mu::Vec3 bp = boss->pos();
+		const float dx = myPos.x() - bp.x();
+		const float dz = myPos.z() - bp.z();
+		const float d2 = dx * dx + dz * dz;
+		if (d2 >= sumR2) continue;
+
+		// 중심이 완전히 겹친 축퇴 상황: 방향이 없으므로 보스의 전방 반대로 밀어낸다.
+		if (d2 < 1e-8f) {
+			const mu::Vec3 f = boss->forward();
+			accumXZ += mu::Vec3(-f.x(), 0.f, -f.z()) * sumR;
+			continue;
+		}
+
+		const float d    = std::sqrt(d2);
+		const float push = sumR - d;                  // 침투량 전체
+		accumXZ += mu::Vec3(dx / d, 0.f, dz / d) * push;
+	}
+
+	const float mag2 = accumXZ.len2();
+	if (mag2 > 1e-10f) {
+		const float mag = std::sqrt(mag2);
+		if (mag > kMaxBossPushPerStep)
+			accumXZ = accumXZ * (kMaxBossPushPerStep / mag);
+		player_->setCurrPos(myPos + accumXZ);  // Y 불변
+		moveChange_ = true;
+	}
+}
+
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	// find(): operator[] would insert a null entry for an unknown id, and code
 	// that find()s the map and dereferences without a null check would crash.
@@ -3955,7 +4143,8 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	holdEvent( eventList_, EvRespawn( npcId ) );
 }
 
-void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad ) {
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+                         bool castAnchorValid, float castAnchorX, float castAnchorZ ) {
 	// Trigger attack animation on the remote player that cast the skill.
 	holdEvent( eventList_, EvAttack( ownerId ) );
 
@@ -3972,8 +4161,13 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	// earlier packet in this batch.
 	refreshSkillCtx();
 	debugLogSkillOwnerResolution("remote", skillAssetId, static_cast<i32t>(ownerId));
+	// Targeted ground skills relay their cast anchor (world XZ) so this client plants the
+	// effect + its Ground-attach hitbox exactly where the server judged it. Y is re-sampled
+	// from the terrain, and yaw still comes from the caster.
+	const mu::Vec3 anchorPos{ castAnchorX, 0.f, castAnchorZ };
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
-	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
+	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed,
+	                        castAnchorValid ? &anchorPos : nullptr);
 }
 
 void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex ) {
@@ -4126,6 +4320,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		resolvePlayerSeparation(effectiveInterval);
 		// 전술 차단벽: barrier 활성 NPC 밖으로 로컬 플레이어를 전체 침투량만큼 밀어낸다.
 		resolveBarrierSeparation(effectiveInterval);
+		// 최종 보스: 서버가 플레이어↔보스 접촉을 필터링하므로 차단은 여기서만 이뤄진다.
+		resolveBossSeparation(effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
@@ -4299,8 +4495,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& m : container) {
 			m->netInterpAcc_ += deltaTime;
 			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
-			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
-				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
+			// Stale check uses its own timeout, not a multiple of the interpolation window:
+			// monsters interpolate over one 60Hz tick, and 2x that (33ms) would trip on
+			// ordinary jitter and blink them into idle mid-stride.
+			if (m->netInterpAcc_ >= kNpcMoveStaleTimeout)
+				m->setVelocity(mu::Vec3{});   // no new packet for a while -> stop drift
 			m->update(deltaTime, tNet);
 		}
 	};
@@ -4593,6 +4792,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		crystalsFrontAttackEffect_.update(deltaTime);
 		aoESlashGreenEffect_.update(deltaTime);
 		crystalsCrossFadeEffect_.update(deltaTime);
+		earthSpikeWarnEffect_.update(deltaTime);
+		earthSpikeEffect_.update(deltaTime);
 		redEnergyExplosionEffect_.update(deltaTime);
 		arrowEffect_.update(deltaTime);
 		arrowVolleyMuzzleEffect_.update(deltaTime);
@@ -4814,6 +5015,8 @@ void Game::renderInGame() {
 	crystalsFrontAttackEffect_.render(gfx_);
 	aoESlashGreenEffect_.render(gfx_);
 	crystalsCrossFadeEffect_.render(gfx_);
+	earthSpikeWarnEffect_.render(gfx_);
+	earthSpikeEffect_.render(gfx_);
 	redEnergyExplosionEffect_.render(gfx_);
 	arrowEffect_.render(gfx_);
 	arrowVolleyMuzzleEffect_.render(gfx_);

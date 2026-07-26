@@ -18,13 +18,22 @@ struct BtContext {
 };
 } // namespace bt
 
+// Jittered timers for the circling/charge cadence. Same file-local thread_local engine
+// pattern the rest of the server AI uses (Npc.cpp).
+static thread_local std::mt19937 s_bossRng{ std::random_device{}() };
+
+static Seconds randomRange(Seconds lo, Seconds hi) {
+    std::uniform_real_distribution<float> dist(lo.count(), hi.count());
+    return Seconds{ dist(s_bossRng) };
+}
+
 // --- applyBossConfig ----------------------------------------------------------
 
 void FinalBoss::applyBossConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 2000.f;
-    // Walk speed. The chase leg runs at moveSpeed * RUN_SPEED_MULT (= 8.75) when there is a
-    // real gap to close -- see updateChaseGait / BossChaseAction.
+    // Walk speed, used while circling the target. The charge leg runs at
+    // moveSpeed * RUN_SPEED_MULT (= 8.75) -- see FinalBoss::engage.
     cfg.moveSpeed      = 3.5f;
     // The client blends Boss_Walk_* against Boss_Run, so its playback rate runs off a
     // weight-blended reference speed (AnimBlenderBoss::update) rather than a single clip's.
@@ -48,14 +57,19 @@ void FinalBoss::applyBossConfig() {
 
 namespace {
 
-// Holds the boss in place (Running) while an authoritative skill instance is live,
-// so the Combat selector cannot preempt a committed attack with a new cast. The
-// skill's own lua timeline drives windup/hit/recover; this guard just waits it out.
+// Holds the boss in place (Running) while an authoritative skill instance is live, so the
+// Combat selector cannot preempt a committed attack with a new cast. The skill's own lua
+// timeline drives windup/hit/recover; this guard just waits it out.
+//
+// The boss stands still for the whole swing on purpose. A walking swing was tried and
+// reverted: the attack clips have a large, weighty windup that reads wrong while the feet
+// are still travelling. The answer to a target that backs off is to close the distance
+// *before* committing -- see attackCommitRange() and the charge in FinalBoss::engage.
 class BossSkillBusyGuard : public bt::BtNode {
 public:
     bt::BtStatus tick(Seconds /*dt*/, bt::BtContext& ctx) override {
         if (ctx.room.npcSkillActive(static_cast<int32>(ctx.boss.getId()))) {
-            ctx.boss.setLinearVel(mu::Vec3(0.f, ctx.boss.body().linearVel().y(), 0.f));
+            ctx.boss.halt();
             return bt::BtStatus::Running;
         }
         return bt::BtStatus::Failure;
@@ -78,31 +92,15 @@ private:
     int idx_;
 };
 
-// Fallback: close the gap to the target. Running as long as a target exists.
-class BossChaseAction : public bt::BtNode {
+// Fallback: approach the target. Circles it at walk speed, then commits to a straight run
+// (FinalBoss::engage owns the whole state machine). Running as long as a target exists.
+class BossEngageAction : public bt::BtNode {
 public:
-    bt::BtStatus tick(Seconds /*dt*/, bt::BtContext& ctx) override {
+    bt::BtStatus tick(Seconds dt, bt::BtContext& ctx) override {
         GameSession* t = ctx.boss.resolveTarget(ctx.room);
         if (!t)
             return bt::BtStatus::Failure;
-
-        const float dist     = ctx.boss.distanceToTarget(ctx.room);
-        const bool  approach = dist > ctx.boss.bossAttackRange() * 0.9f;
-        if (approach) {
-            // Run to close a real gap, walk once already on top of the target. Clients infer
-            // the gait from the broadcast velocity, so the speed multiplier is what actually
-            // makes the boss look like it is running -- the clip switch only keeps the
-            // server's own bone poses (and the hit BVH built from them) in step.
-            const bool running = ctx.boss.updateChaseGait(dist);
-            ctx.boss.moveToward(t->player()->estimatedPos(ctx.room.getElapsedMs()),
-                                running ? ctx.boss.runSpeedMult() : 1.f);
-            ctx.boss.animController().switchClip(running ? "Run" : "Walk");
-        } else {
-            ctx.boss.resetChaseGait();
-            ctx.boss.faceToward(t->player()->pos());
-            ctx.boss.setLinearVel(mu::Vec3(0.f, ctx.boss.body().linearVel().y(), 0.f));
-            ctx.boss.animController().switchClip("Idle");
-        }
+        ctx.boss.engage(dt, ctx.room, *t);
         return bt::BtStatus::Running;
     }
 };
@@ -111,7 +109,7 @@ public:
 class BossIdleAction : public bt::BtNode {
 public:
     bt::BtStatus tick(Seconds /*dt*/, bt::BtContext& ctx) override {
-        ctx.boss.setLinearVel(mu::Vec3(0.f, ctx.boss.body().linearVel().y(), 0.f));
+        ctx.boss.halt();
         ctx.boss.animController().switchClip("Idle");
         return bt::BtStatus::Running;
     }
@@ -123,26 +121,31 @@ public:
 // Root (Selector)
 // +- [reserved] phase/rage priority branch (added later)
 // +- EngageSeq: [Cond: has target] -> Combat (Selector)
-//     +- BossSkillBusyGuard                       (hold during a live cast)
-//     +- Cooldown: [Cond: gap band]  -> Smite     (3, gap closer)
-//     +- Cooldown: [Cond: in melee]  -> Combo     (1, heavy)
-//     +- Cooldown: [Cond: in melee]  -> BackAttack(2, variety)
-//     +- Cooldown: [Cond: in melee]  -> Swings    (0, light filler)
-//     +- BossChaseAction                          (fallback)
-// Root last child: BossIdleAction                 (no target)
+//     +- BossSkillBusyGuard                          (hold during a live cast)
+//     +- Cooldown: [Cond: committed && just charged] -> Smite     (3, run-in payoff)
+//     +- Cooldown: [Cond: committed]                 -> Combo     (1, heavy)
+//     +- Cooldown: [Cond: committed]                 -> BackAttack(2, variety)
+//     +- Cooldown: [Cond: committed]                 -> Swings    (0, light filler)
+//     +- BossEngageAction                            (fallback: circle, then charge)
+// Root last child: BossIdleAction                    (no target)
 //
 // Attack indices match setupFinalBoss's addAttack order (Swings/Combo/BackAttack/
 // Smite). Distance bands and cooldowns are gameplay tunables.
+//
+// Every attack now gates on attackCommitRange() (well inside attackRange) rather than the
+// range edge. All four hitboxes are the same weapon_r OBB, so their real reach is identical
+// -- Smite is no longer a "gap closer" (that would need a moving cast, which was reverted),
+// it is the heavy the boss answers a completed charge with.
 
 void FinalBoss::buildBehaviorTree() {
     using namespace bt;
 
-    auto inMelee = [](BtContext& ctx) {
-        return ctx.boss.distanceToTarget(ctx.room) <= ctx.boss.bossAttackRange();
+    auto committed = [](BtContext& ctx) {
+        return ctx.boss.distanceToTarget(ctx.room) <= ctx.boss.attackCommitRange();
     };
-    auto addMeleeAttack = [&inMelee](BtSelector& combat, int attackIdx, float cooldownS) {
+    auto addMeleeAttack = [&committed](BtSelector& combat, int attackIdx, float cooldownS) {
         auto seq = std::make_unique<BtSequence>();
-        seq->addChild(std::make_unique<BtCondition>(inMelee));
+        seq->addChild(std::make_unique<BtCondition>(committed));
         seq->addChild(std::make_unique<BossSkillAttackAction>(attackIdx));
         combat.addChild(std::make_unique<BtCooldown>(Seconds{ cooldownS }, std::move(seq)));
     };
@@ -150,12 +153,12 @@ void FinalBoss::buildBehaviorTree() {
     auto combat = std::make_unique<BtSelector>();
     combat->addChild(std::make_unique<BossSkillBusyGuard>());
 
-    // Smite (3): gap-closer when the target is just past melee but within gapRange.
+    // Smite (3): the payoff for a charge that just landed on the target.
     {
         auto seq = std::make_unique<BtSequence>();
         seq->addChild(std::make_unique<BtCondition>([](BtContext& ctx) {
-            const float d = ctx.boss.distanceToTarget(ctx.room);
-            return d > ctx.boss.bossAttackRange() && d <= ctx.boss.gapRange();
+            return ctx.boss.justCharged()
+                && ctx.boss.distanceToTarget(ctx.room) <= ctx.boss.attackCommitRange();
         }));
         seq->addChild(std::make_unique<BossSkillAttackAction>(3));
         combat->addChild(std::make_unique<BtCooldown>(Seconds{ 6.f }, std::move(seq)));
@@ -165,7 +168,7 @@ void FinalBoss::buildBehaviorTree() {
     addMeleeAttack(*combat, 2, 7.0f);   // BackAttack -- variety
     addMeleeAttack(*combat, 0, 2.5f);   // Swings -- light filler
 
-    combat->addChild(std::make_unique<BossChaseAction>());
+    combat->addChild(std::make_unique<BossEngageAction>());
 
     auto engage = std::make_unique<BtSequence>();
     engage->addChild(std::make_unique<BtCondition>([](BtContext& ctx) {
@@ -187,11 +190,23 @@ NpcUpdateResult FinalBoss::update(Seconds dt, Room& room) {
 
     if (hp() <= 0) {       // one-shot boss: stop on death (client handles corpse/ragdoll)
         animController().switchClip("Die");
-        setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
+        halt();
         return {};
     }
 
+    // Approach-state bookkeeping lives here, not in engage(), because the Combat selector
+    // evaluates the attack leaves BEFORE the engage leaf: the tick a charge arrives is
+    // usually the tick an attack preempts engage entirely. Leaving the transition inside
+    // engage would strand charging_ at true forever and never open the post-charge window.
+    if (postChargeTimer_ > 0s) postChargeTimer_ -= dt;
+
     evaluateTarget(dt, room);
+
+    if (charging_ && distanceToTarget(room) <= attackCommitRange()) {
+        charging_        = false;
+        chargeTimer_     = randomRange(CHARGE_INTERVAL_MIN, CHARGE_INTERVAL_MAX);
+        postChargeTimer_ = POST_CHARGE_WINDOW;   // full window when the leaves read it below
+    }
     if (btRoot_) {
         bt::BtContext ctx{ *this, room };
         btRoot_->tick(dt, ctx);
@@ -264,23 +279,28 @@ float FinalBoss::scoreTarget(GameSession* s, const std::vector<int32>& recentDam
          + TARGET_W_THREAT    * threat;
 }
 
-bool FinalBoss::updateChaseGait(float distToTarget) {
-    if (running_) {
-        if (distToTarget < RUN_EXIT_DISTANCE)  running_ = false;
-    } else {
-        if (distToTarget > RUN_ENTER_DISTANCE) running_ = true;
-    }
-    return running_;
-}
-
-void MU_CALLCONV FinalBoss::moveToward(mu::Vec3 dest, float speedMult) {
+void MU_CALLCONV FinalBoss::moveToward(mu::Vec3 dest, float speedMult, Seconds dt, bool reorient) {
     mu::Vec3 to = dest - pos();
     mu::Vec3 toXZ(to.x(), 0.f, to.z());
     if (toXZ.len2() < 1e-6f) return;
     mu::NVec3 nd(toXZ);
-    const float spd = moveSpeed() * speedMult;
-    setLinearVel(mu::Vec3(nd.x() * spd, body().linearVel().y(), nd.z() * spd));
-    setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(std::atan2(nd.x(), nd.z()))));
+
+    // Ramp the speed instead of snapping to it. Clients read the gait off the broadcast
+    // velocity, so a hard 3.5 -> 8.75 step jumps clean across the walk<->run blend band
+    // and the crossfade never actually plays -- that is the "hitch" at every gait change.
+    const float target = moveSpeed() * speedMult;
+    const float rate   = (target > curSpeed_) ? MOVE_ACCEL : MOVE_DECEL;
+    const float step   = rate * dt.count();
+    curSpeed_ += std::clamp(target - curSpeed_, -step, step);
+
+    setLinearVel(mu::Vec3(nd.x() * curSpeed_, body().linearVel().y(), nd.z() * curSpeed_));
+    if (reorient)
+        setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(std::atan2(nd.x(), nd.z()))));
+}
+
+void FinalBoss::halt() {
+    setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
+    curSpeed_ = 0.f;
 }
 
 void MU_CALLCONV FinalBoss::faceToward(mu::Vec3 worldPos) {
@@ -291,12 +311,98 @@ void MU_CALLCONV FinalBoss::faceToward(mu::Vec3 worldPos) {
     setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(std::atan2(nd.x(), nd.z()))));
 }
 
+// One tick of the approach. Three states; the charge->press transition is owned by
+// update() (see the comment there), everything else is decided here.
+//
+//   charging -- a straight run at the target. Entered when the circling timer runs out (the
+//               sudden commitment) or when the target has simply got too far away.
+//   pressing -- the window right after a charge lands. Stays inside attackCommitRange so the
+//               melee cooldowns get to fire more than once, instead of immediately walking
+//               back out to the circling radius (which would cap the boss at one swing per
+//               charge and read as timid).
+//   circling -- locked on to the target (faceToward every tick) while side-stepping around it
+//               at walk speed, holding STRAFE_RADIUS. Direction flips on a random timer. This
+//               is what makes the boss read as "sizing you up" rather than a homing missile,
+//               and it is why the client needs the 4-directional walk blend.
+//
+// The boss never attacks while moving (see BossSkillBusyGuard); closing to
+// attackCommitRange first is what stops the target dodging by taking one step back.
+void FinalBoss::engage(Seconds dt, Room& room, GameSession& target) {
+    const float    dist   = distanceToTarget(room);
+    const mu::Vec3 tgtPos = target.player()->pos();
+
+    if (charging_) {
+        // Lead the target: at 8.75 m/s the gap closes fast enough that aiming at where the
+        // player *is* would consistently undershoot a running one.
+        moveToward(target.player()->estimatedPos(room.getElapsedMs()), RUN_SPEED_MULT, dt);
+        animController().switchClip("Run");
+        return;
+    }
+
+    // --- pressing -------------------------------------------------------------------
+    if (postChargeTimer_ > 0s) {
+        faceToward(tgtPos);
+        if (dist > attackCommitRange() * PRESS_HOLD_FRACTION) {
+            moveToward(tgtPos, 1.f, dt);
+            animController().switchClip("Walk");
+        } else {
+            halt();
+            animController().switchClip("Idle");
+        }
+        return;
+    }
+
+    // --- circling -------------------------------------------------------------------
+    chargeTimer_ -= dt;
+    if (dist > CHARGE_FORCE_DISTANCE || chargeTimer_ <= 0s) {
+        charging_ = true;
+        return;                         // the run starts on the next tick, from curSpeed_
+    }
+
+    strafeFlipTimer_ -= dt;
+    if (strafeFlipTimer_ <= 0s) {
+        strafeDirTarget_ = -strafeDirTarget_;
+        strafeFlipTimer_ = randomRange(STRAFE_FLIP_MIN, STRAFE_FLIP_MAX);
+    }
+    // Slew through zero rather than flipping the sign: an instant reversal would swap the
+    // client's Boss_Walk_Left/Right in a single frame. Passing through zero makes the boss
+    // plant and turn, and the near-zero tangent naturally stalls it for a beat.
+    {
+        const float turnStep = STRAFE_TURN_RATE * dt.count();
+        strafeDir_ += std::clamp(strafeDirTarget_ - strafeDir_, -turnStep, turnStep);
+    }
+
+    const mu::Vec3 away = mu::Vec3(pos().x() - tgtPos.x(), 0.f, pos().z() - tgtPos.z());
+    const float    r    = away.len();
+    if (r < 1e-3f) {                    // degenerate: standing on top of the target
+        halt();
+        animController().switchClip("Walk");
+        return;
+    }
+
+    const mu::Vec3 radial(away.x() / r, 0.f, away.z() / r);                       // target -> boss
+    const mu::Vec3 tangent(-radial.z() * strafeDir_, 0.f, radial.x() * strafeDir_);
+    // Positive error = too close, push outward; negative = too far, spiral inward.
+    const float    radialErr = std::clamp((STRAFE_RADIUS - r) / STRAFE_RADIUS, -1.f, 1.f);
+    const mu::Vec3 dir       = tangent + radial * (radialErr * STRAFE_RADIAL_GAIN);
+    // Degenerate mid-reversal (tangent ~ 0 while sitting on the preferred radius): plant.
+    if (dir.len2() < 1e-2f) {
+        halt();
+    } else {
+        // reorient = false: the feet go sideways, the body keeps staring at the target.
+        // The client's blend space turns that velocity into the matching Boss_Walk_Left/Right.
+        moveToward(pos() + dir * 2.f, 1.f, dt, /*reorient=*/false);
+    }
+    faceToward(tgtPos);
+    animController().switchClip("Walk");
+}
+
 void FinalBoss::castAttack(Room& room, int attackIdx) {
     const std::vector<NpcAttack>& atk = attacks();
     if (attackIdx < 0 || attackIdx >= static_cast<int>(atk.size())) return;
 
-    // Hold position; the skill timeline drives the swing.
-    setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
+    // Stand still for the swing; BossSkillBusyGuard keeps holding it for the whole cast.
+    halt();
     if (GameSession* t = resolveTarget(room))
         faceToward(t->player()->estimatedPos(room.getElapsedMs()));
     if (!atk[attackIdx].clipKey.empty())

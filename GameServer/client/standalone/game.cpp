@@ -848,9 +848,9 @@ void Game::setupStage() {
 		if (goblin_) { goblin_->setFaction(Faction::Monsters); skillObjectById_[1] = goblin_.get(); }
 
 		// vfxId 0 is reserved for hit/blood VFX (none bound in editor -> no-op).
-		// vfxId 1..18 bind 1:1 to each built ParticleEffect, mirroring the skill
+		// vfxId 1..20 bind 1:1 to each built ParticleEffect, mirroring the skill
 		// foundation .lua files (each PlayVFX vfxId indexes this array directly).
-		skillVfxById_.assign(19, nullptr);
+		skillVfxById_.assign(21, nullptr);
 		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
@@ -870,6 +870,8 @@ void Game::setupStage() {
 		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
 		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
 		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
+		skillVfxById_[19] = &earthSpikeWarnEffect_;       // EarthSpike telegraph (Grandbaum)
+		skillVfxById_[20] = &earthSpikeEffect_;           // EarthSpike pillar   (Grandbaum)
 
 		skillCtx_.objectById     = skillObjectById_.data();
 		skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
@@ -1653,6 +1655,94 @@ void Game::setParticle()
 		}
 
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
+
+	// ── Earth Spike (Grandbaum ShieldWall 포격) ────────────────────────────────
+	// MIRROR: client/online/onlineGame.cpp — 근거 주석은 그쪽에 있다. 요지: tint는 곱셈이라
+	// 완전 채도 파랑인 crystal 아트로는 갈색이 안 나온다 → 색이 코드 구동인 소재로 교체.
+		{
+			// 예고 마법진(지면에 눕는 납작한 표식).
+			const mu::Vec4     kWarnColor{ 1.35f, 0.62f, 0.18f, 1.f };
+			constexpr float    kWarnSize     = 2.6f;
+			constexpr float    kWarnLifetime = 0.85f;
+
+			ps::ParticleSystemConfig cfg;
+			cfg.main.looping      = false;
+			cfg.main.duration     = 1.0f;
+			cfg.main.lifetimeMin  = kWarnLifetime;
+			cfg.main.lifetimeMax  = kWarnLifetime;
+			cfg.main.speedMin     = 0.f;
+			cfg.main.speedMax     = 0.f;
+			cfg.main.startSizeMin = kWarnSize;
+			cfg.main.startSizeMax = kWarnSize;
+			cfg.main.gravityModifierMin = 0.f;
+			cfg.main.gravityModifierMax = 0.f;
+			// World 정렬 빌보드는 billboardRotation3D(= startRotation3D)만 쓴다. X -90°로 눕힌다.
+			cfg.main.startRotation3DEnabled = true;
+			cfg.main.startRotation3DMin = { -3.14159265f * 0.5f, 0.f, 0.f };
+			cfg.main.startRotation3DMax = { -3.14159265f * 0.5f, 0.f, 0.f };
+			cfg.emission.enabled  = true;
+			cfg.emission.emitRate = 0.f;
+			cfg.shape.enabled     = true;
+			cfg.shape.type        = ps::ShapeModule::Type::Point;
+			cfg.renderer.mode      = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.alignment = ps::RendererModule::Alignment::World;
+			cfg.renderer.mat = ps::MatUnlit{
+				.mainTex = assetManager_.magicCircleTex(),
+				.blend   = ps::BlendMode::Alpha,
+				.color   = kWarnColor
+			};
+			cfg.colorOverLifetime.enabled  = true;
+			cfg.colorOverLifetime.gradient = ColorGradient{
+				.keys = {
+					{ 0.0f,  { 1.f, 1.f, 1.f, 0.f } },
+					{ 0.15f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 0.80f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+				}
+			};
+			earthSpikeWarnEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+		}
+		{
+			// 흙 기둥: spikes와 같은 IceSpikes2 메시 + MatTwoSides(색이 전부 코드 값).
+			const mu::Vec4     kSpikeFrontColor  { 0.40f, 0.24f, 0.11f, 1.f };
+			const mu::Vec4     kSpikeBackColor   { 0.78f, 0.53f, 0.28f, 1.f };
+			const mu::Vec4     kSpikeFresnelColor{ 1.00f, 0.68f, 0.32f, 1.f };
+			constexpr float    kSpikeEmission = 2.0f;
+			constexpr float    kSpikeSize     = 1.4f;
+
+			auto cfg = loadUnityParticleConfig(
+				"../resources/effects/Spikes attack_ParticleSystems.json",
+				"Spikes attack/Spikes");
+			cfg.renderer.mode     = ps::RendererModule::Mode::Mesh;
+			cfg.renderer.pMesh    = assetManager_.meshIceSpikes2();
+			cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+			                      ? nullptr
+			                      : &assetManager_.meshIceSpikes2()->subMeshes[0];
+
+			ps::MatTwoSides mat   = assetManager_.spikesMaterial();
+			mat.frontFacesColor   = kSpikeFrontColor;
+			mat.backFacesColor    = kSpikeBackColor;
+			mat.fresnelColor      = kSpikeFresnelColor;
+			mat.backFresnelColor  = kSpikeFresnelColor;
+			mat.emission          = kSpikeEmission;
+			cfg.renderer.mat      = mat;
+
+			cfg.main.looping      = false;
+			cfg.main.startSizeMin = kSpikeSize;
+			cfg.main.startSizeMax = kSpikeSize;
+			cfg.shape.coneRadius  = 0.f;
+			cfg.shape.randomPositionAmount = 0.f;
+			cfg.colorOverLifetime.enabled  = true;
+			cfg.colorOverLifetime.gradient = ColorGradient{
+				.keys = {
+					{ 0.0f,  { 1.f, 1.f, 1.f, 1.f } },
+					{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+				}
+			};
+			earthSpikeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+		}
+
 	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
 		{
 			// System 0: Arrow mesh (parent) — flies in player's forward direction
@@ -2914,6 +3004,8 @@ void Game::update(Milliseconds deltaTime) {
 	aoESlashGreenEffect_.update( simDt );
 	redEnergyExplosionEffect_.update( simDt );
 	crystalsCrossFadeEffect_.update( simDt );
+	earthSpikeWarnEffect_.update( simDt );
+	earthSpikeEffect_.update( simDt );
 	arrowEffect_.update( simDt );
 	arrowVolleyMuzzleEffect_.update( simDt );
 	arrowVolleyEffect_.update( simDt );
@@ -3017,6 +3109,8 @@ void Game::render() {
 	dustParticleSystem_.render( gfx_ );
 	redEnergyExplosionEffect_.render( gfx_ );
 	crystalsCrossFadeEffect_.render( gfx_ );
+	earthSpikeWarnEffect_.render( gfx_ );
+	earthSpikeEffect_.render( gfx_ );
 	arrowEffect_.render( gfx_ );
 	arrowVolleyMuzzleEffect_.render( gfx_ );
 	arrowVolleyEffect_.render( gfx_ );

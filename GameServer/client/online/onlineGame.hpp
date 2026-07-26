@@ -122,7 +122,10 @@ public:
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onTacticalDialogue( uint16 zoneId, TacticalDialogueId dialogueId );
-	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad );
+	// castAnchorValid=false(대부분)이면 시전 앵커를 시전자 위치에서 캡처한다(기존 동작).
+	// true면 castAnchorX/Z가 앵커 위치를 대신한다 — 대상 지정형 지면 스킬(예: Grandbaum_EarthSpike).
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+		bool castAnchorValid = false, float castAnchorX = 0.f, float castAnchorZ = 0.f );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
@@ -311,6 +314,12 @@ private:
 	// 받음). 위치(setCurrPos)만 보정하므로 임펄스 튕김이 없다. step() 직후 resolvePlayerSeparation
 	// 다음에 호출된다.
 	void resolveBarrierSeparation(Seconds dt);
+
+	// 최종 보스 분리 (클라 예측). 보스는 거대한 나무이므로 플레이어가 밀 수 없다 —
+	// 서버가 플레이어↔보스 접촉을 아예 필터링하므로(Room::setupFinalBoss), 플레이어를
+	// 막아주는 책임이 전부 이쪽에 있다. barrier와 동일한 규칙: 침투량 100%를 플레이어가
+	// 위치 보정으로 받는다(임펄스 없음 → 튕김 없음). step() 직후 호출된다.
+	void resolveBossSeparation(Seconds dt);
 
 	// 아레나 후방 Wall 일방향 벽 (클라 예측). 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는
 	// 로컬 플레이어만 평면으로 되돌린다. 안쪽 입장·측면 이동은 통과 → 후발 파티원도 합류 가능.
@@ -651,6 +660,11 @@ private:
 	ParticleEffect crystalsFrontAttackEffect_{};
 	ParticleEffect aoESlashGreenEffect_{};
 	ParticleEffect crystalsCrossFadeEffect_{};
+	// Grandbaum ShieldWall 포격(Grandbaum_EarthSpike): 예고 마법진 + 갈색 흙 기둥.
+	// vfxId ↔ ParticleEffect가 1:1이라, 소재를 공유하는 다른 스킬과 인스턴스까지 공유하면
+	// 서로의 config/시드를 덮어쓴다 — 반드시 별도 인스턴스여야 한다. 구성은 .cpp 참조.
+	ParticleEffect earthSpikeWarnEffect_{};
+	ParticleEffect earthSpikeEffect_{};
 	ParticleEffect redEnergyExplosionEffect_{};
 	ParticleEffect arrowEffect_{};
 	ParticleEffect arrowVolleyMuzzleEffect_{};
