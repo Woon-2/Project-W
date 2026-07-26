@@ -299,6 +299,10 @@ public:
 	Inventory& inventory() { return inventory_; }
 	const Inventory& inventory() const { return inventory_; }
 
+	// 마지막으로 dbo.Inventory에 반영한 revision. 변경이 없으면 저장 잡을 건너뛴다.
+	uint32 persistedRevision() const { return persistedRevision_; }
+	void   setPersistedRevision(uint32 v) { persistedRevision_ = v; }
+
 private:
 	PlayerWeaponType weaponType_ = PlayerWeaponType::HeavyArrow;
 
@@ -310,6 +314,7 @@ private:
 	float        hpRegenAccum_ = 0.f;
 	int32        lastSyncedHp_ = -1;
 	Inventory    inventory_{};
+	uint32       persistedRevision_ = 0;
 };
 
 class Cube : public Object {

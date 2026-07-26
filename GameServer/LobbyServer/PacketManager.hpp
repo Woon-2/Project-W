@@ -24,7 +24,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSLobbyRoomPlayerJoinedPacket( const LobbyPlayerInfo& info );
 	static std::shared_ptr<SendBuffer> makeSLobbyRoomPlayerLeftPacket( uint16 sessionId );
 	static std::shared_ptr<SendBuffer> makeSLobbyWeaponSelectedPacket( uint16 sessionId, PlayerWeaponType weaponType );
-	static std::shared_ptr<SendBuffer> makeSGameStartPacket( const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode );
+	static std::shared_ptr<SendBuffer> makeSGameStartPacket( const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket );
 };
 
 #endif // lobby_packet_manager_hpp

@@ -77,7 +77,7 @@ public:
 	// 대기실 3D 배경과 인게임이 공유하며, stageVisualReady_로 중복 init을 막는다.
 	void setupStageVisual();
 
-	void prepareInGamePartyRoster(uint16 myPlayerId, const std::vector<uint16>& existingPlayerIds);
+	void prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster);
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void setParticle();
 	void setupGround(const ObjectInfo& groundInfo);
@@ -186,7 +186,7 @@ private:
 	void syncLobbyCharacterWeapons();
 	void updatePartyHpHudLayout();
 	void updatePartyHpHudValues();
-	void registerInGamePartyPlayer(uint16 playerId);
+	void registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname = nullptr);
 	void unregisterInGamePartyPlayer(uint16 playerId);
 	std::wstring partyDisplayName(uint16 playerId) const;
 	void refreshSkillCtx();
@@ -261,11 +261,11 @@ public:
 	void onLobbyPlayerJoined(const LobbyPlayerInfo& info);
 	void onLobbyPlayerLeft(uint16 sessionId);
 	void onLobbyWeaponSelected(uint16 sessionId, PlayerWeaponType weaponType);
-	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
+	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode, const EntryTicket& ticket);
 
 private:
 	// sessionId → 표시 이름(본인은 "나", 그 외 "Player_<id>").
-	std::wstring lobbyDisplayName(uint16 sessionId) const;
+	std::wstring lobbyDisplayName(uint16 sessionId, const wchar_t* nickname) const;
 
 	void cullObjects();
 	// Hi-Z/frustum 컬링 결과를 Object::hiZCulled_ 및 AnimBlender::culled_에 반영한다.
@@ -770,6 +770,9 @@ private:
 	std::string handoffIp_{};
 	uint16      handoffPort_ = 0;
 	std::string handoffCode_{};
+	// Signed by the lobby server; relayed verbatim in C_Enter. The room server trusts
+	// the account id and lobby code inside it, so it must not be modified here.
+	EntryTicket handoffTicket_{};
 
 	// 로비 UI 텍스처/위젯/설정 상태는 lobbyUI_ · settingsPanel_ · settings_로 이동했다.
 	// 대기실 3D 준비(stageVisualReady_) 후, 로딩 오버레이 뒤에서 실제로 렌더된 프레임 수.

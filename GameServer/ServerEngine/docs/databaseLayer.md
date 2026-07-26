@@ -1,6 +1,7 @@
 ﻿# DB 레이어 (ODBC)
 
 `ServerEngine`의 ODBC 래퍼. 로비서버(계정/로그인)와 룸서버(인벤토리)가 공용으로 쓴다.
+**두 서버 모두** `main`에서 `DBExecutor::init`을 호출하며, 실패하면 리스너를 띄우기 전에 종료한다.
 
 | 파일 | 역할 |
 |---|---|
@@ -32,6 +33,40 @@ if ( binder.execute() && binder.fetch() ) {
 `DBBinder<paramCnt, columnCnt>`의 템플릿 인자는 **선언한 개수**다. `execute()`는 그만큼이
 전부 바인딩됐는지 `validate()`로 확인하고, 빠졌으면 로그를 남기고 `false`를 돌려준다
 (Debug에서는 `assert`로 즉시 잡힌다).
+
+### 여러 행 읽기
+
+`SQLBindCol`이 고정 주소를 바인딩하므로 `fetch()`를 반복하면 같은 변수가 행마다 갱신된다.
+
+```cpp
+int32 slotIndex = 0, itemId = 0, itemCount = 0;   // fetch 루프가 끝날 때까지 살아 있어야 한다
+DBBinder<1, 3> binder( conn, L"SELECT slotIndex, itemId, itemCount FROM dbo.Inventory WHERE accountId = ?" );
+...
+if ( !binder.execute() ) return false;
+while ( binder.fetch() ) {
+    // slotIndex/itemId/itemCount가 이번 행의 값이다
+}
+```
+
+`DBBinder` 생성자가 `unbind()`(= `SQL_UNBIND` + `SQL_RESET_PARAMS` + `SQL_CLOSE`)를 호출하므로,
+이전 커서는 새 바인더를 만드는 순간 닫힌다.
+
+### 트랜잭션
+
+ODBC 기본은 autocommit이다. 여러 문장을 묶으려면 T-SQL 문장을 그대로 실행한다.
+
+```cpp
+{ DBBinder<0, 0> b( conn, L"BEGIN TRANSACTION" ); if ( !b.execute() ) return false; }
+// ... DELETE / INSERT ...
+{ DBBinder<0, 0> b( conn, ok ? L"COMMIT TRANSACTION" : L"ROLLBACK TRANSACTION" ); b.execute(); }
+```
+
+`unbind()`가 닫는 것은 **커서**지 트랜잭션이 아니므로, 명시적 트랜잭션은 바인더 여러 개를
+넘어 유지된다. 단 **같은 커넥션**이어야 한다 — 중간에 다른 `DBConnectionPoolGuard`를 잡으면
+다른 커넥션이라 트랜잭션 밖이다.
+
+가변 개수 행을 한 문장으로 INSERT할 수는 없다. `DBBinder`의 `paramCnt`가 템플릿 인자라
+`VALUES (…),(…),…`를 바인딩할 방법이 없고 TVP 지원도 없다. 트랜잭션 안에서 행 단위로 돈다.
 
 ## 반드시 지켜야 할 것
 

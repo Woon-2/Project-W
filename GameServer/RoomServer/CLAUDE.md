@@ -1,6 +1,8 @@
 ### RoomServer
 서버 아키텍처 참조 - `docs/serverArchitecture.md`
 스킬 시스템 아키텍처 참조 - `docs/skillArchitecture.md`
+입장 티켓/계정 핸드오프 참조 - `../ServerEngine/docs/entryTicket.md`
+인벤토리 영속화 참조 - `docs/inventoryPersistence.md`
 
 Entry: `RoomServer/roomServerMain.cpp`
 
@@ -33,10 +35,15 @@ States: `Idle` (대기) ↔ `Patrol` (스폰 근처 천천히 배회) loop while
 
 ### Protocol
 
-Defined in `ServerEngine/protocol.hpp`. Packet types:
-
-- `C_Enter` / `S_Enter` / `S_Enter_Other` — player join notifications
-- `S_Leave` — player disconnect
-- `C_Move` / `S_Move` — position and orientation sync
+Defined in `ServerEngine/protocol.hpp`. RoomServer handles the room/gameplay half — join
+(`C_Enter` / `S_Enter` / `S_Enter_Other` / `S_Leave`), movement (`C_Move`, `C_MouseMove`,
+`C_DebugTeleport`), combat and skills (`C_Attack`, `C_SkillStart`, `C_SelectSkill`),
+inventory (`C_InventoryAction`), and time sync (`C_TimeSync`). Everything it sends outward
+(`S_Npc*`, `S_Skill*`, `S_PlayerHp`, `S_ZoneState`, `S_StrongholdState`, …) is built in
+`PacketManager`. Account and lobby packets belong to LobbyServer.
 
 Packet payloads use `DirectX::XMFLOAT3` for position and `XMFLOAT4` for quaternion orientation.
+
+**입장 게이트:** `C_Enter`는 서명된 `EntryTicket`을 나른다. 검증 전에는 다른 패킷을 처리하지
+않는다 — 보안 목적이자, 대부분의 핸들러가 `session->room()`을 널 체크 없이 역참조하기 때문이다.
+`docs/inventoryPersistence.md`와 `../ServerEngine/docs/entryTicket.md` 참조.

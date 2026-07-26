@@ -435,7 +435,8 @@ std::shared_ptr<SendBuffer> PacketManager::makeSLobbyWeaponSelectedPacket( uint1
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSGameStartPacket( const std::string& roomServerIp, uint16 port, const std::string& lobbyCode ) {
+// 티켓이 수신자마다 다르므로 이 버퍼는 한 명에게만 보내야 한다(브로드캐스트 금지).
+std::shared_ptr<SendBuffer> PacketManager::makeSGameStartPacket( const std::string& roomServerIp, uint16 port, const std::string& lobbyCode, const EntryTicket& ticket ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SGameStartPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 
@@ -443,6 +444,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSGameStartPacket( const std::stri
 	strncpy_s( pkt->roomServerIp, roomServerIp.data(), _TRUNCATE );
 	pkt->roomServerPort = port;
 	strncpy_s( pkt->lobbyCode, lobbyCode.data(), _TRUNCATE );
+	pkt->ticket = ticket;
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_GameStart;

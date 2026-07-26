@@ -5,6 +5,8 @@
 #include "networkConfig.hpp"
 #include "dbConfig.hpp"
 #include "DBExecutor.hpp"
+#include "securityConfig.hpp"
+#include "EntryTicket.hpp"
 
 int main() {
 	NetworkConfig networkConfig;
@@ -38,6 +40,22 @@ int main() {
 		std::cerr << "[DbConfig] failed to connect database\n";
 		return 1;
 	}
+
+	// 입장 티켓 서명 키. 룸서버와 같은 파일을 공유하며, 없으면 티켓을 만들 수 없으므로
+	// DB와 마찬가지로 리스너가 뜨기 전에 치명적으로 실패시킨다.
+	SecurityConfig securityConfig;
+	std::filesystem::path securityConfigPath;
+	std::string securityConfigError;
+	if (!loadSecurityConfig(securityConfig, securityConfigPath, securityConfigError)) {
+		std::cerr << "[SecurityConfig] " << securityConfigError << '\n';
+		return 1;
+	}
+	std::cout << "[SecurityConfig] " << securityConfigPath.string() << '\n';
+
+	EntryTicketAuthority::init(
+		securityConfig.entryTicketSecret.data(),
+		static_cast<int32>(securityConfig.entryTicketSecret.size()),
+		securityConfig.entryTicketTtlSeconds);
 
 	LobbyManager::configureRoomEndpoint(networkConfig.room);
 	LobbyServer server(networkConfig.lobby.port);

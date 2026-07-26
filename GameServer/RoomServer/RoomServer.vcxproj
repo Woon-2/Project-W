@@ -160,6 +160,8 @@
     <ClCompile Include="chargeConfig.cpp" />
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="errorHandling.cpp" />
+    <ClCompile Include="AccountRegistry.cpp" />
+    <ClCompile Include="InventoryStore.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
     <ClCompile Include="finalBoss.cpp" />
@@ -225,6 +227,18 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\common\dbConfig.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\common\securityConfig.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\common\inventory.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
@@ -238,6 +252,8 @@
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="errorHandling.hpp" />
+    <ClInclude Include="AccountRegistry.hpp" />
+    <ClInclude Include="InventoryStore.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="goblin.hpp" />
     <ClInclude Include="finalBoss.hpp" />
@@ -291,6 +307,8 @@
     <ClInclude Include="stronghold.hpp" />
     <ClInclude Include="zone.hpp" />
     <ClInclude Include="..\common\networkConfig.hpp" />
+    <ClInclude Include="..\common\dbConfig.hpp" />
+    <ClInclude Include="..\common\securityConfig.hpp" />
     <ClInclude Include="..\common\inventory.hpp" />
     <ClInclude Include="..\common\zoneDef.hpp" />
     <ClInclude Include="..\common\markerDef.hpp" />

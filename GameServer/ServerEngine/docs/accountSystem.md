@@ -137,10 +137,36 @@ DB 확인: 클라로 가입한 계정이 `dbo.Account`에 적재되고 `pwHash` 
 미확인(문제 징후는 없음): 한글 닉네임의 클라 왕복, 클라 재시작 후 재로그인,
 프로필 라벨 닉네임 표시 정확성.
 
+## 로비→룸 계정 핸드오프 (2026-07-26 구현)
+
+로그인으로 확정된 계정 정보를 룸서버까지 위조 불가능하게 전달한다.
+로비/룸 사이에 소켓이 없어 클라가 중계하므로, 로비서버가 HMAC-SHA256으로 서명한
+**입장 티켓**을 발급하고 룸서버가 같은 키로 검증한다.
+
+```
+C_GameStart(호스트) → LobbyRoom::startGame()
+                       └─ 플레이어별로 mint(accountId, nickname, code) → S_GameStart{ip, port, code, ticket}
+클라: 로비 소켓 close → 룸서버 재접속 → C_Enter{ticket, weapon}
+룸서버: verify → AccountRegistry::bind → setAccount → enterRoom(ticket의 lobbyCode)
+```
+
+이로써 함께 해결된 것:
+
+- 룸서버 **입장 게이트** — `C_Enter` 전에는 다른 패킷을 처리하지 않는다.
+  (전에는 `C_Enter` 없이 `C_Move`만 보내도 `session->room()` 널 역참조로 서버가 죽었다)
+- 인게임/로비 **실명 표시** — `PlayerInfo`/`LobbyPlayerInfo`에 `nickname` 추가,
+  `S_Enter`에 기존 플레이어용 `PlayerNameInfo` 섹션 추가
+- 룸서버 **인벤토리 영속화** — `dbo.Inventory` 로드/저장
+
+> **주의:** 클라가 핸드오프로 로비 소켓을 닫는 순간 로비서버는 계정 바인딩을 푼다
+> (`GameSession::onDisconnected` → `unbindAccount`). 즉 그 시점부터 같은 계정으로 다시
+> 로그인할 수 있으므로, 중복 접속 차단은 룸서버가 자체 `AccountRegistry`로 따로 해야 한다.
+
+상세: `ServerEngine/docs/entryTicket.md`, `RoomServer/docs/inventoryPersistence.md`
+
 ## 남은 것 (다음 단계)
 
-- 룸서버 인벤토리 로드/저장 (`Inventory` 테이블은 스키마에 선반영됨)
-- 로비→룸 계정 정보 전달 (룸 입장 시 accountId 핸드셰이크 — 현재 룸서버는 계정을 모른다)
 - 클라 입력창 `setMaxLength`(23/31/15) + 아이디·비밀번호 ASCII 입력 필터
 - 응답 대기 중 버튼 비활성/스피너 (현재는 `authPending_` 플래그로 재전송만 차단)
 - DB 커넥션 끊김 시 재연결 없음 — 쿼리는 `DbError`로 응답 (풀은 기동 시 1회 연결)
+- 비밀번호 평문 전송 (TLS 없음) — 데모 범위의 알려진 한계

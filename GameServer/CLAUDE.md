@@ -56,6 +56,13 @@ the ordinal is the wire value, so never insert in the middle.
 `S_Login(Ok)`; everything else from an unauthenticated session is silently dropped
 (`LobbyServer/PacketManager.cpp`, 인증 게이트). See `ServerEngine/docs/accountSystem.md`.
 
+**RoomServer requires a signed entry ticket.** `C_Enter` is the only packet accepted before the
+ticket verifies; everything else is dropped (`RoomServer/PacketManager.cpp`, 입장 게이트). The
+lobby mints the ticket (HMAC-SHA256) at `C_GameStart` and the client relays it — there is **no
+lobby↔room socket**, so anything the client carries must be signed. The shared key lives in
+`security_config.json` (server-only, next to `db_config.json`; **never add it to `client.vcxproj`**).
+See `ServerEngine/docs/entryTicket.md`.
+
 ## Concurrency Model
 
 - IOCP worker threads call `IocpReactor::dispatch()` in a tight loop

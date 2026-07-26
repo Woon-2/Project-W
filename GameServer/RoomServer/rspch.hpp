@@ -9,8 +9,9 @@
 #pragma comment(lib, "Release/lua54.lib")
 #endif
 
-// ServerEngine은 static library라서 ODBC import는 EXE 쪽에서 해결해야 한다.
+// ServerEngine은 static library라서 ODBC/CNG import는 EXE 쪽에서 해결해야 한다.
 #pragma comment(lib, "odbc32.lib")
+#pragma comment(lib, "bcrypt.lib")   // EntryTicket 검증(HmacSha256)
 
 #include "sepch.hpp"
 

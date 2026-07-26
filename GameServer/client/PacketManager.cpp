@@ -169,14 +169,17 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 	auto objList = enterPacket->getObjectList();
 
 	auto game = INet::ClientApp::onlineGame();
-	std::vector<uint16> existingPlayerIds;
-	existingPlayerIds.reserve(static_cast<std::size_t>(objList.count()));
-	for (int32 i = 0; i < objList.count(); ++i) {
-		if (objList[i].type == ObjectType::Player) {
-			existingPlayerIds.push_back(objList[i].objectId);
-		}
+
+	// Seed the roster from the names section BEFORE walking the object list: the
+	// createOtherPlayer(ObjectInfo) calls below carry no nickname, and registration
+	// is a no-op for ids already known, so seeding first keeps the real nicknames.
+	auto nameList = enterPacket->getNameList();
+	std::vector<PlayerNameInfo> roster;
+	roster.reserve(static_cast<std::size_t>(nameList.count()));
+	for (int32 i = 0; i < nameList.count(); ++i) {
+		roster.push_back(nameList[i]);
 	}
-	game->prepareInGamePartyRoster(playerInfo.playerId, existingPlayerIds);
+	game->prepareInGamePartyRoster(playerInfo, roster);
 	game->setupPlayer(playerInfo);
 	game->beginServerTimeSync();
 	
@@ -566,7 +569,7 @@ void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SGameStartPacket*>(buffer);
 	std::string ip( pkt->roomServerIp, strnlen( pkt->roomServerIp, sizeof( pkt->roomServerIp ) ) );
 	std::string code( pkt->lobbyCode, strnlen( pkt->lobbyCode, sizeof( pkt->lobbyCode ) ) );
-	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
+	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code, pkt->ticket );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 actionServerMs, uint32 skillSeed, float aimPitchRad) {
@@ -687,12 +690,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad, fl
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType) {
+// The lobby code lives inside the signed ticket; the room server reads it from there.
+std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const EntryTicket& ticket, PlayerWeaponType weaponType) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CEnterPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto pkt = bw.reserve<CEnterPacket>();
-	strncpy_s(pkt->lobbyCode, lobbyCode.data(), _TRUNCATE);
+	pkt->ticket = ticket;
 	pkt->weaponType = weaponType;
 
 	pkt->size = bw.writeSize();

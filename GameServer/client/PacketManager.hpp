@@ -61,7 +61,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeCInventoryActionPacket(
 		uint32 revision, uint8 slotIndex, InventoryAction action);
 
-	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode, PlayerWeaponType weaponType);
+	static std::shared_ptr<SendBuffer> makeCEnterPacket(const EntryTicket& ticket, PlayerWeaponType weaponType);
 
 	// 계정. loginId/password는 프로토콜상 ASCII(char[])라 호출부가 변환·검증을 끝낸 뒤 넘긴다.
 	static std::shared_ptr<SendBuffer> makeCRegisterPacket(

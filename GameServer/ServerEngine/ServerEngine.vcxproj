@@ -161,6 +161,8 @@
     <ClInclude Include="DBConnectionPool.hpp" />
     <ClInclude Include="DBExecutor.hpp" />
     <ClInclude Include="PasswordHash.hpp" />
+    <ClInclude Include="HmacSha256.hpp" />
+    <ClInclude Include="EntryTicket.hpp" />
     <ClInclude Include="JobQueuePool.hpp" />
     <ClInclude Include="globalTLS.hpp" />
     <ClInclude Include="IdPool.hpp" />
@@ -188,6 +190,8 @@
     <ClCompile Include="DBConnectionPool.cpp" />
     <ClCompile Include="DBExecutor.cpp" />
     <ClCompile Include="PasswordHash.cpp" />
+    <ClCompile Include="HmacSha256.cpp" />
+    <ClCompile Include="EntryTicket.cpp" />
     <ClCompile Include="JobQueuePool.cpp" />
     <ClCompile Include="globalTLS.cpp" />
     <ClCompile Include="IdPool.cpp" />

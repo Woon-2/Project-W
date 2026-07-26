@@ -5,6 +5,8 @@
 #include "GameSession.hpp"
 #include "ObjectPool.hpp"
 #include "Room.hpp"
+#include "EntryTicket.hpp"
+#include "AccountRegistry.hpp"
 
 namespace {
 uint64 networkNowMs() {
@@ -15,7 +17,16 @@ uint64 networkNowMs() {
 
 void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
-	
+
+	// 입장 게이트: C_Enter로 티켓을 검증하기 전에는 다른 패킷을 처리하지 않는다.
+	// 보안 목적이자 널 방어다 — 아래 핸들러 대부분이 session->room()을 널 체크 없이 역참조하므로,
+	// 게이트가 없으면 C_Enter 없이 C_Move 하나만 보내도 서버가 죽는다.
+	if (header->type != PacketType::C_Enter && !session->isEntryAuthorized()) {
+		std::cout << "Unauthorized packet dropped. type: " << static_cast<uint16>(header->type)
+			<< " session: " << session->id() << '\n';
+		return;
+	}
+
 	switch (header->type) {
 	case PacketType::C_Enter:
 		handleCEnterPacket(session, buffer, len);
@@ -60,13 +71,53 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 }
 
 void PacketManager::handleCEnterPacket(GameSession* session, byte* buffer, int32 len) {
+	if (len != sizeof(CEnterPacket)) {
+		std::cout << "[EntryTicket] 잘못된 C_Enter 크기. len: " << len
+			<< " session: " << session->id() << '\n';
+		session->disconnect("malformed C_Enter");
+		return;
+	}
+
+	// 중복 C_Enter는 무시한다. 두 번째를 처리하면 계정 바인딩이 꼬이고 방에 두 번 들어간다.
+	if (session->isEntryAuthorized() || session->room() != nullptr) {
+		return;
+	}
+
 	auto pkt = reinterpret_cast<CEnterPacket*>(buffer);
-	std::string code(pkt->lobbyCode, strnlen_s(pkt->lobbyCode, sizeof(pkt->lobbyCode)));
+
+	const EntryTicketResult verdict = EntryTicketAuthority::verify(pkt->ticket);
+	if (verdict != EntryTicketResult::Ok) {
+		std::cout << "[EntryTicket] 거부(" << EntryTicketAuthority::toString(verdict)
+			<< ") session: " << session->id() << '\n';
+		session->disconnect("invalid entry ticket");
+		return;
+	}
+
+	const EntryTicketPayload& tp = pkt->ticket.payload;
+
+	// 계정당 룸서버 세션 하나. 로비는 핸드오프로 소켓이 닫히는 순간 계정 바인딩을 풀기 때문에
+	// (LobbyServer/GameSession.cpp onDisconnected) 중복 입장 차단은 룸서버가 자체적으로 해야 한다.
+	if (!AccountRegistry::bind(tp.accountId, static_cast<uint16>(session->id()))) {
+		std::cout << "[EntryTicket] 계정 중복 입장 거부. accountId: " << tp.accountId
+			<< " session: " << session->id() << '\n';
+		session->disconnect("account already in a room");
+		return;
+	}
+
+	session->setAccount(tp.accountId, tp.nickname);
+
+	std::wcout << L"[EntryTicket] ok accountId=" << tp.accountId
+		<< L" nickname=" << session->nickname()
+		<< L" session=" << session->id() << L'\n';
+
 	const auto ordinal = static_cast<uint8>(pkt->weaponType);
 	session->player()->setWeaponType(
 		ordinal <= static_cast<uint8>(PlayerWeaponType::HeavyArrow)
 			? pkt->weaponType
 			: PlayerWeaponType::Katana);
+
+	// 방 배정의 권위 출처는 티켓 안의 코드다(바깥 사본은 존재하지 않는다).
+	std::string code(tp.lobbyCode, strnlen_s(tp.lobbyCode, sizeof(tp.lobbyCode)));
 	session->enterRoom(code);
 }
 
@@ -151,14 +202,17 @@ void PacketManager::handleCInventoryActionPacket(GameSession* session, byte* buf
 	});
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
+std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos, const std::vector<PlayerNameInfo>& nameInfos) {
 	int32 objCnt = static_cast<int32>(objInfos.size());
-	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(ObjectInfo) * objCnt);
+	int32 nameCnt = static_cast<int32>(nameInfos.size());
+	auto sendBuffer = SendBufferManager::open(
+		sizeof(SEnterPacket) + sizeof(ObjectInfo) * objCnt + sizeof(PlayerNameInfo) * nameCnt);
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto enterPacket = bw.reserve<SEnterPacket>();
 	enterPacket->myInfo = playerInfo;
 	enterPacket->objCnt = objCnt;
+	enterPacket->nameCnt = static_cast<uint8>(nameCnt);
 
 	auto infos = bw.reserve<ObjectInfo>(objCnt);
 	for (int32 i = 0; i < objCnt; ++i) {
@@ -173,7 +227,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& pl
 		infos[i].scale = objInfos[i].scale;
 	}
 
+	auto names = bw.reserve<PlayerNameInfo>(nameCnt);
+	for (int32 i = 0; i < nameCnt; ++i) {
+		names[i] = nameInfos[i];
+	}
+
 	enterPacket->objsOffset = static_cast<uint16>(reinterpret_cast<uint64>(infos) - reinterpret_cast<uint64>(enterPacket));
+	enterPacket->namesOffset = static_cast<uint16>(reinterpret_cast<uint64>(names) - reinterpret_cast<uint64>(enterPacket));
 	enterPacket->size = bw.writeSize();
 	enterPacket->type = PacketType::S_Enter;
 
