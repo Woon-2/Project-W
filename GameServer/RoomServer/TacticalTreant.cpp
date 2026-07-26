@@ -5,6 +5,7 @@ TacticalNpcConfig TacticalTreant::trooperConfig() {
 	return TacticalNpcConfig{
 		.maxHp             = 150.f,
 		.moveSpeed         = 3.f,
+		.animRefSpeed      = 7.8f,   // Treant_Walk authored speed (Grandbaum shares this clip set)
 		.attackRange       = 3.0f,
 		.attackDamage      = 20.f,
 		.attackWindupTime  = 0.5s,

@@ -40,6 +40,7 @@
 #include "../ui/widgets/KillCountWidget.hpp"
 #include "../ui/skillDialHUD.hpp"
 #include "../ui/minimapHUD.hpp"
+#include "../ui/pathGuideHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
@@ -543,6 +544,9 @@ private:
 	// --- Minimap (top-left, North-up; background cache re-baked on chunk load/unload) ---
 	MinimapHUD minimap_{};
 	std::vector<MinimapEntityIcon> minimapIcons_{};
+	// On-screen destination indicator (beacon / edge arrow) for the path-guidance route.
+	PathGuideHUD pathGuideHUD_{};
+	std::vector<mu::Vec3> minimapGuidePoly_{};   // active route sample points for the minimap
 	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
 	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk
 	// load/unload or when the player drifts > kMinimapRebakeMoveThreshold from this center.

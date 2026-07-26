@@ -19,6 +19,18 @@ struct NpcConfig {
     float   maxHp        = 80.f;
     Seconds respawnDelay { 10.f };
     float moveSpeed          = 4.f;
+    // Walk 클립이 저작된 기준 이동 속력(m/s). 서버가 이 값으로 로코모션 재생 배속을 맞춰
+    // 클라의 발 미끄러짐 보정과 본 포즈를 일치시킨다.
+    //
+    // **이 값은 엔티티가 아니라 애니메이션 클립셋의 속성이다.** 같은 클립셋을 쓰는 변종은
+    // moveSpeed가 달라도 같은 값을 써야 한다(Hobgoblin→Goblin, Grandbaum→Treant, Isys→Birdy).
+    // 클라의 대응 상수(`client/object.cpp` 각 AnimBlender의 kRefSpeedWalk)와 **반드시 같은 값**.
+    // 기본값 3.0은 미측정 클립용이며, 각 applyXXXConfig에서 명시적으로 지정한다.
+    float animRefSpeed       = 3.f;
+    // 클라 블렌더에서 idle→이동 블렌드 가중치가 1에 도달하는 속력(m/s).
+    // 몬스터 블렌더는 전부 `walkThreshold(0.06) + 3.f` = 3.06으로 동일하다.
+    // 보스만 run 밴드 끝(5.0)을 쓴다. refSpeed와 함께 서버 재생 배속 공식에 들어간다.
+    float animBandEnd        = 3.06f;
     float detectionRange     = 10.f;
     float attackRange        = 2.f;
     float attackDamage       = 10.f;

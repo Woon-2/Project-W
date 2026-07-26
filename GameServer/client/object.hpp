@@ -85,6 +85,8 @@ private:
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 run 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float runRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
@@ -132,6 +134,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -180,6 +184,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -219,6 +225,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -258,6 +266,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -293,6 +303,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -328,6 +340,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -363,6 +377,8 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// 이동 속력 연동 walk 클립 재생 배속(지수 평활 상태). 발 미끄러짐 저감용.
+	float walkRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalk_ = 0.f;
 	float tAttack_ = 0.f;
@@ -403,6 +419,10 @@ private:
 	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
+	// Speed-linked playback rate, shared by the walk and run clips (smoothed).
+	// Single value on purpose: walk and run crossfade against each other, so per-clip rates
+	// would double-compensate for the blend weight -- see AnimBlenderBoss::update.
+	float locoRate_ = 1.f;
 	float tIdle_ = 0.f;
 	float tWalkForward_ = 0.f;
 	float tWalkBackward_ = 0.f;
@@ -520,6 +540,11 @@ public:
 	// 속도(linearVel)를 갱신한다. 매 프레임 game 로직이 0으로 초기화 후 설정.
 	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
 	mu::Vec3 MU_CALLCONV velocity() const { return body_.linearVel(); }
+	// 수평(XZ) 속력. 로코모션 판정은 낙하 속도에 오염되면 안 되므로 이 값을 쓴다.
+	float MU_CALLCONV horizontalSpeed() const {
+		const auto v = body_.linearVel();
+		return std::sqrt(v.x() * v.x() + v.z() * v.z());
+	}
 	// 각속도를 갱신한다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
 	mu::Vec3 MU_CALLCONV omega() const { return body_.omega(); }

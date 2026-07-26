@@ -191,6 +191,33 @@ protected:
 	std::vector<mu::Mat4x4>& dressXformData();
 	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
 	void updateFrames(const std::string& key, Seconds elapsed);
+
+	// key 클립의 재생 시간을 rate배로 진행시키고 클립 길이로 랩한다.
+	// 각 파생 블렌더가 복붙하던 `t += dt; while (t > dur) t -= dur;`를 대체한다.
+	// 랩은 fmod로 처리하므로 rate가 커도(또는 duration이 0에 가까워도) 루프가 돌지 않는다.
+	void advanceClipTime(const std::string& key, Seconds& time, Seconds deltaTime,
+		float rate = 1.f) const;
+
+	// 이동 속력을 로코모션 클립의 재생 배속으로 환산한다.
+	//
+	// 이 시스템은 속도를 "블렌드 가중치"로 표현해왔다(idle 가중치가 클수록 보폭이 짧아진다).
+	// 따라서 단순히 speedXZ/refSpeed를 쓰면 가중치가 이미 깎아놓은 보폭을 한 번 더 깎아
+	// 중속 구간이 오히려 더 미끄러진다. locoWeight로 그 몫을 되돌려준다.
+	//   rate = clamp( speedXZ / (refSpeed * locoWeight) )
+	// 블렌드 밴드 안에서는 locoWeight ≈ speedXZ/밴드끝 이고 refSpeed를 밴드끝으로 저작하므로
+	// 이 값이 1 근처로 수렴한다(= 기존 룩 보존). 가중치가 포화한 뒤(고속 구간)부터
+	// speedXZ/refSpeed 그대로 배속이 붙는다 — 지금 실제로 깨져 있는 구간이 거기다.
+	//
+	// prevRate를 받아 갱신값을 돌려주므로 상태는 호출 측이 float 하나로 들고 있으면 된다
+	// (원격 캐릭터의 속도는 20Hz 패킷 값이라 평활 없이는 배속이 계단진다).
+	// locoWeight에는 공격 오버레이가 하체에서 깎아가는 몫까지 반영해서 넘겨야 한다
+	// (상하체 마스크 구조를 아는 쪽은 각 파생 블렌더이므로 합성은 호출부 책임).
+	static float solveLocomotionRate(float prevRate, float speedXZ, float refSpeed,
+		float locoWeight, Seconds deltaTime);
+
+	// baked 모드에서 time에 해당하는 샘플 프레임 인덱스를 구한다.
+	// 클립의 샘플 개수로 클램프하므로 배속·랩 타이밍과 무관하게 텍스처 범위를 벗어나지 않는다.
+	static int bakedFrameOf(const AnimClip& clip, Seconds time);
 	// key에 해당하는 클립의 현재 프레임들을 접근한다.
 	// 현재 프레임들은 updateFrames 함수를 통해서 갱신할 수 있다.
 	std::vector<AnimFrame>& curFrames(const std::string& key) {
@@ -233,14 +260,12 @@ private:
 		std::vector< decltype(AnimClip::keyFramesOfBones)::value_type::const_iterator > keyFrameIteratorCache_{};
 		// 키프레임들을 보간하여 계산된 현재 프레임 정보를 저장한다.
 		std::vector<AnimFrame> frameCache_;
-		// ----[Baked Mode 관련]----
-		std::size_t bakedSampleIdx;
+		// Baked 모드는 프레임 캐시를 쓰지 않는다. 파생 블렌더의 onCalcLocal이
+		// finalBakedClipId_/finalBakedClipFrame_만 채우고 GPU가 직접 샘플을 읽는다.
 	};
 
 	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
 	void updateFramesKeyframeMode(const std::string& key, Seconds elapsed);
-	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
-	void updateFramesBakedMode(const std::string& key, Seconds elapsed);
 
 	// onCalcDress에서, 본 트리를 순회하며 행렬들을 갱신하는데 사용된다.
 	void MU_CALLCONV traverseBone(const Bone& bone, mu::Mat4x4 parentXform = mu::Mat4x4());

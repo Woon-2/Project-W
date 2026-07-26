@@ -8,6 +8,7 @@ TacticalNpcConfig TacticalSlime::trooperConfig() {
 	return TacticalNpcConfig{
 		.maxHp             = 600.f,
 		.moveSpeed         = 2.5f,
+		.animRefSpeed      = 3.0f,   // Slime_Walk authored speed (not measured -- default)
 		.attackRange       = 2.6f,
 		.attackDamage      = 8.f,
 		.attackWindupTime  = 0.35s,

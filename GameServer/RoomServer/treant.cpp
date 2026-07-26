@@ -5,6 +5,7 @@ void Treant::applyTreantConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 150.f;
     cfg.moveSpeed      = 2.0f;
+    cfg.animRefSpeed   = 7.8f;   // authored speed of Treant_Walk (Grandbaum shares this clip set)
     cfg.attackRange    = 2.2f;
     cfg.detectionRange = 11.f;
     cfg.attackDamage   = 20.f;

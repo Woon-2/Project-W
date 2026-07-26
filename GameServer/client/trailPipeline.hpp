@@ -56,6 +56,11 @@ struct DrawEvent {
     // for additive draws; leave 0 for the standard SRC_ALPHA-blended PSO.
     u32t          premultiplyAlpha   = 0u;
 
+    // 1 = overlay a procedural flowing-chevron mask (directional arrows toward the
+    // head) on top of the texture. 0 = texture unchanged (default). Used by the
+    // path-guidance ribbon; leave 0 for ordinary particle trails.
+    u32t          patternMode        = 0u;
+
     // Material / sort
     const Texture* pMainTex          = nullptr;
     bool          additive           = false;

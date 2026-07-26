@@ -126,6 +126,16 @@ mu::Vec3 MU_CALLCONV Object::calcSeparationForce( const std::vector<mu::Vec3>& n
 }
 
 void Object::updateAnimBones(Seconds dt) {
+	// Locomotion clips play back proportionally to ground speed, mirroring the client's
+	// foot-slide reduction. The bone poses computed below feed the hit BVH, so if only the
+	// client scaled playback a walking monster's limbs would sit where the server thinks
+	// they are, not where the player sees them. Every other clip stays at 1x -- skill
+	// timelines and hit windows assume real-time playback.
+	animController_.setPlaybackRate(
+		(animRefSpeed_ > 0.f && animController_.isPlayingLocomotion())
+			? ServerAnimState::locomotionRate(horizontalSpeed(), animRefSpeed_, animBandEnd_)
+			: 1.f);
+
 	animController_.advance(dt.count());
 	if (!pModel_ || pModel_->skeleton.empty() || !animController_.clip) return;
 

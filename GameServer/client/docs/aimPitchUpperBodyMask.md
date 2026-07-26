@@ -84,6 +84,47 @@ k = spine_01, 02, 03 순서로 (pitch/3씩):
 - 서버는 사망 페이드 없음(사망자는 판정 대상 아님 — 실질 영향 없음).
 - Baked(원거리 원격) LOD는 마스크/pitch 미적용 — 거리상 시인 불가.
 
+## 6.5 애니메이션 독립 히트박스: `AttachType::Body` (2026-07-25)
+
+### 문제
+플레이어 근접 스킬 8종의 히트박스는 전부 `BoneAttach("spine_01")`였다. 런타임 배치는
+`worldOBB = localOBB · (bone.toDress · finalXformData[spine_01] · world)`인데, `finalXformData[spine_01]`은
+**현재 재생 중인 클립의 애니 포즈**다. 스킬을 무기 없던 시절 클립 기준으로 저작했는데 무기별로 `attackClips_`가
+달라지면서 같은 spine_01의 애니 포즈가 클립마다 달라져 히트박스가 어긋났다.
+
+### 해법
+새 `AttachType::Body`: OBB는 여전히 **본-로컬 공간**(BoneAttach와 동일)에 저작하지만, 런타임은 애니 포즈 대신
+**본의 rest(bind) 프레임(`toDress`)**을 쓴다 — 재생 클립과 무관. 여기에 조준 pitch를 본 원점 기준으로 주입한다.
+
+```
+pivot  = Vec4(0,0,0,1) · rest            // 본 rest 원점(dress 공간), rest = bone.toDress
+K      = translate(-pivot) · rotateXH(aimPitch) · translate(pivot)
+xform  = rest · K · world                // pitch=0이면 rest · world = BoneAttach의 bind 포즈와 동일 위치
+```
+- 클라 `SkillSystem::computeAttachTransform`(`AttachType::Body` 분기, `owner.aimPitch()`),
+  서버 미러(`owner.cameraPitch()`, `entityWorld` = `Object::updateAnimBones`와 동일 합성). 둘 다 `toDress`+동기화된
+  pitch만 쓰므로 **클라 예측 = 서버 판정**이 구조적으로 성립 → §5의 이동+공격 허용 오차가 **소멸**한다.
+- 스윕(sword arc)은 종전처럼 타임라인의 다중 SpawnHitbox로 구동(본 추종 불필요).
+- pitch는 spine_01 base 기준 **전체 aimPitch** 회전(멜리 볼륨이 무기 시각과 함께 상하로 기욺). 종전 서버는
+  `applySpinePitch`로 spine_01에 pitch/3만 실렸었다(약한 틸트) — Body가 더 강하고 직관적.
+
+### Lua / 마이그레이션
+- `BodyAttach(boneName, { pitch = true|false })`(`resources/skills/lua/skill_api.lua`). `pitch=false`면 yaw 전용 평탄
+  (예: PBAoE 링 `spikes`).
+- 8종 이관: `BoneAttach("spine_01")` → `BodyAttach("spine_01")`. **OBB 값 불변**(같은 본-로컬 공간, rest 포즈에서
+  종전과 동일 위치). 무기별 미세조정은 StandAlone 에디터에서. 에디터 picking/편집/렌더는 타입 무관하게 그대로 동작.
+- NPC 공격 스킬은 무기 교체가 없어 `BoneAttach` 유지(애니 추종).
+
+### StandAlone/에디터 조작 Online 동기화
+standalone(=스킬 에디터, `standalone/game.cpp`가 `editor_.handleInput`/`updateCamera`에 위임)은 종전에 카메라
+pitch를 캐스터에 연결하지 않아 이 기능을 테스트할 수 없었다. `client/editor/editorController.cpp handleInput`을
+Online `processInputGame`과 동기화:
+- 매 프레임 `casterObj()->setAimPitch(camPitch_)`(플레이어 한정) → `AnimBlenderPlayer::update`가 캐시 → 스파인 굽힘
+  + Body attach 히트박스 틸트 동작.
+- 이동(WASD) 시 궤도 `camYaw_`를 body orient에 접기(`!rmb && |camYaw_|>eps`, Online 5954–5958과 동일) → 캐스터가
+  시선 방향을 바라봄. 카메라 리그·pitch 클램프는 이미 Online과 동일.
+- 커서 캡처 없는 RMB-look은 에디터 UI(드롭다운·히트박스 픽)를 위해 의도적 존치(Online 커서캡처 mouselook과 다름).
+
 ## 6. 검증 이력 (임시 장치는 제거됨)
 - Phase 1: M키 마스크 A/B 토글 — 이동 공격 발 고정/정지 공격 동일 확인.
 - Phase 2: `[AimPitch]` 서버/클라 로그 — 아래=+0.94, 위=−0.50 도달 확인.

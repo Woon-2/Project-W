@@ -5,6 +5,7 @@ void Snake::applySnakeConfig() {
     NpcConfig cfg;
     cfg.maxHp          = 80.f;
     cfg.moveSpeed      = 3.5f;
+    cfg.animRefSpeed   = 3.0f;   // authored speed of Snake_Walk (not measured -- default)
     cfg.attackRange    = 1.8f;
     cfg.detectionRange = 12.f;
     cfg.attackDamage   = 12.f;

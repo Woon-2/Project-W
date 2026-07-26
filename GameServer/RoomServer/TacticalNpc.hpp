@@ -67,6 +67,21 @@ struct TacticalCommand {
 struct TacticalNpcConfig {
     float maxHp             = 100.f;
     float moveSpeed         = 4.f;
+    // Ground speed the Walk clip was authored for (m/s). Drives the server's locomotion
+    // playback rate so bone poses match the client's foot-slide correction.
+    //
+    // This is a property of the *clip set*, not of the entity: variants that reuse another
+    // monster's anims must carry that monster's value regardless of their own moveSpeed
+    // (Hobgoblin->Goblin, Grandbaum->Treant, Isys->Birdy; see the objType switch in
+    // Room::setupTacticalNpc*). Must equal the matching client constant in
+    // client/object.cpp (AnimBlenderX::update, kRefSpeedWalk).
+    //
+    // Note tactical NPCs travel at moveSpeed * TACTICAL_SPEED_MULT, far above any authored
+    // walk speed -- the rate clamp absorbs the excess; the residual slide needs a run clip.
+    float animRefSpeed      = 3.f;
+    // Speed at which the client's idle->walk blend weight saturates. Every monster blender
+    // uses walkThreshold(0.06) + 3.f; only the boss rig differs.
+    float animBandEnd       = 3.06f;
     float attackRange       = 2.8f;
     float attackDamage      = 15.f;
     Seconds attackWindupTime{ 0.4f };

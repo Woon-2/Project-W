@@ -58,7 +58,8 @@ for i = 0, count - 1 do
         slot                = i,
         -- center on the ring; halfExtents: tangential X, height Y, radial Z.
         localOBBs           = { OBB(0.6, 0.75 * radius * s, 0.75 * radius * c, 0.6, 1.6, 1.2, 0, deg, 0) },
-        attach              = BoneAttach("spine_01"),
+        -- PBAoE ring: animation-independent, kept flat (no aim pitch tilt).
+        attach              = BodyAttach("spine_01", { pitch = false }),
         applyAttachRotation = true,
         hitGroup            = 0,
         hitGroupCooldownMs  = 600,

@@ -38,9 +38,19 @@ struct ServerAnimClip {
 struct ServerAnimState {
     const ServerAnimClip* clip        = nullptr;
     float                 elapsedTime = 0.f;
+    // Clip playback rate. Locomotion clips are sped up / slowed down to match the entity's
+    // ground speed so the bone poses (and therefore the hit BVH built from them) line up
+    // with what the client renders. Non-locomotion clips must keep this at 1.
+    float                 playbackRate = 1.f;
 
     void advance(float dt);
     void switchClip(const ServerAnimClip* newClip, float startTime = 0.f);
+
+    // Ground speed -> locomotion playback rate, clamped. refSpeed is the speed the clip was
+    // authored for (NpcConfig::animRefSpeed); bandEnd is the speed at which the client's
+    // idle->locomotion blend weight saturates (NpcConfig::animBandEnd). Kept in sync with the
+    // client's AnimBlender::solveLocomotionRate -- see the derivation in the .cpp.
+    static float locomotionRate(float speedXZ, float refSpeed, float bandEnd);
 
     // Fills outXforms with bone model-space transforms for the current frame.
     // outXforms[i] = skeleton.bones[i].toDress * bakedSamples[i][sampleIdx]
@@ -68,13 +78,30 @@ public:
     void registerClip(std::string_view key, const ServerAnimClip* clip);
 
     // Looks up the clip by key and switches to it. Returns false if key is not registered.
+    // NOTE: switching does not reset playbackRate -- switchClip() early-outs when the clip
+    // pointer is unchanged, so the rate must always be set through setPlaybackRate().
     bool switchClip(std::string_view key, float startTime = 0.f);
+
+    void setPlaybackRate(float rate) { playbackRate = rate; }
 
     // Returns the registered clip for key, or nullptr if not found.
     const ServerAnimClip* findRegistered(std::string_view key) const;
 
+    // True when the live clip is one of the locomotion clips (the keys the AI switches to
+    // while the entity is travelling). Only those may be played back off 1x -- attack,
+    // hit and death clips drive skill/hit timing and must stay in real time.
+    // Compares against pointers cached at registration, so this stays allocation-free on
+    // the per-entity per-frame path (Object::updateAnimBones).
+    bool isPlayingLocomotion() const;
+
 private:
+    // Keys the AI switches to while an entity is travelling. NPCs/boss use "Walk"/"Run";
+    // players use the directional "Run_*" set (see the registrations in Room.cpp).
+    static bool isLocomotionKey(std::string_view key);
+
     std::unordered_map<std::string, const ServerAnimClip*> clips_;
+    // Locomotion clips seen by registerClip, cached so the per-frame check needs no lookup.
+    std::vector<const ServerAnimClip*> locomotionClips_;
 };
 
 #endif // room_server_serverAnimation_hpp
