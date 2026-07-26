@@ -1240,9 +1240,12 @@ void Room::enter(GameSession* session) {
 	player->body().snapToCurrent();
 	player->setHp(kPlayerMaxHp);   // authoritative HP init (base Object default is unbounded)
 	player->resetSkillState();
+	// 인벤토리는 비운 채로 입장한다. 스타터 지급은 DB 로드가 끝난 뒤 "기록이 없는 계정"에만
+	// onInventoryLoaded에서 1회 한다 — 여기서 미리 넣으면 DB에 근거 없는 아이템이 화면에
+	// 먼저 보이고, 저장 실패를 무기한 가려버린다.
 	std::string inventoryError;
 	ASSERT_CRASH(assetManager_ != nullptr);
-	ASSERT_CRASH(player->inventory().initialize(assetManager_->itemCatalog(), &inventoryError));
+	ASSERT_CRASH(player->inventory().initializeEmpty(assetManager_->itemCatalog(), &inventoryError));
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	if (const auto* anims = RoomManager::playerAnimations()) {
@@ -1471,23 +1474,39 @@ void Room::onInventoryLoaded(GameSession* session, InventoryStore::LoadStatus st
 				session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
 			}
 			else {
-				// 스타터 로드아웃을 유지하고 저장도 하지 않는다(진짜 인벤토리 보호).
+				// 인벤토리를 빈 채로 두고 저장도 하지 않는다(DB의 진짜 인벤토리 보호).
 				std::cout << "[Inventory] 로드 적용 실패: " << error << '\n';
 			}
 			break;
 		}
-		case InventoryStore::LoadStatus::NewAccount:
-			// 저장된 것이 없다. Room::enter가 넣어둔 스타터 로드아웃을 확정하고 저장 대상으로 삼는다.
-			session->setInventoryLoaded(true);
+		case InventoryStore::LoadStatus::NewAccount: {
+			// 저장된 기록이 없는 계정이다. 스타터를 여기서 1회 지급하고 곧바로 저장해,
+			// 그 순간부터 DB와 인게임이 일치하게 만든다.
+			std::string error;
+			if (inventory.initialize(assetManager_->itemCatalog(), &error)) {
+				session->setInventoryLoaded(true);
+				session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+			}
+			else {
+				std::cout << "[Inventory] 스타터 지급 실패: " << error << '\n';
+			}
 			break;
+		}
 
 		case InventoryStore::LoadStatus::DbError:
+			// 스타터를 주지 않는다. 주면 다시 "DB에 없는 아이템"이 생겨, 저장이 망가져도
+			// 화면상 멀쩡해 보이는 상태로 되돌아간다. 인벤토리만 비고 전투·진행은 정상이다.
 			std::cout << "[Inventory] 로드 실패(DB). accountId: " << session->accountId() << '\n';
 			break;
 		}
 
 		// 성공/실패와 무관하게 조작은 다시 허용한다. 실패해도 게임은 정상 플레이돼야 한다.
 		session->setInventoryReady(true);
+
+		// onDbJobFinished보다 "먼저" 호출해야 한다. 그래야 pendingDbJobs_가
+		// 1(load) → 2(load+save) → 1 → 0으로 내려가며 중간에 0을 찍지 않아,
+		// 저장 잡이 떠 있는 동안 방이 제거되지 않는다.
+		persistInventory(session);
 	}
 
 	onDbJobFinished();

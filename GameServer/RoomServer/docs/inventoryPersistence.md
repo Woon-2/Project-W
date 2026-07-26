@@ -98,17 +98,36 @@ bool  closePending_ = false;
 방금 소비한 아이템을 되살린다. 거절은 기존 `StaleRevision`을 재사용하므로 **클라 변경이 없다**
 (클라는 이미 뒤따르는 `S_InventorySnapshot`으로 재동기화한다).
 
-`inventoryLoaded_`가 없으면: DB 장애로 로드에 실패한 세션이 스타터 로드아웃을 그대로 갖고 놀다가
-퇴장 시 그걸 저장해 **진짜 인벤토리를 덮어쓴다.** 이게 이 설계에서 가장 중요한 안전장치다.
+`inventoryLoaded_`가 없으면: DB 장애로 로드에 실패한 세션이 퇴장 시 그 빈 상태를 저장해
+**진짜 인벤토리를 지워버린다.** 이게 이 설계에서 가장 중요한 안전장치다.
 
-## 입장 시 동작 (논블로킹)
+## 입장 시퀀스 — 스타터는 계정 최초 1회
 
-`Room::enter`는 지금까지처럼 `Inventory::initialize`로 스타터 로드아웃을 넣고 즉시
-`S_InventorySnapshot`을 보낸다. **입장은 DB를 기다리지 않는다.**
-로드가 돌아오면 교체하고 스냅샷을 한 번 더 보낸다 — 클라는 입장 직후 스냅샷을 **두 번** 받는다.
+`Room::enter`는 `Inventory::initializeEmpty`로 **빈 인벤토리**를 만들고 스냅샷을 보낸다.
+스타터 지급은 DB 로드가 끝난 뒤 `onInventoryLoaded`에서 판단한다.
 
-적용 시 `applySnapshot(catalog, inventory.revision() + 1, slots)`로 revision을 올린다.
-`applySnapshot`은 현재 revision 이상을 요구하고 슬롯 개수가 `slotCount()`와 같아야 한다.
+| `LoadStatus` | 처리 |
+|---|---|
+| `Ok` | `applySnapshot`으로 저장된 인벤토리 적용. `persistedRevision_`을 맞춰 재저장을 막는다 |
+| `NewAccount` | **`initialize()`로 스타터 1회 지급 + 즉시 저장.** 이 순간부터 DB가 유일한 진실이 된다 |
+| `DbError` | **빈 인벤토리 유지, 저장 금지.** 스타터를 주지 않는다 |
+
+클라는 입장 직후 스냅샷을 **두 번** 받는다(빈 것 → 실제 것).
+
+> **왜 `Room::enter`에서 스타터를 주면 안 되는가.** 처음 구현은 입장 즉시 스타터를 넣고
+> 나중에 DB 값으로 덮었다. 그 결과 **DB에 근거가 없는 아이템이 화면에 먼저 보였고**,
+> 저장이 완전히 깨져 있는데도(`SQL_NO_DATA` 교착, `databaseLayer.md` ⑤ 참조) 매번 포션 5개가
+> 멀쩡히 나와 버그가 드러나지 않았다. 화면에 보이는 것은 DB에 있는 것과 항상 같아야 한다.
+>
+> `DbError`에 스타터를 주지 않는 것도 같은 이유다. 주는 순간 "저장이 망가져도 화면은 멀쩡한"
+> 상태로 되돌아간다. 인벤토리만 비고 전투·진행은 정상이므로 게임은 계속할 수 있다.
+
+`applySnapshot`은 현재 revision 이상을 요구하고 슬롯 개수가 `slotCount()`와 같아야 하므로
+`inventory.revision() + 1`을 넘긴다.
+
+**카운터 순서:** `persistInventory`는 `onInventoryLoaded` 끝의 `onDbJobFinished()`보다 **먼저**
+호출해야 한다. 그래야 `pendingDbJobs_`가 1(load) → 2(load+save) → 1 → 0으로 내려가며 중간에
+0을 찍지 않아, 저장 잡이 떠 있는 동안 방이 제거되지 않는다.
 
 ## 저장 전략 — 변경 시 + 퇴장 시
 
@@ -140,7 +159,7 @@ COMMIT TRANSACTION
 | 시점 | 동작 |
 |---|---|
 | 룸서버 기동 | `DBExecutor::init` 실패 → 로그 + `return 1`. **리스너가 뜨기 전** |
-| 로드 실패 | 스타터 로드아웃 유지, `inventoryLoaded_=false`, `inventoryReady_=true` → **게임은 정상 플레이, 저장은 안 함** |
+| 로드 실패 | **빈 인벤토리**, `inventoryLoaded_=false`, `inventoryReady_=true` → 전투·진행은 정상, 아이템만 없고 저장도 안 함 |
 | 저장 실패 | `ROLLBACK` + 로그. `persistedRevision_`은 이미 올라갔으므로 다음 변경 때 재시도 |
 | 로드 완료 전 조작 | `StaleRevision` + 스냅샷 재전송 |
 

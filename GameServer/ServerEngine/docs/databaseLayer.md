@@ -85,21 +85,29 @@ ODBC는 1-based지만 `DBBinder`가 내부에서 +1 한다. 호출부는 0부터
 **④ `WCHAR` 배열을 `bindParam`에 넘기면 문자열로 바인딩된다.**
 배열 오버로드가 `if constexpr`로 타입을 보고 분기한다. 그 외 타입의 배열은 `SQL_C_BINARY`로 간다.
 
-**⑤ 커넥션은 스레드 안전하지 않다.**
+**⑤ `SQLExecDirect`의 `SQL_NO_DATA`는 오류가 아니다.**
+searched DELETE/UPDATE가 **0행에 영향**을 주면 ODBC가 이 값을 돌려준다. `execute()`는 이를
+성공으로 처리한다. 실패로 보면 "아직 행이 없는 키를 DELETE 후 INSERT"하는 upsert 패턴이
+첫 시도부터 영구히 막힌다 — 행이 없으니 DELETE가 실패하고, 실패했으니 INSERT를 못 해서
+영영 행이 생기지 않는다(실제로 인벤토리 저장이 이 교착에 걸렸었다).
+SELECT는 결과가 비어도 `SQL_SUCCESS`이고, 빈 결과는 `fetch()`의 `SQL_NO_DATA`로 구분된다.
+영향 행 수가 필요하면 `getRowCount()`를 쓴다.
+
+**⑥ 커넥션은 스레드 안전하지 않다 (스레드 전용).**
 `DBConnection` 하나가 `HSTMT` 하나를 독점한다. 반드시 풀에서 빌려 한 스레드에서만 쓴다.
 `DBConnectionPoolGuard`를 쓰면 스코프 이탈 시 자동 반납된다 — 직접 `pop()`/`push()`를 쓰다
 `push()`를 빠뜨리면 커넥션이 영구 소실되고, 풀이 마르면 DB 기능이 조용히 멈춘다.
 
-**⑥ 핸들 해제 순서.**
+**⑦ 핸들 해제 순서.**
 ODBC는 자식부터 해제해야 한다. `STMT` → `SQLDisconnect` → `DBC` → `ENV`.
 순서를 어기면 `SQLFreeHandle`이 `HY010`으로 실패해 핸들이 그대로 샌다.
 `DBConnection::clear()`와 `DBConnectionPool::clearNoLock()`이 이 순서를 지킨다.
 
-**⑦ `MemoryManager` 수명과의 순서.**
+**⑧ `MemoryManager` 수명과의 순서.**
 `DBConnectionPool::connect()`는 내부에서 `onew<DBConnection>()`을 쓴다.
 `MemoryManager::init()` **이후**에 `connect()`, `MemoryManager::release()` **이전**에 `clear()`.
 
-**⑧ 풀 락은 재진입 불가.**
+**⑨ 풀 락은 재진입 불가.**
 `poolMutex_`는 `std::mutex`다. 락을 잡은 상태에서 부를 정리 루틴은 `clear()`가 아니라
 `clearNoLock()`이어야 한다.
 

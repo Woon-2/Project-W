@@ -91,7 +91,14 @@ bool DBConnection::execute( const WCHAR* query ) {
 	const SQLWCHAR* sqlQuery = reinterpret_cast<const SQLWCHAR*>(query);
 
 	SQLRETURN ret = ::SQLExecDirect( hStmt_, const_cast<SQLWCHAR*>(sqlQuery), SQL_NTSL );
-    if( ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO ) {
+
+	// SQL_NO_DATA는 오류가 아니다. searched DELETE/UPDATE가 0행에 영향을 주면 SQLExecDirect가
+	// 이걸 돌려준다(ODBC 규약). 실패로 처리하면 "아직 행이 없는 키를 DELETE 후 INSERT"하는
+	// upsert 패턴이 첫 시도부터 영구히 막힌다 — 행이 없으니 DELETE가 실패하고, 실패했으니
+	// INSERT를 못 해서 영영 행이 생기지 않는다.
+	// SELECT는 결과가 비어도 SQL_SUCCESS이며, 빈 결과는 fetch()의 SQL_NO_DATA로 구분된다.
+	// 영향 행 수가 필요하면 getRowCount()를 쓸 것.
+    if( ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO || ret == SQL_NO_DATA ) {
         return true;
 	}
 
