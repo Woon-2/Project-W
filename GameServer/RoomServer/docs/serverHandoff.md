@@ -164,11 +164,19 @@ Room::init 1회 = 몬스터 232 + 거점 10 = 242개 id 소비 (현재 레벨 �
 실측 핑 환경에서 재검증이 필요하다.
 해결안: fast-forward 중 스폰된 히트박스에 1틱 유예를 주거나, 구간을 스텝 시뮬레이션.
 
-### P2 — `S_NpcMoveBatch` 20Hz 스로틀
+### ~~P2 — `S_NpcMoveBatch` 20Hz 스로틀~~ → **2026-07-27 처리 완료**
 
-틱 수정으로 브로드캐스트가 50Hz → 60Hz로 늘었다. 현재 **매 틱 무조건 전송**(스로틀·델타 압축
-없음)인데 클라 네트워크 보간 구간은 50ms(20Hz) 기준이다. 20Hz로 낮추면 **대역폭 1/3 +
-클라 보간 상수와 정합**된다.
+`Room::kNpcMoveBroadcastPeriodTicks = 3`으로 20Hz 스로틀 적용(시뮬은 60Hz 유지).
+`Room::update` 선두에서 `npcMoveBroadcastThisTick_`을 판정해 `updateMonsterAI`/`updateTacticalAI`의
+두 송신 지점이 같은 틱에 나가도록 공유한다.
+
+이때 **클라에서 더 큰 결함 하나가 같이 발견돼 수정됐다** — `Object::setOrient`의
+`snapToCurrent()`가 위치 보간 세그먼트를 지워, 몬스터·보스가 보간 없이 매 패킷 순간이동하고
+있었다(`netInterpAcc_`/`tNet` 기계 전체가 죽은 코드였다). `Object::setCurrOrient()` 신설로 해결.
+상세: `client/docs/gameArchitecture.md` 게임 루프 8단계, `docs/roomTickCadence.md` §7-2.
+
+**남은 것:** 델타 압축·관심영역 컬링 없음(거리 무관 전체 송신), `S_NpcMoveBatch`에 서버
+타임스탬프가 없어 클라가 시간 정렬을 못 한다(`S_TimeSync` 오프셋은 송신 경로에서만 쓰인다).
 
 ### P3 — 게임플레이 튜닝값 재검토
 

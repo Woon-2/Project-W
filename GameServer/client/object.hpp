@@ -550,6 +550,11 @@ public:
 	mu::Vec3 MU_CALLCONV omega() const { return body_.omega(); }
 	// 방향을 갱신한다. prev/curr 모두 동기화. 방향 벡터도 갱신.
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
+	// curr 방향만 갱신한다 (네트워크 수신부 전용). setCurrPos와 대칭.
+	// setOrient는 snapToCurrent()로 prev_=curr_를 하는데 그건 BodyState 통째(위치 포함)라,
+	// setCurrPos로 세팅해둔 렌더 보간 세그먼트(prev→curr)가 통째로 사라진다.
+	// 그 스냅은 텔레포트/초기 배치에서만 맞는 동작이다.
+	void MU_CALLCONV setCurrOrient(mu::NQuat newOrient);
 	mu::NQuat MU_CALLCONV orient() const { return body_.orient(); }
 	// 크기를 갱신한다. prev/curr 모두 동기화. BVH 재빌드.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
@@ -690,8 +695,36 @@ public:
 	// over one move interval and HOLDS at curr once moves stop. This avoids the
 	// prev<->curr oscillation that the physics-step clock (tPhysicInterpolation)
 	// produces when moves are sparse/stopped (it cycles 0->1 every physics step).
+	//
+	// netInterpDuration_은 고정 상수가 아니라 **실측 도착 간격의 지수 평활값**이다. 창 길이가
+	// 실제 간격과 어긋나면 그 자체가 끊김이 된다 — 창이 길면 t가 1에 못 미친 채 다음 패킷이
+	// 리셋해 세그먼트 시작점으로 되튀고(예: 50ms 창 + 16.7ms 도착), 창이 짧으면 먼저 도착해
+	// 놓고 남은 시간 동안 정지한다(예: 50ms 창 + 66.7ms 도착). noteNetArrival()이 매 수신마다
+	// 갱신하므로 서버 송신 레이트가 바뀌어도 자동으로 맞는다.
 	Seconds netInterpDuration_{ 1s / 20.f };
 	Seconds netInterpAcc_{ 0s };
+
+	// 서버 위치 패킷 수신 시 호출. netInterpAcc_를 0으로 되돌리기 전에 그 값(= 직전 도착 이후
+	// 경과 시간 = 도착 간격)으로 창 길이를 갱신한다. 별도 타이머가 필요 없다.
+	void noteNetArrival() {
+		constexpr Seconds kMinDur{ 1.f / 90.f };    // 90Hz보다 촘촘한 도착은 창을 더 줄이지 않는다
+		constexpr Seconds kMaxDur{ 0.2f };          // 200ms 이상은 손실/스톨로 보고 창을 늘리지 않는다
+		constexpr float   kSmooth = 0.25f;          // 지터 흡수용 평활 계수
+
+		// 첫 수신(acc==0)은 간격 정보가 없으므로 건너뛴다.
+		if (netInterpAcc_ > Seconds{ 0.f }) {
+			const Seconds sample = std::clamp(netInterpAcc_, kMinDur, kMaxDur);
+			netInterpDuration_ += (sample - netInterpDuration_) * kSmooth;
+		}
+		netInterpAcc_ = 0s;
+	}
+
+	// 새 패킷이 한동안 없으면 "멈춘 것"으로 확정(속도 0). 창의 2배를 쓰되 100ms 하한을 둔다 —
+	// 창이 적응형이라 도착이 촘촘할 때 임계값이 같이 짧아지면, 패킷이 조금만 늦어도 이동 중인
+	// 대상의 속도를 0으로 만들어 애니메이션이 끊긴다.
+	bool netStale() const {
+		return netInterpAcc_ >= std::max(netInterpDuration_ * 2.f, Seconds{ 0.1f });
+	}
 
 	// BV rendering color for collision visualization.
 	// Default green: no collision. Red: terrain-object. Blue: object-object.

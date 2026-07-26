@@ -3643,7 +3643,7 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
 	player->body().advanceState();
 	player->setCurrPos( DirectX::XMLoadFloat3( &pos ) );
 	player->setVelocity( DirectX::XMLoadFloat3( &velocity ) );
-	player->netInterpAcc_ = 0s;
+	player->noteNetArrival();   // 보간 창을 실측 도착 간격에 맞추고 acc 리셋
 }
 
 void Game::onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs ) {
@@ -3678,7 +3678,10 @@ void Game::rotatePlayer(uint16 playerId, float yawRad, float pitchRad) {
 	}
 
 	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
-	player->setOrient(yaw);
+	// setOrient가 아니라 setCurrOrient여야 한다. setOrient의 snapToCurrent()는 prev_를 curr_로
+	// 되돌려 이 플레이어의 위치 보간 세그먼트까지 지운다. C_MouseMove는 조준이 바뀔 때마다
+	// 오므로, setOrient를 쓰면 달리면서 마우스를 움직이는 원격 플레이어는 보간이 상시 무효화된다.
+	player->setCurrOrient(yaw);
 	// 원격 플레이어 조준 pitch(상체 굽힘 시각용). body orient에는 넣지 않는다.
 	player->setAimPitch(pitchRad);
 }
@@ -3702,11 +3705,14 @@ void Game::moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, Di
 
 	monster->body().advanceState();
 	monster->setCurrPos(DirectX::XMLoadFloat3(&pos));
-	monster->setOrient(DirectX::XMLoadFloat4(&orient));
+	// setCurrOrient여야 한다. setOrient는 snapToCurrent()로 prev_=curr_를 해서 바로 윗줄이
+	// 세팅한 보간 세그먼트를 통째로 지웠고, 그 결과 lerp(prev,curr,t)가 항상 새 위치를 돌려줘
+	// 몬스터·보스가 보간 없이 매 패킷 순간이동했다(= 끊김의 근본 원인).
+	monster->setCurrOrient(DirectX::XMLoadFloat4(&orient));
 	monster->setVelocity(DirectX::XMLoadFloat3(&velocity));
 	// Restart network interpolation for this move (mirrors movePlayer). Without this the
 	// monster would interpolate on the physics clock and oscillate between prev/curr.
-	monster->netInterpAcc_ = 0s;
+	monster->noteNetArrival();
 	setNpcStatusFlags(npcId, statusFlags);
 }
 
@@ -4063,6 +4069,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// move 패킷 전송 주기 판단
 	moveStateSendAcc_ += deltaTime;
+	aimSendAcc_ += deltaTime;
 
 	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
 
@@ -4222,14 +4229,14 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// Advance floating damage numbers (game thread; KillCountWidget ticks via uiManager_.update).
 	damageNumberSystem_.update(std::chrono::duration<float>(deltaTime).count());
 
-	if (moveStateSendAcc_ >= moveStateSendInterval_) {
+	// moveChange_는 전송했을 때만 내린다. 예전엔 매 프레임 무조건 내려서, 전송 슬롯(50ms)이
+	// 아직 안 찬 프레임에 발생한 이동이 **연기가 아니라 폐기**됐다 — 원격 시점에서 위치 갱신에
+	// 간헐적 공백이 생기고 그만큼 보간 창이 늘어나 끊겨 보인다.
+	if (moveStateSendAcc_ >= moveStateSendInterval_ && moveChange_) {
 		moveStateSendAcc_ = 0s;
-
-		if (moveChange_) {
-			sendMovePacket();
-		}
+		moveChange_ = false;
+		sendMovePacket();
 	}
-	moveChange_ = false;
 
 	// 객체별 업데이트 루틴
 	// 
@@ -4247,9 +4254,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		obj->netInterpAcc_ += deltaTime;
 		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
 
-		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
-		// 1개 간격(50ms)이면 정상 패킷 도착 타이밍과 겹쳐 oscillation이 발생하므로 2배로 여유를 준다.
-		if ( obj->netInterpAcc_ >= obj->netInterpDuration_ * 2.f ) {
+		// 패킷 2개 간격(최소 100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
+		// 1개 간격이면 정상 패킷 도착 타이밍과 겹쳐 oscillation이 발생하므로 2배로 여유를 준다.
+		if ( obj->netStale() ) {
 			obj->setVelocity(mu::Vec3{});
 		}
 
@@ -4265,7 +4272,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& m : container) {
 			m->netInterpAcc_ += deltaTime;
 			const float tNet = std::min(m->netInterpAcc_ / m->netInterpDuration_, 1.f);
-			if (m->netInterpAcc_ >= m->netInterpDuration_ * 2.f)
+			if (m->netStale())
 				m->setVelocity(mu::Vec3{});   // no new packet for 2 intervals -> stop drift
 			m->update(deltaTime, tNet);
 		}
@@ -6514,8 +6521,15 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	// yaw(전방)뿐 아니라 pitch만 변한 경우에도 송신한다 — 종전 조건은 forward가
 	// yaw 전용이라 pitch 변화가 패킷으로 나가지 않았다.
+	// 단, 변화가 있는 프레임마다 보내면 프레임레이트 그대로(100~300Hz) 나간다. C_Move와 같은
+	// 20Hz 슬롯으로 묶어 대역폭을 맞춘다(원격 조준은 slerp로 보간되므로 시각 손실이 없다).
 	if (prevForward != currForward
 		|| std::fabs(static_cast<float>(cameraPitch_) - lastSentAimPitch_) > 0.01f) {
+		aimChange_ = true;
+	}
+	if (aimSendAcc_ >= moveStateSendInterval_ && aimChange_) {
+		aimSendAcc_ = 0s;
+		aimChange_ = false;
 		sendMouseMovePacket();
 	}
 

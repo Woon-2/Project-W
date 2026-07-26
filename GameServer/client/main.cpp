@@ -139,6 +139,10 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	// 서버 연결 및 게임 초기화
 	Timer timer{};
 
+	// SleepEx(1, true)로 매 프레임 네트워크 APC를 배수하는데, 기본 타이머 해상도(최대 ~15.6ms)
+	// 에서는 APC가 없는 프레임마다 그 스톨이 deltaTime에 그대로 섞여 보간·물리가 흔들린다.
+	timeBeginPeriod(1);
+
 	std::cout << "[Main] 서버 연결 중...\n";
 	if (!INet::ClientApp::connectToServer()) {
 		std::cout << "[Main] 서버 연결 실패\n" << "StandAlone 모드로 실행합니다.\n";
@@ -161,6 +165,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 				SendBufferManager::release();		// TLS 청크 해제 + 정적 큐 drain (정적 소멸 UB 방지)
 				MemoryManager::release();
 				SocketUtils::release();
+				timeEndPeriod(1);
 				return static_cast<int>( msg.wParam );
 			}
 

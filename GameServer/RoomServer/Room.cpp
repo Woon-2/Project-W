@@ -930,6 +930,12 @@ void Room::update() {
 	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
 	static constexpr Seconds dtSec   = 1s / 60.f;
 
+	// 이동 브로드캐스트 스로틀 판정은 AI 갱신보다 먼저. updateMonsterAI/updateTacticalAI가
+	// 각자 배치를 보내므로 둘이 같은 틱을 보게 해야 클라에서 위상이 어긋나지 않는다.
+	npcMoveBroadcastThisTick_ = (++npcMoveTickCounter_ >= kNpcMoveBroadcastPeriodTicks);
+	if (npcMoveBroadcastThisTick_)
+		npcMoveTickCounter_ = 0;
+
 	physicsWorld_.step(dtSec);
 	rebuildLivingPlayersCache();   // NPC 분리력 컬링이 최신 플레이어 위치를 쓰도록 AI보다 먼저
 	rebuildNpcNeighbors();         // ① 플레이어 근접 컬링 → ② SAP로 이웃 인접 리스트 구축
@@ -1065,7 +1071,7 @@ void Room::updateMonsterAI(Milliseconds dt) {
 			static_cast<uint16>(id), o->hp(), o->pos().getXmf()));
 	}
 
-	if (!moveInfos.empty())
+	if (npcMoveBroadcastThisTick_ && !moveInfos.empty())
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
 }
 
@@ -2264,7 +2270,7 @@ void Room::updateTacticalAI(Milliseconds dt) {
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(npc->getId()), hit.targetId, hit.newHp));
 	}
 
-	if (!moveInfos.empty())
+	if (npcMoveBroadcastThisTick_ && !moveInfos.empty())
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
 
 	// 전 NPC(보스 + 전 부대원) 처치 시 아레나 가상 벽을 1회 해제 → 플레이어 후퇴 허용.

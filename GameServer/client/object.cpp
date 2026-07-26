@@ -1748,6 +1748,17 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 		rebuildBodyBVH();
 }
 
+// setOrient에서 snapToCurrent()만 뺀 것. 그 한 줄이 prev_를 curr_로 되돌려
+// 렌더 보간 세그먼트를 지우므로, 서버 위치를 반영하는 수신 경로에서는 쓰면 안 된다.
+void MU_CALLCONV Object::setCurrOrient(mu::NQuat newOrient) {
+	body_.setOrient(newOrient);
+	right_   = body_.orient().rotate(mu::Vec3(1.f, 0.f, 0.f));
+	up_      = body_.orient().rotate(mu::Vec3(0.f, 1.f, 0.f));
+	forward_ = body_.orient().rotate(mu::Vec3(0.f, 0.f, 1.f));
+	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
+		rebuildBodyBVH();
+}
+
 // 모델 고유 scale과 게임플레이 per-instance scale을 component-wise 합성해 body_에 적용한다.
 // setModel/setScale 호출 순서와 무관하게 합성식이 동일해 정합한다.
 void Object::applyCompositeScale() {
