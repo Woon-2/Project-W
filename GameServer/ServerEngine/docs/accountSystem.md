@@ -68,12 +68,15 @@ self->send( makeS*Packet(...) )          ← Session::send는 크로스 스레�
 - 로그인: 저장된 솔트로 다시 해시해 비교 (`PasswordHash::verify`)
 - DB에는 평문이 저장되지 않는다. 같은 비밀번호라도 계정마다 솔트가 달라 해시가 다르다.
 
-## DB 준비 (시연 PC 셋업)
+## DB 준비
 
 ```
 sqllocaldb start MSSQLLocalDB
 sqlcmd -S "(localdb)\MSSQLLocalDB" -i db\schema.sql     # 멱등 — 반복 실행 안전
 ```
+
+> **새 PC 셋업 전 과정은 `docs/demoSetup.md`를 볼 것.** ODBC 드라이버 버전, 런타임 DLL,
+> 작업 디렉터리 등 여기 적히지 않은 함정이 여럿 있다.
 
 - 연결 설정은 솔루션 루트 `db_config.json` (서버 전용 — 클라이언트 배포에 넣지 말 것).
   로더는 `common/dbConfig.hpp` (`network_config.json`과 같은 탐색 규칙, 폴백 없음).

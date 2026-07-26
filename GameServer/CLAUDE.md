@@ -19,8 +19,19 @@ Only the **x64** configurations are used (the `x86` ones map to `Win32` and prod
 저장소에 커밋된 바이너리라, git 체크아웃으로 파일 mtime이 obj보다 최신이 되면 MSBuild가 링크를
 건너뛰고 **낡은 lib을 그대로 남긴다** — 서버가 LNK2019로 터지면 `/t:ServerEngine:Rebuild`로 강제한다.
 
+Building `client` is what places the runtime DLLs (`dxcompiler.dll`, `dxil.dll`, `lua54.dll`) into
+`x64\$(Configuration)\` — its PostBuildEvent copies them. **Build servers only and `RoomServer`
+won't start**, because `lua54.dll` is missing.
+
+The servers and the client resolve assets through `../resources/...`, so the **working directory
+must be each project's own folder**. No project sets `LocalDebuggerWorkingDirectory`, so this
+relies on VS's default of `$(ProjectDir)` — launching the exe from `x64\Debug\` directly fails.
+
 There are no automated tests. Server validation is manual: run `LobbyServer` + `RoomServer` and
 drive them with the `client`. (`DummyClient` was removed in `c96eaac0`.)
+
+**새 PC에서 시연 준비: `docs/demoSetup.md`** — 설치 목록(ODBC Driver 17 함정 포함), 스키마 적용,
+실행 순서, 증상별 진단표.
 
 ## Architecture Overview
 
