@@ -61,6 +61,11 @@
      **주의:** 물리 step 클럭(`tPhysicInterpolation`)으로 보간하면 매 step마다 t가 0→1을 반복해, 이동이
      드물거나 멈춘 객체가 prev↔curr를 진동(땅속↔공중 깜빡임)한다 — 몬스터가 이 버그를 겪다가 원격
      플레이어와 동일한 tNet으로 통일해 해결.
+     **⚠ 상수 불일치(미해결):** `netInterpDuration_`은 50ms(20Hz, 원격 플레이어 `S_Move` 기준)인데
+     몬스터의 `S_NpcMoveBatch`는 서버 **매 틱(60Hz, 16.7ms)** 전송이다. 매 패킷 `netInterpAcc_`가
+     리셋되므로 `tNet`이 0.33을 넘지 못해 몬스터 메시는 항상 최신 서버 위치 못 미쳐 렌더된다
+     (판정용 BVH는 curr=최신). 해소안: 서버 `S_NpcMoveBatch`를 20Hz로 스로틀(대역폭 1/3 + 상수 정합)
+     또는 몬스터 한정 `netInterpDuration_`을 16.7ms로. `RoomServer/docs/roomTickCadence.md` §7-2.
 9. animSystem_.updatePriorities() / camera_ / dirLight_
 10. animSystem_.update()
 11. Ragdoll 활성화/동기화  — standalone과 동일한 패턴
@@ -490,17 +495,33 @@ activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이�
 시체→풀 반환 시 HP 바도 함께 이동.
 
 **`updateCorpses(dt, tPhysicInterp)` 2-페이즈:**
-- **Ragdoll**(`kRagdollSeconds=2.5s`): 래그돌 물리를 유지(차밍 포인트). 순서 중요 —
-  `ragdoll->syncToFinalXforms` → `Object::update`(여기서 디버그 BV `worldBVs`를 **래그돌 포즈**로
-  재계산) → `rebuildBodyBVH`. update를 sync보다 먼저 부르면 BV가 직전 애니메이션 포즈로 계산돼
-  메시/물리(래그돌)와 어긋난다. 2.5s 경과 시 `spawnFromMonster`로 오브 생성 + 래그돌 비활성화 후
-  Orb 페이즈로 전환.
+- **Ragdoll**(`kRagdollSeconds` = **2.0s**): 래그돌 물리를 유지(차밍 포인트). 순서 중요 —
+  `ragdoll->syncToFinalXforms(..., tPhysicInterp)` → `Object::update`(여기서 디버그 BV `worldBVs`를
+  **래그돌 포즈**로 재계산) → `rebuildBodyBVH`. update를 sync보다 먼저 부르면 BV가 직전 애니메이션
+  포즈로 계산돼 메시/물리(래그돌)와 어긋난다. 경과 시 `spawnFromMonster`로 오브 생성 + 래그돌
+  비활성화 후 Orb 페이즈로 전환.
 - **Orb**: 오브가 모두 흡수될 때까지 대기(`hasActiveOrbs`). 끝나면 `returnMonsterToPool` 후 시체 제거.
 
 **EnergyOrbSystem 라이프사이클:** `spawnFromMonster(model, finalXforms, objWorld, totalCharge,
 slot, corpseId)` — 스키닝된 서브메시마다 1 오브, `totalCharge`를 오브 수로 N분할. 각 오브 상태머신
 `Forming`(morphT 0→1) → `Tracking`(가속 추적, 접근 시 응축) → `Absorbing` → `Dead`. `update(dt,
 playerPos)`가 추적/흡수를 진행하고, 흡수 순간 `onAbsorb(orb)` 콜백 호출.
+
+**연출 시간 예산 (래그돌 ↔ 오브는 제로섬):** 래그돌 물리가 이 프로젝트의 시연 포인트이므로
+래그돌 구간을 늘리고 오브 구간을 그만큼 줄인다 — **총 흡수 시간은 유지하면서 붕괴만 더 길게**
+보인다. 플레이어까지 10m 기준:
+
+| 구간 | 상수 | 위치 | 값 | 소요 |
+|---|---|---|---|---|
+| 래그돌 유지 | `kRagdollSeconds` | `onlineGame.cpp` `updateCorpses` | 2.0 | 2.00s |
+| Forming(정지 모핑) | `kFormingTime` | `energyOrbSystem.cpp` | 0.90 | 0.90s |
+| Tracking | `kStartSpeed` / `kAccel` / `kMaxSpeed` | 〃 | 8 / 45 / 34 | ≈0.50s |
+| Absorbing | `kAbsorbTime` | 〃 | 0.18 | 0.18s |
+| | | | | **≈3.58s** |
+
+`kFormingTime`은 오브가 **완전히 정지**해 있는 구간이라 체감 지연을 지배한다 — 오브 구간을
+줄일 때 여기부터 손대는 게 맞다(속도 상수를 올리는 것보다 효과가 크고 거리에 무관).
+래그돌 쪽 노브 목록은 `ragdollSafety.md` "래그돌 연출 노브".
 
 **charge 매칭(신규 패킷 없음):** charge는 서버 권위(`S_SkillCharge`)지만 HUD는 흡수에 맞춰
 점진적으로 채운다.

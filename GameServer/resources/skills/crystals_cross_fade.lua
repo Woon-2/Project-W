@@ -7,7 +7,7 @@ skill.name             = "CrystalsCrossFade"
 skill.weapon           = "wand"
 skill.dialSlot         = 1
 skill.chargeCost       = 6
-skill.cooldownMs       = 1800
+skill.cooldownMs       = 1420
 skill.totalDurationMs  = 1400
 skill.interruptible    = true
 

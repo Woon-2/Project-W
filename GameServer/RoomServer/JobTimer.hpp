@@ -35,6 +35,9 @@ struct TimerItem {
 class JobTimer {
 public:
 	static void addJob(Milliseconds delay, uint32 roomId, Job* job);
+	// 절대 시각 예약. 고정 주기 반복(룸 틱)은 반드시 이쪽을 쓴다 — 상대 지연으로 재예약하면
+	// 직전 작업의 처리 시간이 매 주기 누적돼 케이던스가 영구히 밀린다.
+	static void addJobAt(HighResolutionClock::time_point executionTime, uint32 roomId, Job* job);
 	static void distribute();
 	static void clear();
 

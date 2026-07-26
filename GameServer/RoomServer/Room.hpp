@@ -39,9 +39,16 @@ public:
 
 	~Room() {
 		std::cout << "Room destroyed. ID: " << id_ << '\n';
-		IdPool::push(id_);
+		// 룸 id는 객체 IdPool이 아니라 RoomIdPool에서 나온다. 예전엔 여기서 IdPool::push(id_)를
+		// 불러 룸 id(0,1,2,…)를 **객체 id 풀에 주입**했고, 그 값들은 실제 객체 id와 중복되거나
+		// 예약 sentinel 0이라 두 객체가 한 id를 갖게 만들었다.
+		// RoomIdPool로 돌려주지도 않는다: JobTimer::distribute는 죽은 룸의 잔여 틱 잡을
+		// roomId 조회 실패로 버리는데, 룸 id를 재사용하면 그 잡이 **같은 id를 받은 새 룸**을
+		// 때린다. 룸 id는 단조 증가로 남긴다(서버 수명당 65536룸 한도).
+		// 배경: docs/objectIdLifecycle.md
 		for (const auto& cube : cubes_) {
-			IdPool::push(cube.getId());
+			// 레벨에서 온 cube는 setId를 받지 않는다(id_ == -1). 반납하면 풀이 오염된다.
+			if (cube.hasId()) IdPool::push(cube.getId());
 		}
 		for (const auto& g : goblins_) {
 			IdPool::push(g.getId());
@@ -129,6 +136,7 @@ public:
 	}
 
 	void doTimer(Milliseconds delay, CallbackType&& callback);
+	void doTimerAt(HighResolutionClock::time_point executionTime, CallbackType&& callback);
 
 	int32 id() const { return id_; }
 	const std::string& code() const { return code_; }
@@ -290,6 +298,10 @@ private:
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
+
+	// 다음 룸 틱의 절대 데드라인. 고정 케이던스를 유지해 시뮬 시간이 실시간에서 이탈하지 않게 한다
+	// (상대 지연 재예약은 처리 시간을 매 틱 누적시킨다 — Room::update 주석 참조).
+	HighResolutionClock::time_point nextTickTime_{};
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

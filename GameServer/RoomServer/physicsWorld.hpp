@@ -90,6 +90,11 @@ public:
     static mu::Vec3  MU_CALLCONV interpolatePos(const RigidBody& b, float t);
     static mu::NQuat MU_CALLCONV interpolateOrient(const RigidBody& b, float t);
 
+    // [TEMP DIAGNOSTIC] Character levitation investigation. Traces one body's
+    // per-substep vertical displacement, attributed to each stage of step().
+    // Remove once the cause is confirmed.
+    void setTraceBody(RigidBody* b) { traceBody_ = b; }
+
 private:
     void integrate(Seconds dt);
     void generateContacts();
@@ -121,6 +126,8 @@ private:
     int     positionSolveIterations_  = 3;
     int     subStepCount_             = 2;
     Seconds currentSubDt_{};
+
+    RigidBody* traceBody_ = nullptr;   // [TEMP DIAGNOSTIC] see setTraceBody()
 
     struct WarmEntry {
         float accNormal     = 0.f;

@@ -24,6 +24,38 @@ static inline mu::Vec3 finite0(mu::Vec3 v)  {
 // unaffected (they use the default sor=1.f).
 static constexpr float kAngSOR = 0.6f;
 
+// ---------------------------------------------------------------------------
+// Joint viscous damping
+//
+// Every joint damps the RELATIVE velocity across its body pair: a corpse's
+// shoulder is not frictionless, and without it a ragdoll free-spins up to its
+// cone/twist limits and rattles.  Unlike the constraint rows, the damping
+// impulse is NOT accumulated into a warm-start channel, so it does not converge
+// -- it simply multiplies the relative velocity by (1 - f) every time it runs.
+// It must therefore run EXACTLY ONCE per sub-step, from prepare(), and never
+// from solveVelocity().
+//
+// History (client/docs/physicsArchitecture.md): the damping used to live inside
+// solveVelocity() with a fixed per-ITERATION fraction of 0.1, which silently
+// coupled a material property to a convergence parameter.  Raising the joint
+// iteration count for deep-chain stability (setJointSolverExtraIterations(48)
+// for the 16-body snake) then multiplied the effective damping by 13x: relative
+// angular velocity retention per sub-step collapsed to 0.9^52 ~= 0.004, which
+// froze every ragdoll's articulation so corpses toppled like statues instead of
+// folding.  kJointDampingRate is now a per-SECOND viscous rate converted to a
+// per-sub-step fraction here, making it invariant to both the iteration count
+// and the sub-step count.
+// Relative-velocity time constant tau = 1/rate ~= 0.4s.
+static constexpr float kJointDampingRate = 2.5f;   // 1/s
+
+// Fraction of the relative velocity removed over dt for a per-second rate.
+// Exponential form so the result is exact for any sub-step size.
+static float dampingFractionFor(float ratePerSecond, Seconds dt)
+{
+    if (ratePerSecond <= 0.f) return 0.f;
+    return 1.f - std::exp(-ratePerSecond * dt.count());
+}
+
 // Angular effective mass for a pure angular constraint along axis d:
 //   dot(d, d * invI)  [row-vector convention]
 static float angEff1D(mu::Vec3 d, const mu::Mat3x3& invI)
@@ -141,6 +173,28 @@ static mu::Vec3 relVelAt(const RigidBody* a, const RigidBody* b,
          - (b->linearVel() + mu::cross(b->omega(), rB));
 }
 
+// Damp the pair's relative angular velocity along a single world axis by frac.
+// The effective mass is recomputed instead of read from cache_: the cone/twist/
+// limit effective masses are only populated while their limit is active, so a
+// cached read would use a stale value most of the time.
+static void dampRelativeAngular(RigidBody* a, RigidBody* b, mu::Vec3 axis, float frac)
+{
+    const float rv = mu::dot(a->omega() - b->omega(), axis);
+    const float cA = (a->invMass() > 0.f) ? angEff1D(axis, a->invInertiaWorld()) : 0.f;
+    const float cB = (b->invMass() > 0.f) ? angEff1D(axis, b->invInertiaWorld()) : 0.f;
+    const float effMass = 1.f / (cA + cB + Constraint::angularCFM);
+    applyAngularImpulsePair(a, b, -rv * effMass * frac, axis);
+}
+
+// Damp the pair's relative linear velocity at the joint pivot by frac.
+static void dampRelativeLinear(RigidBody* a, RigidBody* b,
+                               mu::Vec3 rA, mu::Vec3 rB,
+                               const mu::Mat3x3& effMassInv, float frac)
+{
+    const mu::Vec3 rv = relVelAt(a, b, rA, rB);
+    applyLinearImpulsePair(a, b, -(rv * effMassInv) * frac, rA, rB);
+}
+
 static mu::Vec3 pseudoRelVelAt(const RigidBody* a, const RigidBody* b,
                                mu::Vec3 rA, mu::Vec3 rB)
 {
@@ -190,7 +244,7 @@ static void swingTwistDecompose(mu::NQuat q, mu::Vec3 twistAxis,
 
 BallSocketJoint::BallSocketJoint(RigidBody* a, RigidBody* b,
                                  mu::Vec3 anchorA, mu::Vec3 anchorB)
-    : bodyA_(a), bodyB_(b), anchorA_(anchorA), anchorB_(anchorB), damping_(0.1f)
+    : bodyA_(a), bodyB_(b), anchorA_(anchorA), anchorB_(anchorB)
 {}
 
 void BallSocketJoint::resetAnchors()
@@ -216,18 +270,18 @@ void BallSocketJoint::prepare(Seconds dt)
     cache_.pseudoBias = posError * (kSplitBeta * invDt);
     cache_.pseudoAccImpulse = {};
 
+    // Viscous damping: once per sub-step, before warm-start -- the integrator uses
+    // the same ordering (damp first so the step's own impulses are not damped).
+    if (const float f = dampingFractionFor(kJointDampingRate, dt); f > 0.f)
+        dampRelativeLinear(bodyA_, bodyB_, cache_.rA, cache_.rB, cache_.effMassInv, f);
+
     // Warm-start: re-apply accumulated impulse.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.accImpulse, cache_.rA, cache_.rB);
 }
 
 void BallSocketJoint::solveVelocity()
 {
-    // damping
-    const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
-    mu::Vec3 dampingImp = -(rv * cache_.effMassInv) * damping_;
-    applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
-
-    // impulse
+    const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
     const mu::Vec3 cVel    = rv + cache_.bias;
     const mu::Vec3 dLambda = -(cVel * cache_.effMassInv);  // row-vector: v * M^-1
 
@@ -256,7 +310,7 @@ HingeJoint::HingeJoint(RigidBody* a, RigidBody* b,
     , anchorA_(anchorA), anchorB_(anchorB)
     , axisA_(mu::Vec3(mu::normalize(axisA)))
     , axisB_(mu::Vec3(mu::normalize((~b->orient()).rotate(a->orient().rotate(axisA_)))))
-    , minAngle_(minAngle), maxAngle_(maxAngle), linearDamping_(0.1f), angularDamping_(0.1f)
+    , minAngle_(minAngle), maxAngle_(maxAngle)
 {
     // Reference relative orientation: q_ref = conj(bodyA) * bodyB at build time.
     refOrient_ = mulQ(~bodyA_->orient(), bodyB_->orient());
@@ -351,6 +405,14 @@ void HingeJoint::prepare(Seconds dt)
             cache_.limitAccImp = 0.f;
     }
 
+    // Viscous damping: once per sub-step, before warm-start. Translational at the
+    // pivot + angular about the free hinge axis (the two perpendicular axes are
+    // already constrained by the alignment rows).
+    if (const float f = dampingFractionFor(kJointDampingRate, dt); f > 0.f) {
+        dampRelativeLinear(bodyA_, bodyB_, cache_.rA, cache_.rB, cache_.linEffMassInv, f);
+        dampRelativeAngular(bodyA_, bodyB_, cache_.hingeAxisWorld, f);
+    }
+
     // Warm-start.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
     for (int i = 0; i < 2; ++i) {
@@ -366,27 +428,17 @@ void HingeJoint::prepare(Seconds dt)
 
 void HingeJoint::solveVelocity()
 {
+    // Damping is NOT applied here -- it runs once per sub-step in prepare().
+    // See kJointDampingRate for why per-iteration damping was wrong.
+
     // --- Translational ---
     {
-        // damping
-        const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
-        mu::Vec3 dampingImp = -(rv * cache_.linEffMassInv) * linearDamping_;
-        applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
-
-        // impulse
+        const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
         const mu::Vec3 cVel    = rv + cache_.linBias;
         const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
         cache_.linAccImp = cache_.linAccImp + dLambda;
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
     }
-
-    // --- Angular Damping (Hinge Axis 기준) ---
-    mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
-    float rvAng = mu::dot(relOmega, cache_.hingeAxisWorld);
-    
-    // 자유 회전축에 대한 감쇠 (limitEffMass를 재활용하거나 새로 계산)
-    float angDampingImp = -rvAng * cache_.limitEffMass * angularDamping_;
-    applyAngularImpulsePair(bodyA_, bodyB_, angDampingImp, cache_.hingeAxisWorld);
 
     // --- Angular alignment ---
     for (int i = 0; i < 2; ++i) {
@@ -451,9 +503,6 @@ ConeTwistJoint::ConeTwistJoint(RigidBody* a, RigidBody* b,
         : mu::Vec3{ 0.f, 0.f, 1.f })
     , coneHalfAngle_(std::min(coneHalfAngle, mu::pi * 0.85f))
     , twistLimit_(std::abs(twistLimit))
-    , linearDamping_(0.1f)
-    , coneDamping_(0.1f)
-    , twistDamping_(0.1f)
 {}
 
 void ConeTwistJoint::resetAnchors()
@@ -518,9 +567,9 @@ void ConeTwistJoint::prepare(Seconds dt)
     const mu::Vec3 oldTwistAxis  = cache_.twistAxis;
 
     // Twist axis is valid every frame regardless of limit activation, so the
-    // angular damping path in solveVelocity() can always split relative angular
-    // velocity into a twist component (along this axis) and a swing component
-    // (the perpendicular remainder). Captured after oldTwistAxis above.
+    // angular damping path below can always split relative angular velocity into
+    // a twist component (along this axis) and a swing component (the perpendicular
+    // remainder). Captured after oldTwistAxis above.
     cache_.twistAxis = twistAxisWorld;
 
     // Decompose relative rotation into swing + twist around the joint Z axis.
@@ -595,6 +644,26 @@ void ConeTwistJoint::prepare(Seconds dt)
             cache_.twistWarmValid    = false;
         }
     }
+    // --- Viscous damping (once per sub-step, before warm-start) ---
+    // Split the relative angular velocity about the twist axis (cache_.twistAxis is
+    // valid every step regardless of limit activation) into a twist component and
+    // the perpendicular swing plane, then damp each. Damping the swing component
+    // even INSIDE the cone is what makes the joint feel heavy instead of
+    // free-spinning up to its limit.
+    if (const float f = dampingFractionFor(kJointDampingRate, dt); f > 0.f) {
+        dampRelativeLinear(bodyA_, bodyB_, cache_.rA, cache_.rB, cache_.linEffMassInv, f);
+
+        const mu::Vec3 tAxis = cache_.twistAxis;
+        dampRelativeAngular(bodyA_, bodyB_, tAxis, f);
+
+        const mu::Vec3 relOmega  = bodyA_->omega() - bodyB_->omega();
+        const mu::Vec3 swingOmega = relOmega - tAxis * mu::dot(relOmega, tAxis);
+        const float    swingSpeed2 = swingOmega.len2();
+        if (swingSpeed2 > 1e-12f)
+            dampRelativeAngular(bodyA_, bodyB_,
+                                mu::Vec3(swingOmega * (1.f / std::sqrt(swingSpeed2))), f);
+    }
+
     // Warm-start: linear + angular rows.
     // Cone/twist axes can rotate sharply under large violations. Reusing an
     // impulse along a very different axis injects energy into joint chains, so
@@ -665,53 +734,16 @@ void ConeTwistJoint::solvePosition()
 
 void ConeTwistJoint::solveVelocity()
 {
+    // Damping is NOT applied here -- it runs once per sub-step in prepare().
+    // See kJointDampingRate for why per-iteration damping was wrong.
+
     // --- Translational ---
     {
-        // damping
-        const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
-        mu::Vec3 dampingImp = -(rv * cache_.linEffMassInv) * linearDamping_;
-        applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
-
+        const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
         const mu::Vec3 cVel    = rv + cache_.linBias;
         const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
         cache_.linAccImp = cache_.linAccImp + dLambda;
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
-    }
-
-    // --- Angular damping (always on, independent of limit activation) ---
-    // Split the relative angular velocity about the twist axis (always valid in
-    // cache_.twistAxis) into a twist component and the perpendicular swing plane,
-    // then damp each separately. Damping the swing component even while inside the
-    // cone makes the joint feel "heavy" instead of free-spinning up to the limit.
-    // Effective masses are recomputed here (not read from cache_) because the
-    // cone/twist effMass fields are only populated when their limit is active.
-    {
-        const mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
-        const mu::Vec3 tAxis    = cache_.twistAxis;
-
-        // 1. Twist damping (about the bone axis).
-        if (twistDamping_ > 0.f) {
-            const float rvTwist = mu::dot(relOmega, tAxis);
-            const float cA = (bodyA_->invMass() > 0.f) ? angEff1D(tAxis, bodyA_->invInertiaWorld()) : 0.f;
-            const float cB = (bodyB_->invMass() > 0.f) ? angEff1D(tAxis, bodyB_->invInertiaWorld()) : 0.f;
-            const float effMass = 1.f / (cA + cB + angularCFM);
-            applyAngularImpulsePair(bodyA_, bodyB_, -rvTwist * effMass * twistDamping_, tAxis);
-        }
-
-        // 2. Swing damping (relative angular velocity perpendicular to the twist
-        //    axis). Applied along the instantaneous swing axis every iteration.
-        if (coneDamping_ > 0.f) {
-            const mu::Vec3 swingOmega = relOmega - tAxis * mu::dot(relOmega, tAxis);
-            const float    swingSpeed2 = swingOmega.len2();
-            if (swingSpeed2 > 1e-12f) {
-                const mu::Vec3 sAxis = mu::Vec3(swingOmega * (1.f / std::sqrt(swingSpeed2)));
-                const float cA = (bodyA_->invMass() > 0.f) ? angEff1D(sAxis, bodyA_->invInertiaWorld()) : 0.f;
-                const float cB = (bodyB_->invMass() > 0.f) ? angEff1D(sAxis, bodyB_->invInertiaWorld()) : 0.f;
-                const float effMass = 1.f / (cA + cB + angularCFM);
-                const float rvSwing = std::sqrt(swingSpeed2);  // = dot(relOmega, sAxis)
-                applyAngularImpulsePair(bodyA_, bodyB_, -rvSwing * effMass * coneDamping_, sAxis);
-            }
-        }
     }
 
     // --- Cone ---

@@ -86,7 +86,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RigidBody::setGravityScale()` / `gravityScale()` | `rigidBody.hpp #110` | per-body 중력 배율(Unity gravityScale 등가, 기본 1). integrate Dynamic 분기에서 `gravity_ * gravityScale()`; 접지 중력 게이팅이 0/1 토글 |
 | `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
-| `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
+| `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition/resetAnchors 인터페이스 |
+| joint 감쇠 | `jointConstraint.cpp` `kJointDampingRate`(**2.5 /s**) / `dampingFractionFor` / `dampRelativeLinear` / `dampRelativeAngular` | 상대 속도 점성 감쇠. **`prepare()`에서 서브스텝당 1회**, `f = 1-exp(-rate·subDt)`로 서브스텝·반복 횟수에 불변. ⚠ `solveVelocity()`에 두면 PGS 반복 횟수가 물성을 바꾼다(과거 버그 — `docs/physicsArchitecture.md` "Per-Constraint Damping") |
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
 | `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
 | `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
@@ -138,8 +139,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::staticContacts_` / `movedByStaticDepen_` | `physicsWorld.hpp` | step별 static 충돌 레코드(broad-phase static 분기 + ScatterCollider) + depenetration으로 직접 이동된 body dirty set |
 | `PhysicsWorld::generateContacts()` static 분기 | `physicsWorld.cpp` | static 포함 쌍(aStatic != bStatic)은 StaticContact로 라우팅 후 continue(ContactConstraint 미생성); normal을 static→movable로 정규화 |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
-| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | velocity PGS 반복 횟수 (기본 4, ragdoll 활성 시 16) |
-| `PhysicsWorld::setPositionSolveIterations()` | `physicsWorld.hpp #87` | split impulse position correction 반복 횟수 (기본 3, ragdoll 활성 시 4) |
+| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #109` | velocity PGS 반복 횟수 (기본 **4**; 온라인은 변경하지 않음) |
+| `PhysicsWorld::setJointSolverExtraIterations()` | `physicsWorld.hpp #113` | joint 전용 추가 velocity 반복 (기본 0, 시체 래그돌 활성 시 **48** — `onlineGame.cpp` 물리 루프). 뱀(16 body/15 joint) 체인 수렴용. **순수 수렴 파라미터**(감쇠와 분리됨) |
+| `PhysicsWorld::setPositionSolveIterations()` | `physicsWorld.hpp #117` | split impulse position correction 반복 횟수 (기본 3) |
+| `PhysicsWorld::setSubStepCount()` | `physicsWorld.hpp #122` | step당 서브스텝 수 (기본 2 → 60Hz step = 120Hz 적분) |
 | `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp #73` | 렌더 보간 헬퍼 (prev→curr, t) |
 | `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #74` | 렌더 보간 헬퍼 (slerp) |
 | `BallSocketJoint` class | `jointConstraint.hpp #16` | 3 translational DOF 제거, bilateral warmstart |
@@ -161,7 +164,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
 | `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |
 | `Ragdoll::syncToPose()` | `ragdoll.cpp` | body pos/orient → AnimFrame pose (DFS) |
-| `Ragdoll::syncToFinalXforms()` | `ragdoll.cpp` | body transform → finalXforms 덮어씀 + passenger 본 재구성 |
+| `Ragdoll::syncToFinalXforms()` | `ragdoll.cpp` | body transform → finalXforms 덮어씀 + passenger 본 재구성. **`tPhysic` 인자로 prev→curr 렌더 보간**(clamp [0,1]) — 없으면 래그돌만 물리 tick 계단으로 갱신돼 stutter |
+| `Ragdoll::applyDeathKick()` | `ragdoll.cpp` | 활성 직후 1회: 전 뼈 `setLinearVel(initVel)`(운동량 보존) + **발밑 피벗 강체 회전**(`v_i += cross(ω, pos_i-pivot)`, `ω_i = ω`, 축=`cross(up, velDir)`)으로 넘어짐 토크 + COM **오프셋** noise impulse(중심 적용은 토크 0). 온라인/standalone 공용 |
+| `Ragdoll::kGravityScale` / `kTopplingOmega` | `ragdoll.hpp` | 래그돌 전용 물리 프로파일 상수: **1.35**(x 월드 중력, `activate()`가 per-body push — Dynamic 전환 후여야 의미 있음) / 2.5 rad/s(`applyDeathKick`). 노브 목록·튜닝 방향은 `docs/ragdollSafety.md` "래그돌 연출 노브" |
 | `Ragdoll::buildPassengers()` | `ragdoll.cpp` | 비-body 본 → 최근접 ragdoll body에 강체 바인딩 (DFS 조상 + 고아 본 BFS 2-pass) |
 | `Ragdoll::activate()` | `ragdoll.cpp` | Kinematic → Dynamic |
 | `Ragdoll::deactivate()` | `ragdoll.cpp` | Dynamic → Kinematic |
@@ -179,9 +184,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::body()` | `object.hpp` | RigidBody 참조 (PhysicsWorld 등록 시 &body() 전달) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (PhysicsWorld 콜백으로도 사용) |
-| `Object::enableRagdoll()` | `object.cpp` | build + seedFromFinalXforms + activate (solverIter=20) |
-| `Object::disableRagdoll()` | `object.cpp` | destroy + reset (solverIter=10 복원) |
-| `Object::hasActiveRagdoll()` | `object.hpp` | ragdoll 활성 여부 |
+| 래그돌 활성화 | `online/onlineGame.cpp` `activateAndCollect` 람다 / `standalone/game.cpp` `activateRagdollIfPending` 람다 | `seedFromFinalXforms` → `buildPassengers` → `activate` → `applyDeathKick`. **`Object::enableRagdoll/disableRagdoll` 멤버는 존재하지 않는다** — 게임 루프의 지역 람다다 |
 | ragdoll finalXform override | `object.cpp Object::update()` | 활성 시 finalXformData를 body 위치로 직접 덮어씀 |
 
 ---
@@ -576,12 +579,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `pbrDeferredSkinned.hlsl` | GBuffer Geometry Pass VS/PS (스킨드 메시). **흡수 물결(M5)**: `PerInstanceData`에 ripple 배열(`ripplePosAge[4]`/`rippleColorIntensity[4]`/`rippleCount`, per-instance) 추가 — VS가 `instIdx`(nointerpolation) 전달, PS가 `gInstances[instIdx]`의 ripple을 가우시안 확장 링으로 GB2 emissive에 가산(`exp(-d*d)`, pow(neg) NaN 회피). 로컬 플레이어만 `rippleCount>0` |
 | `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
 | `energyOrbPipeline.hpp` / `.cpp` + `energyOrb.hlsl` | **몬스터 사망 에너지 오브 렌더 파이프라인**. MeshParticle 복제 + GS quad. 죽은 서브메시 정점을 사망 포즈로 스키닝(boneData t2) → 해시 구체로 모핑(`morphT`) → 카메라향 quad point-sprite, **SceneColorHDR에 가산(bloom 이전)**. PS: 서브메시 albedo→HDR 색 `lerp(_, _, morphT)` × radial falloff. `DrawEvent{world,pMesh,pSubMesh,pAlbedo,boneXforms,sphereCenter,sphereRadius,colorHDR,morphT,pointSize,vertexCount}` |
-| `energyOrbSystem.hpp` / `.cpp` | **에너지 오브 라이프사이클**(모드 비종속). `Orb` 상태머신 Forming→Tracking→Absorbing→Dead. `spawnFromMonster(model,finalXforms,objWorld,totalCharge,slot,corpseId)`=서브메시당 1오브(첫 정점 LBS 스키닝을 구체 중심으로), 플레이어 추적+가속, 근접 시 `onAbsorb`. **응축 스케일**(`renderScale`: 접근 시 월드크기 축소로 원근 팽창/bloom 블롭 억제). `hasActiveOrbs(corpseId)`/`update(dt,playerPos)`/`submitDrawEvents`. 노브: kForming 0.85s, kMaxSpeed 13, kSphereRadius 0.32, kPointSize 0.04, HDR 강도 2.0~3.8, kCondenseMinScale 0.5 |
+| `energyOrbSystem.hpp` / `.cpp` | **에너지 오브 라이프사이클**(모드 비종속). `Orb` 상태머신 Forming→Tracking→Absorbing→Dead. `spawnFromMonster(model,finalXforms,objWorld,totalCharge,slot,corpseId)`=서브메시당 1오브(첫 정점 LBS 스키닝을 구체 중심으로), 플레이어 추적+가속, 근접 시 `onAbsorb`. **응축 스케일**(`renderScale`: 접근 시 월드크기 축소로 원근 팽창/bloom 블롭 억제). `hasActiveOrbs(corpseId)`/`update(dt,playerPos)`/`submitDrawEvents`. 노브(`.cpp` 익명 namespace): **`kFormingTime 0.90`**, `kStartSpeed 8`/`kAccel 45`/`kMaxSpeed 34`, kAbsorbRadius 0.7, kAbsorbTime 0.18, kSphereRadius 0.32, kPointSize 0.04, HDR 강도 1.6~2.7, kCondenseMinScale 0.5, kMaxOrbLifetime 8. **Forming은 오브가 완전 정지하는 구간이라 체감 지연을 지배** — 오브 구간 단축은 여기부터. 시간 예산은 `gameArchitecture.md` "연출 시간 예산" |
 | `pathGuideSystem.hpp` / `.cpp` | **경로 안내 연출**(클라 전용, 게임 스레드 단독). `build(markers)`=`PathPt` 마커(`name="<pathId>_<index>"`) 그룹화·정렬·등호장 리샘플. `update(dt,playerPos,terrain)`=가장 가까운 path 선택→플레이어 폴리라인 투영(`sPlayer_` 저장)→**가시 윈도우만 매 프레임 `heightAtWorld` Y conform**→위습 전진(ease)+bob. `submitDrawEvents(gfx,ribbonTex,orbProxy)`=리본을 ≤31정점+1오버랩 세그먼트로 `addHDRTrailDrawEvent`(흐름+지면정렬+`patternMode=1` 흐르는 쉐브론), 위습 1개 `addDrawEvent(EnergyOrb)`(free-orb morphT=1). **강조**: Config 기본 `ribbonWidth 1.4`/`ribbonColor{0.8,3,4.5}`/`flowSpeed 0.85`. **도착 은퇴**: 플레이어가 경로 끝 XZ `arriveRadius`(4m) 내 진입 시 `Path.completed=true`→해당 경로 영구 미안내(build 시 리셋). **전술전투 억제**: `setSuppressed(bool)`=true면 update가 전부 clear+inactive(아레나 중 off). **UI 안내 데이터 접근자**: `guidanceActive()`/`guidanceTargetWorld()`(=위습 look-ahead)/`goalWorld()`/`distanceToGoal()`(=`totalLen−sPlayer_`)/`activePathPoints(out)`(활성 경로 ~2m 서브샘플, 미니맵 폴리라인용). 노브=`Config`. 상세: `docs/pathGuidance.md` |
 | `mesh.cpp` `buildOrbProxyMesh(device,cmdList,fence,pointCount=128)` | free-orb(위습)용 N-포인트 프록시 메시. EnergyOrbPipeline 4-VB 슬롯(Position/BoneIndices/BoneWeights/UV, 모두 더미)+인덱스[0..N-1]+1 SubMesh. `morphT=1`에서 정점 개수만 의미(시작 pos/본 무관). `onlineGame`이 `recordTerrainResourceLoad`로 1회 생성→`orbProxyMesh_` |
 | `onlineGame.cpp` 경로 안내 훅 | `pathGuide_`(멤버)+`orbProxyMesh_`+`pathGuideHUD_`+`minimapGuidePoly_`. build: `setupStageVisual`의 zone 빌드 직후 `pathGuide_.build(chunkManager_.markers())`+프록시 메시 생성. update: `orbSystem_.update` 직후 `pathGuide_.update(dt,player_->pos(),chunkManager_)`. submit: `orbSystem_.submitDrawEvents` 직후 `pathGuide_.submitDrawEvents(gfx_, assetManager_.trail62Tex(), &orbProxyMesh_)`. **전술전투 억제**: update 직전 `pathGuide_.setSuppressed(localArenaPresentationZoneId_ >= 0)`(아레나 진입~완료 중 안내 전부 off). `pathGuideHUD_.init(gfx_)`는 setup(`tacticalDialogueOverlay_.init` 인근). **UI 방향 지시**(`renderInGame`, uiManager 렌더 직전): `activePathPoints`로 `minimapGuidePoly_` 채워 `MinimapGuide`로 `minimap_.render`에 전달(폴리라인+가장자리 화살표) + `pathGuideHUD_.render(camera view/proj, guidanceTargetWorld, distanceToGoal)`(온스크린 비콘/오프스크린 화살표, m 단위 거리) |
 | `object.cpp/.hpp` `Object::addBodyRipple`/`BodyRipple`/`bodyRipples_` | 흡수 물결 앵커(M5). 오브 흡수 시 `onlineGame` onAbsorb가 호출 → 본체 위치 기준 오프셋으로 저장(매 프레임 live pos에 재앵커→몸 추적), `update`에서 노화(`kBodyRippleLife=1.0s`, HLSL `RIPPLE_LIFE`와 일치), deferred-skinned DrawEvent의 `ripplePosAge/rippleColorIntensity/rippleCount`로 주입 |
-| `onlineGame.cpp` 시체/풀 (`migrateToCorpse`/`updateCorpses`/`reinitFromPool`/`returnMonsterToPool`) | 사망 연출 게임 레벨 라이프사이클(client-authored Corpse). Live→Corpse 이관(맵/컨테이너/`barrierObjects_` 제거, body `snapToCurrent`, `kDetachedCorpseId` 고정 id, `corpseId=renderObjectId`), 래그돌 2.5s→오브 전환, 흡수 완료 시 per-kind 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`/`bomberPool_`/`birdyPool_`/`slimePool_`/`treantPool_`) 반환·재사용. **신규 몬스터(Bomber/Birdy/Slime/Treant)**: goblins_/snakes_/mushrooms_처럼 타입별 벡터(`bombers_`/`birdys_`/`slimes_`/`treants_`)+타입별 HP바 맵으로 처리 — `justDied`/render/cull/HiZ/HP바 모두 타입별 개별 루프, migrate/return/reinit switch도 타입별 case. 공용 셋업은 `configureNetMonster`(HP바 맵 인자), 각 createX가 타입 벡터에 push. Grandbaum→treants_(Treant kind), Isys→birdys_(Birdy kind). 오브 연출은 kind-무관 자동. **renderObjectId 객체당 1회 발급·평생 유지**(범람 방지, `setMaxRenderObjectId(10000)`). **중복 스폰 ghost 가드**: `create{Goblin,Hobgoblin,Snake,Mushroom,Bomber,Birdy,Slime,Treant}`이 `idMonsterMap_`에 이미 있으면 스킵(S_Enter/S_NpcSpawnBatch 중복 대응). 상세: `gameArchitecture.md` "에너지 오브 사망 연출" |
+| `onlineGame.cpp` 시체/풀 (`migrateToCorpse`/`updateCorpses`/`reinitFromPool`/`returnMonsterToPool`) | 사망 연출 게임 레벨 라이프사이클(client-authored Corpse). Live→Corpse 이관(맵/컨테이너/`barrierObjects_` 제거, body `snapToCurrent`, `kDetachedCorpseId` 고정 id, `corpseId=renderObjectId`), 래그돌 `kRagdollSeconds`(2.0s)→오브 전환, 흡수 완료 시 per-kind 풀(`goblinPool_`/`snakePool_`/`mushroomPool_`/`bomberPool_`/`birdyPool_`/`slimePool_`/`treantPool_`) 반환·재사용. **신규 몬스터(Bomber/Birdy/Slime/Treant)**: goblins_/snakes_/mushrooms_처럼 타입별 벡터(`bombers_`/`birdys_`/`slimes_`/`treants_`)+타입별 HP바 맵으로 처리 — `justDied`/render/cull/HiZ/HP바 모두 타입별 개별 루프, migrate/return/reinit switch도 타입별 case. 공용 셋업은 `configureNetMonster`(HP바 맵 인자), 각 createX가 타입 벡터에 push. Grandbaum→treants_(Treant kind), Isys→birdys_(Birdy kind). 오브 연출은 kind-무관 자동. **renderObjectId 객체당 1회 발급·평생 유지**(범람 방지, `setMaxRenderObjectId(10000)`). **중복 스폰 ghost 가드**: `create{Goblin,Hobgoblin,Snake,Mushroom,Bomber,Birdy,Slime,Treant}`이 `idMonsterMap_`에 이미 있으면 스킵(S_Enter/S_NpcSpawnBatch 중복 대응). 상세: `gameArchitecture.md` "에너지 오브 사망 연출" |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::Portrait` 네임스페이스 — 로비 슬롯 캐릭터용 오프스크린 포트레이트 RT(가로 아틀라스, room별 triple-buffer). `addPortraitRT`/`transitionToWrite`/`transitionToRead`/`clearPortraitRT`. GFX 채널: `addLobbyPortraitDrawEvent`/`setLobbyPortraitCamera`/`addLobbyPortraitLightData`/`setLobbyPortraitActive`/`lobbyPortraitTextureForThisFrame`/`lobbyPortraitCellUvScaleBias`. 제출: `Object::renderPortrait(gfx, slot)`. render() 삽입: deferred lighting 이후 → UI 이전. 상세: `docs/lobbyScene.md` 작업 B-3 |
 
@@ -966,6 +969,18 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
 
+### 오브젝트 id 등록 / 수명주기 감시 (온라인)
+
+**설계·원인 분석·로그 판독표: `RoomServer/docs/objectIdLifecycle.md`**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Game::registerSkillObject(id, obj)` / `unregisterSkillObject(id)` | `online/onlineGame.cpp` (`debugTeleportToArena` 아래) | **`skillObjectById_` 등록 단일 진입점.** 서버 오브젝트 id로 색인하는 희소 배열이라 id가 배열보다 클 수 있다 — 필요한 만큼 `resize` 후 등록. 직접 `skillObjectById_[id] = …` 금지(플레이어 등록만 무검사였다가 id≥256에서 힙 OOB + 슬롯 null → 자기 스킬 VFX/SFX가 월드 원점에서 재생됐다). 등록 후 스킬 시스템 진입 전 `refreshSkillCtx()` 필수(`data()` 재할당) |
+| `Game::debugAuditObjectRegistry()` | `online/onlineGame.cpp` | **F12**. 타입별 컨테이너 ↔ `idMonsterMap_` ↔ `skillObjectById_` 전수 대조. `ORPHAN`(렌더는 되는데 id 맵에 없음=유령) / `STALE`(5초 이상 서버 move 없음=서버에선 이미 사망) / `SKILL SLOT MISMATCH` / `PLAYER SLOT MISMATCH` / `DANGLING MAP ENTRY` 보고 |
+| `Game::debugLogSkillOwnerResolution()` | `online/onlineGame.cpp` | 시전 시 owner 해석 **실패만** 1줄 기록(회귀 트립와이어). 실패 시 `PlayVFX`/`PlaySound`가 월드 원점에서 재생된다(`skill/skillSystem.cpp` PlayVFX/PlaySound의 `owner==nullptr` 분기) |
+| `Game::lastNpcMoveAt_` / `diagElapsed_` | `online/onlineGame.hpp` | npc별 마지막 `S_NpcMoveBatch` 수신 시각(STALE 판정 기준). `moveGoblin`이 갱신, `InGameScene`이 시계 누적 |
+| 서버 측 감시 | `ServerEngine/IdPool.cpp`, `ServerEngine/JobQueue.cpp`, `RoomServer/RoomManager.cpp` | `[IdPool] STRAY/INVALID PUSH … REJECTED`(오염 id를 풀에 안 넣음), `[IdPool] DUPLICATE POP`, `[JobQueue] CONCURRENT EXECUTE / NEGATIVE jobCount`(잠복 UAF), `[RoomManager] DOUBLE REMOVE`. 판독표는 `RoomServer/docs/serverHandoff.md` §5 |
+
 ---
 
 ## 11. UI 시스템
@@ -1132,7 +1147,8 @@ standalone 실행 모드는 스킬/몬스터 패턴 제작 툴(에디터)로 동
 | `SkillSystem::collectActiveHitboxes` | `skillSystem.cpp` | 활성 bone 히트박스 열거(`ActiveHitboxRef`) |
 | `SkillSystem::pickHitbox` | `skillSystem.cpp` | ray로 최근접 활성 히트박스 OBB 선택 |
 | `SkillSystem::setHitboxLocalOBBs/setHitboxOnHit` | `skillSystem.cpp` | 활성 히트박스 live override (pause 중 즉시 반영) |
-| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색 |
+| `SkillSystem::renderDebugHitboxes(bv, selectedIdx)` | `skillSystem.cpp` | 선택 박스 하이라이트 색. 호출부 2곳: 에디터(`editorController.cpp`), **online 오버레이**(`onlineGame.cpp` `kDebugSkillHitboxOverlay`, 기본 off) |
+| 피격 동기화 히트박스 오버레이 | `onlineGame.cpp` `kDebugSkillHitboxOverlay`(초록=클라 예측) + `RoomServer/Room.cpp` `kBroadcastDebugHitboxes`(빨강=서버 권위) | 둘 다 기본 off. 짝으로 켜면 클라 예측 vs 서버 판정 히트박스를 겹쳐 렌더 → 포즈/타이밍 오프셋 육안 비교. `RoomServer/docs/roomTickCadence.md` §8.2 |
 | `AttachedHitbox::defIdx` | `skillSystem.hpp` | 활성 히트박스 → asset hitboxDef 역매핑 |
 | `SkillHitboxDef::localOBBEulerDeg` | `skillTypes.hpp` | authoring euler(yaw/pitch/roll), 컴파일러가 보관(에디터 round-trip용) |
 | `SkillHitboxDef::penetrate` | `skillTypes.hpp` (클라/서버) | VFXParticle 전용: false=비관통(첫 피격 시 소스 파티클 소멸). 서버: `ParticleHitboxSource::consumedKeys`/`consumeAnchor`로 권위 처리. `particleHitboxDeterminism.md` §8 |

@@ -355,13 +355,44 @@ SkillSystem은 `SkillDispatchContext::objectById`(= `skillObjectById_`, id로 �
 배열)를 통해 owner/target을 매 프레임 해소한다. `AttachedHitbox`는 id만 저장하므로, 객체가
 파괴되기 전에 슬롯을 비우지 않으면 `checkHitboxCollisions()`가 dangling 포인터를 역참조한다.
 
+### 등록·해제는 단일 진입점으로만
+
+`skillObjectById_`는 **서버 오브젝트 id로 직접 색인하는 희소 배열**이다. id는 서버의 전역
+`IdPool`에서 나오고 **룸 하나가 242개(현재 레벨)를 삼키므로**, 접속을 거듭하면 id가 수백~수천까지
+커진다. 초기 크기 `assign(256, nullptr)`은 **상한이 아니라 힌트**다.
+
+```cpp
+Game::registerSkillObject(i32t id, Object* obj);   // 필요한 만큼 resize 후 등록
+Game::unregisterSkillObject(i32t id);
+```
+
+**`skillObjectById_[id] = …` 직접 대입 금지.** 2026-07-26 `setupPlayer`만 바운드 검사 없이 직접
+대입하고 있었는데, 플레이어 id가 256을 넘는 순간 **힙 밖으로 8바이트를 쓰고**, 직후 몬스터
+등록이 `resize`하면서 그 값이 사라져 **플레이어 슬롯이 null**로 남았다. 결과는 크래시가 아니라
+**조용한 오작동** — `lookupObject`가 owner를 못 찾아 `PlayVFX`/`PlaySound`가 월드 원점에서
+재생되고 로컬 히트박스가 캐스터에 붙지 않는다(모션과 서버 권위 데미지는 정상이라 "이펙트만
+안 나오는" 형태로 보인다). 배경: `RoomServer/docs/objectIdLifecycle.md`.
+
+> **resize 후 `refreshSkillCtx()`** — 배열이 커지면 `data()`가 재할당되므로 `skillCtx_.objectById`가
+> stale이 된다. 등록 후 스킬 시스템에 진입하기 전에 반드시 재바인딩한다.
+
+### 파괴 경로
+
 - **`Game::removePlayer()`** — 원격 플레이어 퇴장 시 `otherPlayers_`/`idPlayerMap_`에서 제거하기
   전에 ① `skillSystem_.interruptAll(playerId, skillCtx_)`로 그 플레이어 소유 스킬을 종료하고
-  ② `skillObjectById_[playerId] = nullptr`로 슬롯을 비운다. (이 정리 누락이 2026-05-29
+  ② `unregisterSkillObject(playerId)`로 슬롯을 비운다. (이 정리 누락이 2026-05-29
   `checkHitboxCollisions` 크래시의 원인이었다.)
+- **`Game::removeNpc()`** — 동일하게 `unregisterSkillObject(npcId)`.
 - **소유자 제거는 허용** — `updateHitboxes()`가 owner null이면 히트박스를 비활성화한다.
-- **재접속/씬 재진입** — 씬 셋업에서 `skillObjectById_.assign(256, nullptr)`로 전체 초기화하며,
-  신규 플레이어 추가 경로(`onEnterOther` 등)가 해당 id 슬롯을 갱신한다.
+- **재접속/씬 재진입** — `setupPlayer`가 `assign(256, nullptr)`로 초기화한 뒤, 그 시점에 이미
+  알고 있는 오브젝트(`idMonsterMap_` + `idPlayerMap_`)를 **전부 다시 등록**한다. 패킷 순서는
+  보장되지 않아 몬스터·원격 플레이어가 `setupPlayer`보다 먼저 도착할 수 있다.
+
+### 진단
+
+- `[Skill] owner unresolved … resolved=0` — 시전 시 owner 해석 실패(위 회귀의 트립와이어)
+- **F12** `Game::debugAuditObjectRegistry()` — 컨테이너 ↔ `idMonsterMap_` ↔ `skillObjectById_`
+  전수 대조. `ORPHAN`/`STALE`/`SKILL SLOT MISMATCH`/`PLAYER SLOT MISMATCH` 보고
 
 > 서버 측 동일 제약은 `RoomServer/docs/skillArchitecture.md`의 「객체 수명주기와 연결 해제」 참조.
 

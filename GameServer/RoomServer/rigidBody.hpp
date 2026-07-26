@@ -153,6 +153,17 @@ public:
     uint32_t collisionCategory()              const { return collisionCategory_; }
     uint32_t collisionMask()                  const { return collisionMask_; }
 
+    // Upright agent (player / monster). A contact between two character bodies is
+    // resolved as agent-vs-agent: PhysicsWorld::generateContacts() projects the
+    // normal onto the horizontal plane and ContactConstraint runs friction on the
+    // horizontal tangent only, so overlapping characters neither launch nor drag
+    // each other vertically.
+    // Default true: every game entity registered today is an upright agent. Free
+    // rigid bodies (ragdoll bones, debug boxes) opt out so they can stack against
+    // each other with a true contact normal.
+    void setCharacterBody(bool v)                   { characterBody_ = v; }
+    bool isCharacterBody()                    const { return characterBody_; }
+
     // Pseudo-velocity API for Split Impulse position correction.
     mu::Vec3 pseudoLinearVel() const { return pseudoLinearVel_; }
     mu::Vec3 pseudoOmega()     const { return pseudoOmega_; }
@@ -212,6 +223,8 @@ private:
     // Collision filter bits (default: collide with everything).
     uint32_t collisionCategory_{ 0xFFFFFFFFu };
     uint32_t collisionMask_    { 0xFFFFFFFFu };
+
+    bool     characterBody_ = true;   // see setCharacterBody()
 };
 
 #endif // room_server_rigidBody_hpp

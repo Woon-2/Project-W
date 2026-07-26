@@ -95,11 +95,12 @@ step(dt)
         │       └─ ScatterCollider → prop push-out StaticContact (staticContacts_에 append)
         ├─ solveConstraints(subDt)
         │   ├─ prepare(subDt) : rA/rB, tangent frame, effMass, Baumgarte bias 계산
+        │   │                  + **joint viscous damping 1회 적용** (아래 Per-Constraint Damping)
         │   │                  + joint warmstart (accImpulse 이전 값 재적용)
-        │   ├─ velocity solve × solverIterations_ (기본 10, ragdoll 활성 시 20)
+        │   ├─ velocity solve × solverIterations_ (기본 4)
         │   │   └─ Contact + BallSocket/Hinge/ConeTwist 혼합 solveVelocity()
-        │   ├─ joint velocity extra × jointSolverExtraIterations_
-        │   │   └─ joint 전용 solveVelocity() (contact 제외) — 분기 많은 ragdoll 체인 안정화
+        │   ├─ joint velocity extra × jointSolverExtraIterations_ (기본 0, ragdoll 활성 시 48)
+        │   │   └─ joint 전용 solveVelocity() (contact 제외) — 깊은 ragdoll 체인(뱀 16 body) 수렴용
         │   ├─ position solve × positionSolveIterations_ (기본 3)
         │   │   └─ joint solvePosition() — split impulse (pseudoBias/pseudoAccImpulse)
         │   └─ warmstart 저장 (accImpulse)
@@ -160,27 +161,53 @@ ContactConstraint는 별도 CFM을 사용하지 않는다. contact 침투는 vel
 
 ## Per-Constraint Damping
 
-각 joint 타입이 독립적으로 damping 계수를 보유한다.
-`prepare()` 호출 시 velocity 목표에서 현재 상대속도의 일부를 빼 속도 오차가 0 수렴 속도를 줄인다.
+joint는 body 쌍의 **상대 속도**를 점성 감쇠한다(시체의 어깨는 무마찰이 아니다). 감쇠가 없으면
+관절이 cone/twist 한계까지 자유 회전하며 덜그럭거린다.
 
-| Joint | 필드 | 기본값 |
-|-------|------|--------|
-| BallSocketJoint | `damping_` | 0.1f |
-| HingeJoint | `linearDamping_`, `angularDamping_` | 별도 설정 |
-| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 0.1f |
+**불변식: 감쇠는 서브스텝당 정확히 1회, `prepare()`에서만 적용한다.**
+감쇠 임펄스는 warm-start 누적기에 들어가지 않아 **수렴하지 않는다** — 그냥 상대 속도에
+`(1 - f)`를 곱할 뿐이다. 따라서 호출 횟수가 곧 감쇠량이 된다. `solveVelocity()`에서 부르면
+PGS 반복 횟수가 물성을 바꿔버린다.
 
-damping이 0이면 joint는 오차를 완전히 해소하려는 강한 impulse를 생성한다.
-ragdoll 자연스러운 움직임을 위해 적절한 damping이 필요하다.
+| 항목 | 값 |
+|---|---|
+| `kJointDampingRate` (`jointConstraint.cpp` 파일 스코프) | **2.5 (1/s)** — 상대 속도 시상수 τ ≈ 0.4s. 3종 joint 공용 |
+| 서브스텝당 감쇠 비율 | `f = 1 - exp(-rate · subDt)` — 서브스텝 길이·개수·반복 횟수에 **불변** |
+| 적용 순서 | 캐시(축·effMass) 계산 → **감쇠** → warm-start. 적분기와 동일 규약(감쇠를 먼저 걸어 그 스텝의 임펄스를 감쇠하지 않는다) |
 
-**ConeTwistJoint angular damping (always on):** `solveVelocity()`에서 상대 각속도
-`ωrel = ωA - ωB`를 twist 축(`cache_.twistAxis`, 한계 활성 여부와 무관하게 매 prepare에서
-설정)에 대해 분해한다.
-- twist 성분 `dot(ωrel, tAxis)` → `twistDamping_`로 감쇠
-- swing 성분 `ωrel - dot(ωrel,tAxis)·tAxis`(twist 축에 수직인 평면) → `coneDamping_`로 감쇠
-  (순간 swing 축에 투영). **cone 한계 내부에서도 항상 적용**되어 관절이 한계까지 자유
-  회전하지 않고 묵직하게 움직인다.
-- effective mass는 cache가 아니라 매번 `angEff1D(axis, invInertiaWorld)`로 재계산한다.
-  `cone/twistEffMass` 캐시 필드는 해당 한계가 active일 때만 채워지므로 감쇠에 쓰면 stale.
+축 분해(3종 공통):
+- BallSocket — 피벗에서의 상대 **선속도**
+- Hinge — 피벗 선속도 + **자유 hinge 축** 상대 각속도 (수직 2축은 alignment row가 이미 구속)
+- ConeTwist — 피벗 선속도 + twist 축 성분 + twist 축에 수직인 **swing 평면** 성분.
+  swing은 **cone 한계 내부에서도** 감쇠해 관절이 묵직하게 움직인다.
+- effective mass는 캐시가 아니라 매번 `angEff1D(axis, invInertiaWorld)`로 재계산한다
+  (`cone/twist/limitEffMass` 캐시는 해당 한계가 active일 때만 채워져 stale).
+
+### 과거 버그(수정 완료, 2026-07-26) — 반복 횟수와 물성의 결합
+
+감쇠가 `solveVelocity()` 안에서 **반복마다 고정 비율 0.1**로 적용됐다. 그 결과 수렴을 위해
+반복 횟수를 올리면 물성이 같이 바뀌었다:
+
+```
+래그돌 활성 시 서브스텝당 joint solveVelocity 호출 = solverIterations_(4) + jointSolverExtra(48) = 52회
+상대 각속도 유지율 = 0.9^52 ≈ 0.004   (스텝당 2 서브스텝 → 0.9^104 ≈ 1.7e-5)
+```
+
+깊은 체인(뱀 16 body) 안정화를 위해 넣은 `setJointSolverExtraIterations(48)`이 실효 감쇠를
+13배로 키워 **뼈 사이의 상대 운동을 매 스텝 완전 소거**했다. CoM 낙하는 멀쩡했으므로 증상은
+"래그돌이 관절이 굳은 마네킹처럼 통째로 천천히 기운다"로 나타났고, 물리 tick/substep/split
+impulse는 전부 정상이었다(그쪽을 먼저 의심해 시간을 썼다).
+
+**교훈:** 수렴 파라미터(반복 횟수)와 물성(감쇠)은 반드시 분리할 것. 비수렴 필터를 PGS 반복
+루프 안에 두지 말 것. 지금은 둘이 독립이므로, 불안정한 리그가 나오면 감쇠를 올리기 전에
+`jointSolverExtraIterations_`를 먼저 올리면 된다.
+
+**진단 재현법:** `kJointDampingRate`를 40 이상으로 올리고 빌드하면 위의 "굳은 마네킹" 거동이
+그대로 재현된다. 붕괴가 다시 둔해 보일 때 원인이 감쇠인지 확인하는 가장 빠른 A/B다.
+
+**미래 확장 여지:** 현재 감쇠율은 전 joint 공용 상수다. 리그별로 다르게 하고 싶다면
+`JointDef`에 필드를 추가해 `Ragdoll::build()`에서 joint에 주입하는 것이 자연스럽다(런타임
+setter는 쓰이지 않아 제거했다).
 
 ---
 
@@ -249,19 +276,51 @@ ContactConstraint의 침투 회복은 **Baumgarte + split impulse 조합**이다
    - `newHp <= 0`이면 `goblin->setRagdollInitVelocity(pkt->targetVelocity)` 저장 (사망 직전 서버 속도)
    - `applyHit()` → `goblin->setRagdollPendingActivation(true)`
 2. 같은 프레임 `animSystem_.update()` 후 `activateRagdollIfPending()` 호출 (finalXformData 확정 후)
-3. `activate(physicsWorld_)` 이후 초기 속도 + noise impulse 적용:
-   - **초기 속도**: 모든 뼈에 `setLinearVel(initVel)` — 강체이던 고블린의 운동량 보존
-   - **noise impulse**: 뼈별 `BoneBoxDef::noiseImpulse` 크기, velDir 방향으로 bias된 랜덤 impulse
-     ```
-     dir = normalize(velDir * kNoiseBias + randUnit * (1 - kNoiseBias))  // kNoiseBias = 0.6
-     body->applyImpulse(dir * noiseImpulse, body->pos())
-     ```
-4. 이후 매 프레임 `syncRagdollToAnim()` — ragdoll body transform → finalXformData 덮어씀
+3. `activate(physicsWorld_)` → **`Ragdoll::applyDeathKick(initVel)`** (온라인·standalone 공용 진입점)
+4. 이후 매 프레임 `syncToFinalXforms(..., tPhysic)` — ragdoll body transform → finalXformData 덮어씀
 
-**초기 속도가 물리적으로 올바른 이유:**
-- 서버 속도는 킬링 블로우 `applyImpulse()` 직후 읽힌 값
-- 강체의 모든 부분이 같은 선속도를 공유 → 뼈 질량 무관하게 `setLinearVel(v)` 적용이 옳음
-- 전체 래그돌 질량 ≈ 고블린 바디 질량(70 kg) → 운동량 보존
+### `applyDeathKick` — 운동량 인계 + 넘어짐 토크 + 노이즈
+
+```
+1) 모든 뼈: v_i = initVel                    — 강체이던 몬스터의 운동량 보존
+2) 넘어짐(강체 운동):  pivot = 발밑(전 body 최저 y, 루트 body의 x/z)
+                       axis  = normalize(cross(worldUp, velDir))   (넉백 없으면 랜덤 수평축)
+                       omega = axis * topplingOmega                (기본 2.5 rad/s)
+                       v_i  += cross(omega, pos_i - pivot),  omega_i = omega
+3) 뼈별 noise: dir = normalize(velDir·0.6 + randUnit·0.4)
+               applyImpulse(dir * noiseImpulse, pos_i + orient·(halfExtents 내 랜덤 오프셋))
+```
+
+- **초기 속도가 옳은 이유:** 서버 속도는 킬링 블로우 `applyImpulse()` 직후 값이고, 강체의 모든
+  부분이 같은 선속도를 공유하므로 뼈 질량과 무관하게 `setLinearVel(v)`가 맞다.
+- **토크를 강체 운동으로 주는 이유:** 전체가 하나의 rigid velocity field를 공유하면 **관절이 보는
+  상대 속도가 0**이라 솔버가 싸우지 않는다. 뼈마다 제각각 토크를 꽂으면 체인이 터진다. 축을
+  `cross(up, velDir)`로 잡으면 몸이 넉백 방향으로 넘어간다(맞은 쪽에서 멀어짐).
+- **noise를 COM이 아닌 오프셋에 적용하는 이유:** `applyImpulse(..., body->pos())`는 r=0이라
+  **토크가 전혀 생기지 않는다**(순수 병진). 과거 코드가 그랬고, 그래서 노이즈가 회전으로
+  보이지 않았다.
+
+### 래그돌 전용 물리 프로파일
+
+살아있는 캐릭터와 의도적으로 다르다 — 시체는 1~2초 안에 "무너지는 것"으로 읽혀야 하는데,
+실제 스케일 중력은 큰 모델에서 그 그림을 못 만든다(거인 슬로모션).
+
+| 항목 | 값 | 위치 |
+|---|---|---|
+| `Ragdoll::kGravityScale` | **1.35** | `activate()`에서 per-body `RigidBody::setGravityScale`. Dynamic 전환 후에 걸어야 의미가 있다 |
+| `Ragdoll::kTopplingOmega` | 2.5 rad/s | `applyDeathKick()` |
+| `kJointDampingRate` | 2.5 (1/s) | `jointConstraint.cpp` — joint 생성자 기본값 |
+
+> 전부 컴파일 타임 상수다. 시연 대비로 F10 런타임 튜너를 만들었다가, 값이 확정된 뒤
+> **디버그 조작·로그는 전부 제거**했다(2026-07-26). 남은 튜닝 여지는
+> `docs/ragdollSafety.md` "천천히 무너진다"의 남은 레버 절에 정리돼 있다.
+
+### 렌더 보간
+
+`syncToFinalXforms`는 `PhysicsWorld::interpolatePos/interpolateOrient`로 prev→curr를 보간한다
+(`t`는 [0,1] 클램프 — 물리 루프가 프레임당 step 상한에 걸리면 누산기 비율이 1을 넘는다).
+보간이 없으면 래그돌만 물리 tick(60Hz, `physicUpdateScaleK_`=4면 15Hz) 계단으로 갱신돼
+빠르게 휘두르는 사지에서 stutter가 보인다 — 붕괴가 가장 잘 보여야 할 구간이다.
 
 **Ragdoll 물리 파라미터 (Unity에서 설정):**
 `BoneBoxDef`에 포함되어 `.bin` 파일로 익스포트:
@@ -269,6 +328,11 @@ ContactConstraint의 침투 회복은 **Baumgarte + split impulse 조합**이다
 - `noiseImpulse` — 뼈별 최대 noise impulse (N·s)
 
 Unity 익스포트 경로: `GoblinRagdollConfig.cs` Inspector → `ModelExtractor.cs` → `.bin`
+
+> ⚠ 현재 전 모델의 `angularDamping`이 **2.0**(Unity `Rigidbody.angularDrag` 기본 0.05의 40배)으로
+> 익스포트돼 있다. 각속도 시상수 τ ≈ 0.5s로 결코 작지 않아 붕괴 둔함의 남은 레버다
+> (`ragdollSafety.md` 참조). 손대려면 Unity Inspector 수정 → 전 모델 재추출이 필요하다.
+> ⚠ `restitution`은 `ContactConstraint`가 **읽지 않는다**(dead) — 모든 접촉이 완전 비탄성이다.
 
 ---
 

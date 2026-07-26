@@ -32,6 +32,14 @@ public:
     // Terrain contacts skip the Baumgarte bias to prevent ground vibration.
     // Position correction is handled exclusively by Split Impulse.
     void setTerrainContact(bool v) { isTerrainContact_ = v; }
+    bool isTerrainContact() const  { return isTerrainContact_; }
+
+    // Mark this constraint as an agent-vs-agent (character) contact. Set by
+    // generateContacts() in the SAME branch that projects the normal onto the
+    // horizontal plane, so prepare() may assume the normal has no Y component.
+    // Such a contact gets a single horizontal friction axis (see prepare()).
+    void setCharacterContact(bool v) { isCharacterContact_ = v; }
+    bool isCharacterContact() const  { return isCharacterContact_; }
 
     void solvePosition() override;
 
@@ -42,6 +50,7 @@ private:
         float    bias;             // velocity-level: external-force compensation only
         float    pseudoBias;       // position-level: β/dt * penetration
         float    accNormalPseudo;  // accumulated pseudo-impulse this step (reset in prepare)
+        int      tangentCount;     // 2 normally, 1 for character contacts (horizontal only)
         mu::Vec3 rA;
         mu::Vec3 rB;
         mu::Vec3 tangent[2];
@@ -54,17 +63,29 @@ private:
     //   kSplitImpulseBeta (position-level): energy-neutral pseudo-velocity to position;
     //     high values snap out penetration in one step (poppy). Bullet erp2 = 0.8.
     // Pure split-impulse was visibly poppy; pure Baumgarte leaves residual penetration.
-    // Must match the client values to keep prediction and authority in sync.
+    // [MIRROR] client/contactConstraint.hpp kBaumgarteBeta / kSplitImpulseBeta — must stay equal.
     static constexpr float kBaumgarteBeta    = 0.2f;
     static constexpr float kSplitImpulseBeta = 0.3f;
     // External-force (gravity) compensation is shared across BOTH channels (velocity
     // bias + split-impulse pseudoBias). The two shares must total exactly extComp;
     // applying the full extComp on each double-compensates gravity and the body floats
     // up. kExtCompVelFrac is the velocity-channel share (the split channel gets the rest).
+    // [MIRROR] client/contactConstraint.hpp kExtCompVelFrac / kSlop — must stay equal.
     static constexpr float kExtCompVelFrac   = 0.5f;
     static constexpr float kSlop             = 0.005f;
+    // Max penetration depth (m) fed into the Baumgarte/split correction per step.
+    // Correction velocity = beta * invDt * depth, so an uncapped deep overlap produces
+    // an enormous correction: a player walking into the boss's bone-box BVH reaches
+    // depths of several tenths of a metre, and the split-impulse channel then TELEPORTS
+    // the body (pseudo-velocity writes position directly, no velocity change) — the boss
+    // pops upright into the air and free-falls back. Capping the depth bounds the
+    // per-step correction; deep penetration just resolves over several steps.
+    // Matches the staticDepenetration clamp philosophy (kMaxCorrect=0.2m).
+    // [MIRROR] client/contactConstraint.hpp kMaxCorrectionDepth — must stay equal.
+    static constexpr float kMaxCorrectionDepth = 0.2f;
 
-    bool     isTerrainContact_ = false;
+    bool     isTerrainContact_   = false;
+    bool     isCharacterContact_ = false;
     mu::Vec3 externalAccelA_{ 0.f, 0.f, 0.f };
     mu::Vec3 externalAccelB_{ 0.f, 0.f, 0.f };
 };

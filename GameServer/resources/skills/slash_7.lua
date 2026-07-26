@@ -9,7 +9,7 @@ skill.name             = "Slash7"
 skill.weapon           = "sword"
 skill.dialSlot         = 1
 skill.chargeCost       = 5
-skill.cooldownMs       = 800
+skill.cooldownMs       = 720
 skill.totalDurationMs  = 700
 skill.interruptible    = true
 

@@ -274,7 +274,8 @@ void Game::setupStageVisual() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
+	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(122.f), mu::Degree(66.f)));
+	// dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 180.f ) ) );
 	dirLight_.color = mu::Vec3( 0.9f, 0.86f, 0.66f );
 	dirLight_.intensity = 7.5f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -2227,15 +2228,15 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		// Build the bottom-right skill dial from this weapon's loadout metadata.
 		setupSkillDial(playerInfo.weaponType);
 
+		// 256은 상한이 아니라 초기 크기 힌트다(registerSkillObject가 필요한 만큼 늘린다).
+		// 이전 세션 잔재를 지우는 역할도 겸하므로, 아래에서 이미 알고 있는 오브젝트를 복구한다.
 		skillObjectById_.assign(256, nullptr);
 		player_->setFaction(Faction::Players);
-		skillObjectById_[player_->getId()] = player_.get();
-		// Register all monsters that arrived before setupPlayer() was called.
-		for (auto& [id, monster] : idMonsterMap_) {
-			auto sid = static_cast<size_t>(id);
-			if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
-			skillObjectById_[sid] = monster;
-		}
+		registerSkillObject(player_->getId(), player_.get());
+		// setupPlayer 이전에 도착한 오브젝트 복구(패킷 순서는 보장되지 않는다).
+		// 몬스터는 S_NpcSpawnBatch가 S_Enter보다 먼저 올 수 있고, 원격 플레이어도 마찬가지다.
+		for (auto& [id, monster] : idMonsterMap_) registerSkillObject(id, monster);
+		for (auto& [id, other]   : idPlayerMap_)  registerSkillObject(id, other.get());
 
 		// vfxId 0 is reserved for hit/blood VFX. vfxId 1..18 bind 1:1 to each
 		// built ParticleEffect, mirroring StandAlone::Game::skillVfxById_ so the
@@ -2343,11 +2344,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(otherPlayerInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = otherPlayer.get();
-	}
+	registerSkillObject(otherPlayerInfo.objectId, otherPlayer.get());
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
@@ -2389,11 +2386,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(otherPlayerInfo.playerId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = otherPlayer.get();
-	}
+	registerSkillObject(otherPlayerInfo.playerId, otherPlayer.get());
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -2456,12 +2449,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	goblin->setRenderObjectId(nextRenderObjId_++);
 
-	// Register goblin in skill system's object lookup table.
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(goblinInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = goblin.get();
-	}
+	registerSkillObject(goblinInfo.objectId, goblin.get());
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId]    = goblin;
@@ -2518,12 +2506,7 @@ void Game::createHobgoblin(const ObjectInfo& hobgoblinInfo) {
 
 	hobgoblin->setRenderObjectId(nextRenderObjId_++);
 
-	// Register hobgoblin in skill system's object lookup table.
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(hobgoblinInfo.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = hobgoblin.get();
-	}
+	registerSkillObject(hobgoblinInfo.objectId, hobgoblin.get());
 
 	// Heat distortion: ancient-tree mid-boss — sickly emerald haze, tall plume.
 	bossHeatProfiles_[hobgoblinInfo.objectId] = BossHeatState{
@@ -2585,11 +2568,7 @@ void Game::createSnake(const ObjectInfo& info) {
 
 	snake->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = snake.get();
-	}
+	registerSkillObject(info.objectId, snake.get());
 
 	snakes_.push_back(snake);
 	idSnakeMap_[info.objectId]    = snake;
@@ -2644,11 +2623,7 @@ void Game::createMushroom(const ObjectInfo& info) {
 
 	mushroom->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = mushroom.get();
-	}
+	registerSkillObject(info.objectId, mushroom.get());
 
 	mushrooms_.push_back(mushroom);
 	idMushroomMap_[info.objectId]   = mushroom;
@@ -2709,11 +2684,7 @@ void Game::configureNetMonster(const std::shared_ptr<Object>& obj, const ObjectI
 
 	obj->setRenderObjectId(nextRenderObjId_++);
 
-	if (!skillObjectById_.empty()) {
-		auto id = static_cast<size_t>(info.objectId);
-		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
-		skillObjectById_[id] = obj.get();
-	}
+	registerSkillObject(info.objectId, obj.get());
 
 	idMonsterMap_[info.objectId]     = obj.get();
 	respawnKind_[info.objectId]      = kind;
@@ -2877,8 +2848,7 @@ u32t Game::migrateToCorpse(const std::shared_ptr<Object>& obj, MonsterKind kind,
 		break;
 	}
 	idMonsterMap_.erase(npcId);
-	if (static_cast<size_t>(npcId) < skillObjectById_.size())
-		skillObjectById_[npcId] = nullptr;
+	unregisterSkillObject(npcId);
 
 	// A corpse is not a barrier: drop any stale barrier registration so the raw pointer in
 	// barrierObjects_ can't outlive this object's current role (and so a pooled reuse does
@@ -3006,9 +2976,7 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 	}
 	}
 	idMonsterMap_[npcId] = obj.get();
-	if (static_cast<size_t>(npcId) >= skillObjectById_.size())
-		skillObjectById_.resize(npcId + 1u, nullptr);
-	skillObjectById_[npcId] = obj.get();
+	registerSkillObject(npcId, obj.get());
 	respawnKind_[npcId] = kind;
 	holdEvent(eventList_, EvRespawn(npcId));
 	return true;
@@ -3016,7 +2984,10 @@ bool Game::reinitFromPool(MonsterKind kind, uint16 npcId, const mu::Vec3& pos, i
 
 void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 	const float dtSec = std::chrono::duration<float>(deltaTime).count();
-	constexpr float kRagdollSeconds = 1.5f;   // hold the ragdoll before dissolving
+	// 래그돌 물리가 이 프로젝트의 시연 포인트라 유지 구간을 길게 잡는다. 늘린 만큼
+	// 오브 구간(energyOrbSystem.cpp의 kFormingTime·추적 속도)을 줄여 총 흡수 시간을
+	// 보존한다 — 시간 예산 표는 docs/gameArchitecture.md "연출 시간 예산".
+	constexpr float kRagdollSeconds = 2.0f;   // hold the ragdoll before dissolving
 	constexpr float kChargeWindow   = 0.5f;   // how long a charge credit waits for its corpse
 
 	// Credit queued charges to the most-recent uncharged ragdoll corpse.
@@ -3050,7 +3021,8 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 			// (Otherwise the BV tracks the death animation while the mesh/physics flop.)
 			if (o.ragdoll() && o.ragdoll()->isActive() && o.animBlender() && o.model())
 				o.ragdoll()->syncToFinalXforms(
-					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world);
+					o.animBlender()->finalXformData(), o.model()->skeleton, o.renderState().world,
+					tPhysicInterp);
 			o.update(deltaTime, tPhysicInterp);
 			if (o.ragdoll() && o.ragdoll()->isActive())
 				o.rebuildBodyBVH();
@@ -3412,8 +3384,7 @@ void Game::removePlayer( i32t playerId ) {
 	// skillObjectById_, so re-sync before dispatching into the skill system.
 	refreshSkillCtx();
 	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
-	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
-		skillObjectById_[playerId] = nullptr;
+	unregisterSkillObject(playerId);
 
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
@@ -3711,6 +3682,10 @@ void Game::moveGoblin(uint16 npcId, uint8 statusFlags, DirectX::XMFLOAT3 pos, Di
 	}
 	Object* monster = it->second;
 
+	// 서버가 이 npc의 이동을 마지막으로 보낸 시각. 감사(F12)에서 오래 갱신되지 않은
+	// 개체를 STALE로 표시한다 — 서버가 hp<=0으로 판단해 move 배치에서 제외했다는 신호.
+	lastNpcMoveAt_[npcId] = diagElapsed_;
+
 	if (monster->isDead()) return;
 
 	monster->body().advanceState();
@@ -3950,6 +3925,7 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, 
 	// APC-time call: re-sync skillCtx_ in case skillObjectById_ was resized by an
 	// earlier packet in this batch.
 	refreshSkillCtx();
+	debugLogSkillOwnerResolution("remote", skillAssetId, static_cast<i32t>(ownerId));
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
 	                        Milliseconds{ static_cast<float>(elapsedMs) }, skillSeed);
 }
@@ -3978,7 +3954,9 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 				mu::Vec3(DirectX::XMLoadFloat3(&info.halfExtents)),
 				mu::NQuat(DirectX::XMLoadFloat4(&info.orient), mu::NQuat::NoNormalize_t{})
 			},
-			Milliseconds{ 100.f }
+			Milliseconds{ 100.f },
+			BVPipeline::BVModel::Box,
+			mu::Vec4{ 1.f, 0.2f, 0.2f, 1.f }   // 빨강 = 서버 권위 히트박스 (클라 예측은 초록)
 		);
 	}
 }
@@ -4035,6 +4013,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (player_ == nullptr) {
 		return;
 	}
+
+	// F12 감사의 STALE 판정 기준이 되는 단조 시계.
+	diagElapsed_ += deltaTime;
 
 	// Skill dispatch context: refresh per-frame pointers.
 	refreshSkillCtx();
@@ -4141,6 +4122,13 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
+
+	// 클라 예측 히트박스(초록)를 서버 권위 히트박스(빨강, onDebugHitboxes)와 나란히 렌더해
+	// 포즈/타이밍 오프셋을 육안 비교한다. 서버의 kBroadcastDebugHitboxes(Room.cpp)와 짝으로 켠다.
+	// 상세: RoomServer/docs/roomTickCadence.md §8.2
+	static constexpr bool kDebugSkillHitboxOverlay = false;
+	if constexpr (kDebugSkillHitboxOverlay)
+		skillSystem_.renderDebugHitboxes(debugBVView_);
 
 	// 이벤트 디스패치
 	//
@@ -4356,23 +4344,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
 
-			// Apply death velocity so the ragdoll flies in the knockback direction.
-			const mu::Vec3 initVel = g.ragdollInitVelocity();
-			if (initVel.len2() > 0.01f) {
-				for (auto& rb : rd.bones()) if (rb.body) rb.body->setLinearVel(initVel);
-				g.setRagdollInitVelocity(mu::Vec3{});
-			}
-			// Per-bone random noise impulse, biased toward the death velocity direction.
-			constexpr float kNoiseBias = 0.6f;
-			const mu::Vec3 velDir = (initVel.len2() > 0.01f) ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
-			for (const auto& rb : rd.bones()) {
-				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
-				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
-				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
-				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
-				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
-				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
-			}
+			// Momentum hand-off + toppling kick + per-bone noise (see Ragdoll::applyDeathKick).
+			rd.applyDeathKick(g.ragdollInitVelocity());
+			g.setRagdollInitVelocity(mu::Vec3{});
+
 			justDied.emplace_back(objPtr, kind);
 		};
 
@@ -5896,6 +5871,153 @@ void Game::debugTeleportToArena(const std::string& tag) {
 	std::cout << "[DebugTeleport] -> '" << tag << "' (" << center.x() << ", " << center.y() << ", " << center.z() << ")\n";
 }
 
+// ── 스킬 오브젝트 조회 테이블 ────────────────────────────────────────────────────
+// 서버 오브젝트 id로 색인하는 희소 배열. id는 서버 IdPool에서 나오며 룸이 생길 때마다
+// 수백씩 커지므로, 등록은 전부 여기를 거쳐 배열을 필요한 만큼 늘린다.
+// 배경: RoomServer/docs/objectIdLifecycle.md
+
+void Game::registerSkillObject(i32t id, Object* obj) {
+	if (id < 0) return;
+	const auto sid = static_cast<size_t>(id);
+	if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
+	skillObjectById_[sid] = obj;
+}
+
+void Game::unregisterSkillObject(i32t id) {
+	if (id < 0) return;
+	const auto sid = static_cast<size_t>(id);
+	if (sid < skillObjectById_.size()) skillObjectById_[sid] = nullptr;
+}
+
+// ── 오브젝트 id 정합성 감시 ──────────────────────────────────────────────────────
+// 계획 문서: async-launching-quokka.md. 수정이 아니라 관측용이며, 원인이 확정되면
+// 이 두 함수와 lastNpcMoveAt_/diagElapsed_는 제거하거나 정식 디버그 기능으로 승격한다.
+
+void Game::debugLogSkillOwnerResolution(const char* phase, uint32 assetId, i32t ownerId) const {
+	const bool inRange = (ownerId >= 0 &&
+		static_cast<size_t>(ownerId) < skillObjectById_.size());
+	const Object* owner = inRange ? skillObjectById_[static_cast<size_t>(ownerId)] : nullptr;
+
+	// 정상 경로에서 매 시전마다 찍히면 로그가 시끄러우므로, 해석에 실패한 경우만 남긴다.
+	if (owner != nullptr) return;
+
+	std::cout << "[Skill] owner unresolved: " << phase << " asset=" << assetId
+		<< " owner=" << ownerId
+		<< " resolved=0 (" << (inRange ? "slot is null" : "index out of range")
+		<< ") tableSize=" << skillObjectById_.size()
+		<< " -- VFX/SFX will play at world origin\n";
+}
+
+void Game::debugAuditObjectRegistry() const {
+	std::cout << "\n===== [Audit] object registry =====\n";
+
+	const i32t localId = player_ ? player_->getId() : -1;
+	std::cout << "localPlayerId=" << localId
+		<< " skillObjectById_.size=" << skillObjectById_.size()
+		<< " idMonsterMap_=" << idMonsterMap_.size()
+		<< " corpses_=" << corpses_.size()
+		<< " detachedNpcIds_=" << detachedNpcIds_.size() << '\n';
+
+	int issues = 0;
+
+	// ① 로컬 플레이어 슬롯. 여기가 어긋나면 자기 스킬의 VFX/SFX가 통째로 사라진다.
+	if (player_) {
+		const auto pid = static_cast<size_t>(player_->getId());
+		if (pid >= skillObjectById_.size()) {
+			std::cout << "  [PLAYER SLOT MISMATCH] id=" << pid
+				<< " >= tableSize=" << skillObjectById_.size() << " (never registered)\n";
+			++issues;
+		}
+		else if (skillObjectById_[pid] != player_.get()) {
+			std::cout << "  [PLAYER SLOT MISMATCH] id=" << pid
+				<< " slot=" << static_cast<const void*>(skillObjectById_[pid])
+				<< " expected=" << static_cast<const void*>(player_.get()) << '\n';
+			++issues;
+		}
+	}
+
+	// ② 서버 동기 컨테이너 전수 검사. 렌더는 되는데 id 맵에 없으면 이동·피격을
+	//    영영 못 받는 "유령"이다.
+	std::unordered_set<const Object*> seen;
+	auto auditPool = [&](const char* kindName, const auto& pool) {
+		for (const auto& sp : pool) {
+			const Object* obj = sp.get();
+			if (!obj) continue;
+			seen.insert(obj);
+
+			const auto id = static_cast<uint16>(obj->getId());
+			const auto it = idMonsterMap_.find(id);
+			const bool mapped = (it != idMonsterMap_.end() && it->second == obj);
+
+			if (!mapped) {
+				std::cout << "  [ORPHAN] " << kindName << " id=" << obj->getId()
+					<< " pos=(" << obj->pos().x() << ", " << obj->pos().y()
+					<< ", " << obj->pos().z() << ")"
+					<< " hp=" << obj->hp()
+					<< " renderObjId=" << obj->renderObjectId()
+					<< (it == idMonsterMap_.end() ? " (absent from idMonsterMap_)"
+					                              : " (idMonsterMap_ points elsewhere)")
+					<< '\n';
+				++issues;
+			}
+
+			const auto sid = static_cast<size_t>(obj->getId());
+			if (sid >= skillObjectById_.size() || skillObjectById_[sid] != obj) {
+				std::cout << "  [SKILL SLOT MISMATCH] " << kindName << " id=" << obj->getId()
+					<< " tableSize=" << skillObjectById_.size() << '\n';
+				++issues;
+			}
+
+			// STALE: 서버가 이 개체의 이동을 안 보낸 지 오래됐다 = 서버에선 hp<=0
+			// (enter 스냅샷에 사망 몬스터가 실려 온 경우가 대표적).
+			if (mapped) {
+				const auto seenAt = lastNpcMoveAt_.find(id);
+				const float ageSec = (seenAt == lastNpcMoveAt_.end())
+					? std::chrono::duration<float>(diagElapsed_).count()
+					: std::chrono::duration<float>(diagElapsed_ - seenAt->second).count();
+				if (ageSec > 5.f) {
+					std::cout << "  [STALE] " << kindName << " id=" << obj->getId()
+						<< " noMoveFor=" << ageSec << "s"
+						<< " hp=" << obj->hp()
+						<< (seenAt == lastNpcMoveAt_.end() ? " (never moved since spawn)" : "")
+						<< " pos=(" << obj->pos().x() << ", " << obj->pos().y()
+						<< ", " << obj->pos().z() << ")\n";
+					++issues;
+				}
+			}
+		}
+	};
+
+	auditPool("Goblin",   goblins_);
+	auditPool("Snake",    snakes_);
+	auditPool("Mushroom", mushrooms_);
+	auditPool("Bomber",   bombers_);
+	auditPool("Birdy",    birdys_);
+	auditPool("Slime",    slimes_);
+	auditPool("Treant",   treants_);
+	auditPool("Boss",     bosses_);
+
+	// ③ 역방향: 맵에는 있는데 어느 컨테이너에도 없는 항목(해제된 포인터일 수 있다).
+	for (const auto& [id, obj] : idMonsterMap_) {
+		if (seen.count(obj) == 0) {
+			std::cout << "  [DANGLING MAP ENTRY] id=" << id
+				<< " ptr=" << static_cast<const void*>(obj)
+				<< " (not in any typed container)\n";
+			++issues;
+		}
+	}
+
+	std::cout << "containers: goblins=" << goblins_.size()
+		<< " snakes=" << snakes_.size()
+		<< " mushrooms=" << mushrooms_.size()
+		<< " bombers=" << bombers_.size()
+		<< " birdys=" << birdys_.size()
+		<< " slimes=" << slimes_.size()
+		<< " treants=" << treants_.size()
+		<< " bosses=" << bosses_.size() << '\n';
+	std::cout << "===== [Audit] done: " << issues << " issue(s) =====\n\n";
+}
+
 void Game::sendMouseMovePacket() {
 	const auto forward = player_->forward();
 	const auto yawRad = std::atan2(forward.x(), forward.z());
@@ -5965,6 +6087,9 @@ void Game::castSkillByName(std::string_view name) {
 	// Per-cast deterministic seed: used locally AND sent to the server
 	// (C_SkillStart) so server hitboxes / remote visuals match exactly.
 	const uint32 skillSeed = std::random_device{}();
+	// owner 해석 실패 = PlayVFX/PlaySound가 월드 원점에서 재생되고 로컬 히트박스가
+	// 캐스터에 붙지 않는다(= "피격은 되는데 VFX/SFX가 없다" 증상의 직접 원인).
+	debugLogSkillOwnerResolution("cast", asset->id, player_->getId());
 	skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_, skillSeed);
 	sendSkillStartPacket(asset->id, skillSeed);
 }
@@ -6232,6 +6357,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugTeleportToArena( "Arena_Isys" );
 	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) )
 		debugTeleportToArena( "Arena_Boss" );
+
+	// F12: 오브젝트 id 정합성 감사. 유령 몬스터를 목격한 즉시 눌러
+	// ORPHAN / STALE / SLOT MISMATCH 중 무엇인지 콘솔에서 확정한다.
+	if ( (keyboardStateCurr_[VK_F12] & 0x80) && !(keyboardStatePrev_[VK_F12] & 0x80) )
+		debugAuditObjectRegistry();
 
 	// F8: [임시 디버그] 로컬 플레이어 이동 속도 부스트 토글(가벽 텍스처 위치 등 빠른 이동 점검용).
 	if ( (keyboardStateCurr_[VK_F8] & 0x80) && !(keyboardStatePrev_[VK_F8] & 0x80) ) {
