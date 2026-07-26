@@ -493,8 +493,12 @@ void LobbyUI::build(UI::UIManager& uiManager, const Callbacks& callbacks) {
     makeLabel(quitButton, L"종료", 0.f, 13.f, 24.f, smallButtonW, 38.f,
         ink, UI::TextHAlign::Center);
 
-    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, bottomMenuButtonY + smallButtonH + 8.f,
-        19.f, contentW, 30.f,
+    // Keep validation/status messages between the main form and the utility
+    // buttons. Placing them below the utility buttons makes the text sit on
+    // the panel edge and overlap the settings/quit row at runtime.
+    constexpr float mainMenuMessageY = 346.f;
+    mainMenuMsgLabel_ = makeLabel(mainPanel, L"", contentX, mainMenuMessageY,
+        19.f, contentW, 28.f,
         { 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
     const float roomRowH = 128.f;
