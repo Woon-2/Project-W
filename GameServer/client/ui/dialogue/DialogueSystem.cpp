@@ -105,6 +105,9 @@ bool parseDefinition(const json::Value& value, DialogueDefinition& out) {
     }
 
     out.style.background = readColor(value.find("background"), out.style.background);
+    out.style.borderColor = readColor(value.find("borderColor"), out.style.borderColor);
+    out.style.borderWidth = std::max(0.f,
+        numberOr(value.find("borderWidth"), out.style.borderWidth));
     out.style.textColor = readColor(value.find("textColor"), out.style.textColor);
     out.style.padding = numberOr(value.find("padding"), out.style.padding);
     out.style.fontSize = numberOr(value.find("fontSize"), out.style.fontSize);
@@ -152,6 +155,25 @@ bool DialogueSystem::init(UIManager& uiManager, const std::filesystem::path& jso
         label_->pivot = Pivots::TopLeft;
         label_->setTextHAlign(TextHAlign::Leading);
         label_->setTextVAlign(TextVAlign::Top);
+        label_->zOrder = 1;
+
+        constexpr const char* borderNames[] = {
+            "DialogueBorderTop",
+            "DialogueBorderBottom",
+            "DialogueBorderLeft",
+            "DialogueBorderRight"
+        };
+        for (std::size_t i = 0; i < borderPanels_.size(); ++i) {
+            borderPanels_[i] = static_cast<Panel*>(
+                panel_->addChild(std::make_unique<Panel>())
+            );
+            borderPanels_[i]->name = borderNames[i];
+            borderPanels_[i]->anchor = Anchors::TopLeft;
+            borderPanels_[i]->pivot = Pivots::TopLeft;
+            borderPanels_[i]->zOrder = 2;
+            borderPanels_[i]->interactive = false;
+            borderPanels_[i]->drawSolidBackground = true;
+        }
     }
 
     return loadDefinitions();
@@ -234,6 +256,35 @@ void DialogueSystem::applyDefinition(const DialogueDefinition& definition) {
     panel_->height = DimValue::px(s.height);
     panel_->colorTint = s.background;
 
+    const float borderWidth = std::clamp(
+        s.borderWidth, 0.f, std::min(s.width, s.height) * 0.5f);
+    for (Panel* border : borderPanels_) {
+        border->visible = borderWidth > 0.f;
+        border->colorTint = s.borderColor;
+    }
+
+    // Top, bottom, left, right. The border is inset so the authored dialogue
+    // rectangle keeps its original footprint and remains screen-safe.
+    borderPanels_[0]->offsetX = DimValue::px(0.f);
+    borderPanels_[0]->offsetY = DimValue::px(0.f);
+    borderPanels_[0]->width = DimValue::px(s.width);
+    borderPanels_[0]->height = DimValue::px(borderWidth);
+
+    borderPanels_[1]->offsetX = DimValue::px(0.f);
+    borderPanels_[1]->offsetY = DimValue::px(s.height - borderWidth);
+    borderPanels_[1]->width = DimValue::px(s.width);
+    borderPanels_[1]->height = DimValue::px(borderWidth);
+
+    borderPanels_[2]->offsetX = DimValue::px(0.f);
+    borderPanels_[2]->offsetY = DimValue::px(borderWidth);
+    borderPanels_[2]->width = DimValue::px(borderWidth);
+    borderPanels_[2]->height = DimValue::px(std::max(0.f, s.height - borderWidth * 2.f));
+
+    borderPanels_[3]->offsetX = DimValue::px(s.width - borderWidth);
+    borderPanels_[3]->offsetY = DimValue::px(borderWidth);
+    borderPanels_[3]->width = DimValue::px(borderWidth);
+    borderPanels_[3]->height = DimValue::px(std::max(0.f, s.height - borderWidth * 2.f));
+
     const float innerWidth = std::max(1.f, s.width - s.padding * 2.f);
     const float innerHeight = std::max(1.f, s.height - s.padding * 2.f);
     label_->offsetX = DimValue::px(s.padding);
@@ -274,6 +325,9 @@ void DialogueSystem::update(float deltaTimeSec) {
 void DialogueSystem::applyAlpha(float alpha) {
     if (!panel_ || !label_ || !activeDefinition_) return;
     panel_->colorTint.a = activeDefinition_->style.background.a * alpha;
+    for (Panel* border : borderPanels_) {
+        border->colorTint.a = activeDefinition_->style.borderColor.a * alpha;
+    }
     label_->colorTint.a = alpha;
 }
 

@@ -84,26 +84,9 @@ void Font::createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ )
 
 void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, float dpi )
 {
-	D2D1_SIZE_U	size;
-	size.width = TexWidth;
-	size.height = TexHeight;
-
-	D2DBitmapWidth_ = TexWidth;
-	D2DBitmapHeight_ = TexHeight;
-
-	D2D1_BITMAP_PROPERTIES1 bitmapProperties =
-		BitmapProperties1(
-			D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-			D2D1::PixelFormat( DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED ),
-			dpi,
-			dpi
-		);
-
-	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateBitmap( size, nullptr, 0, &bitmapProperties, &pD2DTargetBitmap_ ), true );
-
-	bitmapProperties.bitmapOptions = D2D1_BITMAP_OPTIONS_CANNOT_DRAW | D2D1_BITMAP_OPTIONS_CPU_READ;
-
-	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateBitmap( size, nullptr, 0, &bitmapProperties, &pD2DTargetBitmapRead_ ), true );
+	D2DBitmapDpi_ = dpi > 0.f ? dpi : 96.f;
+	DISPLAY_ERROR_STR( ensureTextBitmapSize( TexWidth, TexHeight ),
+		"[Font Error] failed to create D2D text bitmaps.", true );
 
 	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateSolidColorBrush( ColorF( ColorF::White ), &pWhiteBrush_ ), true );
 	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateSolidColorBrush( ColorF( ColorF::Black ), &pBlackBrush_ ), true );
@@ -117,6 +100,60 @@ void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, fl
 	}
 
 	createBundledFontCollection();
+}
+
+bool Font::ensureTextBitmapSize( UINT minWidth, UINT minHeight )
+{
+	minWidth = std::max( 1u, minWidth );
+	minHeight = std::max( 1u, minHeight );
+	if ( pD2DTargetBitmap_ && pD2DTargetBitmapRead_
+		&& minWidth <= D2DBitmapWidth_ && minHeight <= D2DBitmapHeight_ )
+	{
+		return true;
+	}
+
+	// Grow geometrically so switching between labels of nearby sizes does not
+	// repeatedly recreate the D2D staging surfaces.
+	const UINT width = std::max( minWidth,
+		D2DBitmapWidth_ > 0 ? D2DBitmapWidth_ * 2u : minWidth );
+	const UINT height = std::max( minHeight,
+		D2DBitmapHeight_ > 0 ? D2DBitmapHeight_ * 2u : minHeight );
+	const D2D1_SIZE_U size{ width, height };
+
+	D2D1_BITMAP_PROPERTIES1 bitmapProperties =
+		BitmapProperties1(
+			D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+			D2D1::PixelFormat( DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED ),
+			D2DBitmapDpi_,
+			D2DBitmapDpi_
+		);
+
+	ComPtr<ID2D1Bitmap1> targetBitmap;
+	HRESULT hr = pD2DDeviceContext_->CreateBitmap(
+		size, nullptr, 0, &bitmapProperties, &targetBitmap );
+	if ( FAILED( hr ) || !targetBitmap )
+	{
+		DISPLAY_ERROR_DX_HR( hr, false );
+		return false;
+	}
+
+	bitmapProperties.bitmapOptions =
+		D2D1_BITMAP_OPTIONS_CANNOT_DRAW | D2D1_BITMAP_OPTIONS_CPU_READ;
+
+	ComPtr<ID2D1Bitmap1> readBitmap;
+	hr = pD2DDeviceContext_->CreateBitmap(
+		size, nullptr, 0, &bitmapProperties, &readBitmap );
+	if ( FAILED( hr ) || !readBitmap )
+	{
+		DISPLAY_ERROR_DX_HR( hr, false );
+		return false;
+	}
+
+	pD2DTargetBitmap_ = std::move( targetBitmap );
+	pD2DTargetBitmapRead_ = std::move( readBitmap );
+	D2DBitmapWidth_ = width;
+	D2DBitmapHeight_ = height;
+	return true;
 }
 
 void Font::createBundledFontCollection()
@@ -163,7 +200,9 @@ bool Font::hasFontFamily( IDWriteFontCollection1* collection, const WCHAR* fontF
 	return SUCCEEDED( collection->FindFamilyName( fontFamilyName, &familyIndex, &exists ) ) && exists;
 }
 
-bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
+bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight,
+	IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen,
+	UINT maxWidth, UINT maxHeight, D2D1_COLOR_F color )
 {
 	// 이 경로는 매 프레임 Label 갱신에서 호출된다. D2D/DWrite 실패(디바이스 손실 등)는
 	// 프로세스를 종료시키지 않고 false를 돌려준다 — 호출자가 dirty를 유지해 다음
@@ -178,9 +217,17 @@ bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		return false;
 	}
 
-	D2D1_SIZE_F max_size = pD2DDeviceContext->GetSize();
-	max_size.width = (float)D2DBitmapWidth_;
-	max_size.height = (float)D2DBitmapHeight_;
+	if ( !ensureTextBitmapSize( maxWidth, maxHeight ) )
+	{
+		return false;
+	}
+
+	// Text wrapping must follow the destination Label, not the shared staging
+	// bitmap. The latter can be larger after a previous high-resolution label.
+	const D2D1_SIZE_F max_size{
+		static_cast<float>( std::max( 1u, maxWidth ) ),
+		static_cast<float>( std::max( 1u, maxHeight ) )
+	};
 
 	ComPtr<IDWriteTextLayout> pTextLayout;
 	DISPLAY_ERROR_DX_HR( pDWFactory->CreateTextLayout( wchString, dwLen, pTextFormat, max_size.width, max_size.height, &pTextLayout ), false );
@@ -226,8 +273,8 @@ bool Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		return false;
 	}
 
-	int width = (int)ceil( metrics.width );
-	int height = (int)ceil( metrics.height );
+	int width = std::min( (int)ceil( metrics.width ), (int)maxWidth );
+	int height = std::min( (int)ceil( metrics.height ), (int)maxHeight );
 
 	// 공백뿐인 문자열 등 그릴 픽셀이 없으면 복사를 생략한다(성공 취급, 출력 크기 0).
 	if ( width <= 0 || height <= 0 )
@@ -318,7 +365,10 @@ bool Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHe
 	*piOutWidth = 0;
 	*piOutHeight = 0;
 
-	if ( !CreateBitmapFromText( &iTextWidth, &iTextHeight, pFontHandle->pTextFormat.Get(), wchString, dwLen, color ) )
+	if ( !CreateBitmapFromText(
+		&iTextWidth, &iTextHeight,
+		pFontHandle->pTextFormat.Get(), wchString, dwLen,
+		DestWidth, DestHeight, color ) )
 	{
 		return false;
 	}

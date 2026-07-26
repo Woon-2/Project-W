@@ -2290,7 +2290,9 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 
 	// Local player has finished spawning in-game (server S_Enter): show the
 	// authored intro/monologue once. No-op if dialogues.json lacks the event.
-	dialogueSystem_.show("sample_intro");
+	if (dialogueSystem_.show("sample_intro")) {
+		applyCursorPolicy();
+	}
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -3308,7 +3310,9 @@ void Game::onZoneState( uint16 zoneId, uint8 state ) {
 		// from completedArenaZoneIds_, kept in sync on every client via
 		// S_ZoneState, so each client shows it exactly once per clear cycle.
 		if (firstClear && prefix == "WallHobgoblin") {
-			dialogueSystem_.show("sample_context");
+			if (dialogueSystem_.show("sample_context")) {
+				applyCursorPolicy();
+			}
 		}
 	}
 
@@ -4541,7 +4545,11 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 		tacticalZoneIntro_.update(dtSec);
 		tacticalDialogueOverlay_.update(dtSec);
+		const bool dialogueWasActive = dialogueSystem_.active();
 		dialogueSystem_.update(dtSec);
+		if (dialogueWasActive != dialogueSystem_.active()) {
+			applyCursorPolicy();
+		}
 		inventoryPanel_.update(dtSec);
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
@@ -6516,11 +6524,13 @@ void Game::applyCursorPolicy() {
 		return;
 	}
 
-	// 로비 메인 메뉴와 설정창에서는 포인터를 자유롭게 둔다.
+	// 로비 메인 메뉴와 포인터를 사용하는 모달 UI에서는 커서를 표시하고
+	// 클라이언트 영역 구속을 해제한다. 대화 종료 시 이 함수를 다시 호출해
+	// 현재 씬/모달 상태에 맞는 게임플레이 커서 모드로 복귀한다.
 	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
-		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	const bool showCursorNow = (scene_ == Scene::Lobby)
-		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen();
+		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
 

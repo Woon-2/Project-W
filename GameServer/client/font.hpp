@@ -42,9 +42,12 @@ public:
 private:
 	void createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ );
 	void createDWrite( ID3D12Device* device, UINT texWidth, UINT texHeight, float dpi );
+	bool ensureTextBitmapSize( UINT minWidth, UINT minHeight );
 	void createBundledFontCollection();
 	bool hasFontFamily( IDWriteFontCollection1* collection, const WCHAR* fontFamilyName ) const;
-	bool CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color );
+	bool CreateBitmapFromText( int* piOutWidth, int* piOutHeight,
+		IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen,
+		UINT maxWidth, UINT maxHeight, D2D1_COLOR_F color );
 
 	ComPtr<ID2D1Device2> pD2DDevice_ = nullptr;
 	ComPtr<ID2D1DeviceContext2> pD2DDeviceContext_ = nullptr;
@@ -59,6 +62,7 @@ private:
 	ComPtr<IDWriteFontCollection1> pBundledFontCollection_ = nullptr;
 	UINT	D2DBitmapWidth_ = 0;
 	UINT	D2DBitmapHeight_ = 0;
+	float	D2DBitmapDpi_ = 96.f;
 };
 
 #endif // __FONT_HPP

@@ -14,6 +14,8 @@
         "height": 176
       },
       "background": [0.03, 0.05, 0.08, 0.82],
+      "borderColor": [0.48, 0.62, 0.76, 0.90],
+      "borderWidth": 2,
       "textColor": [0.96, 0.98, 1.0, 1.0],
       "padding": 24,
       "fontFamily": "Malgun Gothic",
@@ -34,6 +36,8 @@
         "height": 176
       },
       "background": [0.03, 0.05, 0.08, 0.82],
+      "borderColor": [0.48, 0.62, 0.76, 0.90],
+      "borderWidth": 2,
       "textColor": [0.96, 0.98, 1.0, 1.0],
       "padding": 24,
       "fontFamily": "Malgun Gothic",

@@ -13,6 +13,8 @@ struct DialogueStyle {
     float width = 768.f;
     float height = 176.f;
     Color background{ 0.03f, 0.05f, 0.08f, 0.82f };
+    Color borderColor{ 0.48f, 0.62f, 0.76f, 0.90f };
+    float borderWidth = 2.f;
     Color textColor{ 1.f, 1.f, 1.f, 1.f };
     float padding = 24.f;
     std::wstring fontFamily = L"Malgun Gothic";
@@ -51,6 +53,7 @@ private:
     UIManager* uiManager_ = nullptr;
     Panel* panel_ = nullptr;
     Label* label_ = nullptr;
+    std::array<Panel*, 4> borderPanels_{};
     std::filesystem::path jsonPath_;
     std::unordered_map<std::string, DialogueDefinition> definitions_;
 
