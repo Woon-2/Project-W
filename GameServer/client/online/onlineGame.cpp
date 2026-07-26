@@ -155,29 +155,31 @@ static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
 static constexpr float   kPlayerHpUiX               = 20.f;
 static constexpr float   kPlayerHpUiY               = 20.f;
-static constexpr float   kPlayerHpHeartSize         = 60.f;
-static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 하트 크기 대비 % (해상도 무관, 부모 비율로 스케일)
-static constexpr float   kPlayerHpHeartBarOverlap   = 12.f;
+static constexpr float   kPlayerWeaponBadgeSize     = 60.f;
+static constexpr float   kPlayerWeaponIconScale     = 50.f;  // 배지 크기 대비 % (해상도 무관, 부모 비율로 스케일)
+static constexpr float   kPlayerWeaponBadgeBarOverlap = 12.f;
 static constexpr float   kPlayerHpBarHeight         = 18.f;
-static constexpr float   kPlayerNameLabelHeight     = 22.f;
+static constexpr float   kPlayerNameLabelHeight     = 20.f;
+static constexpr float   kPlayerNameBadgeGap        = 4.f;
 static constexpr float   kPartyHpStartYOffset       = 165.f;
 static constexpr float   kPartyHpRowHeight          = 56.f;
-static constexpr float   kPartyHpHeartSize          = 48.f;
+static constexpr float   kPartyWeaponBadgeSize      = 48.f;
 static constexpr float   kPartyWeaponIconScale      = 50.f;
-static constexpr float   kPartyHpHeartBarOverlap    = 8.f;
+static constexpr float   kPartyWeaponBadgeBarOverlap = 8.f;
+static constexpr float   kPartyNameBadgeGap         = 4.f;
 static constexpr float   kPartyHpBarWidth           = 230.f;
 static constexpr float   kPartyHpBarHeight          = 14.f;
 static constexpr float   kPartyHpNameHeight         = 20.f;
-static constexpr float   kBossHpHudWidth            = 768.f;
-static constexpr float   kBossHpHudHeight           = 128.f;
-static constexpr float   kBossHpHudTop              = 52.f;
-static constexpr float   kBossHpFillX               = 136.f;
-static constexpr float   kBossHpFillY               = 13.f;
-static constexpr float   kBossHpFillWidth           = 580.f;
-static constexpr float   kBossHpFillHeight          = 100.f;
-static constexpr float   kBossHpEmblemX              = 42.f;
-static constexpr float   kBossHpEmblemY              = 22.f;
-static constexpr float   kBossHpEmblemSize           = 84.f;
+static constexpr float   kBossHpHudWidth            = 614.f;
+static constexpr float   kBossHpHudHeight           = 66.f;
+static constexpr float   kBossHpHudTop              = 28.f;
+static constexpr float   kBossHpFillX               = 109.f;
+static constexpr float   kBossHpFillY               = 8.f;
+static constexpr float   kBossHpFillWidth           = 464.f;
+static constexpr float   kBossHpFillHeight          = 56.f;
+static constexpr float   kBossHpEmblemX              = 46.f;
+static constexpr float   kBossHpEmblemY              = 12.f;
+static constexpr float   kBossHpEmblemSize           = 41.f;
 static const DirectX::XMFLOAT4 kNamedMonsterHpColor{ 0.62f, 0.24f, 0.90f, 1.f };
 static constexpr float   kConfusionIconBaseSize      = 40.f;
 static constexpr float   kConfusionIconWorldGap      = 0.65f;
@@ -378,22 +380,21 @@ void Game::setupStage() {
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
-	playerHpHeart_ = static_cast<UI::Image*>(
+	playerWeaponBadge_ = static_cast<UI::Image*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Image>())
 	);
-	playerHpHeart_->name    = "playerHpHeart";
-	playerHpHeart_->anchor  = UI::Anchors::TopLeft;
-	playerHpHeart_->pivot   = UI::Pivots::TopLeft;
-	playerHpHeart_->width   = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->height  = UI::DimValue::px(kPlayerHpHeartSize);
-	playerHpHeart_->zOrder  = 2;
-	playerHpHeart_->texture = assetManager_.playerHpHeart();
+	playerWeaponBadge_->name    = "playerWeaponBadge";
+	playerWeaponBadge_->anchor  = UI::Anchors::TopLeft;
+	playerWeaponBadge_->pivot   = UI::Pivots::TopLeft;
+	playerWeaponBadge_->width   = UI::DimValue::px(kPlayerWeaponBadgeSize);
+	playerWeaponBadge_->height  = UI::DimValue::px(kPlayerWeaponBadgeSize);
+	playerWeaponBadge_->zOrder  = 3;
+	playerWeaponBadge_->texture = assetManager_.playerWeaponIconBackground();
+	playerWeaponBadge_->colorMul = { 2.0f, 2.0f, 2.0f, 1.0f };
 
-	// 하트 위에 겹쳐 그리는 무기 아이콘. 하트의 자식으로 두어 부모(하트) 대비 비율로
-	// 크기를 잡고 중앙 정렬한다 → 하트가 해상도에 맞게 스케일되면 아이콘도 같은 비율로 따라가
-	// 항상 하트 안쪽에 들어간다. 렌더 순서상 부모 다음에 그려지므로 자연히 하트 위에 겹쳐진다.
+	// 내부 배경 위에 무기 아이콘을 그리고, 투명 중앙을 가진 외곽 프레임을 마지막에 겹친다.
 	playerWeaponIcon_ = static_cast<UI::Image*>(
-		playerHpHeart_->addChild(std::make_unique<UI::Image>())
+		playerWeaponBadge_->addChild(std::make_unique<UI::Image>())
 	);
 	playerWeaponIcon_->name    = "playerWeaponIcon";
 	playerWeaponIcon_->anchor  = UI::Anchors::Center;
@@ -401,6 +402,18 @@ void Game::setupStage() {
 	playerWeaponIcon_->width   = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->height  = UI::DimValue::pct(kPlayerWeaponIconScale);
 	playerWeaponIcon_->texture = assetManager_.playerWeaponIcon(PlayerWeaponType::Katana);
+	playerWeaponIcon_->zOrder  = 1;
+
+	auto* playerWeaponFrame = static_cast<UI::Image*>(
+		playerWeaponBadge_->addChild(std::make_unique<UI::Image>())
+	);
+	playerWeaponFrame->name    = "playerWeaponFrame";
+	playerWeaponFrame->anchor  = UI::Anchors::TopLeft;
+	playerWeaponFrame->pivot   = UI::Pivots::TopLeft;
+	playerWeaponFrame->width   = UI::DimValue::pct(100.f);
+	playerWeaponFrame->height  = UI::DimValue::pct(100.f);
+	playerWeaponFrame->texture = assetManager_.playerWeaponIconFrame();
+	playerWeaponFrame->zOrder  = 2;
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -410,8 +423,9 @@ void Game::setupStage() {
 	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
 	playerHpBar_->height  = UI::DimValue::px(kPlayerHpBarHeight);
-	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
+	playerHpBar_->backgroundTex = assetManager_.playerHpFrame();
+	playerHpBar_->fillTex       = assetManager_.playerHpLine();
+	playerHpBar_->drawBackgroundOnTop = true;
 	playerHpBar_->setProgress(1.f);
 
 	playerHpText_ = static_cast<UI::Label*>(
@@ -437,7 +451,7 @@ void Game::setupStage() {
 	playerNameText_->pivot   = UI::Pivots::TopLeft;
 	playerNameText_->width   = UI::DimValue::px(240.f);
 	playerNameText_->height  = UI::DimValue::px(kPlayerNameLabelHeight);
-	playerNameText_->zOrder  = playerHpBar_->zOrder + 2;
+	playerNameText_->zOrder  = playerWeaponBadge_->zOrder + 1;
 	playerNameText_->setTextHAlign(UI::TextHAlign::Leading);
 	playerNameText_->setTextVAlign(UI::TextVAlign::Center);
 	playerNameText_->setFontSize(18.0f);
@@ -518,7 +532,7 @@ void Game::setupBossHpHud() {
 	bossHpEmblem_->width   = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
-	bossHpEmblem_->zOrder  = 2;
+	bossHpEmblem_->zOrder  = -1;
 }
 
 void Game::showBossHpHud() {
@@ -566,13 +580,13 @@ void Game::updateBossHpHud() {
 }
 
 void Game::updatePlayerHpHudLayout() {
-	if (!playerHpHeart_ || !playerHpBar_) return;
+	if (!playerWeaponBadge_ || !playerHpBar_) return;
 
-	const float heartY = kPlayerHpUiY - (kPlayerHpHeartSize - kPlayerHpBarHeight) * 0.5f;
-	const float barX = kPlayerHpUiX + kPlayerHpHeartSize - kPlayerHpHeartBarOverlap;
+	const float badgeY = kPlayerHpUiY - (kPlayerWeaponBadgeSize - kPlayerHpBarHeight) * 0.5f;
+	const float barX = kPlayerHpUiX + kPlayerWeaponBadgeSize - kPlayerWeaponBadgeBarOverlap;
 
-	playerHpHeart_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
-	playerHpHeart_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(heartY));
+	playerWeaponBadge_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(kPlayerHpUiX));
+	playerWeaponBadge_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(badgeY));
 	playerHpBar_->offsetX = UI::DimValue::px(uiManager_.screenLeftInsetToLayoutX(barX));
 	playerHpBar_->offsetY = UI::DimValue::px(uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY));
 
@@ -581,9 +595,13 @@ void Game::updatePlayerHpHudLayout() {
 		playerHpText_->offsetY = playerHpBar_->offsetY;
 	}
 	if (playerNameText_) {
-		playerNameText_->offsetX = playerHpBar_->offsetX;
+		const float nameX = kPlayerHpUiX + kPlayerWeaponBadgeSize + kPlayerNameBadgeGap;
+		const float nameY = kPlayerHpUiY - kPlayerNameLabelHeight;
+		playerNameText_->offsetX = UI::DimValue::px(
+			uiManager_.screenLeftInsetToLayoutX(nameX)
+		);
 		playerNameText_->offsetY = UI::DimValue::px(
-			uiManager_.screenTopInsetToLayoutY(kPlayerHpUiY - kPlayerNameLabelHeight * 0.65f)
+			uiManager_.screenTopInsetToLayoutY(nameY)
 		);
 	}
 	updatePartyHpHudLayout();
@@ -671,23 +689,24 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyRoot->name    = "partyPlayerHud";
 	partyRoot->anchor  = UI::Anchors::TopLeft;
 	partyRoot->pivot   = UI::Pivots::TopLeft;
-	partyRoot->width   = UI::DimValue::px(kPartyHpHeartSize + kPartyHpBarWidth);
+	partyRoot->width   = UI::DimValue::px(kPartyWeaponBadgeSize + kPartyHpBarWidth);
 	partyRoot->height  = UI::DimValue::px(kPartyHpRowHeight);
 	partyRoot->zOrder  = 2;
 
-	auto* partyHeart = static_cast<UI::Image*>(
+	auto* partyWeaponBadge = static_cast<UI::Image*>(
 		partyRoot->addChild(std::make_unique<UI::Image>())
 	);
-	partyHeart->name    = "partyHpHeart";
-	partyHeart->anchor  = UI::Anchors::TopLeft;
-	partyHeart->pivot   = UI::Pivots::TopLeft;
-	partyHeart->width   = UI::DimValue::px(kPartyHpHeartSize);
-	partyHeart->height  = UI::DimValue::px(kPartyHpHeartSize);
-	partyHeart->texture = assetManager_.playerHpHeart();
-	partyHeart->zOrder  = 0;
+	partyWeaponBadge->name    = "partyWeaponBadge";
+	partyWeaponBadge->anchor  = UI::Anchors::TopLeft;
+	partyWeaponBadge->pivot   = UI::Pivots::TopLeft;
+	partyWeaponBadge->width   = UI::DimValue::px(kPartyWeaponBadgeSize);
+	partyWeaponBadge->height  = UI::DimValue::px(kPartyWeaponBadgeSize);
+	partyWeaponBadge->texture = assetManager_.playerWeaponIconBackground();
+	partyWeaponBadge->colorMul = { 2.0f, 2.0f, 2.0f, 1.0f };
+	partyWeaponBadge->zOrder  = 3;
 
 	auto* partyWeaponIcon = static_cast<UI::Image*>(
-		partyHeart->addChild(std::make_unique<UI::Image>())
+		partyWeaponBadge->addChild(std::make_unique<UI::Image>())
 	);
 	partyWeaponIcon->name    = "partyWeaponIcon";
 	partyWeaponIcon->anchor  = UI::Anchors::Center;
@@ -695,6 +714,18 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyWeaponIcon->width   = UI::DimValue::pct(kPartyWeaponIconScale);
 	partyWeaponIcon->height  = UI::DimValue::pct(kPartyWeaponIconScale);
 	partyWeaponIcon->texture = assetManager_.playerWeaponIcon(weaponType);
+	partyWeaponIcon->zOrder  = 1;
+
+	auto* partyWeaponFrame = static_cast<UI::Image*>(
+		partyWeaponBadge->addChild(std::make_unique<UI::Image>())
+	);
+	partyWeaponFrame->name    = "partyWeaponFrame";
+	partyWeaponFrame->anchor  = UI::Anchors::TopLeft;
+	partyWeaponFrame->pivot   = UI::Pivots::TopLeft;
+	partyWeaponFrame->width   = UI::DimValue::pct(100.f);
+	partyWeaponFrame->height  = UI::DimValue::pct(100.f);
+	partyWeaponFrame->texture = assetManager_.playerWeaponIconFrame();
+	partyWeaponFrame->zOrder  = 2;
 
 	auto* partyName = static_cast<UI::Label*>(
 		partyRoot->addChild(std::make_unique<UI::Label>())
@@ -702,11 +733,13 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyName->name    = "partyName";
 	partyName->anchor  = UI::Anchors::TopLeft;
 	partyName->pivot   = UI::Pivots::TopLeft;
-	partyName->offsetX = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyName->offsetX = UI::DimValue::px(kPartyWeaponBadgeSize + kPartyNameBadgeGap);
 	partyName->offsetY = UI::DimValue::px(0.f);
-	partyName->width   = UI::DimValue::px(kPartyHpBarWidth);
+	partyName->width   = UI::DimValue::px(
+		kPartyHpBarWidth - kPartyWeaponBadgeBarOverlap - kPartyNameBadgeGap
+	);
 	partyName->height  = UI::DimValue::px(kPartyHpNameHeight);
-	partyName->zOrder  = 2;
+	partyName->zOrder  = partyWeaponBadge->zOrder + 1;
 	partyName->setTextHAlign(UI::TextHAlign::Leading);
 	partyName->setTextVAlign(UI::TextVAlign::Center);
 	partyName->setFontSize(16.0f);
@@ -719,12 +752,13 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 	partyBar->name      = "partyHpBar";
 	partyBar->anchor    = UI::Anchors::TopLeft;
 	partyBar->pivot     = UI::Pivots::TopLeft;
-	partyBar->offsetX   = UI::DimValue::px(kPartyHpHeartSize - kPartyHpHeartBarOverlap);
+	partyBar->offsetX   = UI::DimValue::px(kPartyWeaponBadgeSize - kPartyWeaponBadgeBarOverlap);
 	partyBar->offsetY   = UI::DimValue::px(kPartyHpNameHeight);
 	partyBar->width     = UI::DimValue::px(kPartyHpBarWidth);
 	partyBar->height    = UI::DimValue::px(kPartyHpBarHeight);
-	partyBar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
-	partyBar->fillColor = { 1.0f, 0.0f, 0.0f, 1.0f };
+	partyBar->backgroundTex = assetManager_.playerHpFrame();
+	partyBar->fillTex       = assetManager_.playerHpLine();
+	partyBar->drawBackgroundOnTop = true;
 	partyBar->zOrder    = 1;
 	partyBar->setProgress(1.f);
 
@@ -733,7 +767,7 @@ void Game::createOtherPlayerHud(uint16 playerId, Player* player, PlayerWeaponTyp
 		worldBar,
 		weaponType,
 		partyRoot,
-		partyHeart,
+		partyWeaponBadge,
 		partyWeaponIcon,
 		partyName,
 		partyBar

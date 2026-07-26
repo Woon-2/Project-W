@@ -7,8 +7,7 @@ namespace UI {
 void ProgressBar::onRender(const RenderContext& rc) {
     const auto& rect = resolvedRect_;
 
-    // Background (full width)
-    {
+    const auto drawBackground = [&]() {
         const Texture* tex = backgroundTex ? backgroundTex : rc.gfx->solidColorTex();
         XMFLOAT4 col = backgroundTex ? XMFLOAT4{ 1.f, 1.f, 1.f, 1.f } : bgColor;
         rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
@@ -17,6 +16,12 @@ void ProgressBar::onRender(const RenderContext& rc) {
             .pCopySrc = nullptr,
             .colorMul = col
         });
+    };
+
+    // A regular progress bar draws its background first. Decorative frame textures
+    // can opt into the final pass so they are not covered by the fill texture.
+    if (!drawBackgroundOnTop) {
+        drawBackground();
     }
 
     // Fill bar (scaled by progress, anchored to left edge)
@@ -42,6 +47,10 @@ void ProgressBar::onRender(const RenderContext& rc) {
             .pCopySrc = nullptr,
             .colorMul = col
         });
+    }
+
+    if (drawBackgroundOnTop) {
+        drawBackground();
     }
 }
 

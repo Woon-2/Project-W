@@ -598,8 +598,8 @@ private:
 	Inventory        inventory_{};
 	UI::InventoryPanel inventoryPanel_{};
 	bool             inventoryUiReady_ = false;
-	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
-	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
+	UI::Image*       playerWeaponBadge_ = nullptr;  // owned by uiManager_
+	UI::Image*       playerWeaponIcon_ = nullptr;   // owned by playerWeaponBadge_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
 	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
@@ -676,8 +676,8 @@ private:
 		UI::ProgressBar* hpBar;        // owned by uiManager_
 		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
 		UI::UIElement*   partyRoot = nullptr;       // owned by uiManager_
-		UI::Image*       partyHeart = nullptr;      // owned by partyRoot
-		UI::Image*       partyWeaponIcon = nullptr; // owned by partyHeart
+		UI::Image*       partyWeaponBadge = nullptr; // owned by partyRoot
+		UI::Image*       partyWeaponIcon = nullptr;  // owned by partyWeaponBadge
 		UI::Label*       partyNameLabel = nullptr;  // owned by partyRoot
 		UI::ProgressBar* partyHpBar = nullptr;      // owned by partyRoot
 	};
