@@ -38,6 +38,7 @@ private:
 
     float elapsed_ = 0.f;
     bool active_ = false;
+    bool hasActiveEmblem_ = true;
 };
 
 } // namespace UI

@@ -24,6 +24,10 @@ void MidBossTacticBase::onLeaderDead( Room& room, PlatoonLeader& leader ) {
     // Once the boss falls, every surviving trooper must be cleanly finishable
     // regardless of the protection profile that was active at the time.
     setEncounterDamageProfile( room, leader, 1.f, 1.f );
+    leader.removeDeadMembersFromSquads();
+    if ( hasLiveSquadMembers( leader ) ) {
+        room.notifyTacticalDialogue( TacticalDialogueId::TroopersFlee );
+    }
     leader.pushConfusedToSquads( room );
 }
 

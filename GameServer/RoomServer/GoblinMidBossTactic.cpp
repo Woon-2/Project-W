@@ -402,6 +402,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
             enterTacticFailCooldown( room, leader );
             return;
         }
+        room.notifyTacticalDialogue( TacticalDialogueId::HobgoblinDivideAndConquer );
         phaseOrderIssued_ = true;
         return;
     }

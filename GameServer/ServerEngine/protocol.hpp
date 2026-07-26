@@ -124,6 +124,8 @@ enum class TacticalDialogueId : uint8 {
 	HobgoblinTactic,
 	GrandbaumShieldWall,
 	IsysPincer,
+	HobgoblinDivideAndConquer,
+	TroopersFlee,
 	Count,
 };
 

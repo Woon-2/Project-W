@@ -12,6 +12,7 @@ struct TacticalDialogueDefinition {
     const wchar_t* dialogue;
     const Texture* (AssetManager::*emblem)() const;
     Color accent;
+    const wchar_t* category = L"전술 지령";
 };
 
 const TacticalDialogueDefinition* definitionFor(TacticalDialogueId dialogueId) {
@@ -33,6 +34,19 @@ const TacticalDialogueDefinition* definitionFor(TacticalDialogueId dialogueId) {
             L"돌격준비!",
             &AssetManager::isysEmblem,
             { 0.24f, 0.62f, 0.94f, 1.f },
+        },
+        {
+            L"홉 고블린",
+            L"각개격파하라!",
+            &AssetManager::hobgoblinEmblem,
+            { 0.85f, 0.20f, 0.12f, 1.f },
+        },
+        {
+            L"겁에 질린 부하",
+            L"대장이 쓰러졌다! 도망쳐!",
+            nullptr,
+            { 0.76f, 0.30f, 0.18f, 1.f },
+            L"전선 붕괴",
         },
     };
     static_assert(std::size(definitions) ==
@@ -165,8 +179,13 @@ bool TacticalDialogueOverlay::trigger(TacticalDialogueId dialogueId) {
     const TacticalDialogueDefinition* definition = definitionFor(dialogueId);
     if (!definition) return false;
 
-    emblem_->texture = (assetManager_->*(definition->emblem))();
+    hasActiveEmblem_ = definition->emblem != nullptr;
+    emblem_->visible = hasActiveEmblem_;
+    if (hasActiveEmblem_) {
+        emblem_->texture = (assetManager_->*(definition->emblem))();
+    }
     emblem_->colorMul = { 1.f, 1.f, 1.f, 0.f };
+    speaker_->width = DimValue::px(hasActiveEmblem_ ? 448.f : 574.f);
     activeAccent_ = definition->accent;
     accent_->colorTint = definition->accent;
     category_->setTextColor(
@@ -174,6 +193,7 @@ bool TacticalDialogueOverlay::trigger(TacticalDialogueId dialogueId) {
         definition->accent.g,
         definition->accent.b,
         1.f);
+    category_->setText(definition->category);
     speaker_->setText(definition->speaker);
     dialogue_->setText(definition->dialogue);
 
@@ -212,14 +232,16 @@ void TacticalDialogueOverlay::applyAlpha(float alpha) {
     const float reveal = smooth01(std::min(elapsed_ / 0.28f, 1.f));
     banner_->width = DimValue::px(720.f + 140.f * reveal);
     banner_->colorMul.w = 0.54f * alpha;
-    emblem_->colorMul.w = alpha;
+    emblem_->colorMul.w = hasActiveEmblem_ ? alpha : 0.f;
     category_->colorTint.a = alpha;
     speaker_->colorTint.a = alpha;
     dialogue_->colorTint.a = alpha;
 
     const float textOffset = 12.f * (1.f - reveal);
-    category_->offsetX = DimValue::px(198.f + textOffset);
-    speaker_->offsetX = DimValue::px(332.f + textOffset);
+    const float categoryBaseX = hasActiveEmblem_ ? 198.f : 72.f;
+    const float speakerBaseX = hasActiveEmblem_ ? 332.f : 206.f;
+    category_->offsetX = DimValue::px(categoryBaseX + textOffset);
+    speaker_->offsetX = DimValue::px(speakerBaseX + textOffset);
     // Keep the dialogue label's configured base position.  Writing offsetX
     // here would overwrite buildUI()'s value on every frame.
 }

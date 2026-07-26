@@ -3215,12 +3215,14 @@ void Game::processInput(Milliseconds deltaTime) {
 		dialogueSystem_.show("sample_intro");
 	}
 
-	// F7: cycle through the three tactical boss dialogue previews.
+	// F7: cycle through the tactical boss dialogue previews.
 	if ( (keyboardStateCurr_[VK_F7] & 0x80) && !(keyboardStatePrev_[VK_F7] & 0x80) ) {
 		constexpr TacticalDialogueId previews[] = {
 			TacticalDialogueId::HobgoblinTactic,
 			TacticalDialogueId::GrandbaumShieldWall,
 			TacticalDialogueId::IsysPincer,
+			TacticalDialogueId::HobgoblinDivideAndConquer,
+			TacticalDialogueId::TroopersFlee,
 		};
 		tacticalDialogueOverlay_.trigger(previews[tacticalDialoguePreviewIndex_]);
 		tacticalDialoguePreviewIndex_ = static_cast<uint8>(
