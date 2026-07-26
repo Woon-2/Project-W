@@ -126,8 +126,8 @@ public:
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
-	// Sends a tactical presentation event only to living players currently inside
-	// the active arena volume. Tactic implementations call this at cycle start.
+	// Sends a tactical presentation event only to living players who have entered
+	// the active arena. Tactic implementations call this at cycle start.
 	void notifyTacticalDialogue(TacticalDialogueId dialogueId);
 
 	void pushJob( Job* job ) {

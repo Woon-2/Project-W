@@ -574,9 +574,9 @@ void Room::bindZoneHandlers() {
 		});
 }
 
-// Triggered once when a player first enters the mid-boss arena. Builds the rear
-// virtual walls from named markers, logs the boss spawn point, and tells clients
-// to build the walls locally (S_ZoneState). One-shot (zone is disarmed).
+// Triggered when a player enters the mid-boss arena. The first entrant builds the
+// encounter; while it is active, later entrants are still detected and registered
+// as dialogue recipients. The zone is disarmed when the encounter is torn down.
 void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
@@ -654,12 +654,11 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	arenaWallsActive_  = true;
 	activeArenaParticipantIds_.clear();
 	activeArenaParticipantIds_.insert(playerId);
-
-	zone.setArmed(false);   // one-shot trigger
 }
 
 // Arena_Hobgoblin과 동일 패턴: Grandbaum 마커(WallGrandbaum_0/1/2, GrandbaumSpawner)로 벽/스폰점을
-// 구성하고 Grandbaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm).
+// 구성하고 Grandbaum 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 전투 중에는 후발
+// 플레이어의 대사 수신 대상 등록을 위해 zone 감지를 유지하고, 전투 종료 시 disarm한다.
 void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
 
@@ -729,13 +728,12 @@ void Room::onArenaGrandbaumEnter(Zone& zone, uint32 playerId) {
 	arenaWallsActive_  = true;
 	activeArenaParticipantIds_.clear();
 	activeArenaParticipantIds_.insert(playerId);
-
-	zone.setArmed(false);   // one-shot trigger
 }
 
 // Arena_Grandbaum과 동일 패턴: Isys 마커(WallIsys_0/1/2, IsysSpawner)로 벽/스폰점을 구성하고 Isys
-// 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 일회성(zone disarm). 디버그 트리거(홉고블린
-// zone 재사용) 시에는 WallIsys 마커가 매칭 안 돼 벽은 생략되고, any-Wall/플레이어 위치로 fallback한다.
+// 인카운터를 동적 스폰 후 클라에 통지(S_NpcSpawnBatch). 전투 중에는 후발 플레이어의 대사 수신
+// 대상 등록을 위해 zone 감지를 유지하고, 전투 종료 시 disarm한다. 디버그 트리거(홉고블린 zone
+// 재사용) 시에는 WallIsys 마커가 매칭 안 돼 벽은 생략되고, any-Wall/플레이어 위치로 fallback한다.
 void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << " (Isys)\n";
 
@@ -805,8 +803,6 @@ void Room::onArenaIsysEnter(Zone& zone, uint32 playerId) {
 	arenaWallsActive_  = true;
 	activeArenaParticipantIds_.clear();
 	activeArenaParticipantIds_.insert(playerId);
-
-	zone.setArmed(false);   // one-shot trigger
 }
 
 // Triggered once when a player enters the final-boss arena ("ArenaZone"). Spawns a
@@ -2295,6 +2291,8 @@ void Room::teardownArenaWalls() {
 		if (b) physicsWorld_.unregisterBody(&b->body());
 	barriers_.clear();
 	broadcast(PacketManager::makeSZoneStatePacket(activeArenaZoneId_, uint8(0)));
+	if (Zone* zone = zoneSystem_.byId(activeArenaZoneId_))
+		zone->setArmed(false);
 	arenaWallsActive_ = false;
 	activeArenaParticipantIds_.clear();
 	std::cout << "[Zone] arena cleared - walls down (zoneId=" << activeArenaZoneId_ << ")\n";
