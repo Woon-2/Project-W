@@ -221,6 +221,11 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="online\lobbyUI.cpp" />
     <ClCompile Include="ui\settingsPanel.cpp" />
+    <ClCompile Include="ui\finalScoreboard.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="ui\inventoryPanel.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -401,6 +406,7 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="online\lobbyUI.hpp" />
     <ClInclude Include="ui\settingsPanel.hpp" />
+    <ClInclude Include="ui\finalScoreboard.hpp" />
     <ClInclude Include="ui\inventoryPanel.hpp" />
     <ClInclude Include="ui\uiBuild.hpp" />
     <ClInclude Include="particleRenderMode.hpp" />

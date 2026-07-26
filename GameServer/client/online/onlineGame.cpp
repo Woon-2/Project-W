@@ -474,6 +474,13 @@ void Game::setupStage() {
 
 	damageNumberSystem_.init(assetManager_.digitAtlasTex());
 	setupBossHpHud();
+	finalScoreboard_.build(
+		uiManager_,
+		UI::FinalScoreboard::Style{
+			.panelTexture = lobbyUI_.panelTexture(),
+			.buttonTexture = lobbyUI_.secondaryButtonTexture()
+		},
+		[this]() { requestLobbyReturnFromScoreboard(); });
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
@@ -533,6 +540,75 @@ void Game::setupBossHpHud() {
 	bossHpEmblem_->height  = UI::DimValue::px(kBossHpEmblemSize);
 	bossHpEmblem_->texture = assetManager_.erdMoreEmblem();
 	bossHpEmblem_->zOrder  = -1;
+}
+
+void Game::hideCombatHudForFinalScoreboard() {
+	if (playerWeaponBadge_) playerWeaponBadge_->visible = false;
+	if (playerHpBar_) playerHpBar_->visible = false;
+	if (playerHpText_) playerHpText_->visible = false;
+	if (playerNameText_) playerNameText_->visible = false;
+	if (killCountWidget_) killCountWidget_->visible = false;
+	hideBossHpHud();
+
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		if (entry.hpBar) entry.hpBar->visible = false;
+		if (entry.partyRoot) entry.partyRoot->visible = false;
+	}
+	auto hideMonsterBars = [](auto& bars) {
+		for (auto& [id, entry] : bars) {
+			if (entry.hpBar) entry.hpBar->visible = false;
+		}
+	};
+	hideMonsterBars(goblinHpBars_);
+	hideMonsterBars(snakeHpBars_);
+	hideMonsterBars(mushroomHpBars_);
+	hideMonsterBars(bomberHpBars_);
+	hideMonsterBars(birdyHpBars_);
+	hideMonsterBars(slimeHpBars_);
+	hideMonsterBars(treantHpBars_);
+	hideMonsterBars(bossHpBars_);
+	hideMonsterBars(strongholdHpBars_);
+	for (auto& [id, entry] : npcStatusIcons_) {
+		if (entry.icon) entry.icon->visible = false;
+	}
+}
+
+void Game::showFinalScoreboard() {
+	if (finalScoreboard_.isVisible()) {
+		return;
+	}
+
+	std::vector<UI::FinalScoreboard::Entry> rows;
+	rows.reserve(inGamePartyPlayerIds_.size());
+	for (const uint16 playerId : inGamePartyPlayerIds_) {
+		const auto scoreIt = inGameMonsterKillsByPlayerId_.find(playerId);
+		rows.push_back(UI::FinalScoreboard::Entry{
+			partyDisplayName(playerId),
+			scoreIt != inGameMonsterKillsByPlayerId_.end() ? scoreIt->second : 0
+		});
+	}
+	std::stable_sort(rows.begin(), rows.end(),
+		[](const UI::FinalScoreboard::Entry& lhs,
+			const UI::FinalScoreboard::Entry& rhs) {
+			return lhs.monsterKills > rhs.monsterKills;
+		});
+
+	settingsPanel_.close();
+	inventoryPanel_.close();
+	if (!finalScoreboard_.show(rows)) {
+		return;
+	}
+	hideCombatHudForFinalScoreboard();
+	finalScoreboardPending_ = false;
+	mouseDeltaX_ = 0;
+	mouseDeltaY_ = 0;
+	applyCursorPolicy();
+}
+
+void Game::requestLobbyReturnFromScoreboard() {
+	if (finalScoreboard_.isVisible()) {
+		pendingLobbyReturn_ = true;
+	}
 }
 
 void Game::showBossHpHud() {
@@ -610,6 +686,7 @@ void Game::updatePlayerHpHudLayout() {
 void Game::registerInGamePartyPlayer(uint16 playerId, const wchar_t* nickname) {
 	if (std::ranges::find(inGamePartyPlayerIds_, playerId) == inGamePartyPlayerIds_.end()) {
 		inGamePartyPlayerIds_.push_back(playerId);
+		inGameMonsterKillsByPlayerId_.try_emplace(playerId, 0);
 
 		// The account nickname is authoritative when the server sent one. The roster
 		// (S_Enter names section / S_Enter_Other) is seeded before the object list is
@@ -2211,7 +2288,9 @@ void Game::setParticle()
 void Game::prepareInGamePartyRoster(const PlayerInfo& myInfo, const std::vector<PlayerNameInfo>& roster) {
 	inGamePartyPlayerIds_.clear();
 	inGamePartyNameById_.clear();
+	inGameMonsterKillsByPlayerId_.clear();
 	inGamePartyNameSeq_ = 0;
+	if (killCountWidget_) killCountWidget_->reset();
 	for (const PlayerNameInfo& info : roster) {
 		registerInGamePartyPlayer(info.playerId, info.nickname);
 	}
@@ -4054,6 +4133,20 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
+
+	// Button callbacks run inside UIManager's window-message dispatch. The actual
+	// widget-tree rebuild and socket hand-back therefore happen here, at a frame-safe point.
+	if (pendingLobbyReturn_) {
+		pendingLobbyReturn_ = false;
+		if (INet::ClientApp::returnToLobbyServer()) {
+			finalScoreboard_.hide();
+			lobbyLeaveRoom();
+			enterLobby();
+			return;
+		}
+		gSharedLog << "[Result] 인증된 LobbyServer 연결이 없어 로비로 복귀하지 못했습니다.\n";
+	}
+
 	updateServerTimeSync();
 
 	if (player_ == nullptr) {
@@ -4074,7 +4167,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 보스 처치 연출은 카메라/UI/네트워크 시계를 늦추지 않고 로컬 시뮬레이션만
 	// 감속한다. 실시간 카메라 시계 덕분에 연출은 항상 정해진 시간 안에 복귀한다.
-	const float simulationScale = camera_.focusCinematicTimeScale();
+	const float simulationScale = finalScoreboard_.isVisible()
+		? 0.f : camera_.focusCinematicTimeScale();
 	const Milliseconds simulationDeltaTime = deltaTime * simulationScale;
 
 	// 현재 속도 저장
@@ -4242,7 +4336,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 					if (bossTarget) {
 						const BossHeatState& presentation = heatIt->second;
-						const bool isFinalBoss = presentation.worldRadius >= 4.f;
+						const bool isFinalBoss = std::ranges::any_of(
+							bosses_, [routeId](const std::shared_ptr<Boss>& boss) {
+								return boss && boss->getId() == routeId;
+							});
 						Camera::FocusCinematicConfig config{};
 						config.duration = Milliseconds{ isFinalBoss ? 2300.f : 1950.f };
 						config.blendIn = Milliseconds{ 350.f };
@@ -4253,6 +4350,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						config.shotHeight = std::max(0.5f, presentation.worldRadius * 0.2f);
 						config.zoomFovy = mu::Degree{ isFinalBoss ? 46.f : 52.f };
 						camera_.playFocusCinematic(bossTarget, config);
+						if (isFinalBoss) {
+							finalScoreboardPending_ = true;
+						}
 					}
 				}
 			}
@@ -4281,12 +4381,20 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						+ mu::Vec3{ 0.f, damageNumberSystem_.tuning().worldHeadOffsetY, 0.f };
 					damageNumberSystem_.spawn(anchor, dmg, kind, targetId);
 				}
-				// Kill count is personal: only the local player's killing blow increments this HUD.
-				if (pEv->type == EventType::Death && killCountWidget_ && !obj->isDead()
-					&& idGoblinMap_.find(static_cast<uint16>(routeId)) != idGoblinMap_.end()
-					&& player_ && static_cast<const EvDeath*>(pEv)->killerId == player_->getId())
-				{
-					killCountWidget_->addKill();
+				// Every client receives the same server-confirmed lethal hit and killer id.
+				// Count every monster type so the final ranking is identical for the party.
+				if (pEv->type == EventType::Death && !obj->isDead()
+					&& idMonsterMap_.find(static_cast<uint16>(routeId)) != idMonsterMap_.end()) {
+					const i32t killerId = static_cast<const EvDeath*>(pEv)->killerId;
+					const bool isPartyPlayer = killerId >= 0
+						&& std::ranges::find(inGamePartyPlayerIds_, static_cast<uint16>(killerId))
+							!= inGamePartyPlayerIds_.end();
+					if (isPartyPlayer) {
+						++inGameMonsterKillsByPlayerId_[static_cast<uint16>(killerId)];
+						if (killCountWidget_ && player_ && killerId == player_->getId()) {
+							killCountWidget_->addKill();
+						}
+					}
 				}
 			}
 
@@ -4409,7 +4517,12 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
+	const bool focusCinematicWasActive = camera_.focusCinematicActive();
 	camera_.updateFocusCinematic(deltaTime);
+	if (finalScoreboardPending_ && focusCinematicWasActive
+		&& !camera_.focusCinematicActive()) {
+		showFinalScoreboard();
+	}
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
 		const mu::Vec3 camEye = camera_.eye();
@@ -4621,6 +4734,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 			applyCursorPolicy();
 		}
 		inventoryPanel_.update(dtSec);
+		if (finalScoreboard_.isVisible()) {
+			hideCombatHudForFinalScoreboard();
+		}
 		uiManager_.layout();
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
@@ -4935,64 +5051,66 @@ void Game::renderInGame() {
 		}
 	}
 
-	// Floating damage numbers: drawn just before the HUD so they share the UI pass
-	// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
-	damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
+	if (!finalScoreboard_.isVisible()) {
+		// Floating damage numbers: drawn just before the HUD so they share the UI pass
+		// (always-on-top, world-anchored via worldToScreen, screen-uniform size).
+		damageNumberSystem_.render(gfx_, camera_, uiManager_.screenWidth(), uiManager_.screenHeight(), uiManager_.uiScale());
 
-	// Skill dial + combo are in-game HUD and must sit BELOW the settings panel,
-	// which is an overlay mounted on uiManager_. UI draw order = submission order,
-	// so submit the dial first; uiManager_.render() (below) then draws the panel's
-	// scrim/popup on top when it is open.
-	skillDial_.render(gfx_,
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top));
+		// Skill dial + combo are in-game HUD and must sit BELOW the settings panel,
+		// which is an overlay mounted on uiManager_. UI draw order = submission order,
+		// so submit the dial first; uiManager_.render() (below) then draws the panel's
+		// scrim/popup on top when it is open.
+		skillDial_.render(gfx_,
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
-	// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
-	// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
-	minimapIcons_.clear();
-	minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
-	for (const auto& [id, p] : idPlayerMap_) {
-		if (id == static_cast<uint16>(player_->getId()) || !p) continue;
-		minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
-	}
-	for (const auto& [id, obj] : idMonsterMap_) {
-		if (!obj) continue;
-		const bool isBossLike = bossNpcIds_.count(id) != 0;
-		minimapIcons_.push_back(MinimapEntityIcon{
-			obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
-		});
-	}
-	// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
-	minimapGuidePoly_.clear();
-	pathGuide_.activePathPoints(minimapGuidePoly_);
-	const MinimapGuide mmGuide{
-		pathGuide_.guidanceActive(),
-		std::span<const mu::Vec3>(minimapGuidePoly_),
-		pathGuide_.guidanceTargetWorld()
-	};
-	minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top),
-		mmGuide);
+		// Minimap: self (green) + party (blue) from idPlayerMap_, monsters (red) /
+		// boss & mid-boss (orange, dynamic_cast against Boss/Grandbaum/Isys) from idMonsterMap_.
+		minimapIcons_.clear();
+		minimapIcons_.push_back(MinimapEntityIcon{ player_->pos(), MinimapEntityIcon::Kind::Self });
+		for (const auto& [id, p] : idPlayerMap_) {
+			if (id == static_cast<uint16>(player_->getId()) || !p) continue;
+			minimapIcons_.push_back(MinimapEntityIcon{ p->pos(), MinimapEntityIcon::Kind::Party });
+		}
+		for (const auto& [id, obj] : idMonsterMap_) {
+			if (!obj) continue;
+			const bool isBossLike = bossNpcIds_.count(id) != 0;
+			minimapIcons_.push_back(MinimapEntityIcon{
+				obj->pos(), isBossLike ? MinimapEntityIcon::Kind::Boss : MinimapEntityIcon::Kind::Monster
+			});
+		}
+		// Path-guidance overlay: route polyline + off-map edge arrow toward the look-ahead.
+		minimapGuidePoly_.clear();
+		pathGuide_.activePathPoints(minimapGuidePoly_);
+		const MinimapGuide mmGuide{
+			pathGuide_.guidanceActive(),
+			std::span<const mu::Vec3>(minimapGuidePoly_),
+			pathGuide_.guidanceTargetWorld()
+		};
+		minimap_.render(gfx_, player_->pos(), minimapBakedCenter_, minimapBakedCoverage_, minimapIcons_,
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top),
+			mmGuide);
 
-	// On-screen destination indicator: beacon when the look-ahead is on screen, an
-	// edge arrow (+distance) when it is off screen / behind the camera.
-	pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
-		pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top));
+		// On-screen destination indicator: beacon when the look-ahead is on screen, an
+		// edge arrow (+distance) when it is off screen / behind the camera.
+		pathGuideHUD_.render(gfx_, camera_.view(), camera_.proj(),
+			pathGuide_.guidanceTargetWorld(), pathGuide_.distanceToGoal(), pathGuide_.guidanceActive(),
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
-	// Combo counter above the dial: kill-streak accelerator feedback. Shown while
-	// an active combo (>=2) is within its window; size eases down as it expires.
-	if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
-		const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
-		const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
-		const float frac = (comboWindowMs_ > 0.f)
-			? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
-		DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
-			sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
-			static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
-			DigitAtlas::Align::Center);
+		// Combo counter above the dial: kill-streak accelerator feedback. Shown while
+		// an active combo (>=2) is within its window; size eases down as it expires.
+		if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
+			const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+			const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+			const float frac = (comboWindowMs_ > 0.f)
+				? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
+			DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
+				sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
+				static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
+				DigitAtlas::Align::Center);
+		}
 	}
 
 	uiManager_.render(gfx_);
@@ -5018,6 +5136,17 @@ void Game::renderInGame() {
 
 void Game::enterLobby() {
 	camera_.cancelFocusCinematic();
+	finalScoreboardPending_ = false;
+	pendingLobbyReturn_ = false;
+	finalScoreboard_.hide();
+
+	// Returning from gameplay leaves many HUD widgets mounted in the shared UI tree.
+	// Hide the old tree first; LobbyUI/SettingsPanel rebuild their own roots below.
+	uiManager_.resetInteractionState();
+	for (const auto& child : uiManager_.root()->children()) {
+		child->visible = false;
+	}
+
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
 	pendingStart_ = false;
@@ -5531,6 +5660,9 @@ void Game::renderWaitingRoom() {
 
 void Game::enterInGame() {
 	camera_.cancelFocusCinematic();
+	finalScoreboardPending_ = false;
+	pendingLobbyReturn_ = false;
+	finalScoreboard_.hide();
 	pendingStart_ = false;
 	localArenaPresentationZoneId_ = -1;
 	localPresentedArenaZoneIds_.clear();
@@ -6407,6 +6539,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		(keyboardStateCurr_['E'] & 0x80)
 		&& !(keyboardStatePrev_['E'] & 0x80);
 
+	if (finalScoreboard_.isVisible()) {
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		return;
+	}
+
 	if (inventoryPanel_.isOpen()) {
 		if (escapePressed || inventoryPressed)
 			setInventoryOpen(false);
@@ -6851,8 +6989,10 @@ void Game::applyCursorPolicy() {
 	// 클라이언트 영역 구속을 해제한다. 대화 종료 시 이 함수를 다시 호출해
 	// 현재 씬/모달 상태에 맞는 게임플레이 커서 모드로 복귀한다.
 	const bool releaseCursorNow = (scene_ == Scene::Lobby && lobbyState_ == LobbyState::MainMenu)
+		|| finalScoreboard_.isVisible()
 		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	const bool showCursorNow = (scene_ == Scene::Lobby)
+		|| finalScoreboard_.isVisible()
 		|| settingsPanel_.isOpen() || inventoryPanel_.isOpen() || dialogueSystem_.active();
 	cursorCaptureEnabled_ = !releaseCursorNow;
 	cursorShowEnabled_ = showCursorNow;
