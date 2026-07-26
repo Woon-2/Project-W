@@ -109,8 +109,13 @@ bool parseDefinition(const json::Value& value, DialogueDefinition& out) {
     out.style.borderWidth = std::max(0.f,
         numberOr(value.find("borderWidth"), out.style.borderWidth));
     out.style.textColor = readColor(value.find("textColor"), out.style.textColor);
+    out.style.hintColor = readColor(value.find("hintColor"), out.style.hintColor);
     out.style.padding = numberOr(value.find("padding"), out.style.padding);
     out.style.fontSize = numberOr(value.find("fontSize"), out.style.fontSize);
+    out.style.hintFontSize = std::max(1.f,
+        numberOr(value.find("hintFontSize"), out.style.hintFontSize));
+    out.style.charactersPerSecond = std::max(1.f,
+        numberOr(value.find("charactersPerSecond"), out.style.charactersPerSecond));
     out.style.fadeOutSeconds = std::max(0.01f,
         numberOr(value.find("fadeOutSeconds"), out.style.fadeOutSeconds));
 
@@ -118,6 +123,17 @@ bool parseDefinition(const json::Value& value, DialogueDefinition& out) {
         fontFamily && fontFamily->isString()) {
         const std::wstring family = utf8ToWide(fontFamily->asString());
         if (!family.empty()) out.style.fontFamily = family;
+    }
+
+    if (const auto* advanceHint = value.find("advanceHint");
+        advanceHint && advanceHint->isString()) {
+        const std::wstring text = utf8ToWide(advanceHint->asString());
+        if (!text.empty()) out.advanceHint = text;
+    }
+    if (const auto* closeHint = value.find("closeHint");
+        closeHint && closeHint->isString()) {
+        const std::wstring text = utf8ToWide(closeHint->asString());
+        if (!text.empty()) out.closeHint = text;
     }
 
     for (const auto& page : pages->asArray()) {
@@ -156,6 +172,16 @@ bool DialogueSystem::init(UIManager& uiManager, const std::filesystem::path& jso
         label_->setTextHAlign(TextHAlign::Leading);
         label_->setTextVAlign(TextVAlign::Top);
         label_->zOrder = 1;
+
+        hintLabel_ = static_cast<Label*>(
+            panel_->addChild(std::make_unique<Label>())
+        );
+        hintLabel_->name = "DialogueAdvanceHint";
+        hintLabel_->anchor = Anchors::TopLeft;
+        hintLabel_->pivot = Pivots::TopLeft;
+        hintLabel_->setTextHAlign(TextHAlign::Trailing);
+        hintLabel_->setTextVAlign(TextVAlign::Bottom);
+        hintLabel_->zOrder = 1;
 
         constexpr const char* borderNames[] = {
             "DialogueBorderTop",
@@ -242,6 +268,9 @@ bool DialogueSystem::show(std::string_view eventId) {
     activeEventId_ = it->first;
     pageIndex_ = 0;
     fadeElapsed_ = 0.f;
+    hintPulseElapsed_ = 0.f;
+    revealedTextLength_ = 0;
+    typewriterAccumulator_ = 0.f;
     state_ = State::Reading;
     applyDefinition(*activeDefinition_);
     panel_->visible = true;
@@ -287,24 +316,110 @@ void DialogueSystem::applyDefinition(const DialogueDefinition& definition) {
 
     const float innerWidth = std::max(1.f, s.width - s.padding * 2.f);
     const float innerHeight = std::max(1.f, s.height - s.padding * 2.f);
+    const float hintHeight = std::min(
+        innerHeight, std::max(1.f, s.hintFontSize * 1.6f));
+    constexpr float kHintGap = 8.f;
+    const float bodyHeight = std::max(
+        1.f, innerHeight - hintHeight - kHintGap);
+
     label_->offsetX = DimValue::px(s.padding);
     label_->offsetY = DimValue::px(s.padding);
     label_->width = DimValue::px(innerWidth);
-    label_->height = DimValue::px(innerHeight);
+    label_->height = DimValue::px(bodyHeight);
     label_->setFontFamily(s.fontFamily);
     label_->setFontSize(s.fontSize);
     label_->setTextColor(s.textColor.r, s.textColor.g, s.textColor.b, s.textColor.a);
-    label_->setText(definition.pages.front());
     label_->colorTint = { 1.f, 1.f, 1.f, 1.f };
+
+    hintLabel_->offsetX = DimValue::px(s.padding);
+    hintLabel_->offsetY = DimValue::px(s.height - s.padding - hintHeight);
+    hintLabel_->width = DimValue::px(innerWidth);
+    hintLabel_->height = DimValue::px(hintHeight);
+    hintLabel_->setFontFamily(s.fontFamily);
+    hintLabel_->setFontSize(s.hintFontSize);
+    hintLabel_->setTextColor(
+        s.hintColor.r, s.hintColor.g, s.hintColor.b, s.hintColor.a);
+    hintLabel_->colorTint = { 1.f, 1.f, 1.f, 1.f };
+    beginPage();
     applyAlpha(1.f);
+}
+
+void DialogueSystem::beginPage() {
+    if (!label_ || !activeDefinition_
+        || pageIndex_ >= activeDefinition_->pages.size()) {
+        return;
+    }
+
+    revealedTextLength_ = 0;
+    typewriterAccumulator_ = 0.f;
+    label_->setText(L"");
+    updateHintText();
+}
+
+bool DialogueSystem::currentPageFullyRevealed() const {
+    if (!activeDefinition_ || pageIndex_ >= activeDefinition_->pages.size()) {
+        return true;
+    }
+    return revealedTextLength_ >= activeDefinition_->pages[pageIndex_].size();
+}
+
+void DialogueSystem::revealCurrentPage() {
+    if (!label_ || !activeDefinition_
+        || pageIndex_ >= activeDefinition_->pages.size()) {
+        return;
+    }
+
+    const std::wstring& page = activeDefinition_->pages[pageIndex_];
+    revealedTextLength_ = page.size();
+    typewriterAccumulator_ = 0.f;
+    label_->setText(page);
+}
+
+void DialogueSystem::updateTypewriter(float deltaTimeSec) {
+    if (currentPageFullyRevealed() || !activeDefinition_) return;
+
+    typewriterAccumulator_ +=
+        deltaTimeSec * activeDefinition_->style.charactersPerSecond;
+    std::size_t charactersToReveal =
+        static_cast<std::size_t>(typewriterAccumulator_);
+    if (charactersToReveal == 0) return;
+    typewriterAccumulator_ -= static_cast<float>(charactersToReveal);
+
+    const std::wstring& page = activeDefinition_->pages[pageIndex_];
+    while (charactersToReveal-- > 0 && revealedTextLength_ < page.size()) {
+        // Keep UTF-16 surrogate pairs together so supplementary characters
+        // never appear as a broken half-glyph during the reveal.
+        const wchar_t current = page[revealedTextLength_++];
+        if (current >= 0xD800 && current <= 0xDBFF
+            && revealedTextLength_ < page.size()) {
+            const wchar_t next = page[revealedTextLength_];
+            if (next >= 0xDC00 && next <= 0xDFFF) {
+                ++revealedTextLength_;
+            }
+        }
+    }
+
+    label_->setText(page.substr(0, revealedTextLength_));
+}
+
+void DialogueSystem::updateHintText() {
+    if (!hintLabel_ || !activeDefinition_) return;
+    const bool lastPage = pageIndex_ + 1 >= activeDefinition_->pages.size();
+    hintLabel_->setText(
+        lastPage ? activeDefinition_->closeHint : activeDefinition_->advanceHint);
 }
 
 void DialogueSystem::advance() {
     if (state_ != State::Reading || !activeDefinition_) return;
 
+    if (!currentPageFullyRevealed()) {
+        revealCurrentPage();
+        return;
+    }
+
     if (pageIndex_ + 1 < activeDefinition_->pages.size()) {
         ++pageIndex_;
-        label_->setText(activeDefinition_->pages[pageIndex_]);
+        beginPage();
         return;
     }
 
@@ -313,9 +428,17 @@ void DialogueSystem::advance() {
 }
 
 void DialogueSystem::update(float deltaTimeSec) {
-    if (state_ != State::Fading || !activeDefinition_) return;
+    if (state_ == State::Hidden || !activeDefinition_) return;
 
-    fadeElapsed_ += std::max(0.f, deltaTimeSec);
+    const float delta = std::max(0.f, deltaTimeSec);
+    hintPulseElapsed_ += delta;
+    if (state_ == State::Reading) {
+        updateTypewriter(delta);
+        applyAlpha(1.f);
+        return;
+    }
+
+    fadeElapsed_ += delta;
     const float duration = activeDefinition_->style.fadeOutSeconds;
     const float alpha = std::clamp(1.f - fadeElapsed_ / duration, 0.f, 1.f);
     applyAlpha(alpha);
@@ -323,12 +446,16 @@ void DialogueSystem::update(float deltaTimeSec) {
 }
 
 void DialogueSystem::applyAlpha(float alpha) {
-    if (!panel_ || !label_ || !activeDefinition_) return;
+    if (!panel_ || !label_ || !hintLabel_ || !activeDefinition_) return;
     panel_->colorTint.a = activeDefinition_->style.background.a * alpha;
     for (Panel* border : borderPanels_) {
         border->colorTint.a = activeDefinition_->style.borderColor.a * alpha;
     }
     label_->colorTint.a = alpha;
+    constexpr float kPulseRadiansPerSecond = 4.5f;
+    const float pulse = 0.75f
+        + 0.25f * std::cos(hintPulseElapsed_ * kPulseRadiansPerSecond);
+    hintLabel_->colorTint.a = pulse * alpha;
 }
 
 void DialogueSystem::hide() {
@@ -337,6 +464,9 @@ void DialogueSystem::hide() {
     activeEventId_.clear();
     pageIndex_ = 0;
     fadeElapsed_ = 0.f;
+    hintPulseElapsed_ = 0.f;
+    revealedTextLength_ = 0;
+    typewriterAccumulator_ = 0.f;
     if (panel_) panel_->visible = false;
 }
 

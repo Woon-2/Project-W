@@ -17,14 +17,19 @@
       "borderColor": [0.48, 0.62, 0.76, 0.90],
       "borderWidth": 2,
       "textColor": [0.96, 0.98, 1.0, 1.0],
+      "hintColor": [0.66, 0.80, 0.92, 0.92],
       "padding": 24,
       "fontFamily": "Malgun Gothic",
       "fontSize": 24,
+      "hintFontSize": 15,
+      "charactersPerSecond": 30,
+      "advanceHint": "클릭하여 계속  ▶",
+      "closeHint": "클릭하여 닫기  ▶",
       "fadeOutSeconds": 0.45,
       "pages": [
         "이 앞에 보이는 석상... 적들을 끊임없이 소환하고 있어.",
         "석상을 파괴하면 적들의 공세를 조금 늦출 수 있을 것 같아.",
-        "좌클릭 - 공격, SHIFT+좌클릭 - 스킬\n(눈 앞의 적들을 쓰러트리자)"
+        "좌클릭 - 공격, SHIFT+좌클릭 - 스킬, 마우스 휠 - 사용할 스킬 지정"
       ]
     },
     {
@@ -39,9 +44,14 @@
       "borderColor": [0.48, 0.62, 0.76, 0.90],
       "borderWidth": 2,
       "textColor": [0.96, 0.98, 1.0, 1.0],
+      "hintColor": [0.66, 0.80, 0.92, 0.92],
       "padding": 24,
       "fontFamily": "Malgun Gothic",
       "fontSize": 24,
+      "hintFontSize": 15,
+      "charactersPerSecond": 30,
+      "advanceHint": "클릭하여 계속  ▶",
+      "closeHint": "클릭하여 닫기  ▶",
       "fadeOutSeconds": 0.45,
       "pages": [
         "이 녀석들 우두머리가 있는 모양이야.",

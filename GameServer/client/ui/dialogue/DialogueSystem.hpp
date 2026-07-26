@@ -1,4 +1,4 @@
-#ifndef __UI_DIALOGUE_SYSTEM_HPP
+﻿#ifndef __UI_DIALOGUE_SYSTEM_HPP
 #define __UI_DIALOGUE_SYSTEM_HPP
 
 #include "../UIManager.hpp"
@@ -16,9 +16,12 @@ struct DialogueStyle {
     Color borderColor{ 0.48f, 0.62f, 0.76f, 0.90f };
     float borderWidth = 2.f;
     Color textColor{ 1.f, 1.f, 1.f, 1.f };
+    Color hintColor{ 0.66f, 0.80f, 0.92f, 0.92f };
     float padding = 24.f;
     std::wstring fontFamily = L"Malgun Gothic";
     float fontSize = 24.f;
+    float hintFontSize = 15.f;
+    float charactersPerSecond = 30.f;
     float fadeOutSeconds = 0.45f;
 };
 
@@ -26,6 +29,8 @@ struct DialogueDefinition {
     std::string eventId;
     DialogueStyle style;
     std::vector<std::wstring> pages;
+    std::wstring advanceHint = L"클릭하여 계속  ▶";
+    std::wstring closeHint = L"클릭하여 닫기  ▶";
 };
 
 class DialogueSystem {
@@ -47,12 +52,18 @@ private:
 
     bool loadDefinitions();
     void applyDefinition(const DialogueDefinition& definition);
+    void beginPage();
+    void updateTypewriter(float deltaTimeSec);
+    void revealCurrentPage();
+    bool currentPageFullyRevealed() const;
+    void updateHintText();
     void applyAlpha(float alpha);
     void hide();
 
     UIManager* uiManager_ = nullptr;
     Panel* panel_ = nullptr;
     Label* label_ = nullptr;
+    Label* hintLabel_ = nullptr;
     std::array<Panel*, 4> borderPanels_{};
     std::filesystem::path jsonPath_;
     std::unordered_map<std::string, DialogueDefinition> definitions_;
@@ -62,6 +73,9 @@ private:
     const DialogueDefinition* activeDefinition_ = nullptr;
     std::size_t pageIndex_ = 0;
     float fadeElapsed_ = 0.f;
+    float hintPulseElapsed_ = 0.f;
+    std::size_t revealedTextLength_ = 0;
+    float typewriterAccumulator_ = 0.f;
 };
 
 } // namespace UI
