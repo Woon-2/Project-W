@@ -133,6 +133,18 @@ attackDamageScale`로 산정되며, 레거시 `TacticalNpcConfig::attackDamage`�
 원안 수치를 유지하기로 선택한 값이며, `grandbaum_earth_spike.lua`의 `damage` 한 줄이라
 플레이 테스트 후 올리기 쉽다.
 
+### 6. 발동 순간 넉백 잔여 속도 제거 (2026-07-27)
+
+링 중심(`shieldWallRingCenter_`)은 `issueShieldWall`에서 보스 위치를 **1회 스냅샷**하고 슬롯도
+절대 좌표로 박제된다. 그런데 미드보스는 평상시 넉백 면역이 아니라(Dynamic mass 70), 임계
+(66%/33%)를 깨는 바로 그 히트의 OnHit 임펄스(350~1200 → 5~17 m/s)가 ShieldWall 진입 시 켜지는
+impulse 면역보다 먼저 실린다. 면역은 이후 임펄스만 막고 잔여 `linearVel`은 안 지우므로
+(linearDamping 0.1), 보스가 캡처된 중심에서 수 미터 미끄러져 **벽 밖에 서 있는** 버그가 있었다.
+
+수정: `issueShieldWall`이 중심을 캡처하기 직전에 보스 XZ `setLinearVel(0)` (Y는 중력 보존).
+면역이 같은 틱에 먼저 켜지므로 이후 새 임펄스도 없다 → 보스는 링 중심에 정지 유지.
+66%/33% 두 발동 모두 이 경로를 지난다. Engage/Cooldown 중 넉백 카운터플레이는 그대로다.
+
 ## 주요 파일
 
 | 파일 | 내용 |
