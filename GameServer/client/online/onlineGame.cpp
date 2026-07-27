@@ -5864,33 +5864,34 @@ void Game::renderInGame() {
 			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
 	// 조준된 보석: 상호작용 안내 + 습득 실패 안내.
-	{
-		const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
-		const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
-		if (const auto it = gemDrops_.find(aimedDropId_);
-			aimedDropId_ != 0 && it != gemDrops_.end() && it->second.obj) {
-			std::wstring label = L"[F] 줍기";
-			if (const ItemDefinition* def = itemCatalog_.find(it->second.itemId))
-				label += L" · " + gemUtf8ToWide(def->name);
-			pickupPromptHUD_.render(gfx_, camera_.view(), camera_.proj(),
-				it->second.obj->pos(), label, true, sw, sh);
+		{
+			const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+			const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+			if (const auto it = gemDrops_.find(aimedDropId_);
+				aimedDropId_ != 0 && it != gemDrops_.end() && it->second.obj) {
+				std::wstring label = L"[F] 줍기";
+				if (const ItemDefinition* def = itemCatalog_.find(it->second.itemId))
+					label += L" · " + gemUtf8ToWide(def->name);
+				pickupPromptHUD_.render(gfx_, camera_.view(), camera_.proj(),
+					it->second.obj->pos(), label, true, sw, sh);
+			}
+			if (pickupNoticeSec_ > 0.f)
+				pickupPromptHUD_.renderNotice(gfx_, pickupNotice_,
+					std::min(1.f, pickupNoticeSec_ / 0.4f), sw, sh);
 		}
-		if (pickupNoticeSec_ > 0.f)
-			pickupPromptHUD_.renderNotice(gfx_, pickupNotice_,
-				std::min(1.f, pickupNoticeSec_ / 0.4f), sw, sh);
-	}
 
-	// Combo counter above the dial: kill-streak accelerator feedback. Shown while
-	// an active combo (>=2) is within its window; size eases down as it expires.
-	if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
-		const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
-		const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
-		const float frac = (comboWindowMs_ > 0.f)
-			? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
-		DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
-			sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
-			static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
-			DigitAtlas::Align::Center);
+		// Combo counter above the dial: kill-streak accelerator feedback. Shown while
+		// an active combo (>=2) is within its window; size eases down as it expires.
+		if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
+			const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+			const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+			const float frac = (comboWindowMs_ > 0.f)
+				? std::clamp(comboSecLeft_ / (comboWindowMs_ / 1000.f), 0.f, 1.f) : 1.f;
+			DigitAtlas::emitNumber(gfx_, assetManager_.digitAtlasTex(),
+				sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
+				static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
+				DigitAtlas::Align::Center);
+		}
 	}
 
 	uiManager_.render(gfx_);
