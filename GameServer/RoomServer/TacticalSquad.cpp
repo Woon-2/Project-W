@@ -87,8 +87,16 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
         return;
     }
 
-    if ( currentOrder_.type == SquadOrderType::WedgeCharge && !wedgePrepared_ && areMembersAtSlots() ) {
-        wedgePrepared_ = true;
+    // strictWedgeFormation이면 안착 래치로 판정한다. areMembersAtSlots()의 허용 오차
+    // (sepRad×1.5 ≈ 4.5m)는 쐐기 슬롯 간격(가로 ~2.25m / 행 ~1.65m)보다 넓어 뭉친 덩어리도
+    // "완성"으로 통과시켰고, 그 상태로 돌진해 V자가 화면에 나오지 않았다.
+    if ( currentOrder_.type == SquadOrderType::WedgeCharge && !wedgePrepared_ ) {
+        const bool prepared = currentOrder_.strictWedgeFormation
+            ? areMembersSettledAtSlotsFraction()
+            : areMembersAtSlots();
+        if ( prepared ) {
+            wedgePrepared_ = true;
+        }
     }
     if ( currentOrder_.type == SquadOrderType::WedgeCharge && wedgePrepared_ &&
          wedgeChargeReleased_ && !wedgeChargeCommandIssued_ ) {
@@ -249,8 +257,16 @@ static mu::Vec3 findSafeFormationSlot( Room& room, mu::Vec3 desired,
         }
     }
 
-    // 현재 위치는 이미 물리 정리된 위치이므로 최종 폴백으로 사용한다. 이 멤버가 도착 판정을
-    // 즉시 만족하더라도 다른 멤버와 전술 진행을 영구히 막지 않는 편이 안전하다.
+    // 1차 폴백: 이웃 간격 조건만 버리고 원래 슬롯을 쓴다. 슬롯 근처에서는 peer 분리를 일부러
+    // 꺼서 밀집 패킹을 허용하는 설계이므로(TacticalNpc::updateHoldSlot), 이웃이 붐빈다는 이유로
+    // 멤버를 대형에서 빼지 않는다. 예전엔 곧장 아래의 "현재 위치"로 떨어졌는데, 그러면 그 멤버는
+    // 이동 거리 0짜리 슬롯을 받아 조용히 제자리에 남았다(도착 판정까지 통과해 발견도 안 됐다).
+    if ( room.isTacticalFormationPositionOpen( groundDesired, npc ) ) {
+        return groundDesired;
+    }
+
+    // 2차 폴백: 슬롯이 정적 장애물에 실제로 막힌 경우. 현재 위치는 이미 물리 정리된 위치이므로
+    // 마지막 수단으로 쓴다.
     mu::Vec3 current = npc.pos();
     current = mu::Vec3( current.x(), room.groundHeightAtWorld( current.x(), current.z() ), current.z() );
     return room.isTacticalFormationPositionOpen( current, npc ) ? current : groundDesired;
@@ -271,6 +287,25 @@ bool TacticalSquad::areMembersSettledAtSlots() const {
     }
 
     return aliveCount > 0;
+}
+
+bool TacticalSquad::areMembersSettledAtSlotsFraction() const {
+    int32 aliveCount = 0;
+    int32 settledCount = 0;
+
+    for ( TacticalNpc* tnpc : memberCache_ ) {
+        if ( !tnpc || tnpc->hp() <= 0 ) {
+            continue;
+        }
+
+        ++aliveCount;
+        if ( tnpc->isSettledAtSlot() ) {
+            ++settledCount;
+        }
+    }
+
+    return aliveCount > 0 &&
+           static_cast<float>( settledCount ) >= static_cast<float>( aliveCount ) * SLOT_ARRIVE_FRACTION;
 }
 
 bool TacticalSquad::areChargeMembersComplete() const {
@@ -439,10 +474,7 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcDenseSlots( mu::Vec3 center
         return slots;
     }
 
-    float spacing = memberSeparationRadius_ * spacingScale;
-    if ( spacing < 1.2f ) {
-        spacing = 1.2f;
-    }
+    float spacing = denseSlotSpacing( spacingScale );
 
     mu::Vec3 right( -forward.z(), 0.f, forward.x() );
 
@@ -489,8 +521,8 @@ std::vector<mu::Vec3> MU_CALLCONV TacticalSquad::calcWedgeSlots( mu::Vec3 apex, 
         spacingMult = 1.f;
     }
 
-    float spacing = std::max( memberSeparationRadius_ * 0.75f, 1.5f ) * spacingMult;
-    float rowSpacing = std::max( memberSeparationRadius_ * 0.55f, 1.25f ) * spacingMult;
+    float spacing = wedgeColSpacing( spacingMult );
+    float rowSpacing = wedgeRowSpacing( spacingMult );
 
     int32 placed = 0;
     int32 row = 0;
@@ -641,6 +673,10 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
             int32 slotCount = count + (ord.reserveWedgeApex ? 1 : 0);
             std::vector<mu::Vec3> slots = calcWedgeSlots( prepareApex, forward, slotCount, ord.wedgeSpacingMult );
             mu::Vec3 exitApex = targetCenter + forward * WEDGE_EXIT_DISTANCE;
+            // 장애물 회피 보정이 요구할 최소 간격 = 이 쐐기의 최근접 이웃 간격. 이보다 크게 잡으면
+            // 모든 슬롯이 서로를 탈락시켜 쐐기가 통째로 무너진다.
+            const float wedgeMinSpacing = std::min( wedgeColSpacing( ord.wedgeSpacingMult ),
+                                                    wedgeRowSpacing( ord.wedgeSpacingMult ) ) * 0.95f;
 
             wedgeMemberIds_.clear();
             wedgeMemberCache_.clear();
@@ -685,13 +721,13 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
                 mu::Vec3 prepareSlot = slots[ bestSlot ];
                 if ( ord.avoidStaticObstacles ) {
                     prepareSlot = findSafeFormationSlot(
-                        room, prepareSlot, *tnpc, occupiedPrepareSlots, memberSeparationRadius_ );
+                        room, prepareSlot, *tnpc, occupiedPrepareSlots, wedgeMinSpacing );
                 }
                 mu::Vec3 rel = prepareSlot - prepareApex;
                 mu::Vec3 exitSlot = exitApex + rel;
                 if ( ord.avoidStaticObstacles ) {
                     exitSlot = findSafeFormationSlot(
-                        room, exitSlot, *tnpc, occupiedExitSlots, memberSeparationRadius_ );
+                        room, exitSlot, *tnpc, occupiedExitSlots, wedgeMinSpacing );
                 }
                 occupiedPrepareSlots.push_back( prepareSlot );
                 occupiedExitSlots.push_back( exitSlot );
@@ -790,6 +826,13 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
 
         std::vector<mu::Vec3> slots = calcDenseSlots( center, faceDir, count, ord.slotSpacingScale, ord.slotColumnScale, ord.slotColumnCount );
         std::vector<mu::Vec3> occupiedSlots;
+        // 회피 보정의 최소 간격은 이 대형의 격자 간격과 같아야 한다(더 크면 전원이 탈락한다).
+        const float slotMinSpacing = denseSlotSpacing( ord.slotSpacingScale ) * 0.95f;
+
+        // FormationHold는 슬롯 유지에 타깃이 필요 없다. holdFacing을 주지 않으면 targetId 플레이어가
+        // 죽는 순간 updateHoldSlot이 슬롯을 포기하고 부대 전원이 그 자리에서 Idle이 된다.
+        // (FormationGuard는 Goblin 회랑 차단선이 쓰므로 기존 거동을 유지한다.)
+        const bool holdFormationFacing = ( ord.type == SquadOrderType::FormationHold );
 
         for ( int32 i = 0; i < count; ++i ) {
             TacticalNpc* tnpc = memberCache_[ i ];
@@ -799,7 +842,7 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
 
             mu::Vec3 slot = slots[ i ];
             if ( ord.avoidStaticObstacles ) {
-                slot = findSafeFormationSlot( room, slot, *tnpc, occupiedSlots, memberSeparationRadius_ );
+                slot = findSafeFormationSlot( room, slot, *tnpc, occupiedSlots, slotMinSpacing );
             }
             occupiedSlots.push_back( slot );
 
@@ -807,7 +850,9 @@ void TacticalSquad::pushCommandsToMembers( Room& room ) {
 				.type = (ord.type == SquadOrderType::FormationGuard) ? TacticalCommandType::GuardSlot : TacticalCommandType::HoldSlot,
 				.targetId = ord.targetId,
 				.slotOffset = slot,
-				.speedMult = ord.speedMult
+				.speedMult = ord.speedMult,
+				.useHoldFacing = holdFormationFacing,
+				.holdFacing = faceDir
             };
             tnpc->receiveCommand( cmd );
         }

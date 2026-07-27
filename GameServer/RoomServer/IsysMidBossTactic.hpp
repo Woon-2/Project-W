@@ -129,6 +129,10 @@ private:
 
     // 협공 상태
     mu::Vec3                     retreatTargetPos_{};
+    // 집결 좌표계의 공용 전진축(후퇴 지점 → 플레이어 군집). Bomber/Buddy 집결 위치를 전부 이
+    // 축 하나로 계산해야 두 대형의 전후 간격이 보장된다 — 부대별 타깃 군집 방향을 쓰면 군집이
+    // 벌어질수록 축이 어긋나 서로 겹친다. 바라보는 방향(formationTargetPos)은 부대별로 유지.
+    mu::Vec3                     retreatForwardDir_{ 1.f, 0.f, 0.f };
     std::vector<TacticalSquad*>  activeStrikeSquads_{};
     std::vector<StrikeTask>      activeStrikeTasks_{};
     std::vector<uint32>          firstStrikeTargetIds_{};      // 1차(Bomber) 타깃 — 2차 페널티 기준
@@ -185,8 +189,12 @@ private:
     static constexpr Seconds RETREAT_TIMEOUT{ 5.0f };
     static constexpr Seconds REGROUP_TIMEOUT{ 3.5f };
     static constexpr Seconds BUDDY_REGROUP_TIMEOUT{ 4.0f };
-    static constexpr Seconds WEDGE_PREP_FORCE_TIMEOUT{ 2.5f };
-    static constexpr Seconds PINCER_TIMEOUT{ 7.0f };
+    // 쐐기 대형이 완성(85% 안착)되기 전 강제 돌진까지의 유예. 2.5s는 라인→V자 재배치가
+    // 끝나기 전에 발동해 쐐기 완성형이 화면에 안 보였다. 자연 완료가 먼저 차면 즉시 출발한다.
+    static constexpr Seconds WEDGE_PREP_FORCE_TIMEOUT{ 4.0f };
+    // 쐐기 준비(최대 WEDGE_PREP_FORCE_TIMEOUT) + 후퇴 지점에서 군집까지의 돌진·관통 시간을
+    // 모두 담아야 한다. 이 타이머가 먼저 차면 돌진 중이던 부대가 Engage로 강제 전환돼 관통이 끊긴다.
+    static constexpr Seconds PINCER_TIMEOUT{ 9.0f };
     static constexpr float   ISIS_RETREAT_EXTRA_DIST      = 14.f;    // 시뮬 35
     static constexpr float   ISIS_RETREAT_MIN_DIST        = 36.f;    // 시뮬 90
     static constexpr float   ISIS_RETREAT_ARRIVE_DIST     = 1.5f;    // 보스 후퇴 도착 판정
@@ -194,13 +202,19 @@ private:
     static constexpr float   RETREAT_LEADER_SPEED_MULT    = 6.0f;    // 모터 캡(시뮬 15.5)
     static constexpr float   RETREAT_BOMBER_FRONT_OFFSET  = 7.f;     // 시뮬 18
     static constexpr float   RETREAT_BOMBER_SIDE_OFFSET   = 8.f;     // 시뮬 20
-    static constexpr float   RETREAT_BUDDY_BACK_OFFSET    = 5.f;     // 시뮬 12
+    // Buddy 집결(후퇴·2차 공용)이 집결지 뒤로 물러나는 거리. Bomber 쐐기 준비가 집결지 앞
+    // −2.2m까지 뻗으므로, Buddy 열 깊이(±6.4m)를 감안해 앞 끝이 그보다 뒤에 오도록 잡는다.
+    static constexpr float   RETREAT_BUDDY_BACK_OFFSET    = 14.f;    // 시뮬 12(전방 겹침으로 상향)
     static constexpr float   RETREAT_BUDDY_SIDE_OFFSET    = 11.f;    // 시뮬 28
     static constexpr float   BOMBER_REGROUP_SPEED_MULT    = 0.75f;
-    static constexpr float   BOMBER_REGROUP_BACK_OFFSET   = 11.f;    // 시뮬 28
-    static constexpr float   BOMBER_REGROUP_SIDE_OFFSET   = 9.f;     // 시뮬 22
+    // (제거) BOMBER_REGROUP_BACK/SIDE_OFFSET — 군집 기준 앵커를 쓰던 시뮬 잔재. 돌격 라인은
+    // 이제 후퇴 집결지 기준(RETREAT_BOMBER_*)이다. issueBomberRegroup 참조.
     static constexpr float   BOMBER_REGROUP_SPACING_SCALE = 0.9f;
-    static constexpr float   BOMBER_REGROUP_COLUMN_SCALE  = 1.8f;
+    // 1.8은 40기 블록을 29.7m 폭으로 퍼뜨려, 부대 중심 간격(RETREAT_BOMBER_SIDE_OFFSET×2 = 16m)
+    // 안에서 두 Bomber 부대가 서로 파고들었다(findSafeFormationSlot은 같은 부대 슬롯끼리만 본다).
+    // 1.0이면 16.2m 폭 × 13.5m 깊이 — 부대끼리 안 겹치고, 이어질 쐐기(18m × 13.2m)와 모양이
+    // 비슷해 V자 재배치 이동도 짧아진다.
+    static constexpr float   BOMBER_REGROUP_COLUMN_SCALE  = 1.0f;
     static constexpr int32   BOMBER_REGROUP_COLUMN_COUNT  = 0;
     static constexpr float   BUDDY_COLUMN_SPACING_SCALE   = 0.85f;
     static constexpr float   BUDDY_COLUMN_SCALE           = 1.0f;

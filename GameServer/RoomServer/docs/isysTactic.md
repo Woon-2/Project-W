@@ -80,8 +80,8 @@ Isys의 전술 무적은 공용 `damageTakenMultiplier`만 사용하므로 **새
 Isys의 `FormationHold`/`WedgeCharge`만 정적 장애물 회피 옵션을 사용한다. 각 슬롯은 XZ 위치의 지형 높이로
 Y를 맞춘 뒤 scatter prop과 아레나 벽/Static BVH 중첩을 검사한다. 막힌 슬롯은 1.5m 간격으로 최대 6m까지
 가까운 빈 바닥을 탐색하며 다른 슬롯과 NPC 분리 반경을 유지한다. 나무·바위 위 높이는 사용하지 않는다.
-쐐기 준비가 2.5초를 넘으면 현재 인원으로 강제 돌진하고, Buddy 재집결은 4초 후 2차 쐐기로 넘어가므로
-일부 NPC가 이동 경로에서 막혀도 전술 전체가 정지하지 않는다.
+쐐기 준비가 `WEDGE_PREP_FORCE_TIMEOUT`(4초)을 넘으면 현재 인원으로 강제 돌진하고, Buddy 재집결은 4초 후
+2차 쐐기로 넘어가므로 일부 NPC가 이동 경로에서 막혀도 전술 전체가 정지하지 않는다.
 
 ### ⑥ 쐐기 준비와 돌진 명령 상태 분리
 
@@ -90,10 +90,91 @@ Y를 맞춘 뒤 scatter prop과 아레나 벽/Static BVH 중첩을 검사한다.
 `areChargeMembersComplete()`가 완료를 반환하지 않으므로, 집결만 마친 Bomber가 돌진 없이 Engage로
 넘어가지 않는다.
 
-자연 준비 완료와 2.5초 강제 시작은 동일한 돌진 시작 경로를 사용한다. 강제 시작 시 준비 슬롯 캐시가
+자연 준비 완료와 강제 시작은 동일한 돌진 시작 경로를 사용한다. 강제 시작 시 준비 슬롯 캐시가
 비어 있으면 현재 명령으로 캐시를 다시 만든 뒤 즉시 돌진을 발행한다. 기존 대표 플레이어가 사망하거나
 이탈한 경우에는 같은 군집의 다른 생존 플레이어를 우선 사용하고, 모두 유효하지 않으면 스쿼드에서 가장
 가까운 생존 플레이어를 향한다. 슬롯 배치, 85% 준비·완료 기준, 돌진 속도와 피해는 기존 값을 유지한다.
+
+### ⑦ 집결 앵커와 쐐기 완성 판정 (2026-07-27)
+
+**두 돌격 라인은 모두 후퇴 집결지(`retreatTargetPos_`) 기준으로 세운다.** 1차
+`issueBomberRegroup`이 예전엔 시뮬 잔재로 *군집 centroid* 기준(`cluster.centroid − 플레이어 평균
+시선 × 11m`)이었다. `ISIS_RETREAT_MIN_DIST`(36m)까지 후퇴시켜 놓고 Bomber만 플레이어 11~14m
+지점으로 되돌려 대형을 짜는 셈이라, "후퇴 → 대형 → 장거리 돌진"이라는 연출이 무너졌다. 지금은
+2차 `issueBuddyColumn`과 동일하게 `retreatTargetPos_ + attackDir × RETREAT_BOMBER_FRONT_OFFSET
+± right × RETREAT_BOMBER_SIDE_OFFSET`을 쓴다. **새 집결 대형을 추가할 때도 이 앵커 계약을 지킬 것** —
+쐐기 준비 apex가 `스쿼드 centroid + forward × WEDGE_PREP_APEX_DISTANCE`라, 집결 위치가 곧 쐐기가
+펼쳐지는 위치다.
+
+**쐐기 준비 완성(`wedgePrepared_`)은 `SquadOrder::strictWedgeFormation` 옵트인으로 안착 래치를 쓴다**
+(`TacticalSquad::areMembersSettledAtSlotsFraction`). 공용 `areMembersAtSlots()`의 허용 오차는
+`separationRadius_ × 1.5`(≈4.5m)인데 쐐기 슬롯 간격은 가로 ~2.25m / 행 ~1.65m라, **허용 오차가
+두 행을 덮어써서** 뭉친 덩어리가 그대로 "대형 완성"으로 통과해 V자가 화면에 나오지 않았다. 안착
+래치(`isSettledAtSlot`, 히스테리시스 inner 0.25×sepRad / outer 0.7×sepRad)를 85% 비율로 집계해
+실제로 자리를 잡은 뒤 출발한다.
+
+> ⚠ 이 플래그는 **강제 돌진 타임아웃이 있는 전술에서만** 켤 것. 준비가 그만큼 느려지므로,
+> 안전장치가 없으면 쐐기가 영영 출발하지 않을 수 있다. Isys는 `WEDGE_PREP_FORCE_TIMEOUT`이
+> 보증한다. Goblin `DivideAndConquer`의 회랑 쐐기는 같은 `WedgeCharge` 경로를 공유하지만
+> 플래그를 켜지 않아 기존 판정 그대로다.
+
+### ⑧ 집결지 배치 규약 — 겹치면 안착이 느려진다 (2026-07-27)
+
+`retreatTargetPos_`를 원점, forward를 타깃 군집 방향으로 놓고 **Bomber는 전방, Buddy는 후방**에
+세운다. 두 대형은 forward 축으로 분리하며, 수정 후 범위는
+Buddy `[−20.4, −7.6]` · Bomber 집결 `[0.25, 13.75]` · Bomber 쐐기 준비 `[−2.2, 11]`이다.
+
+과거 두 가지가 겹쳐 80기가 서로 밀어내며 대형 준비가 지연됐다.
+- `issueBuddyColumn`이 전진 오프셋에 **`RETREAT_BOMBER_FRONT_OFFSET`(Bomber용 상수)** 을 써서
+  2차 대기열이 1차 쐐기 한복판에 섰다. Bomber가 군집 쪽으로 떠나던 시절엔 자리가 비어
+  드러나지 않던 복사 실수다. 지금은 후퇴 배치와 같은 `RETREAT_BUDDY_BACK_OFFSET`(후방)을 쓰며,
+  같은 상수를 공유하는 덕에 Buddy는 두 단계 사이에 사실상 제자리다.
+- `BOMBER_REGROUP_COLUMN_SCALE`이 1.8이라 40기 블록이 29.7m 폭이 되어, 부대 중심 간격
+  `RETREAT_BOMBER_SIDE_OFFSET × 2`(16m) 안에서 두 Bomber 부대가 서로 파고들었다.
+
+> ⚠ **대형 폭은 부대 간 중심 간격보다 좁게 유지할 것.** 폭은
+> `cols = ⌈√N × columnScale⌉` × `separationRadius × slotSpacingScale`로 결정된다.
+> `findSafeFormationSlot`은 **같은 부대 슬롯끼리만** 간격을 검사하므로(부대별 호출) 교차 부대
+> 침투는 아무도 막아주지 않는다. 인원(N)을 늘릴 때 폭이 함께 커진다는 점에 주의.
+
+**집결 위치는 공용 후퇴 축(`retreatForwardDir_`) 하나로만 계산한다.** 예전엔
+`issueBomberRegroup`/`issueBuddyColumn`이 각자 *자기 타깃 군집 방향*을 축으로 썼는데, 1·2차가
+서로 다른 군집을 노리면 두 축이 벌어져(θ≈40°) 위 forward 구간의 5.4m 마진이 약 4.3m 겹침으로
+뒤집혔다. 지금은 `issueRetreatForPincer`가 계산한 축을 저장해 세 배치가 공유하고, 부대별 타깃
+방향은 바라보는 방향(`formationTargetPos`)과 쐐기 전진축에만 쓴다.
+
+### ⑨ 슬롯 격자 간격 ≥ `findSafeFormationSlot`의 `minSpacing` (2026-07-27)
+
+`findSafeFormationSlot`(`TacticalSquad.cpp`)은 후보 지점이 **이미 배치된 슬롯과 `minSpacing` 이상**
+떨어져야 통과시킨다. 예전엔 호출부가 전부 `memberSeparationRadius_`(3.0m)를 넘겼는데, Isys 대형의
+실제 격자 간격은 그보다 좁았다(집결 2.55~2.70m, Bomber 쐐기 가로 2.25 / 행 1.65m). 그래서
+
+1. 첫 멤버를 뺀 **전원이 자기 슬롯에서 탈락**해 6m 링 탐색(4링 × 12샘플)으로 빠지고,
+2. 밀집 블록 *안쪽* 슬롯을 받은 멤버는 48샘플이 전부 실패해 **"현재 위치"** 를 슬롯으로 받았다.
+
+결과가 **후퇴하지 않고 제자리에 남는 NPC**였고, 이동 거리 0이라 `isAtSlot()`/`isSettledAtSlot()`이
+모두 참이 되어 85% 도착 게이트를 오히려 더 쉽게 통과 — **아무 로그 없이 은폐**됐다. 그렇게 플레이어
+군집(=1차 쐐기 관통점)에 남은 Buddy는 30 m/s·70kg Bomber 40기에 물리적으로 떠밀려 함께 돌진했다
+(전술 NPC끼리 충돌 ON, 모터는 외력이 누적되는 소프트 P제어).
+
+수정: 간격 계산을 `denseSlotSpacing` / `wedgeColSpacing` / `wedgeRowSpacing`(`TacticalSquad.hpp`)으로
+단일화해 **생성기와 회피 보정이 같은 값을 보게** 했고, 링 탐색 실패 시 곧장 현재 위치로 떨어지는
+대신 **이웃 간격 조건만 빼고 원래 슬롯을 재시도**하도록 폴백을 2단으로 완화했다.
+
+> ⚠ **새 대형을 추가할 때 `slotSpacingScale`/`wedgeSpacingMult`를 낮추면 반드시 위 헬퍼를 통해
+> `minSpacing`도 함께 내려갈 것.** 보정 쪽이 격자보다 크면 대형이 통째로 무너지는데, 증상이
+> "일부 NPC만 안 움직임"으로 나타나 원인 추적이 어렵다.
+
+또한 `FormationHold` 커맨드는 `useHoldFacing`을 켜서 발행한다. 이게 없으면 `ord.targetId`(특정
+플레이어 1명)가 죽는 순간 `TacticalNpc::updateHoldSlot`이 슬롯을 포기하고 **부대 전원이 그 자리에서
+`Idle`** 이 된다 — 대형 유지에 타깃이 필요 없는데도 생기는 프리즈다. `FormationGuard`(Goblin 회랑
+차단선)는 같은 case를 공유하므로 플래그를 켜지 않아 기존 거동 그대로다.
+
+**남은 구조적 결함(미수정):** `pushCommandsToMembers`가 대상 조회 실패로 early return 해도
+`TacticalSquad::update`는 `orderDirty_`를 무조건 클리어해 **명령이 영구 소실**된다. 위 `useHoldFacing`
+덕에 Isys 경로의 실피해는 사라졌지만 경로 자체는 남아 있다. 그리고 `selectStrikeClusters`의 정렬
+1순위가 인원수라 `SECOND_STRIKE_REPEAT_PENALTY`가 **인원 동수 군집에서만** 작동한다 — 1·2차 타깃
+분산이 설계 의도만큼 되지 않을 수 있다(밸런스 판단 필요).
 
 ## 보스 고속 이동 — 모터 변환 (중요)
 

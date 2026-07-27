@@ -758,6 +758,7 @@ void IsysMidBossTactic::issueRetreatForPincer( Room& room, PlatoonLeader& leader
     mu::Vec3 forward = playerCentroid - retreatTargetPos_;
     float forwardLen = forward.len();
     forward = ( forwardLen > 0.01f ) ? forward * ( 1.f / forwardLen ) : mu::Vec3( 1.f, 0.f, 0.f );
+    retreatForwardDir_ = forward;   // 이후 집결 배치 전부가 이 축을 공유한다
     mu::Vec3 right( -forward.z(), 0.f, forward.x() );
     right = ( right.len2() > 0.01f ) ? norm3( right ) : mu::Vec3( 0.f, 0.f, 1.f );
 
@@ -909,6 +910,7 @@ void IsysMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
         ord.chargeSpeedMult = ISIS_WEDGE_SPEED_MULT;
         ord.chargeAcceleration = ISIS_WEDGE_MOTOR_ACCELERATION;
         ord.avoidStaticObstacles = true;
+        ord.strictWedgeFormation = true;   // V자 완성 후 출발(WEDGE_PREP_FORCE_TIMEOUT이 보증)
         if ( useBuddySquads ) {
             ord.wedgeSpacingMult = ISIS_BUDDY_WEDGE_SPACING_MULT;
             if ( isBossJoinedBuddySquad( squad ) ) {
@@ -939,25 +941,26 @@ void IsysMidBossTactic::issueWedgeStrike( Room& room, PlatoonLeader& leader,
     }
 }
 
-void IsysMidBossTactic::issueBomberRegroup( Room& room, TacticalSquad* squad,
+void IsysMidBossTactic::issueBomberRegroup( Room& /*room*/, TacticalSquad* squad,
                                             const StrikeCluster& strikeCluster, float sideSign ) {
     if ( !squad || squad->isEmpty() ) {
         return;
     }
 
-    mu::Vec3 fallbackDir = strikeCluster.cluster.centroid - squad->calcCentroid();
-    if ( fallbackDir.len2() <= 0.01f ) {
-        fallbackDir = mu::Vec3( 1.f, 0.f, 0.f );
-    }
-
-    mu::Vec3 playerFacing = calcAveragePlayerFacing( room, fallbackDir );
-    mu::Vec3 forward = ( playerFacing.len2() > 0.01f ) ? norm3( playerFacing ) : norm3( fallbackDir );
+    // 돌격 라인은 후퇴 집결지 기준으로 세운다(2차 issueBuddyColumn과 동일 앵커).
+    // 예전엔 군집 centroid − 플레이어 평균 시선×오프셋(~11m)으로 잡아, 후퇴해 놓고 곧장
+    // 플레이어 옆으로 되돌아와 대형을 짰고, 이어지는 쐐기 준비(스쿼드 중심+4m,
+    // TacticalSquad::pushCommandsToMembers)도 플레이어 코앞에서 일어났다. 후퇴 지점에서
+    // 쐐기를 완성한 뒤 장거리 돌진하는 것이 의도된 연출이다.
+    // 위치는 공용 후퇴 축으로만 잡고(부대별 군집 방향을 쓰면 Buddy 대형과 겹친다),
+    // 바라보는 방향만 자기 타깃 군집으로 준다.
+    mu::Vec3 forward = retreatForwardDir_;
     mu::Vec3 right( -forward.z(), 0.f, forward.x() );
     right = ( right.len2() <= 0.01f ) ? mu::Vec3( 0.f, 0.f, 1.f ) : norm3( right );
 
-    mu::Vec3 center = strikeCluster.cluster.centroid
-        - forward * BOMBER_REGROUP_BACK_OFFSET
-        + right * ( BOMBER_REGROUP_SIDE_OFFSET * sideSign );
+    mu::Vec3 center = retreatTargetPos_
+        + forward * RETREAT_BOMBER_FRONT_OFFSET
+        + right * ( RETREAT_BOMBER_SIDE_OFFSET * sideSign );
 
     SquadOrder ord;
     ord.type = SquadOrderType::FormationHold;
@@ -978,13 +981,16 @@ void MU_CALLCONV IsysMidBossTactic::issueBuddyColumn( Room& /*room*/, TacticalSq
         return;
     }
 
-    mu::Vec3 attackDir = strikeCluster.cluster.centroid - retreatTargetPos_;
-    attackDir = ( attackDir.len2() > 0.01f ) ? norm3( attackDir ) : mu::Vec3( 1.f, 0.f, 0.f );
-    mu::Vec3 right( -attackDir.z(), 0.f, attackDir.x() );
+    // Buddy는 집결지 "후방"이다(Bomber가 전방). 예전엔 전진 오프셋에 Bomber용 상수를 써서
+    // 2차 대기열이 1차 쐐기 한복판에 겹쳤다 — Bomber가 군집으로 떠나던 시절엔 자리가 비어
+    // 드러나지 않던 복사 실수다. 후퇴 배치(issueRetreatForPincer)와 같은 상수·같은 축을 쓰므로
+    // Buddy는 후퇴 단계와 2차 집결 단계 사이에 사실상 제자리에 머문다.
+    mu::Vec3 forward = retreatForwardDir_;
+    mu::Vec3 right( -forward.z(), 0.f, forward.x() );
     right = ( right.len2() <= 0.01f ) ? mu::Vec3( 0.f, 0.f, 1.f ) : norm3( right );
 
     mu::Vec3 center = retreatTargetPos_
-        + attackDir * RETREAT_BOMBER_FRONT_OFFSET
+        - forward * RETREAT_BUDDY_BACK_OFFSET
         + right * ( RETREAT_BUDDY_SIDE_OFFSET * sideSign );
 
     SquadOrder ord;

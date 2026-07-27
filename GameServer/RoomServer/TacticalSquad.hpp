@@ -55,6 +55,9 @@ struct SquadOrder {
     mu::Vec3       wedgeApexPos      = {};        // WedgeCharge only: 준비 정점을 명시 지정(회랑 입구)
     bool           hasWedgeApex      = false;     // true면 부대 위치 기준 대신 wedgeApexPos 사용
     bool           avoidStaticObstacles = false;  // Isys 집결/쐐기 슬롯을 인접 빈 바닥으로 보정
+    // WedgeCharge only: 쐐기 준비 완료를 넓은 거리 판정(areMembersAtSlots) 대신 안착 래치로 본다.
+    // V자가 실제로 잡힌 뒤 출발하지만 준비가 느려지므로, 강제 돌진 타임아웃이 있는 전술만 켤 것.
+    bool           strictWedgeFormation = false;
     std::vector<uint32> targetIds  = {};
 };
 
@@ -96,6 +99,9 @@ public:
     mu::Vec3 calcCentroid() const;
     bool     areMembersAtSlots() const;
     bool     areMembersSettledAtSlots() const;
+    // 안착 래치를 SLOT_ARRIVE_FRACTION 비율로 집계한다. 전원(100%)을 요구하는
+    // areMembersSettledAtSlots()는 40기 부대에서 한 명만 끼어도 영원히 false다.
+    bool     areMembersSettledAtSlotsFraction() const;
     bool     areChargeMembersComplete() const;
     bool     isWedgeChargeActive() const { return activeWedgeChargeId_ != 0; }
     bool     isWedgePrepared() const { return wedgePrepared_; }
@@ -117,6 +123,20 @@ private:
     std::vector<mu::Vec3> MU_CALLCONV calcEncircleSlots( mu::Vec3 targetPos, float sectorAngle, float sectorSpan, float radius, int32 count ) const;
     std::vector<mu::Vec3> MU_CALLCONV calcDenseSlots( mu::Vec3 center, mu::Vec3 forward, int32 count, float spacingScale = 1.f, float columnScale = 1.f, int32 fixedColumnCount = 0 ) const;
     std::vector<mu::Vec3> MU_CALLCONV calcWedgeSlots( mu::Vec3 apex, mu::Vec3 forward, int32 count, float spacingMult ) const;
+
+    // 슬롯 격자 간격의 단일 진실 공급원. 생성기(calcDenseSlots/calcWedgeSlots)와 장애물 회피
+    // 보정(findSafeFormationSlot의 minSpacing)이 반드시 같은 값을 봐야 한다 — 보정 쪽이 더 큰
+    // 값을 쓰면 모든 멤버가 자기 슬롯에서 탈락해 대형이 무너진다(pushCommandsToMembers 주석 참조).
+    float denseSlotSpacing( float spacingScale ) const {
+        float s = memberSeparationRadius_ * spacingScale;
+        return ( s < 1.2f ) ? 1.2f : s;
+    }
+    float wedgeColSpacing( float spacingMult ) const {
+        return std::max( memberSeparationRadius_ * 0.75f, 1.5f ) * ( spacingMult > 0.f ? spacingMult : 1.f );
+    }
+    float wedgeRowSpacing( float spacingMult ) const {
+        return std::max( memberSeparationRadius_ * 0.55f, 1.25f ) * ( spacingMult > 0.f ? spacingMult : 1.f );
+    }
 
     int32 squadId_;
     float memberAttackRange_;
