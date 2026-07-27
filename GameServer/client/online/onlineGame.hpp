@@ -374,6 +374,11 @@ private:
 	bool moveChange_{};
 	Seconds moveStateSendAcc_{0s};				// move 패킷 전송을 위한 시간 누산기
 	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
+
+	// C_MouseMove도 같은 20Hz 슬롯으로 묶는다. 예전엔 조준이 바뀐 프레임마다 보내서
+	// 프레임레이트 그대로(100~300Hz) 나갔다.
+	bool aimChange_{};
+	Seconds aimSendAcc_{0s};
 	
 	AnimSystem animSystem_{};
 

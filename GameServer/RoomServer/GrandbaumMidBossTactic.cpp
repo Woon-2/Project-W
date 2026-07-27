@@ -425,6 +425,12 @@ void GrandbaumMidBossTactic::issueShieldWall( Room& room, PlatoonLeader& leader 
     const auto& squads = leader.getSquads();
     uint32 targetId = selectNearestPlayerId( room, leader.pos() );
 
+    // 링 중심은 아래에서 1회 스냅샷된다. 임계를 깨는 그 히트의 넉백 잔여 속도가 남아 있으면
+    // (impulse 면역은 이후 임펄스만 막고 잔여 linearVel은 안 지운다) 보스가 캡처된 중심에서
+    // 계속 미끄러져 벽 밖으로 나가므로, 캡처 전에 XZ 속도를 여기서 끊는다. Y는 중력 보존.
+    mu::Vec3 residualVel = leader.body().linearVel();
+    leader.body().setLinearVel( mu::Vec3( 0.f, residualVel.y(), 0.f ) );
+
     mu::Vec3 leaderPos = leader.pos();
     mu::Vec3 playerCentroid = calcPlayerCentroid( room, leaderPos );
     mu::Vec3 forward = playerCentroid - leaderPos;

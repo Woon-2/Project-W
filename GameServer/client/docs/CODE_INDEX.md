@@ -393,13 +393,15 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
-| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1769,#1777,#1795` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(자유 함수 `equipPlayerWeapon`) |
-| `equipPlayerWeapon(Object&, const AssetManager&, PlayerWeaponType)` (자유 함수) | `object.hpp #1072` / `object.cpp #111` | 무기 모델의 SocketOffset 키로 장착 손 결정 → 양손 disequip 후 equip → `AnimBlenderPlayer::setWeaponType`으로 클립 세트 동기화. online(`onlineGame.cpp` setupPlayer/createOtherPlayer/syncLobbyCharacterWeapons)과 standalone 에디터(`Editor::Controller::applyWeaponToPlayer`) 공용 |
-| `Object::render()` 부속 객체 루프 | `object.cpp #1563` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
-| `Object::renderPortrait()` | `object.cpp #1596` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
-| `Object::renderPortraitEquipment()` | `object.cpp #1634` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
-| `Object::update()` | `object.cpp #1338` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
-| `Object::render()` | `object.cpp #1442` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
+| `Object::equip()/disequip()/getEquipment()` | `object.cpp #1583,#1591,#1609` | `equipments_`에 부속 객체 추가/제거. 무기 장착에 사용(자유 함수 `equipPlayerWeapon`) |
+| `equipPlayerWeapon(Object&, const AssetManager&, PlayerWeaponType)` (자유 함수) | `object.hpp #1012` / `object.cpp #73` | 무기 모델의 SocketOffset 키로 장착 손 결정 → 양손 disequip 후 equip → `AnimBlenderPlayer::setWeaponType`으로 클립 세트 동기화. online(`onlineGame.cpp` setupPlayer/createOtherPlayer/syncLobbyCharacterWeapons)과 standalone 에디터(`Editor::Controller::applyWeaponToPlayer`) 공용 |
+| `Object::render()` 부속 객체 루프 | `object.cpp #1373` | `equipments_` 순회: socketOffset\*bone.toDress\*boneXform\*offsetXform\*world 체인으로 재귀 render() |
+| `Object::renderPortrait()` | `object.cpp #1410` | 로비 포트레이트 전용. 스킨드 메시만 PBRSkinnedPipeline 채널로 제출 + 끝부분에서 `equipments_`를 `renderPortraitEquipment()`로 순회 |
+| `Object::renderPortraitEquipment()` | `object.cpp #1448` | 부속 객체(장착 무기) 전용. non-skinned 메시를 `addLobbyPortraitDrawEventStatic`(PBRPipeline 포트레이트 채널)로 제출 |
+| `Object::update()` | `object.cpp #1152` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
+| `Object::render()` | `object.cpp #1256` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함). 스킨드 deferred는 `bakedReady`(mode==Baked && hasEverUpdated && finalBakedClipId>0) 가드로 stale clipId=0(생성 직후 stretch) 방지 → boneXforms/T-pose 폴백 (graphicsArchitecture.md 참조) |
+| `Object::setCurrOrient()` | `object.cpp` (`setOrient` 바로 아래) | **네트워크 수신 전용 방향 갱신.** `setOrient`에서 `body_.snapToCurrent()`만 뺀 것. 그 한 줄이 `prev_=curr_`를 **BodyState 통째(위치 포함)** 수행해 `setCurrPos`가 세팅한 렌더 보간 세그먼트를 지웠고, 그 탓에 몬스터·보스가 보간 없이 매 패킷 순간이동했다. `setOrient`의 스냅은 텔레포트·초기 배치에서는 올바르므로 유지 |
+| `Object::netInterpAcc_/netInterpDuration_`, `noteNetArrival()`, `netStale()` | `object.hpp` | 서버 위치 구동 객체(원격 플레이어·몬스터)의 렌더 보간 상태. `tNet = min(acc/duration, 1)`. **duration은 고정 상수가 아니라 실측 도착 간격의 지수 평활값** — `noteNetArrival()`이 수신마다 갱신(clamp `[1/90s, 0.2s]`). 창이 실제 간격과 어긋나면 그 자체가 끊김이 된다(길면 되튐, 짧으면 조기 도착 후 정지). `netStale()`은 정지 판정으로 창의 2배·100ms 하한 |
 | `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
 | `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |

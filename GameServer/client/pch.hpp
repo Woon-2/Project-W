@@ -56,6 +56,7 @@
 #include "sepch.hpp"
 
 #include <Windows.h>
+#include <timeapi.h>   // timeBeginPeriod/timeEndPeriod (WIN32_LEAN_AND_MEAN이 mmsystem.h를 제외한다)
 #include <dxgi1_6.h>
 #include "d3dx12/include/directx/d3dx12.h"
 #include "d3dx12/include/directx/d3d12.h"
@@ -133,6 +134,7 @@
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment( lib, "d3d11.lib" )
+#pragma comment( lib, "winmm.lib" )   // timeBeginPeriod (SleepEx 타이머 해상도)
 
 using namespace std::literals;
 

@@ -212,9 +212,15 @@ static constexpr auto kTickPeriod = std::chrono::duration_cast<HighResolutionClo
 1. **게임플레이 튜닝값 재검토 필요.** 물리·NPC 이동속도·AI 상태 타이밍·스킬 지속시간이 모두
    ~20% 빨라진다(정확히는 *저작한 값대로* 돌아온다). 느린 클럭 기준으로 감각 튜닝된 수치가 있다면
    빠르게 느껴질 수 있다.
-2. **NPC 이동 브로드캐스트 대역폭 +20%.** 50Hz → 60Hz. `S_NpcMoveBatch`는 현재 매 틱 무조건
-   전송하는데(스로틀·델타 압축 없음), 클라 네트워크 보간 구간은 50ms(20Hz) 기준이다.
-   **20Hz 스로틀로 낮추면 대역폭 1/3 + 클라 보간 상수와 정합** — 권장 후속 과제.
+2. ~~**NPC 이동 브로드캐스트 대역폭 +20%.**~~ **2026-07-27 처리 완료.**
+   `S_NpcMoveBatch`를 **20Hz로 스로틀**했다(`Room::kNpcMoveBroadcastPeriodTicks = 3`,
+   `Room::update` 선두에서 `npcMoveBroadcastThisTick_` 판정 → `updateMonsterAI`/`updateTacticalAI`의
+   두 송신 지점이 **같은 틱에** 나가도록 공유). 시뮬은 60Hz 그대로다.
+   동기: 살아있는 NPC 242마리 × 43B ≒ 10KB 패킷이 60Hz면 **클라당 약 5MB/s**로 MTU를 훨씬 넘겨
+   TCP 세그먼트로 쪼개지고, 그 단편화 자체가 도착 지터가 되어 클라 보간을 흔들었다.
+   클라 쪽도 `netInterpDuration_`을 실측 도착 간격 추종으로 바꿔(`Object::noteNetArrival`)
+   레이트가 달라져도 정합이 유지된다. 배경: `client/docs/gameArchitecture.md` 게임 루프 8단계.
+   **남은 것:** 델타 압축·관심영역 컬링은 여전히 없다(거리 무관 전체 송신).
 3. **스킬 쿨타임은 자동 정상화.** `elapsedMs_`가 같은 틱 클럭을 누적하므로 별도 수정 불필요.
    (수정 전에는 서버 쿨타임이 실시간 기준 20% 길어 클라 예측이 통과시킨 시전을 서버가 거부할 수 있었다.)
 4. **고핑 환경의 fast-forward 리스크는 미해결.** `SkillSystem::startSkill`은 `[0, elapsedMs]`

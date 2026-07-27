@@ -45,10 +45,10 @@ void JobTimer::distribute() {
 	}
 
 	for (const TimerItem& item : readyItems) {
-		if (auto room = RoomManager::findRoom(item.jobData->roomId)) {
-			room->pushJob(item.jobData->job);
-		}
-		else {
+		// 조회와 push가 rmMtx_ 한 락 안에서 원자적으로 일어난다. 예전처럼 findRoom(락 안) 후
+		// pushJob(락 밖)으로 나누면 그 사이 방이 제거·반납되어 해제된 큐에 push할 수 있었다
+		// (docs/serverHandoff.md §4-P0 D의 (b) 경로).
+		if (!RoomManager::postJob(static_cast<int32>(item.jobData->roomId), item.jobData->job)) {
 			// 방이 존재하지 않는 경우, 작업을 실행할 수 없으므로 Job을 반환
 			ObjectPool<Job>::push(item.jobData->job);
 		}

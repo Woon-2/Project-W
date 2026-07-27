@@ -19,11 +19,11 @@
 | A | 서버 시뮬이 실시간의 **0.83배**로 흘러 스킬 히트가 최대 300ms 늦음 | `Room::update` 재예약 방식 | **수정 완료** |
 | B | 클라 스킬 VFX·SFX가 통째로 사라짐 (몬스터는 정상 피격) | 클라 `skillObjectById_` + 서버 id 발급량 | **수정 완료** |
 | C | `~Room()`이 룸 id를 **객체 id 풀에** 반납 → 중복 id | `Room::~Room` | **수정 완료** |
-| D | Room이 **자기 JobQueue 실행 중에 파괴**됨 (UAF) | `Room::leave` → `RoomManager::removeRoom` | **미수정 · 최우선** |
+| D | Room이 **자기 JobQueue 실행 중에 파괴**됨 (UAF) | `Room::leave` → `RoomManager::removeRoom` | **2026-07-27 수정 완료 (지연 파괴 reaper)** |
 | E | `Room::enter` 스냅샷이 사망 몬스터 포함 | `Room::enter` | 미수정 · 현 설계에선 미발화 |
 
-A·B·C는 검증까지 끝났다. **D는 서버 수명 관리 구조 문제라 서버 담당이 보는 게 맞다고 판단해
-남겨뒀다** — 아래 §4에 재현 조건과 수정 방향을 정리했다.
+A·B·C는 검증까지 끝났다. D는 클라 종료 시 실제 크래시로 발화해 지연 파괴(reaper)로 수정했다 —
+경위와 수정 내용은 §4-D 참조.
 
 ---
 
@@ -131,30 +131,40 @@ Room::init 1회 = 몬스터 232 + 거점 10 = 242개 id 소비 (현재 레벨 �
 
 우선순위 순.
 
-### P0 — D. Room이 자기 JobQueue 실행 도중에 파괴된다 (잠복 UAF)
+### ~~P0 — D. Room이 자기 JobQueue 실행 도중에 파괴된다 (잠복 UAF)~~ → **2026-07-27 수정 완료 (지연 파괴 reaper)**
 
-`Room::leave` → `RoomManager::removeRoom` → `ObjectPool<Room>::push` → `~Room()`이
-**그 룸의 `jobQueue_.execute()` 콜스택 안에서** 일어난다. `JobQueue::execute`는 잡 실행 후에도
-`jobCount_`를 만지므로 **해제된 메모리에 원자 연산**을 한다.
+원 문제: `Room::leave` → `RoomManager::removeRoom` → `ObjectPool<Room>::push` → `~Room()`이
+**그 룸의 `jobQueue_.execute()` 콜스택 안에서** 일어났다. 이후 두 경로로 해제된 메모리를 만졌다:
+(a) 같은 dequeue 배치의 잔여 잡(60Hz 틱 `update`)이 파괴된 Room에서 실행되고, execute 루프
+자체도 파괴된 큐에 `try_dequeue_bulk`/`jobCount_.fetch_sub`를 한다. (b) `JobTimer::distribute`가
+`findRoom`(락 안) 후 `pushJob`(락 밖)하는 사이 룸이 파괴될 수 있다(TOCTOU).
 
-`MemoryPool`은 LIFO라 다음 `ObjectPool<Room>::pop()`이 같은 블록을 돌려준다
-(실측: 룸 3회 생성/파괴가 전부 같은 주소). 새 Room이 그 자리에 오면 죽은 큐의 `fetch_sub`가
-**새 룸의 `jobCount_`를 음수로** 만들고, `push()`의 `prevCnt == 0` 게이트가 어긋나
-잡이 스케줄되지 않거나 `JobQueuePool`에 큐가 중복 등록되어 **두 워커가 한 Room의 잡을 동시에
-실행**한다. 그 순간 R6의 전제가 깨져 Room 상태 전체가 경쟁에 놓인다.
+**실제 발화(2026-07-27): 클라 종료(마지막 세션 leave) 시 서버 크래시.** 1차는
+`PhysicsWorld::solveConstraints`의 warm-cache 저장 루프, 재현 시엔 `JobQueue::execute`의
+`try_dequeue_bulk`에서 터졌다 — moodycamel이 producer별 서브큐라 leave 잡(IOCP 스레드 생산)과
+틱 잡(타이머 스레드 생산)의 순서가 비결정적이어서 **크래시 지점이 매번 다른 것**이 이 UAF의
+서명이다. (풀 LIFO 재활용으로 새 Room이 같은 블록에 와서 `jobCount_` 음수/큐 중복 등록으로
+R6 전제가 깨지는 잠복 경로도 같은 원인 — 실측 3회 생성/파괴 모두 동일 주소.)
 
-**왜 아직 안 터졌나:** 파괴(워커 스레드)와 다음 룸 생성 사이에 사람이 클라를 다시 켜는 수 초의
-간격이 있어서 죽은 큐의 `fetch_sub`가 먼저 끝난다. **파티 2팀이 붙거나 룸 종료 직후 새 파티가
-시작되면 물린다.**
+적용한 수정:
+- `RoomManager::removeRoom`은 **맵에서만 제거**하고 방을 `pendingDestroy_`로 이관.
+  신설 `sweepPendingRooms()`(JobTimer 스레드가 ~50ms 간격으로 호출, `RoomServer.cpp`)가
+  `JobQueue::idle()`(`executing_ == 0 && jobCount_ <= 0`, `ServerEngine/JobQueue.hpp`)을
+  **연속 2회** 관측한 뒤에만 `ObjectPool<Room>::push`한다.
+  `[RoomManager] room reaped id=N` 로그가 정상 반납 신호다.
+- `Room::closed_` 플래그: removeRoom 직전에 선다. `update()`는 틱 재예약을 끊고(큐에 남은 틱
+  잡은 no-op으로 소화), `enter()`는 입장을 거부하고 세션을 끊으며(코드 엔트리는 이미 지워져
+  재접속은 새 방을 만든다), `leave()`는 미아 잡을 무시한다. 이 enter 가드가 아래 "또 하나"의
+  `GameSession::enterRoom` 락-밖 포인터 사용 레이스도 함께 막는다.
+- `JobTimer::distribute`는 신설 `RoomManager::postJob(roomId, job)`으로 **조회와 push를
+  `rmMtx_` 한 락 안에서** 수행한다(TOCTOU 봉합). 락 순서는 기존
+  `findOrCreateRoomByCode`와 같은 rmMtx_ → jobTimerMtx_/풀 단방향이라 사이클 없음.
+- 곁들이: `RoomManager::removeRoom`과 `Room::move`의 `unordered_map::operator[]` → `find`
+  (없는 키에 nullptr을 삽입해 맵을 오염시키던 것). `DOUBLE REMOVE` 탐지·보고는 유지.
 
-수정 방향: `removeRoom`은 맵에서만 제거하고, 실제 반납은 해당 JobQueue가 유휴
-(`executing_ == 0 && jobCount_ <= 0`)임이 확인된 뒤 하는 **지연 파괴(reaper)**.
-곁들여 `RoomManager::removeRoom`과 `Room::move`의 `unordered_map::operator[]` → `find`
-(`operator[]`가 없는 키에 nullptr을 삽입하고, 그 nullptr이 `ObjectPool<Room>::push`로 가면
-`nullptr->~Room()`이다. 지금은 보고 후 반환하도록 막아뒀다).
-
-또 하나: `GameSession::enterRoom`이 `findOrCreateRoomByCode` 반환 포인터를 **락 밖에서** 쓴다.
-그 사이 다른 스레드가 룸을 파괴하면 해제된 메모리에 `doAsync`한다. 같이 정리하면 좋다.
+잔여 리스크(수용): Room*를 직접 들고 `doAsync`하는 스레드가 removeRoom **직후** push하는 극단
+레이스는 reaper 유예(유휴 연속 2회 관측 ≈ 최소 ~100ms)가 실질 방어한다. 완전 봉쇄가 필요해지면
+모든 외부 push를 roomId 경유(`postJob`)로 전면화할 것.
 
 ### P1 — 고핑 환경의 fast-forward 히트 윈도우 소실
 
@@ -164,11 +174,19 @@ Room::init 1회 = 몬스터 232 + 거점 10 = 242개 id 소비 (현재 레벨 �
 실측 핑 환경에서 재검증이 필요하다.
 해결안: fast-forward 중 스폰된 히트박스에 1틱 유예를 주거나, 구간을 스텝 시뮬레이션.
 
-### P2 — `S_NpcMoveBatch` 20Hz 스로틀
+### ~~P2 — `S_NpcMoveBatch` 20Hz 스로틀~~ → **2026-07-27 처리 완료**
 
-틱 수정으로 브로드캐스트가 50Hz → 60Hz로 늘었다. 현재 **매 틱 무조건 전송**(스로틀·델타 압축
-없음)인데 클라 네트워크 보간 구간은 50ms(20Hz) 기준이다. 20Hz로 낮추면 **대역폭 1/3 +
-클라 보간 상수와 정합**된다.
+`Room::kNpcMoveBroadcastPeriodTicks = 3`으로 20Hz 스로틀 적용(시뮬은 60Hz 유지).
+`Room::update` 선두에서 `npcMoveBroadcastThisTick_`을 판정해 `updateMonsterAI`/`updateTacticalAI`의
+두 송신 지점이 같은 틱에 나가도록 공유한다.
+
+이때 **클라에서 더 큰 결함 하나가 같이 발견돼 수정됐다** — `Object::setOrient`의
+`snapToCurrent()`가 위치 보간 세그먼트를 지워, 몬스터·보스가 보간 없이 매 패킷 순간이동하고
+있었다(`netInterpAcc_`/`tNet` 기계 전체가 죽은 코드였다). `Object::setCurrOrient()` 신설로 해결.
+상세: `client/docs/gameArchitecture.md` 게임 루프 8단계, `docs/roomTickCadence.md` §7-2.
+
+**남은 것:** 델타 압축·관심영역 컬링 없음(거리 무관 전체 송신), `S_NpcMoveBatch`에 서버
+타임스탬프가 없어 클라가 시간 정렬을 못 한다(`S_TimeSync` 오프셋은 송신 경로에서만 쓰인다).
 
 ### P3 — 게임플레이 튜닝값 재검토
 

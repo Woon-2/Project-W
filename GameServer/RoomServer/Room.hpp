@@ -140,6 +140,10 @@ public:
 		jobQueue_.push( job );
 	}
 
+	// 지연 파괴(reaper)용: RoomManager::sweepPendingRooms가 이게 참임을 확인한 뒤에만
+	// 방을 풀로 반납한다. docs/serverHandoff.md §4-P0 D.
+	bool jobQueueIdle() const { return jobQueue_.idle(); }
+
 	void doAsync(CallbackType&& callback) {
 		jobQueue_.doAsync(std::move(callback));
 	}
@@ -237,6 +241,20 @@ private:
 	// 사라져 있으면 안 된다. 둘 다 이 방의 JobQueue 전용이라 락이 필요 없다.
 	int32 pendingDbJobs_ = 0;
 	bool  closePending_ = false;
+
+	// RoomManager::removeRoom 직전에 선다. 이후 이 방은 지연 파괴 대기 상태다 — update()는
+	// 틱 재예약을 끊고, enter()/leave()는 미아 잡을 거부한다. 큐가 유휴가 되면
+	// sweepPendingRooms가 풀로 반납한다. docs/serverHandoff.md §4-P0 D.
+	bool  closed_ = false;
+
+	// S_NpcMoveBatch 송신 스로틀. 시뮬은 60Hz 그대로 돌리되 이동 브로드캐스트만 20Hz로 내린다.
+	// 이유 둘: ① 클라 보간 창이 실측 도착 간격을 따라가므로 레이트가 맞아야 t가 0→1을 꽉 채워
+	// 부드러워진다, ② 살아있는 NPC 242마리 × 43B ≒ 10KB 패킷이 60Hz로 나가면 클라당 약 5MB/s라
+	// MTU를 훨씬 넘겨 TCP 세그먼트로 쪼개지고 그 자체가 도착 지터가 된다. 1/3로 준다.
+	// 두 배치(일반 NPC / 전술 NPC)가 **같은 틱에** 나가야 클라에서 위상이 어긋나지 않는다.
+	static constexpr int32 kNpcMoveBroadcastPeriodTicks = 3;   // 60Hz / 3 = 20Hz
+	int32 npcMoveTickCounter_ = 0;
+	bool  npcMoveBroadcastThisTick_ = false;
 
 	// 인벤토리 로드/저장 잡을 건다. persistInventory는 변경이 없으면 아무것도 하지 않는다.
 	void requestInventoryLoad(GameSession* session);

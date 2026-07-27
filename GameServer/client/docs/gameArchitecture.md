@@ -61,6 +61,26 @@
      **주의:** 물리 step 클럭(`tPhysicInterpolation`)으로 보간하면 매 step마다 t가 0→1을 반복해, 이동이
      드물거나 멈춘 객체가 prev↔curr를 진동(땅속↔공중 깜빡임)한다 — 몬스터가 이 버그를 겪다가 원격
      플레이어와 동일한 tNet으로 통일해 해결.
+     **⚠ 과거 결함 2건 — 2026-07-27 수정 완료.** 원격 플레이어·보스가 끊겨 보이던 원인이다.
+
+     **① `setOrient`가 위치 보간 세그먼트를 파괴했다(근본 원인).** `Object::setOrient`는
+     `body_.snapToCurrent()`를 부르는데 이건 orient만이 아니라 **`BodyState` 통째(위치 포함)**
+     `prev_ = curr_`다. `moveGoblin`이 `setCurrPos` **뒤에** `setOrient`를 불러, 방금 세팅한
+     세그먼트가 그 자리에서 지워졌다 → `lerp(prev,curr,t)`가 항상 새 위치를 돌려줘
+     **몬스터·보스는 보간이 아니라 매 패킷 순간이동**했다(`netInterpAcc_`/`tNet`은 죽은 코드였다).
+     원격 플레이어도 `rotatePlayer`가 같은 함수를 썼고 `C_MouseMove`가 매 프레임 나가 상시 무효화.
+     → **`Object::setCurrOrient()` 신설**(`setOrient`에서 `snapToCurrent()`만 제외). 수신 경로 2곳 전환.
+     `setOrient`의 스냅은 텔레포트·초기 배치에서는 올바르므로 그대로 남겼다.
+
+     **② 보간 창이 실제 도착 간격과 불일치했다.** 창이 길면(50ms 창 + 16.7ms 도착) `t`가 1에 못
+     미친 채 리셋돼 세그먼트 시작점으로 되튀고, 짧으면(50ms 창 + 66.7ms 도착) 먼저 도착해놓고
+     남은 시간 정지한다 — 양쪽 다 끊김이다. → `netInterpDuration_`을 고정 상수에서
+     **실측 도착 간격의 지수 평활값**으로 바꿨다(`Object::noteNetArrival()`, clamp `[1/90s, 0.2s]`).
+     서버 송신 레이트가 바뀌어도 자동으로 맞는다. 정지 판정은 `netStale()`이 100ms 하한을 둔다.
+     함께 서버 `S_NpcMoveBatch`를 **20Hz로 스로틀**했다(`Room::kNpcMoveBroadcastPeriodTicks`) —
+     대역폭 1/3(242마리 ≒ 10KB 패킷이 60Hz면 클라당 약 5MB/s로 MTU를 넘겨 TCP 단편화 자체가
+     지터원이었다). `RoomServer/docs/roomTickCadence.md` §7-2.
+     
      **상수 불일치 → 해소(2026-07-27):** `Object`의 기본 `netInterpDuration_`은 50ms(20Hz, 원격
      플레이어 `S_Move` 기준)인데 몬스터의 `S_NpcMoveBatch`는 서버 **매 틱(60Hz, 16.7ms)** 전송이다.
      매 패킷 `netInterpAcc_`가 리셋되므로 `tNet`이 0.33을 넘지 못해, **서버 step의 1/3만 보간되고

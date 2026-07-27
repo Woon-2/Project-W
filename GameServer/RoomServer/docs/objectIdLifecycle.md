@@ -137,23 +137,19 @@ id 0은 별도로 위험하다 — `IdPool::init`의 주석대로 전술 AI가 `
 
 ## 4. 남은 원인 (미수정)
 
-### H3. Room이 자기 JobQueue 실행 도중에 파괴된다 — 잠복 UAF
+### ~~H3. Room이 자기 JobQueue 실행 도중에 파괴된다 — 잠복 UAF~~ → **2026-07-27 수정 완료**
 
 `Room::leave` → `RoomManager::removeRoom` → `ObjectPool<Room>::push` → `~Room()`이
-**그 룸의 `jobQueue_.execute()` 콜스택 안에서** 일어난다. `JobQueue::execute`는 잡 실행 후에도
-`jobCount_`를 만지므로 해제된 메모리에 원자 연산을 한다. `MemoryPool`은 LIFO라 다음
-`ObjectPool<Room>::pop()`이 같은 블록을 돌려주고(로그에서 3회 모두 `this=…BAFDA0`으로 동일
-주소 확인), 새 Room이 그 자리에 오면 **새 룸의 `jobCount_`가 음수**가 되어 `JobQueuePool`
-게이트가 어긋난다 → 잡이 스케줄되지 않거나 **두 워커가 한 Room의 잡을 동시에 실행**한다.
-Room은 "잡 큐 직렬화라 락이 없다"는 전제로 짜여 있으므로 그 순간 전 상태가 경쟁에 놓인다.
+**그 룸의 `jobQueue_.execute()` 콜스택 안에서** 일어났다. "단일 클라 재시작에서는 안 물린다"는
+당시 판단은 **틀렸다** — 새 Room 재활용 없이도, 같은 dequeue 배치의 잔여 틱 잡과 execute 루프
+자체가 파괴된 메모리를 만져 클라 종료 한 번으로 크래시했다(`PhysicsWorld::solveConstraints`
+warm-cache 루프 / `try_dequeue_bulk`에서 발현, 지점은 잡 순서에 따라 유동).
 
-**단일 클라 재시작 패턴에서는 안 물린다** — 파괴(워커 스레드)와 다음 룸 생성(사람이 클라를
-다시 켜는 수 초 뒤) 사이 간격이 충분해서 죽은 큐의 `fetch_sub`가 먼저 끝난다.
-**파티 2팀이거나 빠른 재접속이면 물린다.**
-
-수정 방향: `removeRoom`은 맵에서만 제거하고, 실제 반납은 해당 JobQueue가 유휴
-(`executing_ == 0 && jobCount_ <= 0`)임이 확인된 뒤 별도로 하는 **지연 파괴(reaper)**.
-곁들여 `removeRoom`/`Room::move`의 `unordered_map::operator[]` → `find`.
+**지연 파괴(reaper)로 수정**: `removeRoom`은 맵에서만 제거, `RoomManager::sweepPendingRooms`가
+`JobQueue::idle()` 연속 2회 관측 후 반납. `Room::closed_`가 틱 재예약·입장·미아 leave를 차단,
+`JobTimer::distribute`는 `RoomManager::postJob`으로 조회+push를 한 락에서 수행.
+`removeRoom`/`Room::move`의 `operator[]` → `find`도 처리.
+상세: `docs/serverHandoff.md` §4-D. 아래 감시 장치(§5)는 회귀 알람으로 계속 유지한다.
 
 ### H4. `Room::enter` 스냅샷이 죽은 몬스터를 그대로 보낸다 — 현 설계에선 발화 불가
 
@@ -179,6 +175,8 @@ scale(0,0,0) + orient(0,0,0,0)** 짜리 오브젝트를 만든다.
 
 - `reinitFromPool`에 `[EXPERIMENT] Bomber는 풀 재사용 금지` 임시 코드가 남아 있다.
 - `GameSession::enterRoom`이 `findOrCreateRoomByCode` 반환 포인터를 락 밖에서 쓴다.
+  → 2026-07-27: 지연 파괴 + `Room::enter`의 `closed_` 가드로 완화(닫힌 방 입장은 거부되고
+  세션이 끊겨 재접속 시 새 방을 만든다). serverHandoff.md §4-D 참조.
 
 ---
 
