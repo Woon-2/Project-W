@@ -5218,6 +5218,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		crystalsFrontAttackEffect_.update(simulationDeltaTime);
 		aoESlashGreenEffect_.update(simulationDeltaTime);
 		crystalsCrossFadeEffect_.update(simulationDeltaTime);
+		earthSpikeWarnEffect_.update(simulationDeltaTime);
+		earthSpikeEffect_.update(simulationDeltaTime);
 		redEnergyExplosionEffect_.update(simulationDeltaTime);
 		arrowEffect_.update(simulationDeltaTime);
 		arrowVolleyMuzzleEffect_.update(simulationDeltaTime);
