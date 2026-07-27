@@ -701,7 +701,8 @@ void Game::setupStage() {
 		UI::FinalScoreboard::Style{
 			.panelTexture = lobbyUI_.panelTexture(),
 			.buttonTexture = lobbyUI_.secondaryButtonTexture(),
-			.titleBannerTexture = assetManager_.tacticalZoneTitleBanner()
+			.titleBannerTexture = assetManager_.tacticalZoneTitleBanner(),
+			.revealEasing = UI::FinalScoreboard::Easing::EaseOut
 		},
 		[this]() { requestLobbyReturnFromScoreboard(); });
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
@@ -5198,6 +5199,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		}
 		inventoryPanel_.update(dtSec);
 		if (finalScoreboard_.isVisible()) {
+			finalScoreboard_.update(dtSec);
 			hideCombatHudForFinalScoreboard();
 		}
 		uiManager_.layout();

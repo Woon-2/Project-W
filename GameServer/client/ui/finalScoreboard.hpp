@@ -18,6 +18,12 @@ class FinalScoreboard {
 public:
 	static constexpr int kBossLastHitBonus = 50;
 
+	enum class Easing {
+		Linear,
+		EaseIn,
+		EaseOut
+	};
+
 	struct Entry {
 		std::wstring nickname;
 		int pickedItems = 0;
@@ -34,20 +40,25 @@ public:
 		const Texture* panelTexture = nullptr;
 		const Texture* buttonTexture = nullptr;
 		const Texture* titleBannerTexture = nullptr;
+		Easing revealEasing = Easing::EaseOut;
 	};
 
 	void build(UIManager& manager, Style style, std::function<void()> onExit);
 
 	// Entries are displayed in the order supplied by the game.
 	bool show(const std::vector<Entry>& entries);
+	void update(float deltaTimeSec);
 	void hide();
 	bool isVisible() const { return visible_; }
 
 private:
+	static float evaluateEasing(float t, Easing easing);
 	void syncToScreen();
+	float revealStartOffsetY() const;
 
 	UIManager* manager_ = nullptr;
 	UIElement* root_ = nullptr;  // owned by UIManager
+	UIElement* card_ = nullptr;  // owned by root_
 	std::array<UIElement*, 4> rowRoots_{};
 	std::array<Label*, 4> nameLabels_{};
 	std::array<Label*, 4> rankLabels_{};
@@ -59,6 +70,8 @@ private:
 	std::array<UIElement*, 4> mvpBadges_{};
 	std::array<UIElement*, 4> bossLastHitBadges_{};
 	std::function<void()> onExit_;
+	Easing revealEasing_ = Easing::EaseOut;
+	float revealElapsedSec_ = 0.f;
 	bool visible_ = false;
 };
 

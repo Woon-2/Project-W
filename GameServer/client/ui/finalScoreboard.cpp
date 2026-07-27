@@ -24,6 +24,8 @@ constexpr float kTotalX = 664.f;
 constexpr float kTotalWidth = kContentWidth - kTotalX;
 constexpr float kMetricWidth = 142.f;
 constexpr float kMetricGap = 5.f;
+constexpr float kRevealDurationSec = 0.55f;
+constexpr float kRevealTopPadding = 24.f;
 
 constexpr Color kInk{ 0.055f, 0.10f, 0.15f, 1.f };
 constexpr Color kMutedInk{ 0.26f, 0.34f, 0.40f, 1.f };
@@ -124,6 +126,9 @@ void FinalScoreboard::build(UIManager& manager, Style style,
 
 	manager_ = &manager;
 	onExit_ = std::move(onExit);
+	card_ = nullptr;
+	revealEasing_ = style.revealEasing;
+	revealElapsedSec_ = 0.f;
 	visible_ = false;
 	rowRoots_.fill(nullptr);
 	nameLabels_.fill(nullptr);
@@ -150,6 +155,7 @@ void FinalScoreboard::build(UIManager& manager, Style style,
 
 	auto* card = static_cast<Button*>(
 		overlay->addChild(std::make_unique<Button>()));
+	card_ = card;
 	card->name = "finalScoreboardCard";
 	card->anchor = Anchors::Center;
 	card->pivot = Pivots::Center;
@@ -302,7 +308,7 @@ void FinalScoreboard::build(UIManager& manager, Style style,
 }
 
 bool FinalScoreboard::show(const std::vector<Entry>& entries) {
-	if (!root_ || visible_) {
+	if (!root_ || !card_ || visible_) {
 		return false;
 	}
 
@@ -337,16 +343,49 @@ bool FinalScoreboard::show(const std::vector<Entry>& entries) {
 	}
 
 	syncToScreen();
+	revealElapsedSec_ = 0.f;
+	card_->offsetY = DimValue::px(revealStartOffsetY());
 	visible_ = true;
 	root_->visible = true;
 	return true;
 }
 
+void FinalScoreboard::update(float deltaTimeSec) {
+	if (!visible_ || !card_ || revealElapsedSec_ >= kRevealDurationSec) {
+		return;
+	}
+
+	revealElapsedSec_ = std::min(
+		revealElapsedSec_ + std::max(0.f, deltaTimeSec),
+		kRevealDurationSec);
+	const float t = revealElapsedSec_ / kRevealDurationSec;
+	const float easedT = evaluateEasing(t, revealEasing_);
+	card_->offsetY = DimValue::px(revealStartOffsetY() * (1.f - easedT));
+}
+
 void FinalScoreboard::hide() {
 	visible_ = false;
+	revealElapsedSec_ = 0.f;
 	if (root_) {
 		root_->visible = false;
 	}
+	if (card_) {
+		card_->offsetY = DimValue::px(0.f);
+	}
+}
+
+float FinalScoreboard::evaluateEasing(float t, Easing easing) {
+	t = std::clamp(t, 0.f, 1.f);
+	switch (easing) {
+	case Easing::Linear:
+		return t;
+	case Easing::EaseIn:
+		return t * t * t;
+	case Easing::EaseOut:
+		const float oneMinusT = 1.f - t;
+		return 1.f - oneMinusT * oneMinusT * oneMinusT;
+	}
+	return t;
 }
 
 void FinalScoreboard::syncToScreen() {
@@ -356,6 +395,15 @@ void FinalScoreboard::syncToScreen() {
 
 	root_->width = DimValue::px(manager_->screenWidth() / manager_->uiScale());
 	root_->height = DimValue::px(manager_->screenHeight() / manager_->uiScale());
+}
+
+float FinalScoreboard::revealStartOffsetY() const {
+	if (!manager_) {
+		return -(kCardHeight + kRevealTopPadding);
+	}
+
+	const float overlayHeight = manager_->screenHeight() / manager_->uiScale();
+	return -(overlayHeight + kCardHeight) * 0.5f - kRevealTopPadding;
 }
 
 }  // namespace UI
