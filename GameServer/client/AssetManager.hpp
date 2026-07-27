@@ -22,6 +22,17 @@ public:
 	void loadInventoryUIAssets(GFX& gfx);
 	void loadInventoryItemIcons(GFX& gfx, const ItemCatalog& catalog);
 
+	// ── 월드 드롭 보석 메시 ───────────────────────────────────────────────────
+	// 보석 6종의 비주얼 variant를 (종류, variant) 평탄 인덱스 하나로 보관한다.
+	// itemId는 resources/data/inventory.json의 2..7이며 서버 Room::spawnGemDrops와
+	// 같은 순서/개수를 쓴다(두 곳이 어긋나면 잘못된 메시가 뜬다).
+	static constexpr ItemId kFirstGemItemId  = 2;
+	static constexpr int    kGemKindCount    = 6;
+	static constexpr int    kGemVariants[kGemKindCount] = { 7, 5, 5, 5, 5, 5 };
+	static constexpr int    kGemMeshCount    = 7 + 5 + 5 + 5 + 5 + 5;
+	// 없는 조합이면 nullptr. variant는 종류별 개수로 랩된다(서버 값 방어).
+	const Model* gemModel(ItemId itemId, uint8_t variant) const;
+
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelStronghold() const { return &modelStronghold_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
@@ -142,6 +153,7 @@ private:
 	std::vector<std::shared_ptr<AnimClip>> mushroomAnimations_{};
 	Model modelCube_{};
 	Model modelStronghold_{};
+	std::array<Model, kGemMeshCount> gemModels_{};   // (종류, variant) 평탄 인덱스
 	Model modelPlayer_{};
 	// 무기 모델 (오른손 소켓 장착용, PlayerWeaponType별 1:1).
 	Model modelKatana_{};

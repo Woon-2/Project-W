@@ -51,6 +51,7 @@ ComPtr<ID3D12PipelineState> createPiercingMeshShader(ID3D12Device* device, ID3D1
 ComPtr<ID3D12PipelineState> createPiercingSlashMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createOutlineShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
 // Additive trail PSO targeting SceneColorHDR (R16G16B16A16_FLOAT) — rendered BEFORE
@@ -1266,6 +1267,34 @@ struct PerFrameData {           // 80B
 };
 
 }  // namespace TwoSidesShader
+
+// OutlineShader
+// Inverted-hull silhouette (CullMode = Front) expanded in clip space so the rim
+// keeps a constant pixel width at any distance. Additive into SceneColorHDR.
+namespace OutlineShader {
+
+// t0 — per-instance data in StructuredBuffer
+struct PerInstanceData {        // 96B
+    XMFLOAT4X4 world;           // 64B
+    XMFLOAT4   color;           // 16B  HDR (>1 feeds bloom)
+    float      thicknessPx;     // 4B
+    XMFLOAT3   pad;             // 12B
+};
+
+// b0 — per-drawcall
+struct PerDrawcallData {        // 16B
+    u32t    firstInstanceOffset; // 4B
+    XMUINT3 pad0;                // 12B
+};
+
+// b1 — per-frame
+struct PerFrameData {           // 80B
+    XMFLOAT4X4 matViewProj;     // 64B (row-major)
+    XMFLOAT2   invScreenSize;   // 8B
+    XMFLOAT2   cbpad;           // 8B
+};
+
+}  // namespace OutlineShader
 
 // TrailShader
 // Camera-facing ribbon strip rendered from a per-particle ring buffer.

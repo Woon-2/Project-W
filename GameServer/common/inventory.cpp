@@ -315,6 +315,30 @@ std::uint32_t Inventory::add(const ItemCatalog& catalog, ItemId itemId,
     return quantity;
 }
 
+bool Inventory::canFit(const ItemCatalog& catalog, ItemId itemId,
+                       std::uint32_t quantity) const {
+    if (quantity == 0)
+        return true;
+
+    const ItemDefinition* definition = catalog.find(itemId);
+    if (!definition || slots_.empty())
+        return false;
+
+    std::uint32_t remaining = quantity;
+    for (const ItemStack& stack : slots_) {
+        std::uint32_t room = 0;
+        if (stack.empty())
+            room = definition->maxStack;
+        else if (stack.itemId == itemId && stack.quantity < definition->maxStack)
+            room = definition->maxStack - stack.quantity;
+
+        if (room >= remaining)
+            return true;
+        remaining -= room;
+    }
+    return false;
+}
+
 bool Inventory::removeOne(std::size_t slotIndex) {
     if (slotIndex >= slots_.size() || slots_[slotIndex].empty())
         return false;

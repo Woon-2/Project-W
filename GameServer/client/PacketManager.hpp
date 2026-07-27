@@ -38,6 +38,8 @@ public:
 	static void handleSTacticalDialoguePacket( byte* buffer, int32 len );
 	static void handleSInventorySnapshotPacket(byte* buffer, int32 len);
 	static void handleSInventoryActionResultPacket(byte* buffer, int32 len);
+	static void handleSItemDropBatchPacket(byte* buffer, int32 len);
+	static void handleSItemDropRemovePacket(byte* buffer, int32 len);
 
 	// 계정
 	static void handleSRegisterPacket( byte* buffer, int32 len );
@@ -60,6 +62,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeCTimeSyncPacket(uint64 clientSendMs);
 	static std::shared_ptr<SendBuffer> makeCInventoryActionPacket(
 		uint32 revision, uint8 slotIndex, InventoryAction action);
+	static std::shared_ptr<SendBuffer> makeCItemPickupPacket(uint16 dropId);
 
 	static std::shared_ptr<SendBuffer> makeCEnterPacket(const EntryTicket& ticket, PlayerWeaponType weaponType);
 

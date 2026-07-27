@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -293,6 +293,7 @@
     <ClCompile Include="swordSlashPipeline.cpp" />
     <ClCompile Include="trailPipeline.cpp" />
     <ClCompile Include="twoSidesPipeline.cpp" />
+    <ClCompile Include="outlinePipeline.cpp" />
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="terrainChunkManager.cpp" />
     <ClCompile Include="zone.cpp" />
@@ -333,6 +334,7 @@
     <ClCompile Include="ui\sceneFadeTransition.cpp" />
     <ClCompile Include="ui\uiShapes.cpp" />
     <ClCompile Include="ui\pathGuideHUD.cpp" />
+    <ClCompile Include="ui\pickupPromptHUD.cpp" />
     <ClCompile Include="damageNumberSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -455,6 +457,7 @@
     <ClInclude Include="swordSlashPipeline.hpp" />
     <ClInclude Include="trailPipeline.hpp" />
     <ClInclude Include="twoSidesPipeline.hpp" />
+    <ClInclude Include="outlinePipeline.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="terrainChunkManager.hpp" />
     <ClInclude Include="zone.hpp" />
@@ -489,6 +492,7 @@
     <ClInclude Include="ui\sceneFadeTransition.hpp" />
     <ClInclude Include="ui\uiShapes.hpp" />
     <ClInclude Include="ui\pathGuideHUD.hpp" />
+    <ClInclude Include="ui\pickupPromptHUD.hpp" />
     <ClInclude Include="damageNumberSystem.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -637,6 +641,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="twoSides.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="outline.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

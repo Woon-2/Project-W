@@ -327,6 +327,7 @@ void GFX::init() {
 	shaders_.try_emplace("PiercingSlashMeshShader", createPiercingSlashMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("OutlineShader",   createOutlineShader(   device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShader",          createTrailShader(         device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderAdditive",  createTrailShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderHDR",       createTrailShaderHDR(      device_.Get(), defaultRootSig.get() ));
@@ -390,6 +391,7 @@ void GFX::init() {
 	drawEventsPiercingSlashMeshPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
+	drawEventsOutlinePipeline_.reserve(16u);   // 조준 대상 1개 수준
 	drawEventsTrailPipeline_.reserve(TrailPipeline::kMaxDrawEvents);
 	drawEventsTrailPipelineHDR_.reserve(128u);
 	drawEventsSkyboxPipeline_.reserve(10u);
@@ -673,6 +675,15 @@ void GFX::createSwapChain() {
 	);
 	resourcesTwoSidesPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof( TwoSidesShader::PerDrawcallData ), 256u, backBuffers_.size(), "TwoSides_PerDrawcallData"
+	);
+	resourcesOutlinePipeline_.perInstanceData.init(
+		device_.Get(), sizeof( OutlineShader::PerInstanceData ) * 16u, backBuffers_.size(), "Outline_PerInstanceData"
+	);
+	resourcesOutlinePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( OutlineShader::PerDrawcallData ), 16u, backBuffers_.size(), "Outline_PerDrawcallData"
+	);
+	resourcesOutlinePipeline_.perFrameData.init(
+		device_.Get(), sizeof( OutlineShader::PerFrameData ), backBuffers_.size(), "Outline_PerFrameData"
 	);
 	resourcesTwoSidesPipeline_.perFrameData.init(
 		device_.Get(), sizeof( TwoSidesShader::PerFrameData ), backBuffers_.size(), "TwoSides_PerFrameData"
@@ -1219,6 +1230,18 @@ void GFX::addCameraData( const TwoSidesPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const TwoSidesPipeline::FrameData& frameData ) {
 	frameDataTwoSidesPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const OutlinePipeline::DrawEvent& drawEvent ) {
+	drawEventsOutlinePipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const OutlinePipeline::CameraData& cameraData ) {
+	cameraDataOutlinePipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const OutlinePipeline::FrameData& frameData ) {
+	frameDataOutlinePipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( TrailPipeline::DrawEvent&& drawEvent ) {
@@ -2211,6 +2234,19 @@ void GFX::render() {
 		sceneColorRoomIdx
 	);
 
+	// 상호작용 강조 실루엣: inverted hull을 SceneColorHDR에 가산 합성한다(bloom 전이라
+	// HDR 색이 그대로 발광으로 이어진다). 드로우콜이 프레임당 1개 수준이라 Hi-Z 컬링 대상이 아니다.
+	auto outlineDispatcher = OutlinePipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "OutlineShader" ),
+		submitter_.get(), viewport, clRect,
+		energyOrbRtv, depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesOutlinePipeline_, &cmdListPool_,
+		std::move( drawEventsOutlinePipeline_ ),
+		cameraDataOutlinePipeline_, frameDataOutlinePipeline_,
+		sceneColorRoomIdx
+	);
+
 	// Path-guidance ribbons: additive trail into SceneColorHDR (before bloom, so it
 	// glows). Independent resources from the post-resolve trail pass. Always additive,
 	// so the HDR PSO is bound for both PSO slots.
@@ -2801,6 +2837,9 @@ void GFX::render() {
 			// Boss heat-distortion glow: additive tinted halo into SceneColorHDR, before bloom.
 			heatDistortionDispatcher.updateGPUDataSingleThreaded();
 			heatDistortionDispatcher.drawSingleThreaded();
+			// 상호작용 강조 실루엣: SceneColorHDR에 가산, bloom 전.
+			outlineDispatcher.updateGPUDataSingleThreaded();
+			outlineDispatcher.drawSingleThreaded();
 		}
 
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).
