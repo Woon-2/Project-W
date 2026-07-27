@@ -23,6 +23,7 @@
 #include "../ui/UIManager.hpp"
 #include "../ui/settingsPanel.hpp"
 #include "../ui/finalScoreboard.hpp"
+#include "../ui/sceneFadeTransition.hpp"
 #include "lobbyUI.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Label.hpp"
@@ -632,7 +633,7 @@ private:
 	u32t finalBossRewardCorpseId_ = 0u;
 	bool finalBossRewardCorpseTracked_ = false;
 	bool finalBossRewardOrbsSpawned_ = false;
-	bool pendingLobbyReturn_ = false;
+	UI::SceneFadeTransition lobbyReturnFade_{};
 
 	// Final-boss HUD. Presentation is armed only by this client's local Arena_Boss
 	// enter callback, so another player entering the room cannot reveal it here.

@@ -839,8 +839,22 @@ void Game::showFinalScoreboard() {
 }
 
 void Game::requestLobbyReturnFromScoreboard() {
-	if (finalScoreboard_.isVisible()) {
-		pendingLobbyReturn_ = true;
+	if (!finalScoreboard_.isVisible()) {
+		return;
+	}
+
+	const bool started = lobbyReturnFade_.start([this]() {
+		if (INet::ClientApp::returnToLobbyServer()) {
+			finalScoreboard_.hide();
+			lobbyLeaveRoom();
+			enterLobby();
+		}
+		else {
+			gSharedLog << "[Result] 인증된 LobbyServer 연결이 없어 로비로 복귀하지 못했습니다.\n";
+		}
+	});
+	if (started) {
+		uiManager_.resetInteractionState();
 	}
 }
 
@@ -4513,6 +4527,8 @@ void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
 void Game::update(Milliseconds deltaTime) {
 	// 설정창에서 바뀐 디스플레이 설정(해상도/전체화면)을 씬 갱신/렌더 이전(프레임 안전 지점)에 적용한다.
 	applyPendingDisplaySettings();
+	lobbyReturnFade_.update(
+		std::chrono::duration<float>(deltaTime).count());
 
 	switch (scene_) {
 	case Scene::Lobby:  LobbyScene(deltaTime);  break;
@@ -4550,19 +4566,6 @@ void Game::refreshSkillCtx() {
 
 void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
-
-	// Button callbacks run inside UIManager's window-message dispatch. The actual
-	// widget-tree rebuild and socket hand-back therefore happen here, at a frame-safe point.
-	if (pendingLobbyReturn_) {
-		pendingLobbyReturn_ = false;
-		if (INet::ClientApp::returnToLobbyServer()) {
-			finalScoreboard_.hide();
-			lobbyLeaveRoom();
-			enterLobby();
-			return;
-		}
-		gSharedLog << "[Result] 인증된 LobbyServer 연결이 없어 로비로 복귀하지 못했습니다.\n";
-	}
 
 	updateServerTimeSync();
 
@@ -5578,6 +5581,8 @@ void Game::renderInGame() {
 	}
 
 	uiManager_.render(gfx_);
+	lobbyReturnFade_.render(
+		gfx_, uiManager_.screenWidth(), uiManager_.screenHeight());
 
 	static const auto uiT0 = std::chrono::steady_clock::now();
 	const float uiTimeSec = std::chrono::duration<float>(
@@ -5609,7 +5614,6 @@ void Game::enterLobby() {
 	finalBossRewardCorpseId_ = 0u;
 	finalBossRewardCorpseTracked_ = false;
 	finalBossRewardOrbsSpawned_ = false;
-	pendingLobbyReturn_ = false;
 	finalScoreboard_.hide();
 
 	// Returning from gameplay leaves many HUD widgets mounted in the shared UI tree.
@@ -6048,6 +6052,8 @@ void Game::renderLobby() {
 	}
 
 	uiManager_.render(gfx_);
+	lobbyReturnFade_.render(
+		gfx_, uiManager_.screenWidth(), uiManager_.screenHeight());
 
 	auto frameDataUI = UIPipeline::FrameData{
 		.screenWidth  = static_cast<float>(gClientRect.right - gClientRect.left),
@@ -6118,6 +6124,8 @@ void Game::renderWaitingRoom() {
 	}
 
 	uiManager_.render(gfx_);
+	lobbyReturnFade_.render(
+		gfx_, uiManager_.screenWidth(), uiManager_.screenHeight());
 	gfx_.addFrameData(UIPipeline::FrameData{
 		.screenWidth  = static_cast<float>(gClientRect.right - gClientRect.left),
 		.screenHeight = static_cast<float>(gClientRect.bottom - gClientRect.top)
@@ -6141,7 +6149,7 @@ void Game::enterInGame() {
 	finalBossRewardCorpseId_ = 0u;
 	finalBossRewardCorpseTracked_ = false;
 	finalBossRewardOrbsSpawned_ = false;
-	pendingLobbyReturn_ = false;
+	lobbyReturnFade_.cancel();
 	finalScoreboard_.hide();
 	pendingStart_ = false;
 	localArenaPresentationZoneId_ = -1;
@@ -6536,6 +6544,23 @@ void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, c
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	// The full-screen fade is modal: ignore UI activation while the old scene is
+	// disappearing and while the newly built lobby is being revealed.
+	if (lobbyReturnFade_.active()) {
+		switch (msg) {
+		case WM_MOUSEMOVE:
+		case WM_LBUTTONDOWN:
+		case WM_LBUTTONUP:
+		case WM_RBUTTONDOWN:
+		case WM_RBUTTONUP:
+		case WM_MOUSEWHEEL:
+		case WM_KEYDOWN:
+		case WM_KEYUP:
+		case WM_CHAR:
+			return 0;
+		}
+	}
+
 	// Dialogue input has priority during gameplay, but the topmost settings modal
 	// must receive pointer/key input while it is open.
 	if (!settingsPanel_.isOpen()
