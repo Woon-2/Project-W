@@ -53,9 +53,18 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 ### vfxId 바인딩 (필수 선결 조건)
 
 `vfxId`는 런타임에 실제 `ParticleEffect`로 매핑되어야 한다. 이 매핑은 lua가 아니라 C++에서 한다:
-`standalone/game.cpp`와 `online/onlineGame.cpp`의 `skillVfxById_[vfxId] = &someEffect_` (현재 1~18 사용).
+`standalone/game.cpp`와 `online/onlineGame.cpp`의 `skillVfxById_[vfxId] = &someEffect_` (현재 1~20 사용).
 **새 이펙트를 쓰려면** 해당 `ParticleEffect`를 빌드하고 `skillVfxById_`에 바인딩해야 PlayVFX가 동작한다.
 바인딩되지 않은 `vfxId`는 조용히 무시된다(no-op). 서버는 VFX를 항상 무시한다.
+**두 파일 모두** 고쳐야 한다(online/standalone 미러) — 한쪽만 바인딩하면 그 모드에서만 안 보인다.
+
+> **⚠ 이펙트 색을 코드로 바꿀 때**: `tint = ctx.tint * mat.color`는 **곱셈**이라 색을 뺄 수만 있고
+> 더할 수 없다. 즉 **채도가 있는 텍스처는 원하는 색으로 못 바꾼다** — 예를 들어
+> `CrystalFree1.dds`(평균 RGB 0.03/0.36/0.73, 채도 0.99)에 갈색을 곱하면 R이 0.03×배율이라
+> **거의 검정**이 된다. 임의 색이 필요하면 ① 채도 0 텍스처(`Stone`/`Circle`/`magic_circle`/`Noise*`)를
+> 쓰거나 ② 색이 전부 코드 값인 메시 소재(`ps::MatTwoSides`)를 쓴다.
+> 또한 이펙트 JSON은 `mainTexture: null`로 익스포트되므로 **텍스처는 항상 C++에서 주입**해야 한다 —
+> `mat.mainTex == nullptr`이면 `submitParticleDraw`가 즉시 return해서 **아무것도 안 그려진다**.
 
 ---
 
@@ -69,7 +78,7 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 | `BodyAttach("bone", {pitch=})` | **애니메이션 독립**: 해당 뼈의 rest(bind) 프레임 + 조준 pitch(본 원점 피벗). OBB는 BoneAttach와 동일 본-로컬 공간. 무기/클립 바뀌어도 고정. 플레이어 근접은 `BodyAttach("spine_01")`(chest 피벗). `pitch=false`=yaw 전용 평탄(지면 링 등). `docs/aimPitchUpperBodyMask.md` §6.5 |
 | `BoneAttach("")` / attach 생략 (PlayVFX) | 시전자 루트(캐릭터 위치+방향) |
 | `VFXParticleAttach(vfxId, sysIdx)` (히트박스) | 해당 이펙트의 파티클들 — 파티클마다 히트박스 1개 |
-| `GroundAttach{}` (히트박스) | **시전자 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=시전자 전방/우측 오프셋, center.y=표면 위 높이. 기본은 OBB별 독립 스냅(분산 융기). `anchor=N`이면 `SetGroundAnchor`로 등록한 앵커 프레임에 강체 배치(점 충돌). `align=true`면 지면 노멀로 기울임(분산 모드) |
+| `GroundAttach{}` (히트박스) | **시전 앵커 상대 지점을 지면에 스냅해 정적 고정**(시전자 추종 X). 지면 AoE·솟구치는 기둥용. center.x/z=앵커 전방/우측 오프셋, center.y=표면 위 높이. 기본은 OBB별 독립 스냅(분산 융기). `anchor=N`이면 `SetGroundAnchor`로 등록한 앵커 프레임에 강체 배치(점 충돌). `align=true`면 지면 노멀로 기울임(분산 모드). **시전 앵커는 보통 시전자 자신이지만, 서버가 대상 위에 심어 relay할 수도 있다**(대상 지정형 — §3.5 (4)) |
 
 - **OBB 회전(`orient`)** 과 **PlayVFX `orient`** 는 모두 `{yaw, pitch, roll}` (도) 동일 규약.
 - 뼈에 붙은 박스는 `applyAttachRotation`으로 뼈 회전 추종 여부를 정한다:
@@ -112,7 +121,15 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 | `particleCollision` | (없음) | 이펙트 **파티클**의 지면 충돌: `"GroundStop"`/`"GroundKill"`/`"GroundBounce"`. GroundKill은 착탄 시 Death 서브이미터로 임팩트 버스트(JSON 무수정, sub-emitter 제외 top-level에만 적용) |
 | `particleConform` | (없음) | 이펙트 **파티클**의 스폰 지면 컨폼: `"SnapY"`/`"SnapAndAlign"`(면적 emitter가 슬로프 따라 안착) |
 | `flipX` | false | **메시 이펙트를 좌우 반전**(시전자 right축을 rest 프레임에서 반사). 베기 호(arc) 방향을 캐릭터 스윙 방향에 맞출 때. 메시의 author된 로컬 축과 무관하게 플레이어 기준 수평으로 뒤집힘. 메시 파이프라인이 양면(CULL_NONE)이라 반사 winding도 렌더됨. 서버는 코스메틱이라 무시 |
-| `attach` | 루트 | `BoneAttach(name)`; 생략 시 시전자 루트 |
+| `attach` | 루트 | `BoneAttach(name)`; 생략 시 시전자 루트. **`GroundAttach{}`이면 시전자가 아니라 시전 앵커 기준**(아래) |
+
+> **`attach = GroundAttach{}` (PlayVFX)**: 이펙트를 시전자가 아니라 `SkillInstance::castAnchor`
+> 프레임에 배치한다. 보통 앵커는 시전자 자신의 pos+yaw라 차이가 없지만, **대상 지정 시전**에서는
+> 서버가 앵커를 대상 위에 심어 relay하므로(`S_SkillStart::castAnchor*`) 이펙트가 대상 발밑에서
+> 재생된다. 같은 프레임을 `GroundAttach` 히트박스가 쓰므로 **연출과 판정이 항상 같은 지점**이다.
+> `offset`은 그 프레임에서 적용되며, 표면에 앉히려면 `groundSnap`을 함께 켠다.
+> ⚠ 앵커 오버라이드는 **XZ 전용(Y=0 강제)**이라 소비자는 반드시 ground-snap 해야 한다.
+> 실제 사용례: `resources/skills/grandbaum_earth_spike.lua`.
 
 > **형상 크기(원형 반지름 M, 부채꼴 반지름 R·각도 A)는 PlayVFX가 아니라 이펙트 프리팹 `.json`의
 > shape config에 작성한다** (`shapeType`: Cone/Circle/Sphere…, `radius`, `angle`, `arc`).
@@ -234,8 +251,11 @@ skill.cooldownMs = 1400      -- 시전 쿨다운. 권장: totalDurationMs보다 
 >   - `particleCollision`은 **top-level 시스템에만** 적용된다(서브이미터=임팩트 버스트가 착탄점에서
 >     스폰되자마자 죽지 않도록 제외).
 > - 세부 수치(반발 계수, 표면 오프셋)는 lua로 노출하지 않고 엔진 기본값을 쓴다(필요 시 차후 확장).
-> - `SnapAndAlign`의 노멀 정렬(기울임)은 **메시 파티클**에만 보인다. Billboard/StretchedBillboard는
->   카메라를 향하므로 기울지 않지만, `SnapY`(지면 높이 스냅)는 빌보드에도 적용된다.
+> - `SnapAndAlign`의 노멀 정렬(기울임)은 **메시 파티클**에만 보인다. `SnapY`(지면 높이 스냅)는
+>   빌보드에도 적용된다. 이유: 정렬은 파티클 `baseRotation`을 기울이는데, 빌보드가 실제로 쓰는 회전은
+>   `billboardRotation3D`(= `main.startRotation3D` 오일러)라 서로 다른 값이다. 빌보드를 지면에 눕히려면
+>   `renderer.alignment = Alignment::World` + **C++ cfg의 `startRotation3D`를 X축 -90°로** 직접 세팅해야
+>   하며, 이건 슬로프를 따르지 않는 고정 방향이다(예: `earthSpikeWarnEffect_`).
 > - **클라 전용(시각).** 서버는 파티클이 없으므로 무시한다.
 > - 비용: 충돌은 낙하 파티클당 프레임 1회 지형 질의(`vel.y<0` 게이트). 수천 개 방출 emitter는 주의.
 
@@ -248,14 +268,16 @@ attach = { type = "Ground", align = false }
 시전자를 따라다니지 않고 **시전 시점에 지면에 박혀 정적**으로 남는 판정 박스. 지면 AoE·솟구치는 기둥용.
 
 - **앵커** = 시전 순간의 시전자 위치 + yaw(바라보는 방향). 시전 후 이동해도 박스는 그 자리에 남는다.
+  (서버가 **대상 위에 앵커를 심어 보낼 수도 있다** — 아래 (4). 그 경우에도 yaw는 시전자 것이다.)
 - `localOBBs`의 각 `OBB(cx, cy, cz, hx, hy, hz, ...)`:
   - `cx` = 시전자 기준 **우측(+)/좌측(−)** 오프셋(m)
   - `cz` = 시전자 기준 **전방(+)** 오프셋(m) — XZ는 시전 yaw로 회전되어 "전방 6m"가 시전 방향을 따른다
   - `cy` = **지면 표면 위 높이**(m). `0`이면 박스 중심이 표면 높이에 옴
   - `hx/hy/hz` = 반치수(반지름)
 - `align = true`: OBB를 지면 노멀로 기울임(급경사에서 박스가 기우니 보통 `false`). **분산 모드에서만** 의미가 있다(점 충돌 모드는 등록 앵커의 align이 결정).
-- **결정론:** 클라/서버가 같은 시전자·같은 지형에서 같은 위치를 계산하므로, 신규 패킷 없이 서버 권위
-  판정과 클라 예측이 일치한다(서버도 Ground attach를 미러).
+- **결정론:** 시전자 상대 앵커라면 클라/서버가 같은 시전자·같은 지형에서 같은 위치를 계산하므로,
+  **신규 패킷 없이** 서버 권위 판정과 클라 예측이 일치한다(서버도 Ground attach를 미러).
+  대상 지정 앵커는 서버가 정한 값을 relay해 같은 정합을 얻는다 — (4) 참조.
 
 **두 배치 모드 — 분산 융기 vs 점 충돌**
 
@@ -291,6 +313,27 @@ end
 - **이펙트와의 일치:** 점 충돌은 단일 원점 폭발 VFX(`groundSnap`, `groundAlign=false`)와 분포가 맞아떨어진다.
   VFX를 `groundAlign`하지 않으면 앵커도 `align=false`(똑바로)로 두는 것이 자연스럽다.
 
+#### (4) 대상 지정 앵커 — 떨어진 대상 발밑에 꽂기
+
+여기까지의 지면 스킬은 전부 **시전자 상대**다. 시전자에게서 떨어진 **특정 대상의 발밑**에 꽂으려면
+시전 앵커 자체를 대상 위로 옮긴다. lua에는 스위치가 없다 — **시전 측(서버)이 결정**한다.
+
+```cpp
+// 서버: 대상 위치를 앵커로 넘긴다 (RoomServer)
+room.skillStartInternal(casterId, skillId, seed, damageScale, &anchorWorldPos);
+```
+
+- `S_SkillStart`의 `castAnchorValid/X/Z`로 전 클라에 relay → 클라 예측과 서버 권위가 같은 XZ를 쓴다
+  (`skillSeed`/`aimPitchRadian`과 동일한 패턴). `castAnchorValid==0`이면 기존 동작 그대로다.
+- **yaw는 여전히 시전자 것**이다. 그래서 OBB의 `cx`(우측)/`cz`(전방)가 계속 "시전자 기준"으로 읽힌다.
+- ⚠ **XZ 전용 — Y는 양측에서 0으로 강제된다.** 소비자는 **반드시 ground-snap** 해야 한다
+  (`GroundAttach` 히트박스와 `groundSnap` PlayVFX는 자동으로 한다). 스냅을 빠뜨린 스킬은 양측에서
+  똑같이 눈에 띄게 깨지므로 조용한 desync는 생기지 않는다.
+- 이펙트도 같은 앵커에 놓으려면 PlayVFX에 **`attach = GroundAttach{}`**를 준다(§3.2). 안 주면
+  히트박스만 대상 발밑으로 가고 이펙트는 시전자 발밑에 남는다.
+- 대상 지정 스킬은 **앵커가 추적하지 않는다** — 시전 시점에 고정된다. 예고(텔레그래프)를 두면
+  그 자체가 회피 창이 된다. 실제 사용례: `resources/skills/grandbaum_earth_spike.lua`.
+
 #### 조합 요약
 
 | 원하는 효과 | 사용 도구 |
@@ -300,6 +343,7 @@ end
 | 굴곡 지면에 솟는 기둥/면적 안착 | PlayVFX `particleConform="SnapAndAlign"` |
 | 분산 기둥 그리드(각자 발밑 스냅) | SpawnHitbox `attach=GroundAttach{}`(기본) |
 | 점 충돌 클러스터(메테오 폭발 링) | `SetGroundAnchor`로 앵커 등록 + 각 SpawnHitbox `attach=GroundAttach{anchor=N}` |
+| **떨어진 대상 발밑에 꽂기** | 서버가 `skillStartInternal(..., &anchorPos)` + PlayVFX `attach=GroundAttach{}` |
 
 > 전체 설계·내부 동작은 `docs/terrainInteractingSkills.md` 참조.
 

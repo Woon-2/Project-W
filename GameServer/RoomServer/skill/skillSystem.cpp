@@ -218,7 +218,8 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                            Milliseconds initialElapsed, u32t seed, float damageScale) {
+                            Milliseconds initialElapsed, u32t seed, float damageScale,
+                            const mu::Vec3* anchorPosOverride) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
@@ -230,6 +231,17 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
     inst.seed        = seed;
     inst.damageScale = damageScale;
     captureCastAnchor(inst, lookupObject(ctx, ownerObjectId));
+    // Targeted ground skills: keep the caster's yaw (so OBB/offset stay caster-facing) but
+    // plant the anchor on the target.
+    // INVARIANT: the override is XZ-only -- Y is forced to 0 because S_SkillStart relays only
+    // XZ. Every consumer must ground-snap (AttachType::Ground hitboxes and groundSnap PlayVFX
+    // both do). Zeroing it here rather than trusting the caller keeps client and server
+    // byte-identical, so a skill that forgets to snap breaks visibly on both sides instead of
+    // silently desyncing. MIRROR: client/skill/skillSystem.cpp.
+    if (anchorPosOverride) {
+        inst.castAnchor.pos   = mu::Vec3(anchorPosOverride->x(), 0.f, anchorPosOverride->z());
+        inst.castAnchor.valid = true;
+    }
 
     // NOTE: events in [0, initialElapsed] are dispatched here without any collision pass
     // (checkHitboxCollisions only runs from update()). A hitbox whose Spawn AND Destroy both
@@ -526,6 +538,18 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 
         mu::Mat4x4 baseXform = mu::Mat4x4(owner->orient()) * mu::translate(owner->pos());
 
+        // Ground attach: the effect belongs to the cast anchor, not the caster. This is what
+        // lets a targeted ground skill erupt under a distant player -- the same anchor the
+        // Ground-attach hitboxes use, so visuals and judgement share one frame. The anchor
+        // frame is pure yaw + translation, so the yawOnly/basis code below stays correct.
+        // MIRROR: client/skill/skillSystem.cpp.
+        const bool hasGroundAttach = (p.attachType == static_cast<u8t>(AttachType::Ground));
+        if (hasGroundAttach) {
+            if (!inst.castAnchor.valid) captureCastAnchor(inst, owner);
+            baseXform = mu::rotateYH(mu::Radian{ inst.castAnchor.yaw })
+                      * mu::translate(inst.castAnchor.pos);
+        }
+
         const bool hasBoneAttach = (p.attachType == static_cast<u8t>(AttachType::Bone) &&
                                     p.attachTargetName[0] != '\0');
         if (hasBoneAttach && owner->model() && !owner->model()->skeleton.empty()) {
@@ -556,6 +580,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         // MIRROR: client/skill/skillSystem.cpp PlayVFX uses owner->aimPitch().
         const float aimPitch = (!(p.flags & kPlayVFXFlagYawOnly) &&
                                 !(p.flags & kPlayVFXFlagGroundSnap) &&
+                                !hasGroundAttach &&
                                 !hasBoneAttach) ? owner->cameraPitch() : 0.f;
         mu::Mat4x4 aim = (aimPitch != 0.f)
             ? eulerOff * mu::rotateXH(mu::Radian(aimPitch)) * baseRot

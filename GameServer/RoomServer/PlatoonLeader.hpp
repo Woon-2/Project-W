@@ -32,6 +32,12 @@ public:
     // Casts a random skill attack (boss reuses its base-monster skill roster + damageScale).
     // Returns false if no skills are registered, so the tactic falls back to direct-damage melee.
     bool             castSkillAttack( Room& room );
+    // Casts one NAMED skill with its cast anchor planted at anchorPos (targeted ground skills).
+    // Unlike castSkillAttack this bypasses the random roster and takes an explicit damageScale,
+    // so a dedicated boss skill can author its own damage instead of inheriting the boss's
+    // attackDamageScale. Returns false only when skillId is 0 (name lookup failed).
+    bool MU_CALLCONV castSkillAt( Room& room, uint32 skillId, std::string_view clipKey,
+                                  mu::Vec3 anchorPos, float damageScale );
 
 private:
     std::vector<TacticalSquad*>     squads_;

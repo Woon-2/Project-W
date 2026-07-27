@@ -262,8 +262,13 @@ public:
                    u32t seed = 0);
     // Overload for late-joiners: starts the skill with an initial elapsed time offset
     // (used by remote clients receiving S_SkillStart mid-skill).
+    // `anchorPosOverride`: when non-null, the cast anchor is planted at this world position
+    // instead of the caster's own (yaw still comes from the caster). Relayed by
+    // S_SkillStart::castAnchor* so a targeted ground skill lands where the server judged it.
+    // MIRROR: RoomServer/skill/skillSystem.hpp.
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                   Milliseconds initialElapsed, u32t seed = 0);
+                   Milliseconds initialElapsed, u32t seed = 0,
+                   const mu::Vec3* anchorPosOverride = nullptr);
 
     // Pushes the prebuilt per-system gameplay configs (SkillAsset::vfxDefs,
     // built by buildVfxGameplayConfigs) into the bound ParticleEffect systems

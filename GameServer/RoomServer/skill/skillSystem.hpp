@@ -295,8 +295,12 @@ public:
     // it drives the deterministic VFXParticle hitbox sampler.
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
                    u32t seed = 0);
+    // `anchorPosOverride`: when non-null, the cast anchor is planted at this world position
+    // instead of the caster's own (yaw still comes from the caster). Lets an NPC drop a
+    // Ground-attach skill under a distant target. Null = every existing skill's behaviour.
     int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
-                   Milliseconds initialElapsed, u32t seed = 0, float damageScale = 1.0f);
+                   Milliseconds initialElapsed, u32t seed = 0, float damageScale = 1.0f,
+                   const mu::Vec3* anchorPosOverride = nullptr);
 
     void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);
     void update(Milliseconds dt, SkillDispatchContext& ctx);

@@ -57,8 +57,10 @@ void ClientApp::release() {
 
 	game_.reset();                                         // 게임/워커 먼저(추가 send 차단)
 	if ( serverSession_ )  serverSession_->closeAndDrain();  // 소켓 닫고 잔여 완료 APC 드레인
+	if ( lobbySession_ )   lobbySession_->closeAndDrain();
 	if ( retiredSession_ ) retiredSession_->closeAndDrain();
 	serverSession_.reset();                                // 이제 overlapped 안전 파괴
+	lobbySession_.reset();
 	retiredSession_.reset();
 
 	// 게임 파괴 이후(잔여 SFX 트리거가 더 없는 시점) 오디오 엔진을 정리한다.
@@ -83,10 +85,19 @@ Online::Game* ClientApp::onlineGame() {
 }
 
 void ClientApp::reconnectToRoomServer(const std::string& ip, uint16 port) {
-	// 옛 로비 세션을 은퇴 보관(닫고 살려둠 → 잔여 APC가 유효한 owner로 드레인되게).
+	// 이전 경기의 닫힌 RoomServer 세션이 남아 있으면 새 핸드오프 전에 안전하게 정리한다.
+	if (retiredSession_) {
+		retiredSession_->closeAndDrain();
+		retiredSession_.reset();
+	}
+
+	// 인증된 LobbyServer 연결은 닫지 않는다. 결과 화면에서 이 세션으로 돌아오면
+	// 비밀번호 재입력/재로그인 없이 기존 인증 상태와 방 소속을 그대로 사용할 수 있다.
 	if (serverSession_) {
-		serverSession_->close();
-		retiredSession_ = std::move(serverSession_);
+		if (lobbySession_) {
+			lobbySession_->closeAndDrain();
+		}
+		lobbySession_ = std::move(serverSession_);
 	}
 
 	serverSession_ = std::make_unique<ServerSession>(ip, port);
@@ -96,9 +107,30 @@ void ClientApp::reconnectToRoomServer(const std::string& ip, uint16 port) {
 	}
 }
 
+bool ClientApp::returnToLobbyServer() {
+	if (!lobbySession_ || !lobbySession_->connected()) {
+		return false;
+	}
+
+	// RoomServer 소켓은 닫되 객체는 보관해 취소 완료 APC가 참조할 owner 수명을 보장한다.
+	if (retiredSession_) {
+		retiredSession_->closeAndDrain();
+		retiredSession_.reset();
+	}
+	if (serverSession_) {
+		serverSession_->close();
+		retiredSession_ = std::move(serverSession_);
+	}
+
+	serverSession_ = std::move(lobbySession_);
+	serverSession_->setGame(onlineGame());
+	return true;
+}
+
 std::unique_ptr<IGame> ClientApp::game_ = nullptr;
 std::unique_ptr<SoundManager> ClientApp::sound_ = nullptr;
 std::unique_ptr<ServerSession> ClientApp::serverSession_ = nullptr;
+std::unique_ptr<ServerSession> ClientApp::lobbySession_ = nullptr;
 std::unique_ptr<ServerSession> ClientApp::retiredSession_ = nullptr;
 
 } // namespace INetwork

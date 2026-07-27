@@ -56,6 +56,15 @@ bool PlatoonLeader::castSkillAttack( Room& room ) {
     return true;
 }
 
+bool PlatoonLeader::castSkillAt( Room& room, uint32 skillId, std::string_view clipKey,
+                                 mu::Vec3 anchorPos, float damageScale ) {
+    if ( skillId == 0 ) return false;
+    if ( !clipKey.empty() ) animController().switchClip( std::string( clipKey ) );
+    const uint32 seed = std::random_device{}();
+    room.skillStartInternal( static_cast<int32>( getId() ), skillId, seed, damageScale, &anchorPos );
+    return true;
+}
+
 TacticalNpcUpdateResult PlatoonLeader::update( Seconds dt, Room& room ) {
     frameHits_.clear();
 

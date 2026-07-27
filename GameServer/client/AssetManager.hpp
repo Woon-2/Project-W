@@ -30,7 +30,8 @@ public:
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
-	const Texture* playerHpHeart() const { return &playerHpHeart_; }
+	const Texture* playerWeaponIconBackground() const { return &playerWeaponIconBackground_; }
+	const Texture* playerWeaponIconFrame() const { return &playerWeaponIconFrame_; }
 	const Texture* katana() const { return &katana_; }
 	const Texture* spearHook() const { return &spearHook_; }
 	const Texture* crystalWand() const { return &crystalWand_; }
@@ -168,7 +169,8 @@ private:
 	Skybox skyboxMaterial_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
-	Texture playerHpHeart_{};
+	Texture playerWeaponIconBackground_{};
+	Texture playerWeaponIconFrame_{};
 	Texture katana_{};
 	Texture spearHook_{};
 	Texture crystalWand_{};

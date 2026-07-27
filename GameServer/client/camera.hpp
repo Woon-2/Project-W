@@ -8,6 +8,17 @@ class PhysicsWorld;
 
 class Camera {
 public:
+	struct FocusCinematicConfig {
+		Milliseconds duration{ 2000.f };
+		Milliseconds blendIn{ 350.f };
+		Milliseconds blendOut{ 500.f };
+		float slowMotionScale = 0.18f;
+		float focusHeight = 2.f;
+		float shotDistance = 5.f;
+		float shotHeight = 0.75f;
+		mu::Degree zoomFovy{ 52.f };
+	};
+
 	void setTargetObject(const std::shared_ptr<Object>& pObject) {
 		pTargetObject_ = pObject;
 		springInitialized_ = false;
@@ -28,6 +39,16 @@ public:
 	mu::Vec3 MU_CALLCONV offsetTargetPivot() const { return offsetTargetPivot_; }
 
 	void update(Milliseconds deltaTime);
+	// Game이 일반 follow/free 카메라를 갱신한 뒤 호출한다. 보스 처치처럼 짧은
+	// 포커스 샷을 실시간으로 진행하며, 종료 시 현재 일반 카메라로 부드럽게 복귀한다.
+	void updateFocusCinematic(Milliseconds realDeltaTime);
+	void playFocusCinematic(
+		const std::shared_ptr<Object>& target,
+		const FocusCinematicConfig& config);
+	void cancelFocusCinematic();
+	bool focusCinematicActive() const { return focusCinematicActive_; }
+	// 카메라 자체는 realDeltaTime으로 움직이고, 게임 시뮬레이션만 이 배율을 사용한다.
+	float focusCinematicTimeScale() const;
 	void updateGFX(GFX& gfx);
 
 	// 타겟 추종 로직과 무관하게 view를 직접 설정한다(로비 대기실 정적 카메라 등).
@@ -93,6 +114,21 @@ private:
 	mu::Vec3 at_{};
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};
+	// 포커스 연출이 presentation view를 덮어써도 follow spring의 기준 상태가
+	// 오염되지 않도록 일반 카메라 결과를 별도로 보관한다.
+	mu::Vec3 baseEye_{};
+	mu::Vec3 baseAt_{};
+	mu::Mat4x4 baseView_{};
+	mu::Mat4x4 baseProj_{};
+	bool baseViewInitialized_ = false;
+	bool perspectiveProjection_ = true;
+
+	std::weak_ptr<Object> focusCinematicTarget_{};
+	FocusCinematicConfig focusCinematicConfig_{};
+	Milliseconds focusCinematicElapsed_{ 0.f };
+	mu::Vec3 focusCinematicPoint_{};
+	mu::Vec3 focusCinematicShotDir_{ 0.f, 0.f, -1.f };
+	bool focusCinematicActive_ = false;
 
 	PhysicsWorld* physicsWorld_  = nullptr;
 	float currentArmLength_      = 0.f;   // actual arm length (may be shorter than desired)

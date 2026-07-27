@@ -112,6 +112,10 @@ void GrandbaumMidBossTactic::update( Seconds dt, Room& room, PlatoonLeader& lead
     if ( phase_ == Phase::ShieldWall ) {
         applyShieldWallProtection( room, leader );   // 매 틱 DR/블로커 갱신(죽은 슬라임 반영)
 
+        // 벽 안에서 대기만 하지 않도록 원거리 포격. 벽 형성/파훼 판정과 독립이며, 페이즈를
+        // 벗어나는 순간(파훼·보스 사망) 호출 자체가 끊긴다.
+        updateShieldWallBarrage( dt, room, leader );
+
         // 벽이 형성될 때까지 링 안에 들어온 플레이어를 재넉백한다. 형성 완료/타임아웃 시 중단
         // (슬라임 barrier가 차단 인계). 고정 락(2s)이 가변 형성 시간을 못 따라가는 문제 방지.
         if ( shieldWallRingIssued_ && !shieldWallFormed_ ) {
@@ -167,7 +171,8 @@ void GrandbaumMidBossTactic::enterPhase( Phase next, PlatoonLeader& leader ) {
         shieldWallRingIssued_ = false;
         shieldWallFormed_ = false;
         shieldWallFormTimer_ = 0s;
-        resetBossMelee( leader );   // 발동 중 보스는 벽 안에서 보호받으며 대기
+        resetBossMelee( leader );        // 근접은 정지 — 플레이어가 링 바깥이라 어차피 안 닿는다
+        resetShieldWallBarrage();        // 대신 원거리 포격으로 압박한다
         return;
     }
 
@@ -233,6 +238,66 @@ void GrandbaumMidBossTactic::resetBossMelee( PlatoonLeader& leader ) {
     leader.setTacticalTarget( 0 );
     leader.setDesiredVel( mu::Vec3{} );
     leader.transitionTacticalState( TacticalNpcState::Idle );
+}
+
+void GrandbaumMidBossTactic::resetShieldWallBarrage() {
+    barrageTimer_ = SHIELDWALL_BARRAGE_FIRST_DELAY;
+    barrageLastTargetId_ = 0;   // 다음 발은 가장 작은 playerId부터
+}
+
+// ShieldWall 중 보스의 유일한 공격. 살아있는 플레이어를 playerId 오름차순으로 순환하며
+// 대상 발밑에 결정을 하나 솟구치게 한다(예고 후 작렬 — lua 타임라인이 텔레그래프/융기/파괴를 담당).
+void GrandbaumMidBossTactic::updateShieldWallBarrage( Seconds dt, Room& room, PlatoonLeader& leader ) {
+    barrageTimer_ -= dt;
+    if ( barrageTimer_ > 0s ) {
+        return;
+    }
+    // 대상이 없거나 시전에 실패해도 재장전은 한다(빈 방에서 매 틱 재시도하지 않도록).
+    barrageTimer_ = SHIELDWALL_BARRAGE_INTERVAL;
+
+    if ( barrageSkillId_ == 0 ) {
+        barrageSkillId_ = room.skillIdByName( SHIELDWALL_BARRAGE_SKILL );
+        if ( barrageSkillId_ == 0 ) {
+            return;   // lua 미등록/이름 불일치 — 조용히 스킵(포격 없음)
+        }
+    }
+
+    // 순환 커서: barrageLastTargetId_보다 큰 최소 id, 없으면 최소 id로 wrap.
+    const std::vector<GameSession*>& players = room.getLivingPlayers();
+    GameSession* next    = nullptr;
+    GameSession* lowest  = nullptr;
+    for ( GameSession* s : players ) {
+        if ( !s || !s->player() ) {
+            continue;
+        }
+        const uint32 id = static_cast<uint32>( s->id() );
+        if ( !lowest || id < static_cast<uint32>( lowest->id() ) ) {
+            lowest = s;
+        }
+        if ( id > barrageLastTargetId_ &&
+             ( !next || id < static_cast<uint32>( next->id() ) ) ) {
+            next = s;
+        }
+    }
+    GameSession* target = next ? next : lowest;
+    if ( !target ) {
+        return;
+    }
+    barrageLastTargetId_ = static_cast<uint32>( target->id() );
+
+    // 앵커는 시전 시점의 대상 위치(lag comp 반영). 이후 추적하지 않으므로 텔레그래프를 보고
+    // 걸어 나가면 회피된다 — 그 창이 이 패턴의 유일한 대응 수단이다.
+    const mu::Vec3 anchor = target->player()->estimatedPos( room.getElapsedMs() );
+
+    mu::Vec3 toTarget = anchor - leader.pos();
+    if ( toTarget.len2() > 0.01f ) {
+        leader.setFacing( norm3( toTarget ) );   // 벽 안에서 대상 쪽으로 돌아 시전
+    }
+    leader.setDesiredVel( mu::Vec3{} );
+    leader.transitionTacticalState( TacticalNpcState::AttackWindup );
+
+    leader.castSkillAt( room, barrageSkillId_, SHIELDWALL_BARRAGE_CLIP_KEY,
+                        anchor, SHIELDWALL_BARRAGE_DAMAGE_SCALE );
 }
 
 void GrandbaumMidBossTactic::updateBossMelee( Seconds dt, Room& room, PlatoonLeader& leader ) {

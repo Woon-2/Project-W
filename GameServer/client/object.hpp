@@ -38,10 +38,10 @@ public:
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
 
 private:
-	// 공격 오버레이의 본별 상체 마스크와 스파인 체인 데이터를 구축한다
-	// (spine_01 서브트리=상체, 경계 소프트 / spine_01..03 체인 인덱스·서브트리 깊이).
-	// setSkeleton 이후(init)에 1회 호출.
-	void buildAttackMask();
+	// 조준 pitch용 스파인 체인 데이터를 구축한다
+	// (spine_01..03 체인 인덱스와 본별 서브트리 깊이). setSkeleton 이후(init)에 1회 호출.
+	// 상하체 마스크는 기반 클래스의 buildUpperBodyMask()가 담당한다.
+	void buildSpineChain();
 
 	// 드레스 공간 후처리: 스파인 체인에 조준 pitch를 피벗-공액으로 분산 주입한다.
 	// (onCalcDress 누적 직후 호출됨. 자식 본들은 서브트리 곱으로 함께 회전.)
@@ -49,11 +49,6 @@ private:
 
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
-
-	// 상하체 분리: 공격 오버레이 본별 가중치(상체=1, 하체=0, 경계 소프트).
-	// 이동 중 하체가 run 클립을 유지해 발 미끄러짐을 없앤다.
-	// 정지 시(tIdle_=1)에는 전신 공격(종전 동작)과 프레임 단위로 동일하다.
-	std::vector<float> attackMask_{};
 
 	// 조준 pitch 스파인 체인 (spine_01..03 본 인덱스, 미발견 시 -1).
 	std::array<int, 3> spineChainIdx_{ -1, -1, -1 };
@@ -393,6 +388,11 @@ private:
 // run (player-style blend space), multi-attack (Swings/Combo/BackAttack/Smite via
 // attackIndex), two hit-reaction clips (Hit1/Hit2 chosen by the server), Death,
 // and Rage (registered only; its trigger is wired when the boss BehaviorTree lands).
+// Upper/lower body split, like the player: the attack and hit overlays are weighted by
+// the base class's upper-body mask, so the legs keep the locomotion clip while the boss
+// swings or flinches on the move (the boss advances during a cast -- see FinalBoss::
+// advanceDuringCast). Standing still collapses the mask term and reproduces the old
+// full-body overlay frame for frame. See client/docs/aimPitchUpperBodyMask.md.
 class AnimBlenderBoss : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
@@ -423,6 +423,9 @@ private:
 	// Single value on purpose: walk and run crossfade against each other, so per-clip rates
 	// would double-compensate for the blend weight -- see AnimBlenderBoss::update.
 	float locoRate_ = 1.f;
+	// Shared normalized stride phase [0,1) driving both animTimeWalk_ and animTimeRun_, so
+	// the walk<->run crossfade blends matching foot positions instead of arbitrary ones.
+	float locoPhase_ = 0.f;
 	float tIdle_ = 0.f;
 	float tWalkForward_ = 0.f;
 	float tWalkBackward_ = 0.f;

@@ -22,6 +22,8 @@
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/settingsPanel.hpp"
+#include "../ui/finalScoreboard.hpp"
+#include "../ui/sceneFadeTransition.hpp"
 #include "lobbyUI.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Label.hpp"
@@ -122,7 +124,10 @@ public:
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onZoneState( uint16 zoneId, uint8 state );
 	void onTacticalDialogue( uint16 zoneId, TacticalDialogueId dialogueId );
-	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad );
+	// castAnchorValid=false(대부분)이면 시전 앵커를 시전자 위치에서 캡처한다(기존 동작).
+	// true면 castAnchorX/Z가 앵커 위치를 대신한다 — 대상 지정형 지면 스킬(예: Grandbaum_EarthSpike).
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs, uint32 skillSeed, float aimPitchRad,
+		bool castAnchorValid = false, float castAnchorX = 0.f, float castAnchorZ = 0.f );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity, uint8 hitAnimIndex = 0 );
 	// Stack-charge skill system (server-authoritative state -> dial / teammate HUD / combo).
 	void onSkillCharge( uint16 playerId, uint8 slot, float charge );
@@ -233,6 +238,9 @@ private:
 	void setupLobbyCharacters();   // 대기실 전시 캐릭터 생성(무대 위 일렬)
 	void updateLobbyCharacterTransforms();   // 카메라 sway 중에도 화면 슬롯 위치 유지
 	void clearLobbyCharacters();   // 전시 캐릭터 제거 + animSystem 트랙 해제
+	// 이전 RoomServer 경기에서 생성된 플레이어/NPC/시체와 모든 id 조회 상태를 제거한다.
+	// 로비 복귀 직후와 다음 경기 진입 직전에 모두 호출할 수 있도록 멱등적이어야 한다.
+	void resetInGameSession();
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
@@ -242,6 +250,9 @@ private:
 	void showBossHpHud();
 	void hideBossHpHud();
 	void updateBossHpHud();
+	void showFinalScoreboard();
+	void requestLobbyReturnFromScoreboard();
+	void hideCombatHudForFinalScoreboard();
 
 	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
 	void enterInGame();
@@ -311,6 +322,12 @@ private:
 	// 받음). 위치(setCurrPos)만 보정하므로 임펄스 튕김이 없다. step() 직후 resolvePlayerSeparation
 	// 다음에 호출된다.
 	void resolveBarrierSeparation(Seconds dt);
+
+	// 최종 보스 분리 (클라 예측). 보스는 거대한 나무이므로 플레이어가 밀 수 없다 —
+	// 서버가 플레이어↔보스 접촉을 아예 필터링하므로(Room::setupFinalBoss), 플레이어를
+	// 막아주는 책임이 전부 이쪽에 있다. barrier와 동일한 규칙: 침투량 100%를 플레이어가
+	// 위치 보정으로 받는다(임펄스 없음 → 튕김 없음). step() 직후 호출된다.
+	void resolveBossSeparation(Seconds dt);
 
 	// 아레나 후방 Wall 일방향 벽 (클라 예측). 전투 활성 중, 양끝 Wall을 바깥으로 통과하려는
 	// 로컬 플레이어만 평면으로 되돌린다. 안쪽 입장·측면 이동은 통과 → 후발 파티원도 합류 가능.
@@ -603,13 +620,25 @@ private:
 	Inventory        inventory_{};
 	UI::InventoryPanel inventoryPanel_{};
 	bool             inventoryUiReady_ = false;
-	UI::Image*       playerHpHeart_  = nullptr;  // owned by uiManager_
-	UI::Image*       playerWeaponIcon_ = nullptr;  // owned by uiManager_ (하트 위에 겹쳐 그리는 무기 아이콘)
+	UI::Image*       playerWeaponBadge_ = nullptr;  // owned by uiManager_
+	UI::Image*       playerWeaponIcon_ = nullptr;   // owned by playerWeaponBadge_
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Label*       playerHpText_   = nullptr;  // owned by uiManager_
 	UI::Label*       playerNameText_ = nullptr;  // owned by uiManager_
 	UI::KillCountWidget* killCountWidget_ = nullptr;  // owned by uiManager_
 	DamageNumberSystem   damageNumberSystem_{};
+
+	// Final-boss result UI owns its widget references; Game only coordinates
+	// cinematic timing, score collection, and the lobby hand-off.
+	UI::FinalScoreboard finalScoreboard_{};
+	bool finalScoreboardPending_ = false;
+	// The result must not cover the final boss's reward conversion. Track that
+	// corpse separately and wait until every one of its energy orbs has finished
+	// the Absorbing state.
+	u32t finalBossRewardCorpseId_ = 0u;
+	bool finalBossRewardCorpseTracked_ = false;
+	bool finalBossRewardOrbsSpawned_ = false;
+	UI::SceneFadeTransition lobbyReturnFade_{};
 
 	// Final-boss HUD. Presentation is armed only by this client's local Arena_Boss
 	// enter callback, so another player entering the room cannot reveal it here.
@@ -656,6 +685,11 @@ private:
 	ParticleEffect crystalsFrontAttackEffect_{};
 	ParticleEffect aoESlashGreenEffect_{};
 	ParticleEffect crystalsCrossFadeEffect_{};
+	// Grandbaum ShieldWall 포격(Grandbaum_EarthSpike): 예고 마법진 + 갈색 흙 기둥.
+	// vfxId ↔ ParticleEffect가 1:1이라, 소재를 공유하는 다른 스킬과 인스턴스까지 공유하면
+	// 서로의 config/시드를 덮어쓴다 — 반드시 별도 인스턴스여야 한다. 구성은 .cpp 참조.
+	ParticleEffect earthSpikeWarnEffect_{};
+	ParticleEffect earthSpikeEffect_{};
 	ParticleEffect redEnergyExplosionEffect_{};
 	ParticleEffect arrowEffect_{};
 	ParticleEffect arrowVolleyMuzzleEffect_{};
@@ -666,6 +700,9 @@ private:
 	ParticleEffect tornadoShotEffect_{};
 	ParticleEffect tornadoMuzzleEffect_{};
 	ParticleEffect tornadoHitEffect_{};
+	// ParticleEffect::addSystem은 누적 동작이다. Game 객체를 재사용해 두 번째 경기에
+	// 들어가더라도 동일 시스템을 다시 추가하지 않도록 최초 구성 여부를 보존한다.
+	bool particleEffectsReady_ = false;
 	ParticleSystem dustParticleSystem_{};
 	bool      tornadoShotActive_   = false;
 	mu::Vec3  tornadoShotPos_{};
@@ -681,8 +718,8 @@ private:
 		UI::ProgressBar* hpBar;        // owned by uiManager_
 		PlayerWeaponType weaponType = PlayerWeaponType::Katana;
 		UI::UIElement*   partyRoot = nullptr;       // owned by uiManager_
-		UI::Image*       partyHeart = nullptr;      // owned by partyRoot
-		UI::Image*       partyWeaponIcon = nullptr; // owned by partyHeart
+		UI::Image*       partyWeaponBadge = nullptr; // owned by partyRoot
+		UI::Image*       partyWeaponIcon = nullptr;  // owned by partyWeaponBadge
 		UI::Label*       partyNameLabel = nullptr;  // owned by partyRoot
 		UI::ProgressBar* partyHpBar = nullptr;      // owned by partyRoot
 	};
@@ -691,6 +728,12 @@ private:
 	// Stable display names ("playerN"), frozen at registration; a member leaving
 	// must never renumber the remaining members (see registerInGamePartyPlayer).
 	std::unordered_map<uint16, std::wstring> inGamePartyNameById_{};
+	std::unordered_map<uint16, int> inGameMonsterKillsByPlayerId_{};
+	std::unordered_map<uint16, int> inGameDamageByPlayerId_{};
+	// Reserved for the future drop-item system. Entries stay at zero until its
+	// authoritative pickup event is connected.
+	std::unordered_map<uint16, int> inGamePickedItemsByPlayerId_{};
+	int32 inGameBossLastHitPlayerId_ = -1;
 	uint32 inGamePartyNameSeq_ = 0;
 
 	struct GoblinHpEntry {

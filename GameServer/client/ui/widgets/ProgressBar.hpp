@@ -9,6 +9,7 @@ class ProgressBar : public UIElement {
 public:
     const Texture* backgroundTex = nullptr;
     const Texture* fillTex       = nullptr;
+    bool drawBackgroundOnTop     = false;
 
     // Solid colors used when the corresponding texture is nullptr.
     XMFLOAT4 bgColor   = { 0.2f, 0.2f, 0.2f, 1.f };

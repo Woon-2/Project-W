@@ -17,7 +17,7 @@ skill:addEvent(0, "PlayAnimation", {
 -- First strike.
 skill:addEvent(750, "SpawnHitbox", {
     slot                = 0,
-    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    localOBBs           = { OBB(0.25, 0.1, 0.25, 0.9, 1.2, 2.5, 0, -1, 23) },
     attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 0,
@@ -29,7 +29,7 @@ skill:addEvent(1050, "DestroyHitbox", { slot = 0 })
 -- Second, stronger strike.
 skill:addEvent(1400, "SpawnHitbox", {
     slot                = 1,
-    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    localOBBs           = { OBB(0.25, 0.1, 0.25, 0.9, 1.2, 2.5, 0, -1, 23) },
     attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 1,
@@ -41,7 +41,7 @@ skill:addEvent(1700, "DestroyHitbox", { slot = 1 })
 -- Third, strongest strike.
 skill:addEvent(2400, "SpawnHitbox", {
     slot                = 2,
-    localOBBs           = { OBB(0.2, 0.15, 0.6, 0.9, 1.0, 2.2, 0, -1, 23) },
+    localOBBs           = { OBB(0.25, 0.1, 0.25, 0.9, 1.2, 2.5, 0, -1, 23) },
     attach              = BoneAttach("weapon_r"),   -- placeholder: tune per skeleton in editor,
     applyAttachRotation = true,
     hitGroup            = 2,

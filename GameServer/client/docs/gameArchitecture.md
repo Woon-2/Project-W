@@ -80,6 +80,18 @@
      함께 서버 `S_NpcMoveBatch`를 **20Hz로 스로틀**했다(`Room::kNpcMoveBroadcastPeriodTicks`) —
      대역폭 1/3(242마리 ≒ 10KB 패킷이 60Hz면 클라당 약 5MB/s로 MTU를 넘겨 TCP 단편화 자체가
      지터원이었다). `RoomServer/docs/roomTickCadence.md` §7-2.
+     
+     **상수 불일치 → 해소(2026-07-27):** `Object`의 기본 `netInterpDuration_`은 50ms(20Hz, 원격
+     플레이어 `S_Move` 기준)인데 몬스터의 `S_NpcMoveBatch`는 서버 **매 틱(60Hz, 16.7ms)** 전송이다.
+     매 패킷 `netInterpAcc_`가 리셋되므로 `tNet`이 0.33을 넘지 못해, **서버 step의 1/3만 보간되고
+     나머지 2/3는 패킷마다 점프**로 도착했다. 평균 속도는 맞지만 60Hz 스터터가 되고, 애니는 진짜
+     서버 velocity로 배속이 맞춰져 있으니 **발과 지면이 어긋나 미끄러져 보인다**.
+     → `configureNetMonster`가 몬스터 한정으로 `netInterpDuration_ = kNpcMoveInterval(1/60s)`을
+     설정한다(전송 주기와 일치 → 다음 패킷이 도착하는 순간 `tNet`이 정확히 1.0에 닿는다).
+     **함께 분리한 것:** "패킷 끊김" 판정을 `netInterpDuration_ * 2`에서 독립 상수
+     `kNpcMoveStaleTimeout(150ms)`로 뺐다 — 60Hz 기준으로 2배는 33ms라, 평범한 지터에도
+     velocity가 0이 되어 몬스터가 걷다가 idle로 깜빡인다. 진동 방지의 근거는 배수가 아니라
+     `tNet`의 1.0 clamp이므로 이 분리는 안전하다. `RoomServer/docs/roomTickCadence.md` §7-2.
 9. animSystem_.updatePriorities() / camera_ / dirLight_
 10. animSystem_.update()
 11. Ragdoll 활성화/동기화  — standalone과 동일한 패턴

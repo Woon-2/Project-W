@@ -3,6 +3,15 @@
 #include "physicsWorld.hpp"
 
 void Camera::update(Milliseconds deltaTime) {
+	// updateFocusCinematic()은 렌더용 eye/at/view만 덮어쓴다. 다음 follow 계산은
+	// 연출이 적용되기 전의 일반 카메라 상태에서 이어져야 복귀 시 튀지 않는다.
+	if (focusCinematicActive_ && baseViewInitialized_) {
+		eye_  = baseEye_;
+		at_   = baseAt_;
+		view_ = baseView_;
+		proj_ = baseProj_;
+	}
+
 	auto pTarget = pTargetObject_.lock();
 	if (!pTarget) {
 		return;
@@ -95,6 +104,10 @@ void Camera::update(Milliseconds deltaTime) {
 	}
 
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
+	baseEye_  = eye_;
+	baseAt_   = at_;
+	baseView_ = view_;
+	baseViewInitialized_ = true;
 }
 
 void MU_CALLCONV Camera::setView(mu::Vec3 eye, mu::Vec3 at) {
@@ -102,6 +115,131 @@ void MU_CALLCONV Camera::setView(mu::Vec3 eye, mu::Vec3 at) {
 	at_  = at;
 	followFilterInitialized_ = false;
 	view_ = mu::lookAt(eye, at, mu::NVec3(0.f, 1.f, 0.f));
+	baseEye_  = eye_;
+	baseAt_   = at_;
+	baseView_ = view_;
+	baseViewInitialized_ = true;
+}
+
+void Camera::playFocusCinematic(
+	const std::shared_ptr<Object>& target,
+	const FocusCinematicConfig& config) {
+	if (!target || focusCinematicActive_) return;
+
+	focusCinematicTarget_ = target;
+	focusCinematicConfig_ = config;
+	focusCinematicElapsed_ = Milliseconds{ 0.f };
+	focusCinematicPoint_ = target->renderState().pos
+		+ mu::Vec3{ 0.f, config.focusHeight, 0.f };
+
+	// 현재 카메라가 바라보던 쪽에서 보스에게 다가간다. 보스의 사망 회전에
+	// 종속되지 않으므로 래그돌 전환 순간에도 샷 방향이 뒤집히지 않는다.
+	mu::Vec3 shotDir{
+		eye_.x() - focusCinematicPoint_.x(),
+		0.f,
+		eye_.z() - focusCinematicPoint_.z()
+	};
+	const float shotDirLen = shotDir.len();
+	if (shotDirLen > 1e-4f) {
+		focusCinematicShotDir_ = shotDir * (1.f / shotDirLen);
+	}
+	else {
+		const mu::Vec3 backward = target->orient().rotate(mu::Vec3{ 0.f, 0.f, -1.f });
+		const float backwardLen = std::sqrt(
+			backward.x() * backward.x() + backward.z() * backward.z());
+		focusCinematicShotDir_ = backwardLen > 1e-4f
+			? mu::Vec3{ backward.x() / backwardLen, 0.f, backward.z() / backwardLen }
+			: mu::Vec3{ 0.f, 0.f, -1.f };
+	}
+
+	if (!baseViewInitialized_) {
+		baseEye_  = eye_;
+		baseAt_   = at_;
+		baseView_ = view_;
+		baseViewInitialized_ = true;
+	}
+	focusCinematicActive_ = true;
+}
+
+void Camera::cancelFocusCinematic() {
+	focusCinematicActive_ = false;
+	focusCinematicTarget_.reset();
+	focusCinematicElapsed_ = Milliseconds{ 0.f };
+	if (baseViewInitialized_) {
+		eye_  = baseEye_;
+		at_   = baseAt_;
+		view_ = baseView_;
+		proj_ = baseProj_;
+	}
+}
+
+float Camera::focusCinematicTimeScale() const {
+	if (!focusCinematicActive_) return 1.f;
+
+	const float durationMs = std::max(1.f, focusCinematicConfig_.duration.count());
+	const float blendOutMs = std::clamp(
+		focusCinematicConfig_.blendOut.count(), 0.f, durationMs);
+	const float recoverStartMs = durationMs - blendOutMs;
+	const float elapsedMs = focusCinematicElapsed_.count();
+	const float minScale = std::clamp(
+		focusCinematicConfig_.slowMotionScale, 0.01f, 1.f);
+
+	if (blendOutMs <= 0.f || elapsedMs <= recoverStartMs) return minScale;
+
+	float t = std::clamp((elapsedMs - recoverStartMs) / blendOutMs, 0.f, 1.f);
+	t = t * t * (3.f - 2.f * t);
+	return minScale + (1.f - minScale) * t;
+}
+
+void Camera::updateFocusCinematic(Milliseconds realDeltaTime) {
+	if (!focusCinematicActive_) return;
+
+	const float durationMs = std::max(1.f, focusCinematicConfig_.duration.count());
+	focusCinematicElapsed_ += std::max(realDeltaTime, Milliseconds{ 0.f });
+	const float elapsedMs = focusCinematicElapsed_.count();
+
+	if (auto target = focusCinematicTarget_.lock()) {
+		focusCinematicPoint_ = target->renderState().pos
+			+ mu::Vec3{ 0.f, focusCinematicConfig_.focusHeight, 0.f };
+	}
+
+	const auto smoothStep = [](float t) {
+		t = std::clamp(t, 0.f, 1.f);
+		return t * t * (3.f - 2.f * t);
+	};
+	const float blendInMs = std::max(1.f, focusCinematicConfig_.blendIn.count());
+	const float blendOutMs = std::max(1.f, focusCinematicConfig_.blendOut.count());
+	const float blendIn = smoothStep(elapsedMs / blendInMs);
+	const float blendOut = smoothStep((durationMs - elapsedMs) / blendOutMs);
+	const float weight = std::min(blendIn, blendOut);
+
+	const mu::Vec3 shotEye = focusCinematicPoint_
+		+ focusCinematicShotDir_ * focusCinematicConfig_.shotDistance
+		+ mu::Vec3{ 0.f, focusCinematicConfig_.shotHeight, 0.f };
+	eye_ = mu::lerp(baseEye_, shotEye, weight);
+	at_  = mu::lerp(baseAt_, focusCinematicPoint_, weight);
+	if ((eye_ - at_).len2() < 1e-4f)
+		eye_ += focusCinematicShotDir_ * 0.1f;
+	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
+
+	if (perspectiveProjection_) {
+		const float baseFovy = static_cast<float>(fovy_);
+		const float focusFovy = static_cast<float>(focusCinematicConfig_.zoomFovy);
+		const mu::Degree presentationFovy{
+			baseFovy + (focusFovy - baseFovy) * weight
+		};
+		proj_ = mu::perspReversedZ(presentationFovy, aspect_, nearz_, farz_);
+	}
+
+	if (elapsedMs >= durationMs) {
+		focusCinematicActive_ = false;
+		focusCinematicTarget_.reset();
+		focusCinematicElapsed_ = Milliseconds{ 0.f };
+		eye_  = baseEye_;
+		at_   = baseAt_;
+		view_ = baseView_;
+		proj_ = baseProj_;
+	}
 }
 
 void Camera::updateGFX(GFX& gfx) {
@@ -201,18 +339,22 @@ void Camera::updateGFX(GFX& gfx) {
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {
 	proj_ = mu::perspReversedZ(fovy, aspect, nearz, farz);
+	baseProj_ = proj_;
 	fovy_ = fovy;
 	aspect_ = aspect;
 	nearz_ = nearz;
 	farz_ = farz;
+	perspectiveProjection_ = true;
 }
 
 void Camera::setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ) {
 	proj_ = mu::ortho(minX, maxX, minY, maxY, minZ, maxZ);
+	baseProj_ = proj_;
 	minX_ = minX;
 	maxX_ = maxX;
 	minY_ = minY;
 	maxY_ = maxY;
 	minZ_ = minZ;
 	maxZ_ = maxZ;
+	perspectiveProjection_ = false;
 }

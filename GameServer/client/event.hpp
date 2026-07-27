@@ -91,13 +91,25 @@ struct EvHit : BasicEvent {
 		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp} {}
 	EvHit(i32t targetId, i32t hp, u8t hitAnimIndex)
 		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp}, hitAnimIndex{hitAnimIndex} {}
+	EvHit(i32t targetId, i32t hp, i32t attackerId, u8t hitAnimIndex)
+		: BasicEvent{EventType::Hit}, targetId{targetId}, hp{hp},
+		  attackerId{attackerId >= 0 && attackerId < static_cast<i32t>(kInvalidAttackerId)
+			  ? static_cast<u16t>(attackerId)
+			  : kInvalidAttackerId},
+		  hitAnimIndex{hitAnimIndex} {}
 
+	static constexpr u16t kInvalidAttackerId = 0xFFFFu;
 	i32t targetId{-1};
 	i32t hp{-1};
+	// uint16 keeps EvHit within the event pool's 16-byte size limit.
+	// UINT16_MAX means no attributable attacker.
+	u16t attackerId{kInvalidAttackerId};
 	// 어떤 피격 리액션 클립을 재생할지 선택하는 인덱스(서버 권위 선택, S_SkillHit로 전달).
 	// 다중 hit 리그(Boss: Hit1/Hit2)에서만 의미가 있고, 단일 hit 몬스터는 무시한다.
 	u8t hitAnimIndex{0};
 };
+static_assert(sizeof(EvHit) <= 16, "EvHit must fit the 16-byte event pool.");
+
 struct EvBlood : BasicEvent {
 	EvBlood() : BasicEvent{EventType::Blood} {}
 	EvBlood(i32t victimId) : BasicEvent{EventType::Blood}, victimId{victimId} {}
@@ -117,12 +129,20 @@ struct EvAttack : BasicEvent {
 	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
 	EvAttack(i32t attackerId, u8t attackIndex)
 		: BasicEvent{EventType::Attack}, attackerId{attackerId}, attackIndex{attackIndex} {}
+	EvAttack(i32t attackerId, u8t attackIndex, Milliseconds skillRemaining)
+		: BasicEvent{EventType::Attack}, attackerId{attackerId}, attackIndex{attackIndex},
+		  skillRemaining{skillRemaining} {}
 
 	i32t attackerId{-1};
 	// 어떤 공격 클립을 재생할지 선택하는 인덱스.
 	// AnimBlender가 보유한 공격 클립 순서 목록(attackClips_)의 인덱스로 해석된다.
 	// PlayAnimation 스킬 이벤트의 attackIndex에서 전파된다. 기본 0(첫 공격).
 	u8t  attackIndex{0};
+	// 이 이벤트를 발생시킨 스킬이 끝날 때까지 남은 시간(0 = 정보 없음).
+	// 공격 오버레이가 스킬보다 오래 살아남지 않게 상한으로 쓴다 — 스킬이 끝나면 캐스터는
+	// 다시 움직일 수 있는데(NPC는 AI가 즉시 이동을 재개한다) 오버레이가 남아 있으면
+	// 다리가 공격 포즈에 붙어 미끄러져 보인다. 캐스터별 채택 여부는 각 블렌더가 정한다.
+	Milliseconds skillRemaining{ 0.f };
 };
 struct EvRespawn : BasicEvent {
 	EvRespawn() : BasicEvent{EventType::Respawn} {}

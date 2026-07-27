@@ -73,7 +73,10 @@ inline const std::vector<CharacterDef> kCharacterSkillMap = {
     { CharacterKind::Birdy,    "Birdy",    { "Birdy_Attack1", "Birdy_Attack2" } },
     { CharacterKind::Bomber,   "Bomber",   { "Bomber_Attack1" } },
     { CharacterKind::Slime,    "Slime",    { "Slime_Attack1" } },
-    { CharacterKind::Treant,   "Treant",   { "Treant_SpinKick", "Treant_Clap", "Treant_Punch" } },
+    // Grandbaum_EarthSpike rides the Treant rig (Grandbaum shares its clip set). It is a
+    // targeted ground skill, so in the editor the anchor falls back to the caster's own feet.
+    { CharacterKind::Treant,   "Treant",   { "Treant_SpinKick", "Treant_Clap", "Treant_Punch",
+                                             "Grandbaum_EarthSpike" } },
     { CharacterKind::Boss,     "Boss",     { "Boss_Swings", "Boss_Combo", "Boss_BackAttack", "Boss_Smite" } },
 };
 

@@ -408,7 +408,8 @@ void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed, pkt->aimPitchRadian );
+	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs, pkt->skillSeed, pkt->aimPitchRadian,
+		pkt->castAnchorValid != 0, pkt->castAnchorX, pkt->castAnchorZ );
 }
 
 void PacketManager::handleSTimeSyncPacket( byte* buffer, int32 len ) {

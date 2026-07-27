@@ -848,9 +848,9 @@ void Game::setupStage() {
 		if (goblin_) { goblin_->setFaction(Faction::Monsters); skillObjectById_[1] = goblin_.get(); }
 
 		// vfxId 0 is reserved for hit/blood VFX (none bound in editor -> no-op).
-		// vfxId 1..18 bind 1:1 to each built ParticleEffect, mirroring the skill
+		// vfxId 1..20 bind 1:1 to each built ParticleEffect, mirroring the skill
 		// foundation .lua files (each PlayVFX vfxId indexes this array directly).
-		skillVfxById_.assign(19, nullptr);
+		skillVfxById_.assign(21, nullptr);
 		skillVfxById_[0]  = &bloodEffect_;                // Blood hit (칼/창/완드 피격)
 		skillVfxById_[1]  = &swordSlash1Effect_;          // SwordSlash
 		skillVfxById_[2]  = &slashWaveEffect_;            // SlashWave
@@ -870,6 +870,8 @@ void Game::setupStage() {
 		skillVfxById_[16] = &piercingSlashEffect_;        // PiercingSlash
 		skillVfxById_[17] = &piercingCircleSlashEffect_;  // PiercingCircleSlash
 		skillVfxById_[18] = &piercingMultiEffect_;        // PiercingMulti
+		skillVfxById_[19] = &earthSpikeWarnEffect_;       // EarthSpike telegraph (Grandbaum)
+		skillVfxById_[20] = &earthSpikeEffect_;           // EarthSpike pillar   (Grandbaum)
 
 		skillCtx_.objectById     = skillObjectById_.data();
 		skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
@@ -1653,6 +1655,94 @@ void Game::setParticle()
 		}
 
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
+
+	// ── Earth Spike (Grandbaum ShieldWall 포격) ────────────────────────────────
+	// MIRROR: client/online/onlineGame.cpp — 근거 주석은 그쪽에 있다. 요지: tint는 곱셈이라
+	// 완전 채도 파랑인 crystal 아트로는 갈색이 안 나온다 → 색이 코드 구동인 소재로 교체.
+		{
+			// 예고 마법진(지면에 눕는 납작한 표식).
+			const mu::Vec4     kWarnColor{ 1.35f, 0.62f, 0.18f, 1.f };
+			constexpr float    kWarnSize     = 2.6f;
+			constexpr float    kWarnLifetime = 0.85f;
+
+			ps::ParticleSystemConfig cfg;
+			cfg.main.looping      = false;
+			cfg.main.duration     = 1.0f;
+			cfg.main.lifetimeMin  = kWarnLifetime;
+			cfg.main.lifetimeMax  = kWarnLifetime;
+			cfg.main.speedMin     = 0.f;
+			cfg.main.speedMax     = 0.f;
+			cfg.main.startSizeMin = kWarnSize;
+			cfg.main.startSizeMax = kWarnSize;
+			cfg.main.gravityModifierMin = 0.f;
+			cfg.main.gravityModifierMax = 0.f;
+			// World 정렬 빌보드는 billboardRotation3D(= startRotation3D)만 쓴다. X -90°로 눕힌다.
+			cfg.main.startRotation3DEnabled = true;
+			cfg.main.startRotation3DMin = { -3.14159265f * 0.5f, 0.f, 0.f };
+			cfg.main.startRotation3DMax = { -3.14159265f * 0.5f, 0.f, 0.f };
+			cfg.emission.enabled  = true;
+			cfg.emission.emitRate = 0.f;
+			cfg.shape.enabled     = true;
+			cfg.shape.type        = ps::ShapeModule::Type::Point;
+			cfg.renderer.mode      = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.alignment = ps::RendererModule::Alignment::World;
+			cfg.renderer.mat = ps::MatUnlit{
+				.mainTex = assetManager_.magicCircleTex(),
+				.blend   = ps::BlendMode::Alpha,
+				.color   = kWarnColor
+			};
+			cfg.colorOverLifetime.enabled  = true;
+			cfg.colorOverLifetime.gradient = ColorGradient{
+				.keys = {
+					{ 0.0f,  { 1.f, 1.f, 1.f, 0.f } },
+					{ 0.15f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 0.80f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+				}
+			};
+			earthSpikeWarnEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+		}
+		{
+			// 흙 기둥: spikes와 같은 IceSpikes2 메시 + MatTwoSides(색이 전부 코드 값).
+			const mu::Vec4     kSpikeFrontColor  { 0.40f, 0.24f, 0.11f, 1.f };
+			const mu::Vec4     kSpikeBackColor   { 0.78f, 0.53f, 0.28f, 1.f };
+			const mu::Vec4     kSpikeFresnelColor{ 1.00f, 0.68f, 0.32f, 1.f };
+			constexpr float    kSpikeEmission = 2.0f;
+			constexpr float    kSpikeSize     = 1.4f;
+
+			auto cfg = loadUnityParticleConfig(
+				"../resources/effects/Spikes attack_ParticleSystems.json",
+				"Spikes attack/Spikes");
+			cfg.renderer.mode     = ps::RendererModule::Mode::Mesh;
+			cfg.renderer.pMesh    = assetManager_.meshIceSpikes2();
+			cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+			                      ? nullptr
+			                      : &assetManager_.meshIceSpikes2()->subMeshes[0];
+
+			ps::MatTwoSides mat   = assetManager_.spikesMaterial();
+			mat.frontFacesColor   = kSpikeFrontColor;
+			mat.backFacesColor    = kSpikeBackColor;
+			mat.fresnelColor      = kSpikeFresnelColor;
+			mat.backFresnelColor  = kSpikeFresnelColor;
+			mat.emission          = kSpikeEmission;
+			cfg.renderer.mat      = mat;
+
+			cfg.main.looping      = false;
+			cfg.main.startSizeMin = kSpikeSize;
+			cfg.main.startSizeMax = kSpikeSize;
+			cfg.shape.coneRadius  = 0.f;
+			cfg.shape.randomPositionAmount = 0.f;
+			cfg.colorOverLifetime.enabled  = true;
+			cfg.colorOverLifetime.gradient = ColorGradient{
+				.keys = {
+					{ 0.0f,  { 1.f, 1.f, 1.f, 1.f } },
+					{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+					{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+				}
+			};
+			earthSpikeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 0
+		}
+
 	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
 		{
 			// System 0: Arrow mesh (parent) — flies in player's forward direction
@@ -2546,10 +2636,11 @@ void Game::update(Milliseconds deltaTime) {
 	// 입력 처리
 	processInput(deltaTime);
 
-	// 에디터 슬로모션/일시정지: 시뮬레이션 계열(물리/스킬/애니메이션)에만 timeScale 적용.
-	// 입력·카메라·UI는 실시간(deltaTime)으로 동작시켜 조작 반응성을 유지한다.
+	// 에디터 배율과 보스 처치 슬로모션을 합성한다. 입력·카메라·UI는
+	// 실시간(deltaTime)으로 동작하므로 처치 연출은 느려진 시간에 갇히지 않는다.
 	const float editorScale = editor_.timeScale();
-	const Milliseconds simDt = deltaTime * editorScale;
+	const float simulationScale = editorScale * camera_.focusCinematicTimeScale();
+	const Milliseconds simDt = deltaTime * simulationScale;
 
 	// debug BV 갱신 (TTL 감소 + 소멸 조건 평가)
 	debugBVView_.update(deltaTime);
@@ -2605,6 +2696,20 @@ void Game::update(Milliseconds deltaTime) {
 			auto* death = static_cast<EvDeath*>(pEv);
 
 			if (death->victimId == goblin_->getId()) {
+				// standalone 에디터는 goblin_ 한 개의 모델/블렌더를 교체해 모든
+				// 몬스터를 시험한다. 현재 리그가 Boss일 때만 처치 연출을 시작한다.
+				if (!goblin_->isDead() && goblin_->model() == assetManager_.modelBoss()) {
+					Camera::FocusCinematicConfig config{};
+					config.duration        = Milliseconds{ 2100.f };
+					config.blendIn         = Milliseconds{ 350.f };
+					config.blendOut        = Milliseconds{ 550.f };
+					config.slowMotionScale = 0.16f;
+					config.focusHeight     = 3.4f;
+					config.shotDistance    = 7.f;
+					config.shotHeight      = 1.1f;
+					config.zoomFovy        = mu::Degree{ 48.f };
+					camera_.playFocusCinematic(goblin_, config);
+				}
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			}
 			else if (death->victimId == player_->getId()) {
@@ -2746,6 +2851,7 @@ void Game::update(Milliseconds deltaTime) {
 	chunkManager_.update(player_->pos(), deltaTime);
 
 	editor_.updateCamera(deltaTime);
+	camera_.updateFocusCinematic(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -2792,8 +2898,10 @@ void Game::update(Milliseconds deltaTime) {
 	inventoryPanel_.update(std::chrono::duration<float>(deltaTime).count());
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
-	// 애니메이션 업데이트 (에디터 슬로모션/일시정지 반영)
-	animSystem_.update(Seconds(0.01f * editorScale));
+	// 사망 이벤트는 프레임 중간에 연출을 시작할 수 있으므로 현재 배율을 다시
+	// 조회해 첫 사망 포즈부터 곧바로 슬로모션이 적용되게 한다.
+	animSystem_.update(Seconds(
+		0.01f * editorScale * camera_.focusCinematicTimeScale()));
 
 	// Ragdoll 활성화: 이번 프레임 사망 → finalXformData 확정 후 seed + activate
 	// Ragdoll 동기화: 활성 ragdoll body 위치를 finalXformData에 덮어씀
@@ -2914,6 +3022,8 @@ void Game::update(Milliseconds deltaTime) {
 	aoESlashGreenEffect_.update( simDt );
 	redEnergyExplosionEffect_.update( simDt );
 	crystalsCrossFadeEffect_.update( simDt );
+	earthSpikeWarnEffect_.update( simDt );
+	earthSpikeEffect_.update( simDt );
 	arrowEffect_.update( simDt );
 	arrowVolleyMuzzleEffect_.update( simDt );
 	arrowVolleyEffect_.update( simDt );
@@ -3017,6 +3127,8 @@ void Game::render() {
 	dustParticleSystem_.render( gfx_ );
 	redEnergyExplosionEffect_.render( gfx_ );
 	crystalsCrossFadeEffect_.render( gfx_ );
+	earthSpikeWarnEffect_.render( gfx_ );
+	earthSpikeEffect_.render( gfx_ );
 	arrowEffect_.render( gfx_ );
 	arrowVolleyMuzzleEffect_.render( gfx_ );
 	arrowVolleyEffect_.render( gfx_ );

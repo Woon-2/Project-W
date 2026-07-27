@@ -47,6 +47,13 @@ private:
     // ── 보스 melee ──
     void  updateBossMelee( Seconds dt, Room& room, PlatoonLeader& leader );
     void  resetBossMelee( PlatoonLeader& leader );
+
+    // ── ShieldWall 원거리 포격 ──
+    // 벽이 서면 플레이어는 링 바깥(최대 8m)으로 밀려나 보스 melee 사거리(3.5m) 밖에 있다.
+    // 그동안 보스가 아무것도 안 하면 이 페이즈가 위협 없는 노가다가 되므로, 대상 지정형
+    // 지면 스킬(Grandbaum_EarthSpike)로 살아있는 플레이어를 한 명씩 순환 타격한다.
+    void  updateShieldWallBarrage( Seconds dt, Room& room, PlatoonLeader& leader );
+    void  resetShieldWallBarrage();
     void MU_CALLCONV moveBossToward( PlatoonLeader& leader, mu::Vec3 targetPos, float speedMult ) const;
 
     // ── 부대 명령 ──
@@ -81,6 +88,10 @@ private:
     BossMeleeState bossMeleeState_{ BossMeleeState::AcquireTarget };
     Seconds        bossMeleeTimer_{};
     uint32         bossMeleeTargetId_{ 0 };
+    Seconds        barrageTimer_{};
+    uint32         barrageSkillId_{ 0 };        // skillIdByName 캐시(0이면 다음 시도에 재조회)
+    uint32         barrageLastTargetId_{ 0 };   // 순환 커서. 인덱스가 아니라 playerId라서
+                                                // 도중에 누가 죽어도 순번이 어긋나지 않는다.
 
     // ── 상수 ──
     // 월드 거리/반경/슬롯간격은 인게임 스케일 적용. 시간(Seconds)·비율·HP 임계는 설계값.
@@ -110,6 +121,15 @@ private:
     static constexpr float BOSS_CHASE_SPEED_MULT         = 1.8f;
     // 파훼: 형성 시점 슬라임의 이 비율 이상을 처치하면 ShieldWall 종료.
     static constexpr float SHIELD_BREAK_KILL_FRACTION    = 0.2f;
+    // ShieldWall 포격. 첫 발은 넉백/벽 형성 직후에 오도록 한 박자 늦춘다.
+    static constexpr Seconds SHIELDWALL_BARRAGE_FIRST_DELAY{ 1.5f };
+    // ⚠ 반드시 Grandbaum_EarthSpike의 totalDurationMs(1400)보다 커야 한다. skillStartInternal이
+    // hasActiveSkill 가드로 중복 캐스트를 "조용히" 버리므로, 짧아지면 포격이 소리 없이 절반만 나간다.
+    static constexpr Seconds SHIELDWALL_BARRAGE_INTERVAL{ 1.6f };
+    // 포격은 전용 lua가 데미지를 직접 저작하므로 보스의 attackDamageScale(5.0)을 태우지 않는다.
+    static constexpr float SHIELDWALL_BARRAGE_DAMAGE_SCALE = 1.0f;
+    static constexpr const char* SHIELDWALL_BARRAGE_SKILL     = "Grandbaum_EarthSpike";
+    static constexpr const char* SHIELDWALL_BARRAGE_CLIP_KEY  = "Clap";   // Treant_Clap (attackIndex 1)
 };
 
 #endif // grandbaum_midboss_tactic_hpp
