@@ -4,6 +4,7 @@
 #include "Listener.hpp"
 #include "JobQueuePool.hpp"
 #include "JobTimer.hpp"
+#include "RoomManager.hpp"
 
 void DoIocp(IocpReactor& reactor) {
 	while (true) {
@@ -12,8 +13,18 @@ void DoIocp(IocpReactor& reactor) {
 }
 
 void DoJobTimer() {
+	auto nextSweep = HighResolutionClock::now();
 	while (true) {
 		JobTimer::distribute();
+
+		// 지연 파괴 reaper: 맵에서 빠진 방을 JobQueue 유휴 확인 후 풀로 반납한다
+		// (docs/serverHandoff.md §4-P0 D). 루프가 hot-spin이라 매 스핀마다 rmMtx_를
+		// 잡지 않도록 ~50ms 간격으로만 돈다.
+		const auto now = HighResolutionClock::now();
+		if (now >= nextSweep) {
+			RoomManager::sweepPendingRooms();
+			nextSweep = now + std::chrono::milliseconds(50);
+		}
 	}
 }
 

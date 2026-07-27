@@ -13,6 +13,12 @@ public:
 	void push(Job* job);
 	void execute();
 
+	// True when no thread is inside execute() and no jobs remain. push() bumps jobCount_
+	// before enqueueing, so while idle() holds this queue is not registered in JobQueuePool
+	// either. An owner destroyed via deferred reaping must observe this before being
+	// returned to its pool.
+	bool idle() const { return executing_.load() == 0 && jobCount_.load() <= 0; }
+
 	void doAsync(CallbackType&& callback) {
 		push(ObjectPool<Job>::pop(std::move(callback)));
 	}

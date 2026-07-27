@@ -137,6 +137,10 @@ public:
 		jobQueue_.push( job );
 	}
 
+	// 지연 파괴(reaper)용: RoomManager::sweepPendingRooms가 이게 참임을 확인한 뒤에만
+	// 방을 풀로 반납한다. docs/serverHandoff.md §4-P0 D.
+	bool jobQueueIdle() const { return jobQueue_.idle(); }
+
 	void doAsync(CallbackType&& callback) {
 		jobQueue_.doAsync(std::move(callback));
 	}
@@ -234,6 +238,11 @@ private:
 	// 사라져 있으면 안 된다. 둘 다 이 방의 JobQueue 전용이라 락이 필요 없다.
 	int32 pendingDbJobs_ = 0;
 	bool  closePending_ = false;
+
+	// RoomManager::removeRoom 직전에 선다. 이후 이 방은 지연 파괴 대기 상태다 — update()는
+	// 틱 재예약을 끊고, enter()/leave()는 미아 잡을 거부한다. 큐가 유휴가 되면
+	// sweepPendingRooms가 풀로 반납한다. docs/serverHandoff.md §4-P0 D.
+	bool  closed_ = false;
 
 	// S_NpcMoveBatch 송신 스로틀. 시뮬은 60Hz 그대로 돌리되 이동 브로드캐스트만 20Hz로 내린다.
 	// 이유 둘: ① 클라 보간 창이 실측 도착 간격을 따라가므로 레이트가 맞아야 t가 0→1을 꽉 채워

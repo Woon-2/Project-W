@@ -946,6 +946,12 @@ void Room::spawnBarrierFromMarker(const MarkerDef& m) {
 }
 
 void Room::update() {
+	// 지연 파괴 대기 중: 아무것도 하지 않고 재예약도 끊는다. 큐에 이미 들어와 있던 틱 잡은
+	// 여기서 no-op으로 소화되고, 큐가 비면 RoomManager::sweepPendingRooms가 방을 반납한다.
+	if (closed_) {
+		return;
+	}
+
 	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
 	static constexpr Seconds dtSec   = 1s / 60.f;
 
@@ -1268,6 +1274,17 @@ static void registerPlayerAnimClips(Player& player, const std::vector<ServerAnim
 }
 
 void Room::enter(GameSession* session) {
+	// findOrCreateRoomByCode가 돌려준 포인터를 락 밖에서 쓰는 사이 마지막 세션이 떠나
+	// 방이 닫히는 레이스(docs/serverHandoff.md §4-P0 말미). 지연 파괴 덕에 메모리는
+	// 안전하므로 입장만 거부하고 재접속을 유도한다(코드 엔트리는 이미 지워져, 재접속은
+	// 새 방을 만든다).
+	if (closed_) {
+		std::cout << "[Room] enter on closed room id=" << id_
+			<< " session=" << session->id() << " -- rejected\n";
+		session->disconnect("room closed");
+		return;
+	}
+
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
 	player->setFaction(Faction::Players);
@@ -1565,11 +1582,21 @@ void Room::onInventoryLoaded(GameSession* session, InventoryStore::LoadStatus st
 void Room::onDbJobFinished() {
 	--pendingDbJobs_;
 	if (pendingDbJobs_ == 0 && closePending_ && sessions_.empty()) {
+		closed_ = true;
 		RoomManager::removeRoom(id_);
 	}
 }
 
 void Room::leave(GameSession* session) {
+	// 닫힌 방에 정상 leave는 올 수 없다(closed_는 sessions_가 빈 뒤에만 선다). 여기 오는 건
+	// 닫힌 방 입장이 거부돼 끊긴 세션의 leave 같은 미아 잡뿐이다 — 그 세션은 이 방에 등록된
+	// 적이 없으므로 해제 작업 없이 무시한다.
+	if (closed_) {
+		std::cout << "[Room] leave on closed room id=" << id_
+			<< " session=" << session->id() << " -- ignored\n";
+		return;
+	}
+
 	// sessions_에서 빼기 전에 저장한다 — session->player()가 아직 유효해야 한다.
 	persistInventory(session);
 
@@ -1599,6 +1626,7 @@ void Room::leave(GameSession* session) {
 		// DB 잡이 남아 있으면 방 제거를 미룬다. 지금 지우면 Room이 풀로 반환돼,
 		// 되돌아올 완료 잡이 재활용된 다른 방을 건드리게 된다.
 		if (pendingDbJobs_ == 0) {
+			closed_ = true;
 			RoomManager::removeRoom(id_);
 		}
 		else {
@@ -1608,14 +1636,14 @@ void Room::leave(GameSession* session) {
 }
 
 void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
-	// 혹시나 하는 가능성 중, sessionId로 idSessionMap_에서 session을 찾는 것이 유효하지 않을 수도 있음.
-	// leave한 sessionId가 move 패킷을 보내는 경우 등. 일단은 방에 있는 session이 보낸 패킷이므로 유효하다고 가정하고 작성한다.
-	auto session = idSessionMap_[sessionId];
-
-	if (session == nullptr) {
+	// leave한 sessionId가 move 패킷을 보내는 경우 등 조회 실패 가능성이 있다.
+	// operator[]는 없는 키에 nullptr을 삽입해 맵을 오염시키므로 find로 조회한다(§4-P0 곁들이).
+	auto it = idSessionMap_.find(sessionId);
+	if (it == idSessionMap_.end() || it->second == nullptr) {
 		std::cout << "[ move() ] 존재하지 않는 session을 찾고 있습니다. sessionId: " << sessionId << '\n';
 		return;
 	}
+	auto session = it->second;
 
 	auto player = session->player();
 
