@@ -1336,3 +1336,18 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | 서버 권한 처리 | `../../RoomServer/Room.cpp`, `PacketManager.cpp` | Player 소유 인벤토리, revision 검증, HP 브로드캐스트 |
 | 프로토콜 | `../../ServerEngine/protocol.hpp` | `C_InventoryAction`, `S_InventorySnapshot`, `S_InventoryActionResult` |
 | 유지보수 문서 | `inventorySystem.md` | 아이템 추가 방법, 확장 규칙, 빌드·검증 절차 |
+| `Inventory::canFit` | `../common/inventory.cpp` | add()와 같은 배치 규칙의 사전 검사(월드 습득의 전부-아니면-전무용) |
+
+## 16. 아이템 드롭 / 습득 (월드 보석)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| 설계 문서 | `../../RoomServer/docs/itemDropSystem.md` | 권위 경계, 룸 로컬 dropId, 패킷 계약, 아이콘 저작 절차 |
+| 프로토콜 | `../../ServerEngine/protocol.hpp` | `C_ItemPickup`, `S_ItemDropBatch`, `S_ItemDropRemove`, `ItemDropInfo`, `ItemPickupResult` |
+| 서버 드롭/습득 | `../../RoomServer/Room.cpp` | `spawnGemDrops` / `updateItemDrops` / `pickupItem`, `noteAndMaybeReward`의 사망 훅 |
+| 드롭 개수 티어 | `../../RoomServer/object.hpp`, `Npc.hpp`, `TacticalNpc.hpp`, `PlatoonLeader.hpp`, `finalBoss.hpp` | `rollGemDropCount()` virtual (0 / 1~2 / 5 / 10) |
+| 클라 드롭 객체 | `online/onlineGame.cpp` | `GemDrop`/`gemDrops_`, `createItemDrop`·`updateItemDrops`·`updateItemDropAim`·`destroyItemDrop` |
+| 보석 메시 | `AssetManager.hpp/.cpp` | `gemModels_`(32개 평탄 배열) + `gemModel(itemId, variant)` |
+| 강조 실루엣 | `outlinePipeline.hpp/.cpp`, `outline.hlsl`, `shader.cpp: createOutlineShader` | inverted hull, SceneColorHDR 가산 → bloom 발광 |
+| 습득 프롬프트 | `ui/pickupPromptHUD.hpp/.cpp` | 월드 앵커 `[F] 줍기` + 중앙 실패 안내 |
+| 아이콘 저작 모드 | `standalone/game.cpp: renderIconCapture` | F10 토글, 1~6 종류 / `[`·`]` variant |

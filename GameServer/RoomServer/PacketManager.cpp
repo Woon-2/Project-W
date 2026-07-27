@@ -64,6 +64,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCInventoryActionPacket(session, buffer, len);
 		break;
 
+	case PacketType::C_ItemPickup:
+		handleCItemPickupPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -199,6 +203,21 @@ void PacketManager::handleCInventoryActionPacket(GameSession* session, byte* buf
 	session->room()->doAsync([session, revision, slotIndex, action]() {
 		if (session->room())
 			session->room()->inventoryAction(session->id(), revision, slotIndex, action);
+	});
+}
+
+void PacketManager::handleCItemPickupPacket(GameSession* session, byte* buffer, int32 len) {
+	if (!session || !session->room() || len != sizeof(CItemPickupPacket))
+		return;
+
+	const auto* pkt = reinterpret_cast<const CItemPickupPacket*>(buffer);
+	const uint16 dropId = pkt->dropId;
+	if (dropId == 0)
+		return;   // 0은 "드롭 없음" sentinel
+
+	session->room()->doAsync([session, dropId]() {
+		if (session->room())
+			session->room()->pickupItem(session->id(), dropId);
 	});
 }
 
@@ -732,6 +751,44 @@ std::shared_ptr<SendBuffer> PacketManager::makeSInventoryActionResultPacket(
 	pkt->slot = slot;
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_InventoryActionResult;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSItemDropBatchPacket(
+	const std::vector<ItemDropInfo>& drops) {
+	const uint16 count = static_cast<uint16>(drops.size());
+	auto sendBuffer = SendBufferManager::open(sizeof(SItemDropBatchPacket) + sizeof(ItemDropInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SItemDropBatchPacket>();
+
+	auto* infos = bw.reserve<ItemDropInfo>(count);
+	for (uint16 i = 0; i < count; ++i)
+		infos[i] = drops[i];
+
+	pkt->dataOffset = static_cast<uint16>(reinterpret_cast<uint64>(infos) - reinterpret_cast<uint64>(pkt));
+	pkt->dropCount  = count;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_ItemDropBatch;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSItemDropRemovePacket(
+	uint16 dropId, uint16 pickerObjId, ItemPickupResult result) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SItemDropRemovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<SItemDropRemovePacket>();
+	pkt->dropId      = dropId;
+	pkt->pickerObjId = pickerObjId;
+	pkt->result      = result;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_ItemDropRemove;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

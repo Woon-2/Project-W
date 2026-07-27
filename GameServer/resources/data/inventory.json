@@ -12,6 +12,60 @@
         "type": "heal_percent",
         "value": 0.2
       }
+    },
+    {
+      "id": 2,
+      "key": "ui_gem_BlueCrystal",
+      "name": "푸른 수정",
+      "description": "몬스터의 잔해에서 굳어진 서늘한 수정.",
+      "iconPath": "../resources/UI/ui_gem_BlueCrystal.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
+    },
+    {
+      "id": 3,
+      "key": "ui_gem_MoonStone",
+      "name": "월석",
+      "description": "달빛을 머금은 듯 은은하게 빛나는 돌.",
+      "iconPath": "../resources/UI/ui_gem_MoonStone.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
+    },
+    {
+      "id": 4,
+      "key": "ui_gem_Obsidian",
+      "name": "흑요석",
+      "description": "빛을 삼키는 검은 유리질 광석.",
+      "iconPath": "../resources/UI/ui_gem_Obsidian.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
+    },
+    {
+      "id": 5,
+      "key": "ui_gem_GreenObsidian",
+      "name": "녹빛 흑요석",
+      "description": "깊은 녹색이 스며든 희귀한 흑요석.",
+      "iconPath": "../resources/UI/ui_gem_GreenObsidian.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
+    },
+    {
+      "id": 6,
+      "key": "ui_gem_PurpCrystal",
+      "name": "보랏빛 수정",
+      "description": "마력이 응결되어 보랏빛을 띠는 수정.",
+      "iconPath": "../resources/UI/ui_gem_PurpCrystal.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
+    },
+    {
+      "id": 7,
+      "key": "ui_gem_RedCrystal",
+      "name": "붉은 수정",
+      "description": "안쪽에서 열기가 도는 붉은 결정.",
+      "iconPath": "../resources/UI/ui_gem_RedCrystal.dds",
+      "maxStack": 99,
+      "use": { "type": "none" }
     }
   ],
   "starter": [

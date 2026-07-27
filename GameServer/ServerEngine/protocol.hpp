@@ -82,6 +82,11 @@ enum class PacketType : uint16 {
 	C_InventoryAction,
 	S_InventorySnapshot,
 	S_InventoryActionResult,
+
+	// Append-only: monster gem drops + world pickup.
+	C_ItemPickup,
+	S_ItemDropBatch,
+	S_ItemDropRemove,
 };
 
 enum class ObjectType : uint16 {
@@ -170,6 +175,17 @@ enum class InventoryActionResult : uint8 {
 	FullHealth,
 	Dead,
 	StaleRevision,
+};
+
+// S_ItemDropRemove의 사유. PickedUp/Expired만 월드에서 드롭을 제거하며(브로드캐스트),
+// 나머지는 요청자 한 명에게만 가는 습득 거절 사유다.
+enum class ItemPickupResult : uint8 {
+	PickedUp = 0,
+	Expired,
+	TooFar,
+	NotFound,
+	InventoryFull,
+	NotReady,
 };
 
 struct PacketHeader {
@@ -676,6 +692,39 @@ struct SInventoryActionResultPacket : public PacketHeader {
 	InventoryAction       action;
 	InventoryActionResult result;
 	InventorySlotInfo     slot;
+};
+
+// 월드에 떨어진 보석 1개. dropId는 룸 로컬 id 공간이며 IdPool과 무관하다
+// (근거: RoomServer/docs/itemDropSystem.md). 서버는 착지점(pos)만 확정하고
+// 낙하 연출(Dynamic RigidBody)은 클라가 로컬로 돌린다.
+struct ItemDropInfo {
+	uint16            dropId;
+	uint32            itemId;
+	uint16            quantity;
+	uint8             visualVariant;   // 같은 아이템 종류 안에서의 메시 인덱스
+	uint16            sourceObjId;     // 던지기 시작점으로 쓸 시체의 objId (0 = 없음)
+	DirectX::XMFLOAT3 pos;             // 권위 착지점
+};
+
+struct SItemDropBatchPacket : public PacketHeader {
+	uint16 dataOffset;   // ItemDropInfo 배열 시작 위치 (this 기준)
+	uint16 dropCount;
+
+	using DropList = DataList<ItemDropInfo>;
+	DropList getDropList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return DropList(reinterpret_cast<ItemDropInfo*>(dataStart), dropCount);
+	}
+};
+
+struct CItemPickupPacket : public PacketHeader {
+	uint16 dropId;
+};
+
+struct SItemDropRemovePacket : public PacketHeader {
+	uint16           dropId;
+	uint16           pickerObjId;   // PickedUp일 때만 유효, 그 외 0
+	ItemPickupResult result;
 };
 
 #pragma pack(pop)

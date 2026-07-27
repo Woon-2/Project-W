@@ -226,6 +226,17 @@ private:
 	float heatDebugWarpScale_ = 1.0f;
 	float heatDebugGlowScale_ = 1.0f;
 
+	// F10: 인벤토리 아이콘 저작 모드. 씬을 어두운 배경으로 덮고 카메라 앞에 보석 하나만
+	// 고정 배치한다. 1~6으로 종류, [ / ]로 variant를 바꾼 뒤 화면을 캡처해
+	// resources/UI/texConv.bat으로 .dds를 만든다(1회성 저작 경로) —
+	// RoomServer/docs/itemDropSystem.md의 "아이콘 저작" 절 참조.
+	bool  iconCaptureMode_    = false;
+	int   iconCaptureKind_    = 0;   // 0..5 (inventory.json 보석 id 2..7 순서)
+	int   iconCaptureVariant_ = 0;
+	std::unique_ptr<Object> iconCaptureGem_{};        // 표시 중인 보석 (지연 생성)
+	std::unique_ptr<Object> iconCaptureBackdrop_{};   // 보석 뒤 어두운 판
+	void renderIconCapture();
+
 	// --- Physics constraint debug state ---
 	std::vector<PhysicsTestObject> rdObjects_{};
 	float rdImpulseStrength_ = 5.f;    // N*s applied by R key

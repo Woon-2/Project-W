@@ -127,6 +127,9 @@ public:
 
     TacticalNpcUpdateResult update( Seconds dt, Room& room );
 
+    // 전술 부대원은 필드 일반 몬스터와 같은 취급(1~2). 중간보스는 PlatoonLeader가 override.
+    int32 rollGemDropCount() override { return 1 + (rand() % 2); }
+
     void receiveCommand( const TacticalCommand& cmd );
 
     TacticalNpcState  getState()             const { return state_; }

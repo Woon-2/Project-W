@@ -108,6 +108,13 @@ void AssetManager::loadInventoryItemIcons(GFX& gfx, const ItemCatalog& catalog) 
 	for (const ItemDefinition& item : catalog.items()) {
 		if (item.iconPath.empty())
 			continue;
+		// 아이콘 리소스는 카탈로그보다 늦게 저작될 수 있다(보석 아이콘 캡처 등).
+		// 없는 파일을 요청하면 로더가 죽으므로 건너뛰고, 패널이 폴백 블록을 그리게 둔다.
+		if (!std::filesystem::exists(item.iconPath)) {
+			gSharedLog << "[AssetManager] inventory icon not found, using fallback: "
+			           << item.iconPath << '\n';
+			continue;
+		}
 
 		auto [it, inserted] = inventoryItemIcons_.try_emplace(item.id);
 		if (!inserted)
@@ -197,7 +204,43 @@ void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) 
 	setupBakedAnimationIds();
 }
 
+namespace {
+// resources/models/props/<Kind><variant>.bin. 순서는 inventory.json의 보석 id 2..7과
+// 정확히 일치해야 한다(서버 Room::spawnGemDrops가 같은 순서로 kind를 고른다).
+constexpr const char* kGemMeshPrefix[AssetManager::kGemKindCount] = {
+	"BlueCrystal", "MoonStone", "Obsidian", "GreenObsidian", "PurpCrystal", "RedCrystal"
+};
+
+// (kind, variant) -> gemModels_ 평탄 인덱스.
+constexpr int gemFlatIndex(int kind, int variant) {
+	int base = 0;
+	for (int k = 0; k < kind; ++k) base += AssetManager::kGemVariants[k];
+	return base + variant;
+}
+}
+
+const Model* AssetManager::gemModel(ItemId itemId, uint8_t variant) const {
+	const int kind = static_cast<int>(itemId) - static_cast<int>(kFirstGemItemId);
+	if (kind < 0 || kind >= kGemKindCount)
+		return nullptr;
+	const int v = static_cast<int>(variant) % kGemVariants[kind];
+	return &gemModels_[gemFlatIndex(kind, v)];
+}
+
 void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& configs) {
+	// 월드에 떨어지는 보석 메시 전량(32개). 모두 저폴리 prop이고 텍스처 세트는
+	// 11종을 공유하므로 texHashMap_ 캐시가 실제 VRAM 비용을 억제한다.
+	for (int kind = 0; kind < kGemKindCount; ++kind) {
+		for (int v = 0; v < kGemVariants[kind]; ++v) {
+			gfx.addRequestModelLoad( RequestModelLoad{
+				.modelPath = std::filesystem::path("../resources/models/props/")
+					/ (std::string(kGemMeshPrefix[kind]) + std::to_string(v) + ".bin"),
+				.pTexHashMap = &texHashMap_,
+				.pDest = &gemModels_[gemFlatIndex(kind, v)]
+			} );
+		}
+	}
+
 	// Remaining assets needed only in-game.
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/goblin/goblin.bin",

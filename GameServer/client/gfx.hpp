@@ -23,6 +23,7 @@
 #include "piercingSlashMeshPipeline.hpp"
 #include "swordSlashPipeline.hpp"
 #include "twoSidesPipeline.hpp"
+#include "outlinePipeline.hpp"
 #include "trailPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
@@ -261,6 +262,11 @@ public:
 	void addCameraData( const TwoSidesPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const TwoSidesPipeline::FrameData& frameData );
+	// 상호작용 강조용 실루엣(inverted hull). SceneColorHDR에 가산 합성되므로
+	// HDR 색을 넣으면 bloom이 테두리를 빛나게 한다.
+	void addDrawEvent( const OutlinePipeline::DrawEvent& drawEvent );
+	void addCameraData( const OutlinePipeline::CameraData& cameraData );
+	void addFrameData( const OutlinePipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
 	// Submits a trail drawn into SceneColorHDR BEFORE bloom (glowing path-guidance
@@ -629,6 +635,11 @@ private:
 	TwoSidesPipeline::Resources              resourcesTwoSidesPipeline_{};
 	TwoSidesPipeline::CameraData             cameraDataTwoSidesPipeline_{};
 	TwoSidesPipeline::FrameData              frameDataTwoSidesPipeline_{};
+	// Outline Pipeline (interaction silhouette, additive into SceneColorHDR)
+	std::vector<OutlinePipeline::DrawEvent>  drawEventsOutlinePipeline_{};
+	OutlinePipeline::Resources               resourcesOutlinePipeline_{};
+	OutlinePipeline::CameraData              cameraDataOutlinePipeline_{};
+	OutlinePipeline::FrameData               frameDataOutlinePipeline_{};
 	// Trail Pipeline
 	std::vector<TrailPipeline::DrawEvent>    drawEventsTrailPipeline_{};
 	TrailPipeline::Resources                 resourcesTrailPipeline_{};

@@ -104,6 +104,7 @@ public:
     // Set the gravitational acceleration applied to Dynamic bodies each step.
     // Default: {0, -9.8, 0} (world Y-up).
     void MU_CALLCONV setGravity(mu::Vec3 g) { gravity_ = g; }
+    mu::Vec3 MU_CALLCONV gravity() const { return gravity_; }
 
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
