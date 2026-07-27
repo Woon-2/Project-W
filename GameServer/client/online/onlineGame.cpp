@@ -381,6 +381,204 @@ void Game::clearLobbyCharacters() {
 	lobbyUI_.hideAllSlotBays();
 }
 
+void Game::resetInGameSession() {
+	// 이 Game 인스턴스는 LobbyServer 연결과 함께 여러 경기에 걸쳐 재사용된다.
+	// 이전 경기 객체가 남으면 새 Room이 같은 npc id를 재사용했을 때 create*의 중복
+	// 스폰 방지가 새 객체 생성을 건너뛰고, 이전 객체가 이동/피격에서 분리된 유령이 된다.
+	const bool hadSessionObjects =
+		player_ || !otherPlayers_.empty() || !idMonsterMap_.empty()
+		|| !corpses_.empty() || !strongholds_.empty();
+	if (hadSessionObjects) {
+		// 객체와 그 UI가 직전 프레임 GPU 제출에서 참조됐을 수 있다.
+		gfx_.drainGpu();
+	}
+
+	uiManager_.resetInteractionState();
+	camera_.cancelFocusCinematic();
+	camera_.setTargetObject(std::shared_ptr<Object>{});
+
+	// HP/UI 엔트리는 Object*를 비소유로 들고 있으므로 객체보다 먼저 숨긴다.
+	auto hideBars = [](auto& bars) {
+		for (auto& [id, entry] : bars) {
+			if (entry.hpBar) entry.hpBar->visible = false;
+		}
+	};
+	hideBars(goblinHpBars_);
+	hideBars(snakeHpBars_);
+	hideBars(mushroomHpBars_);
+	hideBars(bomberHpBars_);
+	hideBars(birdyHpBars_);
+	hideBars(slimeHpBars_);
+	hideBars(treantHpBars_);
+	hideBars(bossHpBars_);
+	hideBars(strongholdHpBars_);
+	for (auto& [id, entry] : otherPlayerHpBars_) {
+		if (entry.hpBar) entry.hpBar->visible = false;
+		if (entry.partyRoot) entry.partyRoot->visible = false;
+	}
+	for (auto& [id, entry] : npcStatusIcons_) {
+		if (entry.icon) entry.icon->visible = false;
+	}
+	for (auto& corpse : corpses_) {
+		if (corpse.hpBar) corpse.hpBar->visible = false;
+	}
+	auto hidePoolBars = [](auto& pool) {
+		for (auto& entry : pool) {
+			if (entry.hpBar) entry.hpBar->visible = false;
+		}
+	};
+	hidePoolBars(goblinPool_);
+	hidePoolBars(snakePool_);
+	hidePoolBars(mushroomPool_);
+	hidePoolBars(bomberPool_);
+	hidePoolBars(birdyPool_);
+	hidePoolBars(slimePool_);
+	hidePoolBars(treantPool_);
+	hidePoolBars(bossPool_);
+
+	// AnimSystem/PhysicsWorld는 비소유 raw pointer를 보관한다. 모든 소유 컨테이너에서
+	// 객체를 모아 중복 없이 등록을 해제한 뒤 shared_ptr을 파괴해야 한다.
+	std::unordered_set<Object*> sessionObjects;
+	auto remember = [&sessionObjects](const auto& object) {
+		if (object) sessionObjects.insert(object.get());
+	};
+	remember(player_);
+	for (const auto& object : otherPlayers_) remember(object);
+	for (const auto& [id, object] : idPlayerMap_) remember(object);
+	for (const auto& object : goblins_) remember(object);
+	for (const auto& object : snakes_) remember(object);
+	for (const auto& object : mushrooms_) remember(object);
+	for (const auto& object : bombers_) remember(object);
+	for (const auto& object : birdys_) remember(object);
+	for (const auto& object : slimes_) remember(object);
+	for (const auto& object : treants_) remember(object);
+	for (const auto& object : bosses_) remember(object);
+	for (const auto& object : strongholds_) remember(object);
+	for (const auto& object : barriers_) remember(object);
+	for (const auto& corpse : corpses_) remember(corpse.obj);
+	auto rememberPool = [&remember](const auto& pool) {
+		for (const auto& entry : pool) remember(entry.obj);
+	};
+	rememberPool(goblinPool_);
+	rememberPool(snakePool_);
+	rememberPool(mushroomPool_);
+	rememberPool(bomberPool_);
+	rememberPool(birdyPool_);
+	rememberPool(slimePool_);
+	rememberPool(treantPool_);
+	rememberPool(bossPool_);
+
+	for (Object* object : sessionObjects) {
+		if (object->animBlender()) {
+			animSystem_.untrackAnimBlender(object->animBlender());
+		}
+		if (Ragdoll* ragdoll = object->ragdoll()) {
+			ragdoll->destroy(physicsWorld_);
+		}
+		physicsWorld_.unregisterBody(&object->body());
+	}
+
+	// SkillSystem의 실행 인스턴스에는 owner/target raw pointer가 있으므로 id 맵과
+	// 객체를 비우기 전에 런타임 전체를 폐기한다. 다음 S_Enter의 setupPlayer가
+	// 에셋과 dispatch context를 새 경기 객체로 다시 구성한다.
+	skillSystem_ = SkillSystem{};
+	skillCtx_ = SkillDispatchContext{};
+	skillObjectById_.clear();
+	skillVfxById_.clear();
+	clearEvents(eventList_);
+
+	player_.reset();
+	otherPlayers_.clear();
+	idPlayerMap_.clear();
+	goblins_.clear();
+	snakes_.clear();
+	mushrooms_.clear();
+	bombers_.clear();
+	birdys_.clear();
+	slimes_.clear();
+	treants_.clear();
+	bosses_.clear();
+	idGoblinMap_.clear();
+	idSnakeMap_.clear();
+	idMushroomMap_.clear();
+	idMonsterMap_.clear();
+	bossNpcIds_.clear();
+	bossHeatProfiles_.clear();
+	barrierObjects_.clear();
+	strongholds_.clear();
+	barriers_.clear();
+
+	corpses_.clear();
+	goblinPool_.clear();
+	snakePool_.clear();
+	mushroomPool_.clear();
+	bomberPool_.clear();
+	birdyPool_.clear();
+	slimePool_.clear();
+	treantPool_.clear();
+	bossPool_.clear();
+	respawnKind_.clear();
+	monsterSpawnInfo_.clear();
+	detachedNpcIds_.clear();
+	pendingOrbCharges_.clear();
+	orbSystem_.clear();
+	std::ranges::fill(prevServerCharge_, 0.f);
+
+	otherPlayerHpBars_.clear();
+	goblinHpBars_.clear();
+	snakeHpBars_.clear();
+	mushroomHpBars_.clear();
+	bomberHpBars_.clear();
+	birdyHpBars_.clear();
+	slimeHpBars_.clear();
+	treantHpBars_.clear();
+	bossHpBars_.clear();
+	strongholdHpBars_.clear();
+	npcStatusIcons_.clear();
+	teammateCharge_.clear();
+	teammateSelected_.clear();
+	inGamePartyPlayerIds_.clear();
+	inGamePartyNameById_.clear();
+	inGameMonsterKillsByPlayerId_.clear();
+	inGameDamageByPlayerId_.clear();
+	inGamePickedItemsByPlayerId_.clear();
+	inGameBossLastHitPlayerId_ = -1;
+	inGamePartyNameSeq_ = 0;
+
+	zoneStates_.clear();
+	localArenaPresentationZoneId_ = -1;
+	localPresentedArenaZoneIds_.clear();
+	completedArenaZoneIds_.clear();
+	arenaLeashActive_ = false;
+	arenaWalls_.clear();
+	barrierMagicCircleQuads_.clear();
+	bossHpTarget_ = nullptr;
+	bossHpHudActive_ = false;
+
+	damageNumberSystem_.clear();
+	minimapIcons_.clear();
+	minimapGuidePoly_.clear();
+	lastNpcMoveAt_.clear();
+	diagElapsed_ = 0ms;
+	playerDead_ = false;
+	inRoom_ = false;
+	moveChange_ = false;
+	physicUpdateAcc_ = 0s;
+	moveStateSendAcc_ = 0s;
+	prevVelocity_ = {};
+	currVelocity_ = {};
+	knockbackTimer_ = 0.f;
+	knockbackSpeed_ = 0.f;
+	knockbackDir_ = {};
+	postKnockbackLockTimer_ = 0.f;
+	comboCount_ = 0;
+	comboWindowMs_ = 0.f;
+	comboSecLeft_ = 0.f;
+	tornadoShotActive_ = false;
+	tornadoShotElapsed_ = 0s;
+	nextRenderObjId_ = 0u;
+}
+
 void Game::setupStage() {
 	// 레벨 파싱 + 지형/스카이박스/방향광 (대기실 배경과 공유, 1회만 init).
 	setupStageVisual();
@@ -633,6 +831,8 @@ void Game::showFinalScoreboard() {
 	}
 	hideCombatHudForFinalScoreboard();
 	finalScoreboardPending_ = false;
+	finalBossRewardCorpseTracked_ = false;
+	finalBossRewardOrbsSpawned_ = false;
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
 	applyCursorPolicy();
@@ -2477,7 +2677,12 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	idPlayerMap_[playerInfo.playerId] = player_;
 	registerInGamePartyPlayer(playerInfo.playerId, playerInfo.nickname);
 
-	setParticle();
+	// Game은 로비 연결을 유지한 채 여러 경기를 재사용한다. ParticleEffect::addSystem은
+	// 누적되므로 두 번째 S_Enter에서 다시 구성하면 VFX 시스템이 경기마다 배증한다.
+	if (!particleEffectsReady_) {
+		setParticle();
+		particleEffectsReady_ = true;
+	}
 
 	// Compile skills and build dispatch context (online mode: prediction-only, no damage events).
 	{
@@ -3308,6 +3513,10 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 					std::span<const mu::Mat4x4>(fx.data(), fx.size()),
 					o.renderState().world, c.totalCharge, c.slot, c.corpseId);
 				c.orbsSpawned = true;
+				if (finalBossRewardCorpseTracked_
+					&& c.corpseId == finalBossRewardCorpseId_) {
+					finalBossRewardOrbsSpawned_ = true;
+				}
 				c.phase = Corpse::Phase::Orb;
 				if (o.ragdoll() && o.ragdoll()->isActive())
 					o.ragdoll()->deactivate(physicsWorld_);
@@ -4562,6 +4771,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 						camera_.playFocusCinematic(bossTarget, config);
 						if (isFinalBoss) {
 							finalScoreboardPending_ = true;
+							finalBossRewardCorpseId_ = 0u;
+							finalBossRewardCorpseTracked_ = false;
+							finalBossRewardOrbsSpawned_ = false;
 							const i32t killerId = static_cast<const EvDeath*>(pEv)->killerId;
 							if (killerId >= 0
 								&& std::ranges::find(
@@ -4757,12 +4969,7 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	pathGuide_.update(std::chrono::duration<float>(deltaTime).count(), player_->pos(), chunkManager_);
 
 	camera_.update(deltaTime);
-	const bool focusCinematicWasActive = camera_.focusCinematicActive();
 	camera_.updateFocusCinematic(deltaTime);
-	if (finalScoreboardPending_ && focusCinematicWasActive
-		&& !camera_.focusCinematicActive()) {
-		showFinalScoreboard();
-	}
 	// 3D 오디오 리스너를 카메라에 맞춘다(공간 SFX 감쇠/패닝 기준).
 	{
 		const mu::Vec3 camEye = camera_.eye();
@@ -4808,12 +5015,25 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		for (auto& treant   : treants_)   activateAndCollect(treant,   MonsterKind::Treant);
 		for (auto& boss     : bosses_)    activateAndCollect(boss,     MonsterKind::Boss);
 
-		for (auto& [objPtr, kind] : justDied)
-			migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
+		for (auto& [objPtr, kind] : justDied) {
+			const u32t corpseId =
+				migrateToCorpse(objPtr, kind, static_cast<uint16>(objPtr->getId()));
+			if (finalScoreboardPending_ && kind == MonsterKind::Boss) {
+				finalBossRewardCorpseId_ = corpseId;
+				finalBossRewardCorpseTracked_ = true;
+			}
+		}
 	}
 
 	// Advance client-authored corpses: ragdoll hold -> orb dissolve -> pool return.
 	updateCorpses(simulationDeltaTime, tPhysicInterpolation);
+	if (finalScoreboardPending_
+		&& !camera_.focusCinematicActive()
+		&& finalBossRewardCorpseTracked_
+		&& finalBossRewardOrbsSpawned_
+		&& !orbSystem_.hasActiveOrbs(finalBossRewardCorpseId_)) {
+		showFinalScoreboard();
+	}
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -5377,8 +5597,16 @@ void Game::renderInGame() {
 // ===========================================================================
 
 void Game::enterLobby() {
+	// RoomServer 경기 객체는 LobbyServer 세션보다 수명이 짧다. 로비 UI를 다시 만들기
+	// 전에 이전 경기의 id 맵과 소유 컨테이너를 함께 비워야 다음 방의 재사용 id가
+	// create* 중복 방지에 걸리지 않는다.
+	resetInGameSession();
+
 	camera_.cancelFocusCinematic();
 	finalScoreboardPending_ = false;
+	finalBossRewardCorpseId_ = 0u;
+	finalBossRewardCorpseTracked_ = false;
+	finalBossRewardOrbsSpawned_ = false;
 	pendingLobbyReturn_ = false;
 	finalScoreboard_.hide();
 
@@ -5901,8 +6129,16 @@ void Game::renderWaitingRoom() {
 }
 
 void Game::enterInGame() {
+	// 닫힌 RoomServer의 이미 완료된 recv APC가 로비의 alertable wait에서 뒤늦게
+	// 전달될 수 있다. reconnectToRoomServer가 retired session을 드레인한 다음인 이
+	// 지점에서 한 번 더 정리해, 그 패킷이 복원한 이전 경기 객체도 제거한다.
+	resetInGameSession();
+
 	camera_.cancelFocusCinematic();
 	finalScoreboardPending_ = false;
+	finalBossRewardCorpseId_ = 0u;
+	finalBossRewardCorpseTracked_ = false;
+	finalBossRewardOrbsSpawned_ = false;
 	pendingLobbyReturn_ = false;
 	finalScoreboard_.hide();
 	pendingStart_ = false;
@@ -5919,6 +6155,12 @@ void Game::enterInGame() {
 
 	// 대기실 전시 캐릭터 정리: animSystem 트랙/shared_ptr를 제거해 인게임 씬으로 누수되지 않게 한다.
 	clearLobbyCharacters();
+
+	// setupStageVisual은 최초 한 번만 실행되므로 경기 단위 진행 상태는 여기서 다시 만든다.
+	clientZoneSystem_.build(chunkManager_.zones());
+	bindZoneHandlers();
+	rebuildBarrierMagicCircleQuads();
+	pathGuide_.build(chunkManager_.markers());
 
 	std::string inventoryError;
 	if (inventory_.initializeEmpty(itemCatalog_, &inventoryError))

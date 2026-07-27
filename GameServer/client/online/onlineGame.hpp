@@ -237,6 +237,9 @@ private:
 	void setupLobbyCharacters();   // 대기실 전시 캐릭터 생성(무대 위 일렬)
 	void updateLobbyCharacterTransforms();   // 카메라 sway 중에도 화면 슬롯 위치 유지
 	void clearLobbyCharacters();   // 전시 캐릭터 제거 + animSystem 트랙 해제
+	// 이전 RoomServer 경기에서 생성된 플레이어/NPC/시체와 모든 id 조회 상태를 제거한다.
+	// 로비 복귀 직후와 다음 경기 진입 직전에 모두 호출할 수 있도록 멱등적이어야 한다.
+	void resetInGameSession();
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 	void updatePlayerHpHudLayout();
@@ -623,6 +626,12 @@ private:
 	// cinematic timing, score collection, and the lobby hand-off.
 	UI::FinalScoreboard finalScoreboard_{};
 	bool finalScoreboardPending_ = false;
+	// The result must not cover the final boss's reward conversion. Track that
+	// corpse separately and wait until every one of its energy orbs has finished
+	// the Absorbing state.
+	u32t finalBossRewardCorpseId_ = 0u;
+	bool finalBossRewardCorpseTracked_ = false;
+	bool finalBossRewardOrbsSpawned_ = false;
 	bool pendingLobbyReturn_ = false;
 
 	// Final-boss HUD. Presentation is armed only by this client's local Arena_Boss
@@ -685,6 +694,9 @@ private:
 	ParticleEffect tornadoShotEffect_{};
 	ParticleEffect tornadoMuzzleEffect_{};
 	ParticleEffect tornadoHitEffect_{};
+	// ParticleEffect::addSystem은 누적 동작이다. Game 객체를 재사용해 두 번째 경기에
+	// 들어가더라도 동일 시스템을 다시 추가하지 않도록 최초 구성 여부를 보존한다.
+	bool particleEffectsReady_ = false;
 	ParticleSystem dustParticleSystem_{};
 	bool      tornadoShotActive_   = false;
 	mu::Vec3  tornadoShotPos_{};
