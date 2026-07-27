@@ -3534,6 +3534,12 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 					finalBossRewardOrbsSpawned_ = true;
 				}
 				c.phase = Corpse::Phase::Orb;
+				// 보류 중이던 보석 드롭도 이 시점에 튀어나온다(오브 생성과 동기화).
+				// 시체는 client-authored라 id 맵에 없으므로 위치를 직접 넘긴다.
+				{
+					const mu::Vec3 corpsePos = o.pos();
+					releasePendingItemDrops(c.origId, &corpsePos);
+				}
 				if (o.ragdoll() && o.ragdoll()->isActive())
 					o.ragdoll()->deactivate(physicsWorld_);
 			}
@@ -3594,12 +3600,15 @@ namespace {
 constexpr float kGemTossSec        = 0.75f;   // 던지기 탄도 비행 시간(초기 속도 역산에 사용)
 constexpr float kGemFlyMaxSec      = 2.0f;    // 이 시간이 지나면 무조건 수렴 단계로
 constexpr float kGemSettleSec      = 0.3f;    // 권위 착지점으로 블렌딩하는 시간
+constexpr float kGemScale          = 0.7f;    // 원본 prop 메시가 월드에선 너무 크다
 constexpr float kGemMass           = 0.6f;
-constexpr float kGemHalfExtent     = 0.12f;   // 관성 텐서용 근사 반치수
+constexpr float kGemHalfExtent     = 0.06f;   // 관성 텐서용 근사 반치수(kGemScale 반영)
 constexpr float kGemIdleSpinRadSec = 0.9f;    // Idle 회전 속도
 constexpr float kGemBobAmplitude   = 0.05f;
 constexpr float kGemBobRadSec      = 2.2f;
-constexpr float kGemIdleLift       = 0.15f;   // 지면에 박혀 보이지 않도록 살짝 띄운다
+constexpr float kGemIdleLift       = 0.08f;   // 지면에 박혀 보이지 않도록 살짝 띄운다
+// 대응하는 시체를 못 찾은 보류 드롭의 강제 스폰 시한(래그돌 2.0s보다 넉넉하게).
+constexpr float kPendingDropTimeoutSec = 3.0f;
 
 // 카탈로그의 아이템 이름은 JSON에서 온 UTF-8이라 위젯에 넣기 전에 변환해야 한다.
 // pch.hpp가 NONLS를 정의해 MultiByteToWideChar/CP_UTF8을 쓸 수 없으므로,
@@ -3645,15 +3654,37 @@ void Game::createItemDrop(const ItemDropInfo& info) {
 	if (info.dropId == 0) return;
 	// 중복 수신/재접속 대비: 같은 dropId가 이미 있으면 무시한다.
 	if (gemDrops_.contains(info.dropId)) return;
+	for (const PendingGemDrop& p : pendingGemDrops_)
+		if (p.info.dropId == info.dropId) return;
+
+	// 사망 즉시 스폰하지 않는다 — 시체가 에너지 오브로 분해되는 시점까지 보류한다.
+	pendingGemDrops_.push_back(PendingGemDrop{ info, 0.f });
+}
+
+void Game::releasePendingItemDrops(uint16 sourceObjId, const mu::Vec3* originOverride) {
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		if (pendingGemDrops_[i].info.sourceObjId != sourceObjId) { ++i; continue; }
+		const ItemDropInfo info = pendingGemDrops_[i].info;
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+		spawnGemDropNow(info, originOverride);
+	}
+}
+
+void Game::spawnGemDropNow(const ItemDropInfo& info, const mu::Vec3* originOverride) {
+	if (gemDrops_.contains(info.dropId)) return;
 
 	const Model* model = assetManager_.gemModel(info.itemId, info.visualVariant);
 	if (!model) return;
 
 	const mu::Vec3 landing = mu::Vec3(info.pos.x, info.pos.y, info.pos.z);
 
-	// 던지기 시작점: 시체가 아직 살아 있으면 그 위치, 아니면 착지점 위.
+	// 던지기 시작점: 시체(오브 분해 지점)가 있으면 그 위치, 아니면 착지점 위.
+	// 시체는 client-authored라 skillObjectById_에 없으므로 호출자가 위치를 넘겨준다.
 	mu::Vec3 origin = landing + mu::Vec3(0.f, 1.5f, 0.f);
-	if (const size_t sid = static_cast<size_t>(info.sourceObjId);
+	if (originOverride)
+		origin = *originOverride + mu::Vec3(0.f, 1.0f, 0.f);
+	else if (const size_t sid = static_cast<size_t>(info.sourceObjId);
 		sid != 0 && sid < skillObjectById_.size() && skillObjectById_[sid]) {
 		origin = skillObjectById_[sid]->pos() + mu::Vec3(0.f, 1.0f, 0.f);
 	}
@@ -3661,6 +3692,7 @@ void Game::createItemDrop(const ItemDropInfo& info) {
 	auto obj = std::make_shared<Object>();
 	obj->setPos(origin);
 	obj->setModel(model);
+	obj->setScale(mu::Vec3(kGemScale, kGemScale, kGemScale));
 	obj->setRenderObjectId(nextRenderObjId_++);
 
 	RigidBody& body = obj->body();
@@ -3695,6 +3727,13 @@ void Game::createItemDrop(const ItemDropInfo& info) {
 }
 
 void Game::destroyItemDrop(uint16 dropId) {
+	// 아직 보류 중(오브 단계 대기)에 만료/습득 통지가 올 수 있다.
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		if (pendingGemDrops_[i].info.dropId != dropId) { ++i; continue; }
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+	}
+
 	const auto it = gemDrops_.find(dropId);
 	if (it == gemDrops_.end()) return;   // 중복 제거 통지는 무해
 
@@ -3706,8 +3745,15 @@ void Game::destroyItemDrop(uint16 dropId) {
 	if (pickupPendingId_ == dropId) pickupPendingId_ = 0;
 }
 
-void Game::onItemDropRemoved(uint16 dropId, uint16 /*pickerObjId*/, ItemPickupResult result) {
+void Game::onItemDropRemoved(uint16 dropId, uint16 pickerObjId, ItemPickupResult result) {
 	if (result == ItemPickupResult::PickedUp || result == ItemPickupResult::Expired) {
+		// 최종 점수판 집계. 성공 시에만 세며, 이 패킷은 브로드캐스트라 모든 클라이언트가
+		// 같은 값을 얻는다(킬 카운트와 동일한 방식 — inGameMonsterKillsByPlayerId_ 참조).
+		// 드롭은 항상 quantity 1이므로 습득 횟수 = 보석 개수다.
+		if (result == ItemPickupResult::PickedUp && pickerObjId != 0
+			&& std::ranges::find(inGamePartyPlayerIds_, pickerObjId) != inGamePartyPlayerIds_.end()) {
+			++inGamePickedItemsByPlayerId_[pickerObjId];
+		}
 		destroyItemDrop(dropId);
 		return;
 	}
@@ -3731,6 +3777,17 @@ void Game::updateItemDrops(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const float dt = std::chrono::duration_cast<Seconds>(deltaTime).count();
 
 	if (pickupNoticeSec_ > 0.f) pickupNoticeSec_ = std::max(0.f, pickupNoticeSec_ - dt);
+
+	// 보류 드롭: 대응 시체가 오브 단계로 넘어가면 releasePendingItemDrops가 꺼내간다.
+	// 시체를 끝내 못 찾은 것만 여기서 시한이 지나 강제 스폰된다.
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		pendingGemDrops_[i].age += dt;
+		if (pendingGemDrops_[i].age < kPendingDropTimeoutSec) { ++i; continue; }
+		const ItemDropInfo info = pendingGemDrops_[i].info;
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+		spawnGemDropNow(info, nullptr);
+	}
 	// 응답이 유실돼도 영구히 잠기지 않도록 대기 상태를 만료시킨다.
 	if (pickupPendingId_ != 0) {
 		pickupPendingSec_ += dt;
