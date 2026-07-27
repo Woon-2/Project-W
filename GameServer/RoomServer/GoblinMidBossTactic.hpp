@@ -116,7 +116,7 @@ private:
     static constexpr float ENCIRCLE_SLOT_SPACING         = 3.0f;
     static constexpr float TACTIC_HP_THRESHOLD           = 0.70f;
     static constexpr float TACTIC_SQUAD_RATIO            = 0.80f;
-    static constexpr Seconds TACTIC_COOLDOWN_DURATION{ 16.0f };
+    static constexpr Seconds TACTIC_COOLDOWN_DURATION{ 12.0f };
     static constexpr Seconds TACTIC_FAIL_COOLDOWN_DURATION{ 5.0f };
     static constexpr Seconds DIVIDE_ENGAGE_DURATION{ 3.0f };
     static constexpr Seconds FORMATION_TIMEOUT{ 7.0f };       // 박스/포위/경계/후퇴 집결 타임아웃 폴백

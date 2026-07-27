@@ -184,8 +184,8 @@ private:
     // 비율/카운트/점수/spacing은 시뮬 원본 유지. 쿨다운은 게임 템포에 맞춘 별도 튜닝값.
     // 월드 거리/오프셋은 인게임 스케일 ×~0.4(주석 병기).
     // 보스 고속 이동(후퇴/합류/돌진)은 모터라 시뮬 배율을 못 써 인게임값으로 캡(주석 병기, M3 튜닝).
-    static constexpr float   MIN_COOLDOWN                 = 15.0f;   // 초(rollCooldown)
-    static constexpr float   MAX_COOLDOWN                 = 21.0f;   // 초
+    static constexpr float   MIN_COOLDOWN                 = 11.0f;   // 초(rollCooldown)
+    static constexpr float   MAX_COOLDOWN                 = 16.0f;   // 초
     static constexpr Seconds RETREAT_TIMEOUT{ 5.0f };
     static constexpr Seconds REGROUP_TIMEOUT{ 3.5f };
     static constexpr Seconds BUDDY_REGROUP_TIMEOUT{ 4.0f };
