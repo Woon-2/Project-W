@@ -57,6 +57,9 @@ public:
 	void setPhysicsWorld(PhysicsWorld* pw) { physicsWorld_ = pw; }
 
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
+	// fovy/near/far은 그대로 두고 aspect만 갱신한다 (해상도 변경 시 재사용).
+	// perspective 카메라에만 적용되며, ortho 카메라에는 아무 효과가 없다.
+	void setAspect(float aspect);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
 
 	void setStiffness(float stiffness) { stiffness_ = stiffness; }

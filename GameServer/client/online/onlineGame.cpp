@@ -6305,6 +6305,16 @@ void Game::applyDisplaySettings() {
 	// 3. 스왑체인 백버퍼/깊이/GBuffer/HiZ 재생성 (GPU idle 후).
 	gfx_.resize(static_cast<u32t>(clientW), static_cast<u32t>(clientH));
 
+	// 3-1. 인게임 카메라의 종횡비를 새 해상도에 맞춘다. lobbyCamera_는 LobbyScene에서
+	//      매 프레임 gClientRect로부터 aspect를 재계산하므로 여기서 건드릴 필요가 없지만,
+	//      camera_(플레이어 추적 카메라)의 proj_는 setPerspective가 호출된 시점에 고정되어
+	//      InGame 도중 ESC 설정창에서 해상도를 바꿔도 갱신되지 않아 화면이 늘어나 보였다.
+	{
+		const float aspect = static_cast<float>(clientW)
+			/ std::max(1.f, static_cast<float>(clientH));
+		camera_.setAspect(aspect);
+	}
+
 	// 4. UI 화면 크기 갱신 + 픽셀 기반 UI(로비/설정창) 재빌드.
 	//    (HUD/데미지 넘버는 앵커·월드 좌표 기반이라 setScreenSize + 매 프레임 worldToScreen로 추종.)
 	uiManager_.setScreenSize(static_cast<float>(clientW), static_cast<float>(clientH));

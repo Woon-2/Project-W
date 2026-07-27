@@ -347,6 +347,13 @@ void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float fa
 	perspectiveProjection_ = true;
 }
 
+void Camera::setAspect(float aspect) {
+	if (!perspectiveProjection_) return;
+	aspect_ = aspect;
+	proj_ = mu::perspReversedZ(fovy_, aspect_, nearz_, farz_);
+	baseProj_ = proj_;
+}
+
 void Camera::setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ) {
 	proj_ = mu::ortho(minX, maxX, minY, maxY, minZ, maxZ);
 	baseProj_ = proj_;
