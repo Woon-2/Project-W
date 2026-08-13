@@ -426,8 +426,15 @@ public:
 	void setHiZCullEnabled(bool v) { hiZCullEnabled_ = v; }
 	bool isHiZCullEnabled() const  { return hiZCullEnabled_; }
 
-	// Hi-Z 컬링 통계 (이전 프레임 기준).
-	struct HiZStats { u32t visible; u32t total; };
+	// 컬링 단계별로 "남은 DrawEvent 인스턴스" 수. 오브젝트가 아니라 per-instance 단위다
+	// (한 캐릭터가 몸/옷/장비로 여러 개를 제출한다). submitted는 청크 스트리밍/거리 컬링을
+	// 이미 통과해 파이프라인에 제출된 전량을 뜻한다.
+	// afterHiZ만 N-2 프레임(전역 프레임 펜스로 완성이 보장된 슬롯) 기준이라 앞 두 단계와
+	// 최대 2프레임 어긋난다. Hi-Z 비활성 시에는 패스가 돌지 않으므로 afterFrustum과 같다.
+	struct HiZStats {
+		u32t skinnedSubmitted = 0u, skinnedAfterFrustum = 0u, skinnedAfterHiZ = 0u;
+		u32t propSubmitted    = 0u, propAfterFrustum    = 0u, propAfterHiZ    = 0u;
+	};
 	HiZStats getHiZStats() const;
 
 	// Hi-Z occlusion culling 결과 조회 (1-frame delay).

@@ -93,7 +93,7 @@ Dispatcher::Dispatcher(
     std::vector<LightData>&& lightData,
     const LightData& mainDirectionalLightData,
     const CameraData& cameraData, const FrameData& frameData,
-    std::size_t roomIdx
+    std::size_t roomIdx, u32t visibilitySlot
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool),
@@ -113,7 +113,7 @@ Dispatcher::Dispatcher(
     lightData_(std::move(lightData)),
     mainDirectionalLightData_(mainDirectionalLightData),
     cameraData_(cameraData), frameData_(frameData),
-    roomIdx_(roomIdx),
+    roomIdx_(roomIdx), visibilitySlot_(visibilitySlot),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
     rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
@@ -164,6 +164,14 @@ void Dispatcher::sortDrawEvents() {
         it = std::upper_bound(it, hiZEvents_.cend(), *it);
     }
     instanceGroups_.push_back(std::numeric_limits<u32t>::max());
+
+    // 컬링 3단계 오버레이용 카운터(Hi-Z 단계는 hiZPassUpdate가 채운다).
+    // gBufferEvents_와 hiZEvents_는 disjoint하므로 둘의 합이 frustum 통과분이고,
+    // gBufferEvents_는 occludee가 아니라 Hi-Z와 무관하게 항상 그려진다.
+    pResources_->hiZPass.lastSubmittedCount = static_cast<u32t>(drawEvents_.size());
+    pResources_->hiZPass.lastFrustumCount =
+        static_cast<u32t>(gBufferEvents_.size() + hiZEvents_.size());
+    pResources_->hiZPass.lastDirectCount   = static_cast<u32t>(gBufferEvents_.size());
 }
 
 void Dispatcher::occluderPass() { occluderUpdate(); occluderDraw(); }
@@ -1023,6 +1031,25 @@ void Dispatcher::occluderDraw() {
 // ============================================================
 
 void Dispatcher::hiZPassUpdate() {
+    // visibility feedback 집계(통계 전용): 직전 프레임들이 써둔 2-slot ring 중
+    // 전역 프레임 펜스(N-2 대기)로 완성이 보장된 same-parity 슬롯만 센다.
+    // 스킨드와 달리 objectVisibility 테이블은 없다 — prop은 anim/물리 스킵 대상이 아니다.
+    // hiZEvents_가 비어도 카운트는 갱신해야 하므로 조기 반환보다 앞에 둔다.
+    {
+        auto& hiZ = pResources_->hiZPass;
+        if (hiZ.visibilityFeedback.hasReadback()) {
+            const u64t slotBytes =
+                static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+            const u32t total = hiZ.slotEntryCount[visibilitySlot_];
+            const auto* pc = hiZ.visibilityFeedback.readbackPtr<u32t>(
+                0u, visibilitySlot_ * slotBytes);
+            u32t vis = 0u;
+            for (u32t i = 0u; i < total; ++i) vis += (pc[i] & 1u);
+            hiZ.lastVisibleCount = vis;
+            hiZ.lastTotalCount   = total;
+        }
+    }
+
     if (hiZEvents_.empty()) return;
 
     // 1. Cull pass input. Static props have no skinning/ragdoll, so the world-space AABB
@@ -1076,7 +1103,11 @@ void Dispatcher::hiZPassUpdate() {
 }
 
 void Dispatcher::hiZPassCompute() {
-    if (hiZEvents_.empty()) return;
+    if (hiZEvents_.empty()) {
+        // 이번 프레임은 이 슬롯에 아무것도 쓰지 않는다 — 낡은 카운트가 남지 않게 0으로.
+        pResources_->hiZPass.slotEntryCount[visibilitySlot_] = 0u;
+        return;
+    }
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -1117,9 +1148,14 @@ void Dispatcher::hiZPassCompute() {
         rootParamIdxHiZMap_, SharedResources::HiZMap::hiZMaps[roomIdx_].srvHandle), false );
     pResources_->hiZPass.perGroupCnt.bindCompute(cmdList, rootParamIdxDestCnts0_, roomIdx_);
     pResources_->hiZPass.visibleFlags.bindCompute(cmdList, rootParamIdxDestCnts1_, roomIdx_);
-    // The cull shader always writes a (objId<<1|vis) feedback entry to u3; route it into the
-    // throwaway scratch buffer (static props need no CPU visibility readback).
-    pResources_->hiZPass.cullScratch.bindCompute(cmdList, rootParamIdxOutPerGroupData_, roomIdx_);
+    // The cull shader always writes a (objId<<1|vis) feedback entry to u3; route it into
+    // this frame's ring slot so the CPU can count the survivors for the culling overlay.
+    {
+        const u64t slotBytes =
+            static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+        pResources_->hiZPass.visibilityFeedback.bindCompute(
+            cmdList, rootParamIdxOutPerGroupData_, 0u, visibilitySlot_ * slotBytes);
+    }
     DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
         static_cast<u32t>( (hiZEvents_.size() + dispatchUnit - 1u) / dispatchUnit ), 1u, 1u), false );
     pResources_->hiZPass.perGroupCnt.uavBarrier(cmdList, roomIdx_);
@@ -1165,6 +1201,21 @@ void Dispatcher::hiZPassCompute() {
         pResources_->hiZPass.indirectCmd.resource(roomIdx_),
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+
+    // visibility feedback readback: cull이 기록한 이번 프레임 슬롯을 같은 슬롯 offset으로
+    // 복사한다. cull(u3) 이후 어떤 패스도 visibilityFeedback을 건드리지 않으므로(여전히 UAV
+    // 상태), copy의 UAV→COPY_SOURCE 전환이 곧 쓰기 완료 동기화점이다. 전용 fence는 없다 —
+    // coherency는 전역 프레임 펜스(N-2 대기)가 제공한다(스킨드 파이프라인과 동일).
+    {
+        const u64t slotBytes =
+            static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+        const u64t slotOffset = visibilitySlot_ * slotBytes;
+        pResources_->hiZPass.visibilityFeedback.copyToReadback(
+            cmdList, 0u, hiZEvents_.size() * sizeof(u32t),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, slotOffset, slotOffset
+        );
+        pResources_->hiZPass.slotEntryCount[visibilitySlot_] = static_cast<u32t>(hiZEvents_.size());
+    }
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR(hrClose, false);

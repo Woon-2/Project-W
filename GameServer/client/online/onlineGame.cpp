@@ -709,6 +709,7 @@ void Game::setupStage() {
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
 	pickupPromptHUD_.init(gfx_);   // "[F] 줍기" 프롬프트 + 실패 안내 텍스트 타깃
+	hiZStatsHUD_.init(gfx_);   // 컬링 통계 행별 텍스트 타깃(재입장 시 멱등)
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
@@ -5956,6 +5957,15 @@ void Game::renderInGame() {
 				static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
 				DigitAtlas::Align::Center);
 		}
+
+		// 컬링 통계 오버레이(F1). 모달이 떠 있으면 아예 제출하지 않는다.
+		if (hiZOverlayVisible_ && !settingsPanel_.isOpen() && !inventoryPanel_.isOpen()) {
+			hiZStatsHUD_.render(gfx_, gfx_.getHiZStats(), gfx_.isHiZCullEnabled(),
+				hiZSkippedObjects_, hiZTrackedObjects_,
+				pTimer_ ? pTimer_->fps() : 0.f,
+				static_cast<float>(gClientRect.right - gClientRect.left),
+				static_cast<float>(gClientRect.bottom - gClientRect.top));
+		}
 	}
 
 	uiManager_.render(gfx_);
@@ -7588,6 +7598,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		gfx_.cycleGBufferDebugMode();
 	}
 
+	// F1: 컬링 통계 오버레이 토글. 끄면 패널이 화면에서 완전히 사라진다.
+	if ( (keyboardStateCurr_[VK_F1] & 0x80) && !(keyboardStatePrev_[VK_F1] & 0x80) ) {
+		hiZOverlayVisible_ = !hiZOverlayVisible_;
+	}
+
 	// F5/F6/F7: debug teleport to each arena to test the mid-boss encounters.
 	if ( (keyboardStateCurr_[VK_F5] & 0x80) && !(keyboardStatePrev_[VK_F5] & 0x80) )
 		debugTeleportToArena( "Arena_Hobgoblin" );
@@ -7824,6 +7839,10 @@ void Game::cullObjects() {
 // 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
 // 못한 채 방치(T-pose 등)될 수 있기 때문이다.
 void Game::feedbackCullResultToAnim() {
+	// 컬링 오버레이용 오브젝트 단위 집계. 어차피 도는 루프라 추가 비용은 없다.
+	hiZTrackedObjects_ = 0u;
+	hiZSkippedObjects_ = 0u;
+
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
@@ -7851,6 +7870,9 @@ void Game::feedbackCullResultToAnim() {
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
 			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
+
+		++hiZTrackedObjects_;
+		if (!hiZVisible) ++hiZSkippedObjects_;
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);

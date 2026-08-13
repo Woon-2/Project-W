@@ -481,6 +481,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
 | `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
+| `GFX::getHiZStats()` | `gfx.cpp #6` | 컬링 3단계(No culling / Frustum / Hi-Z) × (스킨드 / 정적 prop) 잔존 인스턴스 수. 10절 "컬링 통계 오버레이" 참조 |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
 | `mu::perspReversedZ()` | `mathUtil.hpp` (client + common, 동일 내용) | Reversed-Z LH 퍼스펙티브 투영(near→depth 1.0, far→depth 0.0). `Camera::setPerspective()`(`camera.cpp`)가 사용 — 메인/로비/포트레이트 카메라 전부 적용. 그림자맵(ortho)은 미적용. 상세: `docs/graphicsArchitecture.md` "Reversed-Z 깊이 버퍼" |
 
@@ -976,6 +977,20 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
 
+### 컬링 통계 오버레이 (온라인 인게임, F1)
+
+설계: `docs/graphicsArchitecture.md` "컬링 통계 오버레이"
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래) 컬링 단계별 잔존 인스턴스 표. **No culling / + Frustum / + Hi-Z** × (Skinned / Props / Total) + 컬링률 막대 + anim·물리 스킵 오브젝트 수 + FPS. `PathGuideHUD`/`PickupPromptHUD`와 같은 즉시모드 HUD(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, ~6Hz 평균). **고정폭 Consolas**로 열 정렬(`ensureFont`, uiScale 변경 시에만 재생성) |
+| 행 가시성 규칙 | `hiZStatsHUD.cpp` `render()` | Hi-Z OFF면 `+ Hi-Z`·`Anim/Physics skipped` 행을 값 대신 `—`로 채우지 않고 **아예 그리지 않는다**(패널이 줄어듦). `visible_==false`면 최상단 조기 반환으로 **아무것도 제출하지 않음** |
+| `GFX::getHiZStats()` | `gfx.cpp #6`, 구조체는 `gfx.hpp` | 스킨드 + 정적 파이프라인 `hiZPass` 카운터를 3단계로 합성. Hi-Z OFF면 `afterHiZ = afterFrustum`(패스 미실행이라 낡은 값 방지) |
+| 단계 카운터 | `pbrDeferredSkinnedPipeline.cpp` / `pbrDeferredPipeline.cpp` `sortDrawEvents()` | `lastSubmittedCount`(제출 전량) / `lastFrustumCount`(VFC 통과) / 정적은 `lastDirectCount`(비-occludee) 추가. Hi-Z ON/OFF 무관하게 매 프레임 갱신 |
+| 정적 prop visibility feedback | `pbrDeferredPipeline.cpp` `hiZPassUpdate/Compute()`, 버퍼는 `gfx.cpp` | 구 `cullScratch` → `visibilityFeedback`(단일 리소스 2-slot ring + readback, roomCnt=1). **통계 전용** — `objectVisibility` 테이블 없음 |
+| 오브젝트 단위 집계 | `online/onlineGame.cpp` `feedbackCullResultToAnim()` | `hiZTrackedObjects_` / `hiZSkippedObjects_`. 이미 도는 루프에 카운터만 추가 |
+| 토글 / 렌더 호출 | `online/onlineGame.cpp` `processInputGame()` (**F1**), `renderInGame()` | `uiManager_.render()` 직전, `finalScoreboard_` 비표시 블록 안. 설정창·인벤토리가 열려 있으면 미제출 |
+
 ### 오브젝트 id 등록 / 수명주기 감시 (온라인)
 
 **설계·원인 분석·로그 판독표: `RoomServer/docs/objectIdLifecycle.md`**
@@ -1075,6 +1090,20 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::KillCountWidget` | `ui/widgets/KillCountWidget.hpp/cpp` | 상단 HUD: 스컬 아이콘(`icon_kill.dds`) + 누적 킬. 킬 팝, streak 표시, 마일스톤(10/25/50/100) 금색 플래시. `addKill()`은 게임 스레드에서 호출 |
 | `KillCountTuning` | `ui/widgets/KillCountWidget.hpp` | Kill Count 연출 상수 묶음 |
 | onlineGame 통합 | `online/onlineGame.cpp` | UI 셋업: `killCountWidget_` add + `damageNumberSystem_.init()`. 이벤트 디스패치 루프: `receive` 직전 `prevHp` 캡처 → `dmg` 계산 → `spawn`, 고블린 `EvDeath` 시 `addKill()`. `InGameScene`: `damageNumberSystem_.update()`. `renderInGame`: `uiManager_.render` 직전 `damageNumberSystem_.render()` |
+
+### 즉시모드 HUD (UIManager 트리 밖)
+
+`UIManager` 위젯이 아니라 `renderInGame()`에서 `UIPipeline::DrawEvent`를 직접 제출하는 HUD들.
+런타임 위젯 생성/파괴가 없어 `drainGpu` 요구(GPU UAF)가 없고, 행/요소 단위 조건부 표시가 자유롭다.
+좌표는 **bottom-origin 실제 픽셀**, 크기는 각자 `uiScale = min(sw/1024, sh/768)`로 상대화.
+
+| 클래스 | 파일 | 화면 위치 |
+|--------|------|-----------|
+| `MinimapHUD` | `ui/minimapHUD.{hpp,cpp}` | 우상단 |
+| `SkillDialHUD` | `ui/skillDialHUD.{hpp,cpp}` | 우하단 |
+| `PathGuideHUD` | `ui/pathGuideHUD.{hpp,cpp}` | 월드 투영 / 화면 가장자리 |
+| `PickupPromptHUD` | `ui/pickupPromptHUD.{hpp,cpp}` | 아이템 월드 위치 위 / 중앙 알림 |
+| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래). 컬링 통계, **F1** 토글 — 10절 참조 |
 
 ### 파티원 HP HUD (인게임)
 

@@ -148,6 +148,10 @@ void Dispatcher::sortDrawEvents() {
         it = std::upper_bound(it, gBufferEvents_.cend(), *it);
     }
     instanceGroups_.push_back(std::numeric_limits<u32t>::max());
+
+    // 컬링 3단계 오버레이용 카운터(Hi-Z 단계는 hiZPassUpdate가 채운다).
+    pResources_->hiZPass.lastSubmittedCount = static_cast<u32t>(drawEvents_.size());
+    pResources_->hiZPass.lastFrustumCount   = static_cast<u32t>(gBufferEvents_.size());
 }
 
 void Dispatcher::hiZPass()       { hiZPassUpdate(); hiZPassCompute(); }

@@ -44,6 +44,7 @@
 #include "../ui/minimapHUD.hpp"
 #include "../ui/pathGuideHUD.hpp"
 #include "../ui/pickupPromptHUD.hpp"
+#include "../ui/hiZStatsHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
@@ -646,6 +647,12 @@ private:
 	// On-screen destination indicator (beacon / edge arrow) for the path-guidance route.
 	PathGuideHUD pathGuideHUD_{};
 	PickupPromptHUD pickupPromptHUD_{};
+	// 컬링 통계 오버레이(F1). 좌측 파티 HP 아래. 끄면 아무것도 그리지 않는다.
+	HiZStatsHUD hiZStatsHUD_{};
+	bool hiZOverlayVisible_ = true;
+	// feedbackCullResultToAnim()이 매 프레임 채우는 오브젝트 단위 Hi-Z 결과.
+	u32t hiZTrackedObjects_ = 0u;
+	u32t hiZSkippedObjects_ = 0u;
 	std::vector<mu::Vec3> minimapGuidePoly_{};   // active route sample points for the minimap
 	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
 	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk

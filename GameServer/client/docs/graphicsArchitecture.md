@@ -87,7 +87,7 @@
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
 3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동). 스킨드 GBuffer PS는 추가로 **흡수 물결(per-instance ripple)** emissive를 GB2에 가산(로컬 플레이어만; 아래 "몬스터 사망 에너지 오브 연출" 참조)
    - PBRDeferredSkinned/PBRDeferred 모두 Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw 실행. compute 셰이더 5종 + `cmdSig_`는 공유
-   - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. visibility feedback ring/CPU readback **없음**(정적이라 anim/물리 스킵 불필요; cull u3 출력은 scratch로 폐기). 비-occludee는 `gBufferPass` direct
+   - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. 비-occludee는 `gBufferPass` direct. cull의 u3 출력은 스킨드와 동일한 **2-slot ring + readback**으로 받는다(2026-08-13) — 단 **통계 전용**이다(정적 prop은 anim/물리 스킵 대상이 아니라 `objectVisibility` 테이블이 없다). 아래 "컬링 통계 오버레이" 참조
    - PBRDeferredSkinned Hi-Z: Cull→visibleFlags + visibility feedback 2-slot ring → CPU readback(1-frame delay, anim/물리 스킵용)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
@@ -570,6 +570,42 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 3. `feedbackCullResultToAnim()`(이전 이름: `applyHiZCulling()`) 내에 `applyToEntity(obj)` 추가
 4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
 
+#### 컬링 통계 오버레이 (No Culling → Frustum → Hi-Z, 2026-08-13)
+
+Online 모드 인게임 좌측 중단(파티 HP 아래)에 컬링 단계별 잔존 인스턴스 수를 표시한다.
+과거 우상단 `HiZ: ON Visible n/m` 한 줄 라벨을 대체하며, 그 자리는 미니맵이 쓴다.
+
+**수치 수집 지점** — 단위는 오브젝트가 아니라 **DrawEvent 인스턴스**다.
+
+| 단계 | 스킨드(`PBRDeferredSkinnedPipeline`) | 정적/scatter(`PBRDeferredPipeline`) |
+|---|---|---|
+| No culling | `drawEvents_.size()` | `drawEvents_.size()` |
+| + Frustum | `gBufferEvents_.size()` | `gBufferEvents_.size() + hiZEvents_.size()` (둘은 disjoint) |
+| + Hi-Z | `hiZPass.lastVisibleCount` | `lastDirectCount + lastVisibleCount` |
+
+- 앞 두 단계는 **`sortDrawEvents()`에서** 채운다(`lastSubmittedCount`/`lastFrustumCount`).
+  Hi-Z ON/OFF와 무관하게 매 프레임 실행되므로 Hi-Z를 꺼도 두 단계는 살아 있다.
+- 정적 파이프라인의 Hi-Z 단계에는 occludee가 아닌 몫(`lastDirectCount` = `gBufferEvents_`)을
+  더한다 — 그쪽은 Hi-Z와 무관하게 항상 그려지므로, 합이 곧 "실제로 그린 인스턴스"다.
+- Hi-Z 단계만 **N-2 프레임 슬롯 기준**이라 앞 두 단계와 최대 2프레임 어긋난다. 오버레이가
+  ~6Hz로 평균을 내 표시하므로 육안 차이는 없다.
+- `GFX::getHiZStats()`가 두 파이프라인 값을 합성한다. **Hi-Z OFF면 컬링 패스가 돌지 않아
+  마지막 단계 값이 낡으므로, `afterHiZ`에 `afterFrustum`을 그대로 넣어 반환**한다.
+
+**정적 파이프라인 visibility feedback (통계 전용):** 구 `cullScratch`(readback 없는 sink)를
+`visibilityFeedback`으로 바꿔 스킨드와 동일한 단일 리소스 2-slot ring(roomCnt=1,
+byteWidth=2*slotBytes) + readback으로 만들었다. cull이 u3에 슬롯 offset으로 `(objId<<1|vis)`를
+dense 기록 → `copyToReadback` → 다음 프레임 `hiZPassUpdate()`가 same-parity 슬롯을 세어
+`lastVisibleCount/lastTotalCount` 산출. 전용 fence 없음(전역 프레임 펜스 N-2 대기가 coherency 제공).
+스킨드와 달리 `objectVisibility` 테이블은 만들지 않는다 — 정적 prop은 anim/물리 스킵 대상이 아니다.
+
+**표시 규칙:** `HiZStatsHUD`(`client/ui/hiZStatsHUD.{hpp,cpp}`)는 `PathGuideHUD`/`PickupPromptHUD`와
+같은 즉시모드 HUD다(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, 고정폭
+Consolas로 열 정렬). **행 구성이 런타임에 정해진다**: Hi-Z OFF면 `+ Hi-Z` 행과
+`Anim/Physics skipped` 행을 값 대신 `—`로 채우는 게 아니라 **아예 그리지 않고** 패널이 줄어든다.
+`F1`로 오버레이를 끄면 `render()`가 최상단에서 조기 반환해 **플레이트·막대·텍스트 전부 미제출**
+(릴리즈 빌드와 동일한 화면). 설정창/인벤토리/최종 스코어보드가 뜬 동안도 동일.
+
 **최초 1회 애니메이션 갱신 보장:**
 서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
 visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 받을 수 있다.
@@ -663,7 +699,7 @@ Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin
 
 ## 미니맵 (Minimap)
 
-우상단 top-down North-up 미니맵(제거된 Hi-Z 디버그 프린트 자리). 코드 위치는 `docs/CODE_INDEX.md` "미니맵" 섹션 참조. 핵심 설계 결정만 여기 정리한다.
+우상단 top-down North-up 미니맵(제거된 Hi-Z 디버그 프린트 자리 — 그 프린트는 2026-08-13에 좌측 중단의 `HiZStatsHUD` 컬링 통계 패널로 복원됐다. 위 "컬링 통계 오버레이" 참조). 코드 위치는 `docs/CODE_INDEX.md` "미니맵" 섹션 참조. 핵심 설계 결정만 여기 정리한다.
 
 ### 월드 고정 베이크 + 매 프레임 UV 스크롤 (스크롤의 핵심)
 

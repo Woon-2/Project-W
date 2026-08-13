@@ -335,6 +335,7 @@
     <ClCompile Include="ui\uiShapes.cpp" />
     <ClCompile Include="ui\pathGuideHUD.cpp" />
     <ClCompile Include="ui\pickupPromptHUD.cpp" />
+    <ClCompile Include="ui\hiZStatsHUD.cpp" />
     <ClCompile Include="damageNumberSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -493,6 +494,7 @@
     <ClInclude Include="ui\uiShapes.hpp" />
     <ClInclude Include="ui\pathGuideHUD.hpp" />
     <ClInclude Include="ui\pickupPromptHUD.hpp" />
+    <ClInclude Include="ui\hiZStatsHUD.hpp" />
     <ClInclude Include="damageNumberSystem.hpp" />
   </ItemGroup>
   <ItemGroup>

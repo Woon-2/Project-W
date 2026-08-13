@@ -4,10 +4,36 @@
 #include "errorHandling.hpp"
 
 GFX::HiZStats GFX::getHiZStats() const {
-	return {
-		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastVisibleCount,
-		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastTotalCount
+	const auto& skinned = resourcesPBRDeferredSkinnedPipeline_.hiZPass;
+	const auto& prop    = resourcesPBRDeferredPipeline_.hiZPass;
+
+	auto stats = HiZStats{
+		.skinnedSubmitted    = skinned.lastSubmittedCount,
+		.skinnedAfterFrustum = skinned.lastFrustumCount,
+		.skinnedAfterHiZ     = skinned.lastVisibleCount,
+		.propSubmitted       = prop.lastSubmittedCount,
+		.propAfterFrustum    = prop.lastFrustumCount,
+		// occludee가 아닌 정적 지오메트리(lastDirectCount)는 Hi-Z와 무관하게 항상 그려지므로
+		// Hi-Z 단계의 "실제로 그린 인스턴스"는 그 몫 + Hi-Z를 통과한 occludee다.
+		.propAfterHiZ        = prop.lastDirectCount + prop.lastVisibleCount
 	};
+
+	// Hi-Z가 꺼져 있으면 컬링 패스 자체가 돌지 않아 마지막 단계 값이 낡는다.
+	// 진입 직후처럼 readback 슬롯이 아직 한 번도 안 채워진 경우도 마찬가지다(양쪽 슬롯 0).
+	// 두 경우 모두 "아직 모름"이므로 보수적으로 frustum 단계를 그대로 물려준다 —
+	// 0을 그대로 내보내면 "전부 컬링됨"으로 오독된다.
+	const bool skinnedNoData =
+		(skinned.slotEntryCount[0] == 0u && skinned.slotEntryCount[1] == 0u);
+	const bool propNoData =
+		(prop.slotEntryCount[0] == 0u && prop.slotEntryCount[1] == 0u);
+	if (!hiZCullEnabled_ || skinnedNoData) stats.skinnedAfterHiZ = stats.skinnedAfterFrustum;
+	if (!hiZCullEnabled_ || propNoData)    stats.propAfterHiZ    = stats.propAfterFrustum;
+
+	// Hi-Z 단계만 N-2 프레임 기준이라, 카메라가 급회전한 직후엔 현재 프레임의 frustum
+	// 잔존보다 커질 수 있다. 단계 잔존은 정의상 단조 감소이므로 클램프한다.
+	stats.skinnedAfterHiZ = std::min(stats.skinnedAfterHiZ, stats.skinnedAfterFrustum);
+	stats.propAfterHiZ    = std::min(stats.propAfterHiZ,    stats.propAfterFrustum);
+	return stats;
 }
 
 bool GFX::getHiZObjectVisible(u32t renderObjectId) const {
@@ -830,8 +856,14 @@ void GFX::createSwapChain() {
 		resourcesPBRDeferredPipeline_.hiZPass.visibleIndices.init(
 			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_VisibleIndices"
 		);
-		resourcesPBRDeferredPipeline_.hiZPass.cullScratch.init(
-			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_CullScratch"
+		// visibility feedback: 스킨드와 동일한 단일 리소스 2-slot ring (roomCnt=1).
+		// 백버퍼 수와 무관하게 2슬롯이면 충분하다(전역 프레임 펜스가 N-2 완성을 보장).
+		resourcesPBRDeferredPipeline_.hiZPass.visibilityFeedback.init(
+			device_.Get(), 2u * static_cast<u64t>(kMaxStaticHiZ) * sizeof(u32t),
+			1u, "PBRDeferred_HiZ_VisibilityFeedback"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.visibilityFeedback.initReadback(
+			device_.Get(), 2u * static_cast<u64t>(kMaxStaticHiZ) * sizeof(u32t)
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.gBufferPerInstanceData.init(
 			device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_GBufferPerInstanceData"
@@ -2438,7 +2470,8 @@ void GFX::render() {
 		std::move(lightDataPBRDeferredPipeline_),
 		mainDirectionalLightPBRDeferredPipeline_, cameraDataPBRDeferredPipeline_,
 		frameDataPBRDeferredPipeline_,
-		frameIdx_ % backBuffers_.size()
+		frameIdx_ % backBuffers_.size(),
+		static_cast<u32t>(frameIdx_ % 2u)   // visibility ring slot (2-slot, backbuffer 수와 무관)
 	);
 
 	auto pbrDeferredSkinnedDispatcher = PBRDeferredSkinnedPipeline::Dispatcher(

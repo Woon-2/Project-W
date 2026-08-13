@@ -97,9 +97,11 @@ struct Resources {
     } occluderPass;
 
     // Hi-Z occlusion-cull + indirect draw for occludee-candidate events (BVH props).
-    // Reuses the same compute shaders / command signature as the skinned pipeline.
-    // No CPU visibility feedback ring: static props need no anim/physics skip, so the
-    // cull shader's per-instance feedback write lands in a throwaway scratch buffer.
+    // Reuses the same compute shaders / command signature as the skinned pipeline,
+    // including the 2-slot visibility feedback ring. Unlike the skinned pipeline the
+    // feedback is *statistics only* (no per-object visibility table): static props are
+    // never anim/physics skipped, but the on-screen culling overlay needs to know how
+    // many prop instances survived occlusion.
     struct HiZPass {
         static constexpr u32t MAX_HIZ_INSTANCES = 120'000u;
 
@@ -115,7 +117,21 @@ struct Resources {
         RWStructuredBuffer perGroupData;           // t5, u3
         RWStructuredBuffer visibleIndices;         // u1 (compact) / t3 (indirect draw SRV)
         RWStructuredBuffer indirectCmd;            // u0, space1
-        RWStructuredBuffer cullScratch;            // u3 (cull feedback sink, no readback)
+
+        // visibility feedback: 단일 리소스 2-slot ring (roomCnt=1, byteWidth=2*slotBytes).
+        // cull 패스가 u3에 슬롯 offset으로 바인딩되어 (objId<<1 | visBit)를 기록한다.
+        // 스킨드와 동일한 구조이나 여기서는 통계 집계에만 쓴다.
+        RWStructuredBuffer visibilityFeedback;     // u3
+        u32t slotEntryCount[2] = { 0u, 0u };   // CPU가 직접 추적하는 slot별 엔트리 수
+
+        u32t  lastVisibleCount = 0u;   // 직전 완성 슬롯에서 Hi-Z를 통과한 occludee 수
+        u32t  lastTotalCount   = 0u;   // 그 슬롯의 occludee 총수
+
+        // 컬링 3단계 오버레이용 카운터. sortDrawEvents()에서 매 프레임 갱신되므로
+        // Hi-Z가 꺼져 있어도(= hiZPass 미실행) 앞 두 단계는 항상 유효하다.
+        u32t  lastSubmittedCount = 0u;   // drawEvents_ 전량 (컬링 이전)
+        u32t  lastFrustumCount   = 0u;   // gBufferEvents_ + hiZEvents_ (view frustum 통과)
+        u32t  lastDirectCount    = 0u;   // gBufferEvents_ (occludee가 아니라 항상 그려지는 몫)
 
         // GBuffer instance/drawcall data for the indirect draw (occludee events only;
         // disjoint from gBufferPass which serves the direct, non-occludee draws).
@@ -180,7 +196,7 @@ public:
         std::vector<LightData>&& lightData,
         const LightData& mainDirectionalLightData,
         const CameraData& cameraData, const FrameData& frameData,
-        std::size_t roomIdx
+        std::size_t roomIdx, u32t visibilitySlot
     );
 
     void sortDrawEvents();
@@ -278,6 +294,7 @@ private:
     CameraData cameraData_{};
     FrameData  frameData_{};
     std::size_t roomIdx_{};
+    u32t visibilitySlot_{};   // 이번 프레임이 쓸 visibility ring slot (0 또는 1)
 
     UINT rootParamIdxPID_{};
     UINT rootParamIdxPDD_{};
