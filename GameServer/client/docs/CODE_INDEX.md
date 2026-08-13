@@ -983,13 +983,13 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래) 컬링 단계별 잔존 인스턴스 표. **No culling / + Frustum / + Hi-Z** × (Skinned / Props / Total) + 컬링률 막대 + anim·물리 스킵 오브젝트 수 + FPS. `PathGuideHUD`/`PickupPromptHUD`와 같은 즉시모드 HUD(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, ~6Hz 평균). **고정폭 Consolas**로 열 정렬(`ensureFont`, uiScale 변경 시에만 재생성) |
+| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래) 컬링 단계별 잔존 인스턴스 표. **Distance culling / + Frustum / + Hi-Z** × (Skinned / Props / Total). 첫 행이 "No culling"이 아닌 이유: 파이프라인 도달 전에 거리 컬링·청크 스트리밍이 이미 적용됨. **막대는 단계별 잔존량을 중첩(큰 것부터)해 그려 컬링될수록 짧아진다** — 라벨도 `drawn X%`(남은 양). 표의 단계 행 색 = 대응 막대 세그먼트 색(별도 범례 불필요) + 컬링률 막대 + anim·물리 스킵 오브젝트 수 + FPS. `PathGuideHUD`/`PickupPromptHUD`와 같은 즉시모드 HUD(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, ~6Hz 평균). **고정폭 Consolas**로 열 정렬(`ensureFont`, uiScale 변경 시에만 재생성) |
 | 행 가시성 규칙 | `hiZStatsHUD.cpp` `render()` | Hi-Z OFF면 `+ Hi-Z`·`Anim/Physics skipped` 행을 값 대신 `—`로 채우지 않고 **아예 그리지 않는다**(패널이 줄어듦). `visible_==false`면 최상단 조기 반환으로 **아무것도 제출하지 않음** |
 | `GFX::getHiZStats()` | `gfx.cpp #6`, 구조체는 `gfx.hpp` | 스킨드 + 정적 파이프라인 `hiZPass` 카운터를 3단계로 합성. Hi-Z OFF면 `afterHiZ = afterFrustum`(패스 미실행이라 낡은 값 방지) |
 | 단계 카운터 | `pbrDeferredSkinnedPipeline.cpp` / `pbrDeferredPipeline.cpp` `sortDrawEvents()` | `lastSubmittedCount`(제출 전량) / `lastFrustumCount`(VFC 통과) / 정적은 `lastDirectCount`(비-occludee) 추가. Hi-Z ON/OFF 무관하게 매 프레임 갱신 |
 | 정적 prop visibility feedback | `pbrDeferredPipeline.cpp` `hiZPassUpdate/Compute()`, 버퍼는 `gfx.cpp` | 구 `cullScratch` → `visibilityFeedback`(단일 리소스 2-slot ring + readback, roomCnt=1). **통계 전용** — `objectVisibility` 테이블 없음 |
 | 오브젝트 단위 집계 | `online/onlineGame.cpp` `feedbackCullResultToAnim()` | `hiZTrackedObjects_` / `hiZSkippedObjects_`. 이미 도는 루프에 카운터만 추가 |
-| 토글 / 렌더 호출 | `online/onlineGame.cpp` `processInputGame()` (**F1**), `renderInGame()` | `uiManager_.render()` 직전, `finalScoreboard_` 비표시 블록 안. 설정창·인벤토리가 열려 있으면 미제출 |
+| 토글 / 렌더 호출 | `online/onlineGame.cpp` `processInputGame()` (**F1**, `hiZOverlayVisible_` **기본 false**), `renderInGame()` | `uiManager_.render()` 직전, `finalScoreboard_` 비표시 블록 안. 설정창·인벤토리가 열려 있으면 미제출 |
 
 ### 오브젝트 id 등록 / 수명주기 감시 (온라인)
 

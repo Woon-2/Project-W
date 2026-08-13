@@ -39,8 +39,10 @@ public:
 private:
     // Fixed row slots. Keeping the index stable per line keeps each row's raster
     // cache warm even when the visible row set changes.
+    // RowDistance is the count that actually reached the pipeline: distance culling and
+    // chunk streaming already ran upstream, so it is not a raw "no culling" total.
     enum Row : int {
-        RowTitle = 0, RowHeader, RowNoCull, RowFrustum, RowHiZ,
+        RowTitle = 0, RowHeader, RowDistance, RowFrustum, RowHiZ,
         RowRatio, RowSkip, RowFps, RowCnt
     };
 
@@ -72,7 +74,12 @@ private:
     u32t          accumTrack_ = 0u;
     u32t          accumCnt_   = 0u;
     bool          prevEnabled_ = true;
-    float         culledRatio_ = 0.f;   // drives the bar, refreshed with the text
+
+    // Bar: stage survivors as a fraction of what reached the pipeline. Drawn nested
+    // (largest first) so each culling stage visibly *shortens* the bar — culling means
+    // less gets drawn, so the bar must shrink, not grow. Refreshed with the text.
+    float         frustumRatio_ = 1.f;
+    float         hiZRatio_     = 1.f;
 
     bool visible_ = true;
     bool ready_   = false;

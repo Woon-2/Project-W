@@ -7598,7 +7598,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		gfx_.cycleGBufferDebugMode();
 	}
 
-	// F1: 컬링 통계 오버레이 토글. 끄면 패널이 화면에서 완전히 사라진다.
+	// F1: 컬링 통계 오버레이 토글(기본 꺼짐). 끄면 패널이 화면에서 완전히 사라진다.
 	if ( (keyboardStateCurr_[VK_F1] & 0x80) && !(keyboardStatePrev_[VK_F1] & 0x80) ) {
 		hiZOverlayVisible_ = !hiZOverlayVisible_;
 	}

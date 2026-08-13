@@ -648,8 +648,9 @@ private:
 	PathGuideHUD pathGuideHUD_{};
 	PickupPromptHUD pickupPromptHUD_{};
 	// 컬링 통계 오버레이(F1). 좌측 파티 HP 아래. 끄면 아무것도 그리지 않는다.
+	// 기본은 꺼진 상태 — 평소 화면은 릴리즈와 동일하고, 필요할 때만 F1로 켠다.
 	HiZStatsHUD hiZStatsHUD_{};
-	bool hiZOverlayVisible_ = true;
+	bool hiZOverlayVisible_ = false;
 	// feedbackCullResultToAnim()이 매 프레임 채우는 오브젝트 단위 Hi-Z 결과.
 	u32t hiZTrackedObjects_ = 0u;
 	u32t hiZSkippedObjects_ = 0u;

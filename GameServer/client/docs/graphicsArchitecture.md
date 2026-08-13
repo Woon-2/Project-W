@@ -579,10 +579,13 @@ Online 모드 인게임 좌측 중단(파티 HP 아래)에 컬링 단계별 잔�
 
 | 단계 | 스킨드(`PBRDeferredSkinnedPipeline`) | 정적/scatter(`PBRDeferredPipeline`) |
 |---|---|---|
-| No culling | `drawEvents_.size()` | `drawEvents_.size()` |
+| Distance culling | `drawEvents_.size()` | `drawEvents_.size()` |
 | + Frustum | `gBufferEvents_.size()` | `gBufferEvents_.size() + hiZEvents_.size()` (둘은 disjoint) |
 | + Hi-Z | `hiZPass.lastVisibleCount` | `lastDirectCount + lastVisibleCount` |
 
+- 첫 행 레이블이 "No culling"이 아니라 **"Distance culling"**인 이유: 파이프라인에 도달하기
+  전에 이미 거리 컬링과 청크 스트리밍이 돌았으므로, `drawEvents_`는 원본 전량이 아니라
+  **거리 컬링까지 통과한 잔존분**이다(그래서 prop 수치가 이동에 따라 계속 변한다).
 - 앞 두 단계는 **`sortDrawEvents()`에서** 채운다(`lastSubmittedCount`/`lastFrustumCount`).
   Hi-Z ON/OFF와 무관하게 매 프레임 실행되므로 Hi-Z를 꺼도 두 단계는 살아 있다.
 - 정적 파이프라인의 Hi-Z 단계에는 occludee가 아닌 몫(`lastDirectCount` = `gBufferEvents_`)을
@@ -599,12 +602,19 @@ dense 기록 → `copyToReadback` → 다음 프레임 `hiZPassUpdate()`가 same
 `lastVisibleCount/lastTotalCount` 산출. 전용 fence 없음(전역 프레임 펜스 N-2 대기가 coherency 제공).
 스킨드와 달리 `objectVisibility` 테이블은 만들지 않는다 — 정적 prop은 anim/물리 스킵 대상이 아니다.
 
+**막대 방향 규칙(중요):** 막대는 *컬링된 양*이 아니라 **단계별 잔존량을 중첩해서**(제출 전체 →
+frustum 잔존 → Hi-Z 잔존, 큰 것부터 덮어 그림) 표시한다. 컬링의 성과는 "그리는 양이 줄어드는 것"
+이므로 **막대가 짧아지는 방향**이어야 직관적이다. 라벨도 `culled X%`가 아니라 `drawn X%`.
+UE(`stat initviews`)·Unity(Statistics)도 주 지표는 컬링된 양이 아니라 **실제로 그려지는 양**이다.
+표의 각 단계 행 텍스트 색을 대응 막대 세그먼트 색과 맞춰 별도 범례를 두지 않는다.
+
 **표시 규칙:** `HiZStatsHUD`(`client/ui/hiZStatsHUD.{hpp,cpp}`)는 `PathGuideHUD`/`PickupPromptHUD`와
 같은 즉시모드 HUD다(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, 고정폭
 Consolas로 열 정렬). **행 구성이 런타임에 정해진다**: Hi-Z OFF면 `+ Hi-Z` 행과
 `Anim/Physics skipped` 행을 값 대신 `—`로 채우는 게 아니라 **아예 그리지 않고** 패널이 줄어든다.
-`F1`로 오버레이를 끄면 `render()`가 최상단에서 조기 반환해 **플레이트·막대·텍스트 전부 미제출**
-(릴리즈 빌드와 동일한 화면). 설정창/인벤토리/최종 스코어보드가 뜬 동안도 동일.
+**기본은 꺼진 상태**이며 `F1`로 켠다. 꺼져 있으면 `render()`가 최상단에서 조기 반환해
+**플레이트·막대·텍스트 전부 미제출**(오버레이가 없던 때와 동일한 화면).
+설정창/인벤토리/최종 스코어보드가 뜬 동안도 동일.
 
 **최초 1회 애니메이션 갱신 보장:**
 서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
