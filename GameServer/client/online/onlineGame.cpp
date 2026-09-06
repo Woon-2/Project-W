@@ -7583,7 +7583,9 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		INet::ClientApp::send();
 	}
 
-	// C key: toggle CSM cascade debug visualization
+	// C key: toggle CSM cascade debug visualization (cascade 0~3을 R/G/B/Y로 틴트).
+	// 인게임은 Deferred 경로라 GFX::effectiveDebugMode()가 lighting 패스에 넘기는
+	// cascade level 뷰로 나타난다(로비 Forward에서는 PSO 퍼뮤테이션).
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
 	}

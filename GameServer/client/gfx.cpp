@@ -2184,7 +2184,7 @@ void GFX::render() {
 		backBufferRtvs_[backbufIdx],
 		&fenceToSignal, &resourcesTonemapPipeline_, &cmdListPool_,
 		sceneColorSrv, sceneColorRoomIdx,
-		tonemapExposure_, bloomIntensity_, gBufferDebugMode_,
+		tonemapExposure_, bloomIntensity_, effectiveDebugMode(),
 		SharedResources::Bloom::mip0Srv(sceneColorRoomIdx),
 		&srvTex3DPool_, colorGradingLUTSrv,
 		heatParams, heatGB4
@@ -2743,7 +2743,7 @@ void GFX::render() {
 			lpfd.idxGB3   = gbData.gb3.idxSrv;
 			lpfd.idxDepth = gbData.depth.idxSrv;
 			lpfd.idxGB4   = gbData.gb4.idxSrv;
-			lpfd.debugMode = gBufferDebugMode_;
+			lpfd.debugMode = effectiveDebugMode();
 			lpfd.idxSkybox = skyboxIdxSrv;
 			// IBL maps (generated at load by precomputeIBL)
 			lpfd.idxIrradiance       = SharedResources::IBL::iblData.irradiance.idxSrv;
@@ -2853,15 +2853,24 @@ void GFX::render() {
 			}
 		}
 
-		// Energy orbs: additive HDR glow into SceneColorHDR (still a RENDER_TARGET at
-		// this point), depth-tested against scene depth, BEFORE bloom so they glow.
-		if (!SharedResources::SceneColor::sceneColorData.empty() && gBufferDebugMode_ == 0u) {
-			// Skybox into SceneColorHDR FIRST (background only, depth-tested), so the additive
-			// glows + bloom + heat distortion warp all apply over the sky and survive to the
-			// resolve. The resolve passes background pixels through untonemapped, preserving the
-			// sky's authored look. (Forward/lobby path still draws the skybox to the backbuffer.)
+		const auto debugMode = effectiveDebugMode();
+
+		// Skybox into SceneColorHDR FIRST (background only, depth-tested), so the additive
+		// glows + bloom + heat distortion warp all apply over the sky and survive to the
+		// resolve. The resolve passes background pixels through untonemapped, preserving the
+		// sky's authored look. (Forward/lobby path still draws the skybox to the backbuffer.)
+		// The cascade level view keeps the sky: it only replaces lit geometry, and without
+		// this the background would keep the lighting pass' output for depth-less pixels
+		// (cascade 0 = a red sky). Every other debug view wants the raw channel, no sky.
+		if (!SharedResources::SceneColor::sceneColorData.empty()
+			&& (debugMode == 0u || debugMode == kGBufferDebugCascadeLevel)) {
 			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 			skyboxPipelineDispatcher.drawSingleThreaded();
+		}
+
+		// Energy orbs: additive HDR glow into SceneColorHDR (still a RENDER_TARGET at
+		// this point), depth-tested against scene depth, BEFORE bloom so they glow.
+		if (!SharedResources::SceneColor::sceneColorData.empty() && debugMode == 0u) {
 			energyOrbDispatcher.updateGPUDataSingleThreaded();
 			energyOrbDispatcher.drawSingleThreaded();
 			// Path-guidance ribbons glow: additive HDR trail into SceneColorHDR, before bloom.
@@ -2890,7 +2899,7 @@ void GFX::render() {
 			}
 			// Bloom: reads SceneColorHDR (now PIXEL_SHADER_RESOURCE), writes the bloom mip
 			// chain (mip 0 composited by the resolve). Skipped in debug views (passthrough).
-			if (gBufferDebugMode_ == 0u) {
+			if (debugMode == 0u) {
 				bloomPipelineDispatcher.render();
 			}
 			tonemapPipelineDispatcher.updateGPUDataSingleThreaded();

@@ -7,8 +7,8 @@
 #include "../sim/ScenarioFinalBoss.hpp"
 #include <cstdio>
 
-#define USE_FINALBOSS_SCENARIO
-//#define USE_ISIS_SCENARIO
+// #define USE_FINALBOSS_SCENARIO
+// #define USE_ISIS_SCENARIO
 //#define USE_GRANDBAUM_SCENARIO
 
 namespace viz {

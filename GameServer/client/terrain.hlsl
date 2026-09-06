@@ -188,24 +188,6 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     float shadow = calcCSMShadow(input.posV, input.posW - camPos, normalize(input.normalW), ndotl);
     color *= shadow;
 
-#ifdef CSM_DEBUG_VIS
-    {
-        static const float3 kCascadeColors[4] = {
-            float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0)
-        };
-        uint dbgCascade = cascadeCount - 1u;
-        float dbgSplits[4] = {
-            cascadeSplitsFarV.x, cascadeSplitsFarV.y,
-            cascadeSplitsFarV.z, cascadeSplitsFarV.w
-        };
-
-        for (uint dci = 0u; dci < cascadeCount; ++dci) {
-            if (input.posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
-        }
-        color = lerp(color, kCascadeColors[dbgCascade], 0.4f);
-    }
-#endif
-
     // 6. Ambient (constant + IBL environment).
     color += globalAmbient * albedo * (1.f - ao);
 #ifdef IBL_ENABLED
@@ -215,6 +197,13 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // 7. Tonemap (Reinhard) + gamma correction.
     color = color / (color + float3(1.f, 1.f, 1.f));
     color = pow(abs(color), 1.f / 2.2f);
+
+#ifdef CSM_DEBUG_VIS
+    // Cascade level overlay, applied after the tonemap+gamma above so the hue survives.
+    // selectCascadeIndex guards cascadeCount == 0 (the old inline copy underflowed here).
+    if (cascadeCount > 0u)
+        color = lerp(color, kCascadeDebugColors[selectCascadeIndex(input.posV.z)], kCascadeDebugTint);
+#endif
 
     return float4(color, 1.f);
 }

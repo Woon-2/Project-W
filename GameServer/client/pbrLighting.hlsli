@@ -375,6 +375,42 @@ float sampleCascadePCF(uint cascadeIdx, float3 posRel, float3 normalW, float sin
     return shadow / 25.f;
 }
 
+// selectCascadeIndex: the first cascade whose far depth exceeds the view depth.
+// Single source of truth for the shadow lookup and for every cascade debug view —
+// a debug overlay that picked its cascade with its own copy of this loop would stop
+// telling the truth the moment the selection rule changed.
+// cascadeCount == 0 (e.g. lobby portrait, no CSM bound) returns 0 instead of
+// underflowing `cascadeCount - 1u`; callers must ignore the result in that case.
+uint selectCascadeIndex(float posVz) {
+    if (cascadeCount == 0u) return 0u;
+
+    float splits[4] = {
+        cascadeSplitsFarV.x, cascadeSplitsFarV.y,
+        cascadeSplitsFarV.z, cascadeSplitsFarV.w
+    };
+
+    uint cascadeIdx = cascadeCount - 1u;
+    for (uint ci = 0u; ci < cascadeCount; ++ci) {
+        if (posVz < splits[ci]) {
+            cascadeIdx = ci;
+            break;
+        }
+    }
+    return cascadeIdx;
+}
+
+// Cascade debug palette, shared by the forward CSM_DEBUG_VIS overlay (pbr/pbrSkinned/
+// terrain) and the deferred GBUF_DEBUG_CASCADE_LEVEL view, so both look identical.
+// Tinted over the DISPLAY-ENCODED colour: mixing into linear HDR then tonemapping
+// washes the hue out and makes bright surfaces read as white in a screenshot.
+static const float3 kCascadeDebugColors[4] = {
+    float3(1.f, 0.f, 0.f),  // cascade 0 — nearest
+    float3(0.f, 1.f, 0.f),  // cascade 1
+    float3(0.f, 0.f, 1.f),  // cascade 2
+    float3(1.f, 1.f, 0.f)   // cascade 3 — farthest
+};
+static const float kCascadeDebugTint = 0.45f;
+
 // calcCSMShadow: selects related cascades by view-space depth, performs 5x5 PCF,
 //                then blends the results.
 // posRel: CAMERA-RELATIVE world position (posW - camPos). The cascade lightVP matrices
@@ -396,13 +432,7 @@ float calcCSMShadow(float3 posV, float3 posRel, float3 normalW, float rawNdotl) 
     };
 
     // Select cascade: find first cascade whose far depth exceeds |posV.z|
-    uint cascadeIdx = cascadeCount - 1u;
-    for (uint ci = 0u; ci < cascadeCount; ++ci) {
-        if (posV.z < splits[ci]) { 
-            cascadeIdx = ci; 
-            break; 
-        }
-    }
+    uint cascadeIdx = selectCascadeIndex(posV.z);
 
     // NdotL-adaptive normal offset: maximum when surface is perpendicular to light,
     // zero when surface faces light directly.
@@ -580,23 +610,6 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
     float directFactor = calcCSMShadow(posV, posW - camPos, normalW, rawNdotl_shadow);
     color *= directFactor;
 
-#ifdef CSM_DEBUG_VIS
-    if (cascadeCount > 0u) {
-        static const float3 kCascadeColors[4] = {
-            float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0)
-        };
-        uint dbgCascade = cascadeCount - 1u;
-        float dbgSplits[4] = {
-            cascadeSplitsFarV.x, cascadeSplitsFarV.y,
-            cascadeSplitsFarV.z, cascadeSplitsFarV.w
-        };
-        for (uint dci = 0u; dci < cascadeCount; ++dci) {
-            if (posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
-        }
-        color.rgb = lerp(color.rgb, kCascadeColors[dbgCascade], 0.4f);
-    }
-#endif
-
     float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
 #ifdef IBL_ENABLED
     // Forward IBL: environment ambient added on top of the constant ambient.
@@ -607,6 +620,12 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
 
     color = color / (color + float3(1.f, 1.f, 1.f));
     color = pow( abs(color), 1.f/2.2f );
+
+#ifdef CSM_DEBUG_VIS
+    // Cascade level overlay, applied after the tonemap+gamma above so the hue survives.
+    if (cascadeCount > 0u)
+        color = lerp(color, kCascadeDebugColors[selectCascadeIndex(posV.z)], kCascadeDebugTint);
+#endif
 
     return float4(color, albedo.w);
 }

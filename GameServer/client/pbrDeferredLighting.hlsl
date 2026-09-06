@@ -18,6 +18,10 @@
 #define GBUF_DEBUG_CASCADE1     12u
 #define GBUF_DEBUG_CASCADE2     13u
 #define GBUF_DEBUG_CASCADE3     14u
+// Which cascade each pixel samples, tinted over the lit scene. Not part of the 'G'
+// cycle above — GFX::effectiveDebugMode() feeds it from the dedicated 'C' toggle.
+// Keep in sync with GFX::kGBufferDebugCascadeLevel.
+#define GBUF_DEBUG_CASCADE_LEVEL 15u
 
 struct VSOutput {
     float4 pos : SV_Position;
@@ -213,7 +217,21 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     float3 fogColor = sampleLevelBindlessCube(idxSkybox, viewDir, 6.f).rgb;
     
     color = lerp(color, fogColor, computeExponentialHeightFog(posW, camPos, fogDensity, heightFalloff, fogBaseHeight));
-    
+
+    // Cascade level view: tint the lit scene by the cascade it samples, so the split
+    // boundaries are readable against real geometry and shadows. The resolve passes
+    // debug output through untouched, so display-encode here with the same Reinhard +
+    // gamma the forward path uses (pbrLighting.hlsli::illuminateCSM) and tint on top —
+    // tinting linear HDR instead would let the tonemap wash the hue out.
+    // Background pixels are overwritten by the skybox composite that follows this pass.
+    if (debugMode == GBUF_DEBUG_CASCADE_LEVEL) {
+        float3 disp = color / (color + 1.0f);
+        disp = pow(abs(disp), 1.0f / 2.2f);
+        if (cascadeCount > 0u)
+            disp = lerp(disp, kCascadeDebugColors[selectCascadeIndex(posV.z)], kCascadeDebugTint);
+        return float4(disp, 1.0f);
+    }
+
     // HDR pipeline: output linear radiance into SceneColorHDR.
     // Tonemap (Reinhard) + gamma is applied later by the dedicated tonemap-resolve pass.
 

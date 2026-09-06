@@ -420,7 +420,13 @@ public:
 	void render();
 
 	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
-	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
+	// Forward 경로에서는 CSM_DEBUG_VIS PSO 퍼뮤테이션으로, Deferred 경로에서는
+	// effectiveDebugMode()가 넘기는 kGBufferDebugCascadeLevel로 나타난다.
+	// 켤 때 'G' 뷰를 끄는 이유: 둘이 같은 화면을 다투면 'C'가 안 먹는 것처럼 보인다.
+	void toggleCsmDebugVisualization() {
+		csmDebugVisualization_ = !csmDebugVisualization_;
+		if (csmDebugVisualization_) gBufferDebugMode_ = 0u;
+	}
 
 	// Hi-Z occlusion culling 활성화 여부 ('H' 키에 연결됨).
 	void setHiZCullEnabled(bool v) { hiZCullEnabled_ = v; }
@@ -451,7 +457,24 @@ public:
 	// GBuffer 채널 debug 뷰를 순환한다 ('G' 키에 연결됨).
 	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth
 	//        → IBL diffuse → IBL specular → BRDF → CSM cascade 0~3 shadow map → None
-	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 15u; }
+	// cascade level 뷰(15)는 순환에 넣지 않는다 — 'C' 전용 토글이다.
+	// 'C' 뷰를 끄는 이유: 두 디버그 뷰는 화면 하나를 두고 배타적이다. 남겨두면 순환이
+	// None(0)으로 돌아오는 순간 cascade 뷰가 되살아나 껐다고 생각한 화면이 다시 물든다.
+	void cycleGBufferDebugMode() {
+		gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 15u;
+		csmDebugVisualization_ = false;
+	}
+
+	// pbrDeferredLighting.hlsl의 GBUF_DEBUG_CASCADE_LEVEL과 같은 값이어야 한다.
+	static constexpr u32t kGBufferDebugCascadeLevel = 15u;
+
+	// Deferred lighting/resolve에 실제로 넘기는 디버그 모드. 'G' 순환 뷰와 'C' cascade
+	// level 뷰를 합성하는 유일한 지점이다 — 렌더 경로의 디버그 분기는 전부 이것만 읽어야
+	// 두 토글이 서로 다른 패스에서 엇갈리지 않는다. 'G' 뷰가 켜져 있으면 그쪽이 이긴다.
+	u32t effectiveDebugMode() const {
+		return gBufferDebugMode_ != 0u ? gBufferDebugMode_
+			: (csmDebugVisualization_ ? kGBufferDebugCascadeLevel : 0u);
+	}
 
 	// Returns false when text rendering fails (e.g. device loss); callers keep
 	// their text dirty and retry on a later frame.
@@ -723,7 +746,10 @@ private:
 	bool hiZCullEnabled_      = true;
 	bool vsyncEnabled_        = true;   // Present(1,0) 기본. setVsync 참고
 	RenderPath renderPath_    = RenderPath::Deferred;
-	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT, 11~14=CSM cascade 0~3 shadow map
+	// 0=None, 1=Albedo, ..., 7=Depth, 8=IBL diffuse, 9=IBL specular, 10=BRDF LUT,
+	// 11~14=CSM cascade 0~3 shadow map. 15(cascade level tint)는 여기 들어오지 않는다 —
+	// csmDebugVisualization_이 소유하고 effectiveDebugMode()가 합성한다.
+	u32t gBufferDebugMode_    = 0u;
 	float tonemapExposure_    = 1.25f;  // linear exposure multiplier applied in the tonemap resolve pass
 	float bloomThreshold_     = 0.77f;  // bloom brightness threshold (HDR luminance)
 	float bloomIntensity_     = 0.1f; // bloom additive strength at composite (0 = bloom off)

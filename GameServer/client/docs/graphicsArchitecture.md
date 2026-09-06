@@ -214,7 +214,17 @@ Light::updateCSMCascades()
   → render() → Pipeline::mainUpdate() → PerFrameData { lightVP[4], cascadeSplitsFarV, cascadeNormalOffsets }
 ```
 
-**CSM 디버그:** `#define CSM_DEBUG_VIS` — cascade별 색상 오버레이 (R/G/B/Y)
+**CSM cascade level 디버그 뷰 ('C' 키 → `GFX::toggleCsmDebugVisualization()`):**
+각 픽셀이 실제로 샘플하는 cascade를 R/G/B/Y로 틴트한다(근거리 0=빨강 → 원거리 3=노랑, 강도 0.45).
+**두 렌더 경로에서 구현이 다르다:**
+- Forward(로비 포트레이트): `#define CSM_DEBUG_VIS` PSO 퍼뮤테이션 —
+  `PBRShaderCSMDebug` / `PBRSkinnedShaderCSMDebug` / `TerrainShaderCSMDebug`
+- Deferred(인게임): PSO 퍼뮤테이션 없이 lighting cbuffer의 `debugMode = 15`
+  (`GBUF_DEBUG_CASCADE_LEVEL`) — 아래 "GBuffer / IBL 디버그 뷰" 참조
+
+틴트는 **양쪽 모두 톤매핑+감마 이후**에 얹는다. linear HDR에 섞으면 톤매핑이 색을 날려
+밝은 면이 흰색으로 뭉갠다. cascade 선택은 `pbrLighting.hlsli::selectCascadeIndex()` 하나만
+쓴다(그림자 조회와 동일 함수) — 디버그 뷰가 자체 복사본으로 고르면 선택 규칙이 바뀌는 순간 거짓말을 한다.
 
 **주의사항:**
 - cascade DSV clear는 `gfx.cpp::clearCSMAllShadowMaps()`에서만 수행 (각 파이프라인 shadowDraw에서 개별 클리어 금지)
@@ -283,10 +293,16 @@ Light::updateCSMCascades()
 - 이후 Skybox/Terrain/Billboard 등 Forward-always 패스가 올바른 깊이를 기준으로 렌더링 가능
 
 **GBuffer / IBL 디버그 뷰:**
-- 'G' 키 → `GFX::cycleGBufferDebugMode()` → `gBufferDebugMode_` (0~10) 순환
-- 순서: 0 None → 1 Albedo → 2 Normal → 3 AO → 4 Roughness → 5 Metallic → 6 LightAccum(=emissive) → 7 Depth → **8 IBL diffuse → 9 IBL specular → 10 BRDF LUT**
+- 'G' 키 → `GFX::cycleGBufferDebugMode()` → `gBufferDebugMode_` (0~14) 순환
+- 순서: 0 None → 1 Albedo → 2 Normal → 3 AO → 4 Roughness → 5 Metallic → 6 LightAccum(=emissive) → 7 Depth → **8 IBL diffuse → 9 IBL specular → 10 BRDF LUT → 11~14 CSM cascade 0~3 그림자맵 원본 depth**
+- **15 = cascade level 틴트**는 순환에 없다. 'C' 전용 토글(`csmDebugVisualization_`)이 소유하고,
+  `GFX::effectiveDebugMode()`가 두 상태를 합성해 셰이더에 넘기는 유일한 지점이다('G' 뷰가 이긴다).
+  두 토글은 서로를 끈다 — 화면 하나를 두고 배타적이기 때문.
 - Lighting PSO의 `debugMode` (cbuffer b1 내 uint)로 전달, PSO permutation 불필요
 - **디버그 패스스루:** resolve가 `debugMode!=0`이면 exposure/ACES/gamma를 건너뛰고 샘플값을 그대로 출력한다(디버그 분기가 이미 표시용으로 인코딩하므로 이중 톤매핑/감마 방지). 디버그 모드에서는 bloom도 스킵.
+- **skybox는 예외:** `debugMode==0`과 **cascade level 뷰(15)**에서만 SceneColorHDR에 합성한다.
+  cascade 뷰는 깊이 없는 배경 픽셀이 라이팅 패스 출력(= cascade 0 빨강)으로 남으므로 하늘을 덮어야 한다.
+  나머지 디버그 뷰는 채널 원본을 봐야 해서 하늘을 그리지 않는다.
 
 **주의사항:**
 - GBuffer DSV와 backbuffer DSV는 별개 리소스 — Deferred path에서 geometry pass는 GBuffer DSV 사용, depth 복사 없이 Forward 패스를 이어 실행하면 깊이가 초기화된 상태로 모든 Forward 오브젝트가 GBuffer 위에 그려짐

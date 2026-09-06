@@ -545,6 +545,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `terrainDeferredPipeline.hpp` | `TerrainDeferredPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
 | `terrainDeferredPipeline.cpp` | `Dispatcher::shadowPass()` / `gBufferPass()` 구현 |
 | `pbrLighting.hlsli` | PBR BRDF 함수 라이브러리 — terrain에서 `#define TERRAIN_SHADER` 후 include 시 `illuminate()` 제외됨 |
+| `pbrLighting.hlsli::selectCascadeIndex(posVz)` | **cascade 선택 단일 진입점** — `calcCSMShadow`(그림자 조회), forward `CSM_DEBUG_VIS` 오버레이(pbr/pbrSkinned/terrain), deferred `GBUF_DEBUG_CASCADE_LEVEL` 뷰가 전부 이 함수로 고른다. `cascadeCount==0`이면 0 반환(언더플로 가드). 공용 팔레트 `kCascadeDebugColors[4]` / `kCascadeDebugTint`도 같은 위치 |
 
 **TerrainData 구조 (`terrain.hpp #18-31`):**
 - `heightmapResolution` (N): 그리드 N×N 정점
@@ -642,8 +643,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **GFX RenderPath 선택 (`gfx.hpp`):**
 - `enum class RenderPath { Forward, Deferred }`
 - `GFX::setRenderPath(RenderPath)` — 런타임 전환
-- `GFX::cycleGBufferDebugMode()` — 'G' 키로 디버그 뷰 순환 (0 None→Albedo→Normal→AO→Roughness→Metallic→LightAccum(=emissive)→Depth→**8 IBL diffuse→9 IBL specular→10 BRDF LUT**)
-- `gBufferDebugMode_` (uint, 0~10) — Lighting PSO의 `debugMode` cbuffer 필드로 전달. resolve는 `debugMode≠0` 시 패스스루(톤매핑 생략)
+- `GFX::cycleGBufferDebugMode()` — 'G' 키로 디버그 뷰 순환 (0 None→Albedo→Normal→AO→Roughness→Metallic→LightAccum(=emissive)→Depth→**8 IBL diffuse→9 IBL specular→10 BRDF LUT→11~14 CSM cascade 0~3 그림자맵 원본**). 'C' 뷰를 끈다(배타적)
+- `gBufferDebugMode_` (uint, 0~14) — 'G' 순환 뷰. **15(cascade level 틴트)는 여기 들어오지 않는다** — `csmDebugVisualization_` 소유
+- `GFX::toggleCsmDebugVisualization()` / `csmDebugVisualization_` (`gfx.hpp #423`) — 'C' 키. Forward는 `*CSMDebug` PSO 퍼뮤테이션, Deferred는 `debugMode=15`. 켤 때 'G' 뷰를 0으로 리셋
+- `GFX::effectiveDebugMode()` (`gfx.hpp #466`) — 'G'·'C' 두 상태를 합성하는 **유일한 지점**. lighting cbuffer·톤맵 dispatcher·skybox/bloom 게이트가 전부 이것만 읽는다. resolve는 `debugMode≠0` 시 패스스루(톤매핑 생략), bloom 스킵. skybox는 `0` 또는 `15`에서만 합성(cascade 뷰의 하늘 보존)
 
 **gfx.cpp 라이트 스테이징 (`gfx.cpp`):**
 - PBR Dispatcher 생성 직전에 `lightDataPBRPipeline_` → `PBRShader::Light` 변환 후 `resourcesTerrainPipeline_.mainPass.lightData` 스테이징
