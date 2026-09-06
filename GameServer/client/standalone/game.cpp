@@ -3053,11 +3053,67 @@ void Game::update(Milliseconds deltaTime) {
 	clearEvents(eventList_);
 }
 
+// 인벤토리 아이콘 저작용 1회성 뷰. 씬을 전부 빼고 카메라 정면에 보석 하나와
+// 어두운 배경 판만 그린다. 화면을 캡처해 정사각으로 자른 뒤
+// resources/UI/texConv.bat으로 ui_gem_*.dds를 만든다.
+// 배경이 불투명하므로 알파 키잉이 필요 없다 — GPU 리드백 경로를 만들지 않는 이유.
+void Game::renderIconCapture() {
+	const ItemId itemId = AssetManager::kFirstGemItemId + static_cast<ItemId>(iconCaptureKind_);
+	const Model* gemModel = assetManager_.gemModel(itemId, static_cast<uint8_t>(iconCaptureVariant_));
+	if (!gemModel) return;
+
+	const mu::Vec3 eye = camera_.eye();
+	const mu::Vec3 fwd = mu::Vec3(mu::NVec3(camera_.at() - eye));
+
+	// 이 모드에서는 다른 오브젝트를 아예 그리지 않으므로, Hi-Z visibility ring의
+	// 최대 id 범위를 넓히지 않고 기존 범위 안의 id 0/1을 그대로 빌려 쓴다.
+	if (!iconCaptureGem_) {
+		iconCaptureGem_ = std::make_unique<Object>();
+		iconCaptureGem_->setRenderObjectId(0u);
+	}
+	if (!iconCaptureBackdrop_) {
+		iconCaptureBackdrop_ = std::make_unique<Object>();
+		iconCaptureBackdrop_->setModel(assetManager_.modelCube());
+		iconCaptureBackdrop_->setRenderObjectId(1u);
+	}
+
+	// 보석은 카메라 앞 0.9m, 배경 판은 그 뒤 2.5m에 크게 놓는다. 회전은 천천히 돌려
+	// 마음에 드는 각도에서 캡처할 수 있게 한다.
+	static const auto t0 = std::chrono::steady_clock::now();
+	const float t = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+
+	// setModel은 BVH를 재빌드하므로 실제로 바뀔 때만 호출한다.
+	if (iconCaptureGem_->model() != gemModel)
+		iconCaptureGem_->setModel(gemModel);
+	iconCaptureGem_->setPos(eye + fwd * 0.9f);
+	iconCaptureGem_->setOrient(mu::NQuat(mu::Vec3(0.f, 1.f, 0.f), t * 0.6f));
+
+	iconCaptureBackdrop_->setPos(eye + fwd * 3.4f);
+	iconCaptureBackdrop_->setScale(mu::Vec3(6.f, 6.f, 0.2f));
+
+	// renderState_.world는 update()에서만 계산된다. 이 모드는 cullObjects()를 건너뛰므로
+	// 직접 갱신해야 하며, setPos/setOrient가 prev/curr를 동기화하니 보간 계수는 1이면 된다.
+	iconCaptureGem_->update(Milliseconds{ 0.f }, 1.f);
+	iconCaptureBackdrop_->update(Milliseconds{ 0.f }, 1.f);
+
+	iconCaptureBackdrop_->render(gfx_);
+	iconCaptureGem_->render(gfx_);
+
+	camera_.updateGFX(gfx_);
+	dirLight_.render(gfx_);
+}
+
 void Game::render() {
 	if (skipNextRender_) {
 		skipNextRender_ = false;
 		return;
 	}
+
+	// 아이콘 저작 모드는 씬 제출만 대체한다. 아래 FrameData + gfx_.render() 꼬리는
+	// swapchain 동기화 때문에 반드시 공통으로 지나가야 한다(여기서 return 하면 화면이 멈춘다).
+	if (iconCaptureMode_) {
+		renderIconCapture();
+	} else {
 
 	cullObjects();
 	cullObjectsForShadow();
@@ -3141,13 +3197,15 @@ void Game::render() {
 
 	uiManager_.render( gfx_ );
 
+	}   // !iconCaptureMode_
+
 	// FrameData와 gfx_.render()는 렉 상황에도 항상 호출한다 (DX12 swapchain 동기화 유지).
 	gfx_.addFrameData( PBRPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 	gfx_.addFrameData( PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 	gfx_.addFrameData( PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 	gfx_.addFrameData( PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 
-	if (!chunkManager_.empty()) {
+	if (!chunkManager_.empty() && !iconCaptureMode_) {   // 아이콘 저작 모드에서는 지형도 숨긴다
 		chunkManager_.setCullCamera(extractFrustum(camera_.view() * camera_.proj()), camera_.eye());
 		chunkManager_.submitDrawEvents(gfx_, dirLight_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
@@ -3155,7 +3213,8 @@ void Game::render() {
 	}
 
 	gfx_.render();
-	feedbackCullResultToAnim();
+	if (!iconCaptureMode_)
+		feedbackCullResultToAnim();   // cullObjects()를 건너뛴 프레임의 결과는 쓰지 않는다
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -3333,6 +3392,25 @@ void Game::processInput(Milliseconds deltaTime) {
 	// F9: toggle boss heat-distortion debug source (attached to goblin_).
 	if ( (keyboardStateCurr_[VK_F9] & 0x80) && !(keyboardStatePrev_[VK_F9] & 0x80) ) {
 		heatDebugEnabled_ = !heatDebugEnabled_;
+	}
+
+	// F10: 인벤토리 아이콘 저작 모드. 1~6 = 보석 종류, [ / ] = variant.
+	if ( (keyboardStateCurr_[VK_F10] & 0x80) && !(keyboardStatePrev_[VK_F10] & 0x80) ) {
+		iconCaptureMode_ = !iconCaptureMode_;
+	}
+	if (iconCaptureMode_) {
+		for (int k = 0; k < AssetManager::kGemKindCount; ++k) {
+			const int vk = '1' + k;
+			if ( (keyboardStateCurr_[vk] & 0x80) && !(keyboardStatePrev_[vk] & 0x80) ) {
+				iconCaptureKind_    = k;
+				iconCaptureVariant_ = 0;
+			}
+		}
+		const int variants = AssetManager::kGemVariants[iconCaptureKind_];
+		if ( (keyboardStateCurr_[VK_OEM_4] & 0x80) && !(keyboardStatePrev_[VK_OEM_4] & 0x80) )
+			iconCaptureVariant_ = (iconCaptureVariant_ + variants - 1) % variants;
+		if ( (keyboardStateCurr_[VK_OEM_6] & 0x80) && !(keyboardStatePrev_[VK_OEM_6] & 0x80) )
+			iconCaptureVariant_ = (iconCaptureVariant_ + 1) % variants;
 	}
 	// J / K : adjust warp strength; - / = : adjust glow strength (debug tuning).
 	if ((keyboardStateCurr_['J'] & 0x80) && !(keyboardStatePrev_['J'] & 0x80))

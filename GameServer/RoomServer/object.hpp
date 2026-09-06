@@ -140,6 +140,11 @@ public:
 	void setHp(int32 hp) { hp_ = hp; }
 	int32 hp() const { return hp_; }
 
+	// 플레이어에게 처치당했을 때 떨어뜨릴 보석 개수. 티어가 클래스 계층과 정확히
+	// 일치하므로(일반 몬스터 / 중간보스 / 최종 보스) 스폰 시 주입 대신 virtual로 둔다.
+	// 0 = 드롭 없음(거점, 플레이어 등 기본값). 굴림이 들어가므로 const가 아니다.
+	virtual int32 rollGemDropCount() { return 0; }
+
 	// --- Stack-charge: kill-charge reward + recent-damager attribution (monsters) ---
 	// killChargeReward_ > 0 marks a chargeable monster; set at spawn from ChargeConfig.
 	float killChargeReward() const { return killChargeReward_; }

@@ -23,6 +23,9 @@ public:
     // Drives the BehaviorTree instead of the Npc FSM (Npc::update is virtual).
     NpcUpdateResult update(Seconds dt, Room& room) override;
 
+    // 최종 보스: 보석 10개.
+    int32 rollGemDropCount() override { return 10; }
+
     // Builds btRoot_. Call from Room::setupFinalBoss AFTER addAttack() so the
     // attack leaves can resolve their skill ids/clip keys by index.
     void buildBehaviorTree();

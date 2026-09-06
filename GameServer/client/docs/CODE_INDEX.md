@@ -330,7 +330,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `AnimBlender::setCulled()/isCulled()` | `animation.hpp #123` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
 | `AnimBlender::onCalcLocal()` | `animation.hpp #143` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
 | `AnimBlender::onCalcDress()` | `animation.hpp #146` | dress 공간으로 환원. 누적 직후 `onPostDress()` 훅 호출 |
-| `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 스파인 조준 pitch에 사용(보스는 미적용) — `docs/aimPitchUpperBodyMask.md` |
+| `AnimBlender::onPostDress()` (virtual 훅) | `animation.hpp #185` | 드레스 누적 직후 프로시저럴 보정 주입 지점(Keyframe 한정, 기본 no-op). AnimBlenderPlayer가 상체 yaw 보정 + 스파인 조준 pitch에 사용(보스는 미적용) — `docs/aimPitchUpperBodyMask.md` |
 | `AnimBlender::onCalcFinal()` | `animation.hpp #156` | toLocal 적용 → finalXformData |
 | `AnimBlender::finalXformData()` | `animation.hpp #160-161` | 셰이더 입력용 최종 행렬 배열 |
 | `AnimBlender::advanceClipTime()` | `animation.hpp #198` / `animation.cpp #392` | 루프 클립 시간을 `rate`배로 진행 + fmod 랩. 파생 블렌더가 복붙하던 `t += dt; while (t > dur) t -= dur;`의 단일 구현. **루프 로코모션 전용** — 공격/피격/사망은 랩하면 안 되므로 각자 clamp 방식 유지 |
@@ -345,7 +345,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #61` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): 마스크는 기반 클래스 `buildUpperBodyMask("player")`(위 표), 공격 lerp에만 `tAttack_*(mask+(1-mask)*tIdle_)` 적용(hit/death는 전신). `buildSpineChain()`=`object.cpp #26`(pitch용 spine_01..03 체인, init 시 1회), `onPostDress()`=`object.cpp #360`(스파인 피벗-공액 pitch, 사망 페이드). **run 배속**: `runRate_`+지역 `kRefSpeedRun=5`, 가중치 `tRun*(1-tAttack_*tIdle_)`(하체 마스크 몫 차감), 공격 오버레이 처리 **다음**에 계산 |
+| `AnimBlenderPlayer` | `object.hpp #17` / `setWeaponType`=`object.cpp #61` — **무기 인지(weapon-aware)**. `setWeaponType(PlayerWeaponType)`(무기 장착 시 자유 함수 `equipPlayerWeapon`가 호출)가 무기별 idle/hit/4방향 run 클립명(`Combat_2H_Ready`/`Run_Bow_*` 등)과 `attackClips_` 순서 목록을 재구성. Death는 공용 `Death`. 공격은 Goblin식 오버레이(`currentAttackClip_`/`tAttack_`, EvAttack.attackIndex로 선택, 클립 길이만큼 재생). 콤보/반복은 스킬 타임라인의 다중 PlayAnimation이 구동. 트리거는 `EventBus::receive`. **상하체 분리 마스크+조준 pitch**(`docs/aimPitchUpperBodyMask.md`): 마스크는 기반 클래스 `buildUpperBodyMask("player")`(위 표), 공격 lerp에만 `tAttack_*(mask+(1-mask)*tIdle_)` 적용(hit/death는 전신). `buildSpineChain()`=`object.cpp #26`(pitch용 spine_01..03 체인 + 상체 yaw 보정용 `spineAncestry_` 루트→말단 경로, init 시 1회), `onPostDress()`=`object.cpp #393`(yaw 보정 → pitch 순서로 위임). `cancelAttackYawDrift()`=`object.cpp #410`(**이동 중 공격 상체 yaw 끌림 상쇄** — 좌우 run 클립의 골반 ±90°가 마스크로 남아 상체가 이동 방향을 향하던 것을, 공격 클립 단독 상체 방향을 목표로 상체 루트에서 yaw만 되돌림. 강도 `tAttack_*(1-tIdle_)*(1-tDeath_)`라 정지 시 0=회귀 없음, 골반·다리 불변=접지 유지), `applyAimPitch()`=`object.cpp #451`(스파인 피벗-공액 pitch, 사망 페이드). **run 배속**: `runRate_`+지역 `kRefSpeedRun=5`, 가중치 `tRun*(1-tAttack_*tIdle_)`(하체 마스크 몫 차감), 공격 오버레이 처리 **다음**에 계산 |
 | `AnimBlenderGoblin` | `object.hpp #107` — 5-클립(Idle/Walk/Hit/Death + 다중 Attack) 속력 블렌딩. **다중 공격 클립**: `attackClips_`(로드된 공격 클립 풀네임 순서 목록, init이 후보 매칭으로 채움) + `currentAttackClip_`(EvAttack.attackIndex로 선택). 레거시 단일 `X_Attack` 폴백. **walk 배속**: `walkRate_`+지역 `kRefSpeedWalk=3`, 가중치 `tWalk_*(1-tAttack_)`(마스크 없음 → 공격이 전 본에 걸림) |
 | `AnimBlenderSnake` / `AnimBlenderMushroom` | `object.hpp #157` / `#198` — 고블린과 동일 구조·다중 공격·walk 배속(클립 접두어만 다름). Snake는 idle 슬롯에도 `Snake_Walk`를 쓰므로 배속은 walk 슬롯에만 적용 |
 | `AnimBlenderBomber/Birdy/Slime/Treant` | `object.hpp #239`/`#276`/`#313`/`#350` — Mushroom 패턴 복제(클립 접두어+attackClips_만 다름), 모두 활성(가드 제거됨). 7종 캐스터 공용 |
@@ -481,6 +481,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
 | `GFX::drainGpu()` | `gfx.hpp/cpp` | 제출된 모든 GPU 작업(FrameFence 전체 + LoadFence) 블로킹 대기. `~GFX`가 호출하지만, **Game 소멸자 본문에서도 멤버 소멸 전에 반드시 호출** — gfx_보다 뒤에 선언된 멤버가 in-flight 리소스를 해제하면 디바이스 행(TDR)으로 같은 GPU의 타 프로세스까지 디바이스 제거됨 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
+| `GFX::getHiZStats()` | `gfx.cpp #6` | 컬링 3단계(No culling / Frustum / Hi-Z) × (스킨드 / 정적 prop) 잔존 인스턴스 수. 10절 "컬링 통계 오버레이" 참조 |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
 | `mu::perspReversedZ()` | `mathUtil.hpp` (client + common, 동일 내용) | Reversed-Z LH 퍼스펙티브 투영(near→depth 1.0, far→depth 0.0). `Camera::setPerspective()`(`camera.cpp`)가 사용 — 메인/로비/포트레이트 카메라 전부 적용. 그림자맵(ortho)은 미적용. 상세: `docs/graphicsArchitecture.md` "Reversed-Z 깊이 버퍼" |
 
@@ -976,6 +977,20 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
 
+### 컬링 통계 오버레이 (온라인 인게임, F1)
+
+설계: `docs/graphicsArchitecture.md` "컬링 통계 오버레이"
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래) 컬링 단계별 잔존 인스턴스 표. **Distance culling / + Frustum / + Hi-Z** × (Skinned / Props / Total). 첫 행이 "No culling"이 아닌 이유: 파이프라인 도달 전에 거리 컬링·청크 스트리밍이 이미 적용됨. **막대는 단계별 잔존량을 중첩(큰 것부터)해 그려 컬링될수록 짧아진다** — 라벨도 `drawn X%`(남은 양). 표의 단계 행 색 = 대응 막대 세그먼트 색(별도 범례 불필요) + 컬링률 막대 + anim·물리 스킵 오브젝트 수 + FPS. `PathGuideHUD`/`PickupPromptHUD`와 같은 즉시모드 HUD(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, ~6Hz 평균). **고정폭 Consolas**로 열 정렬(`ensureFont`, uiScale 변경 시에만 재생성) |
+| 행 가시성 규칙 | `hiZStatsHUD.cpp` `render()` | Hi-Z OFF면 `+ Hi-Z`·`Anim/Physics skipped` 행을 값 대신 `—`로 채우지 않고 **아예 그리지 않는다**(패널이 줄어듦). `visible_==false`면 최상단 조기 반환으로 **아무것도 제출하지 않음** |
+| `GFX::getHiZStats()` | `gfx.cpp #6`, 구조체는 `gfx.hpp` | 스킨드 + 정적 파이프라인 `hiZPass` 카운터를 3단계로 합성. Hi-Z OFF면 `afterHiZ = afterFrustum`(패스 미실행이라 낡은 값 방지) |
+| 단계 카운터 | `pbrDeferredSkinnedPipeline.cpp` / `pbrDeferredPipeline.cpp` `sortDrawEvents()` | `lastSubmittedCount`(제출 전량) / `lastFrustumCount`(VFC 통과) / 정적은 `lastDirectCount`(비-occludee) 추가. Hi-Z ON/OFF 무관하게 매 프레임 갱신 |
+| 정적 prop visibility feedback | `pbrDeferredPipeline.cpp` `hiZPassUpdate/Compute()`, 버퍼는 `gfx.cpp` | 구 `cullScratch` → `visibilityFeedback`(단일 리소스 2-slot ring + readback, roomCnt=1). **통계 전용** — `objectVisibility` 테이블 없음 |
+| 오브젝트 단위 집계 | `online/onlineGame.cpp` `feedbackCullResultToAnim()` | `hiZTrackedObjects_` / `hiZSkippedObjects_`. 이미 도는 루프에 카운터만 추가 |
+| 토글 / 렌더 호출 | `online/onlineGame.cpp` `processInputGame()` (**F1**, `hiZOverlayVisible_` **기본 false**), `renderInGame()` | `uiManager_.render()` 직전, `finalScoreboard_` 비표시 블록 안. 설정창·인벤토리가 열려 있으면 미제출 |
+
 ### 오브젝트 id 등록 / 수명주기 감시 (온라인)
 
 **설계·원인 분석·로그 판독표: `RoomServer/docs/objectIdLifecycle.md`**
@@ -1075,6 +1090,20 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::KillCountWidget` | `ui/widgets/KillCountWidget.hpp/cpp` | 상단 HUD: 스컬 아이콘(`icon_kill.dds`) + 누적 킬. 킬 팝, streak 표시, 마일스톤(10/25/50/100) 금색 플래시. `addKill()`은 게임 스레드에서 호출 |
 | `KillCountTuning` | `ui/widgets/KillCountWidget.hpp` | Kill Count 연출 상수 묶음 |
 | onlineGame 통합 | `online/onlineGame.cpp` | UI 셋업: `killCountWidget_` add + `damageNumberSystem_.init()`. 이벤트 디스패치 루프: `receive` 직전 `prevHp` 캡처 → `dmg` 계산 → `spawn`, 고블린 `EvDeath` 시 `addKill()`. `InGameScene`: `damageNumberSystem_.update()`. `renderInGame`: `uiManager_.render` 직전 `damageNumberSystem_.render()` |
+
+### 즉시모드 HUD (UIManager 트리 밖)
+
+`UIManager` 위젯이 아니라 `renderInGame()`에서 `UIPipeline::DrawEvent`를 직접 제출하는 HUD들.
+런타임 위젯 생성/파괴가 없어 `drainGpu` 요구(GPU UAF)가 없고, 행/요소 단위 조건부 표시가 자유롭다.
+좌표는 **bottom-origin 실제 픽셀**, 크기는 각자 `uiScale = min(sw/1024, sh/768)`로 상대화.
+
+| 클래스 | 파일 | 화면 위치 |
+|--------|------|-----------|
+| `MinimapHUD` | `ui/minimapHUD.{hpp,cpp}` | 우상단 |
+| `SkillDialHUD` | `ui/skillDialHUD.{hpp,cpp}` | 우하단 |
+| `PathGuideHUD` | `ui/pathGuideHUD.{hpp,cpp}` | 월드 투영 / 화면 가장자리 |
+| `PickupPromptHUD` | `ui/pickupPromptHUD.{hpp,cpp}` | 아이템 월드 위치 위 / 중앙 알림 |
+| `HiZStatsHUD` | `ui/hiZStatsHUD.{hpp,cpp}` | 좌측 중단(파티 HP 아래). 컬링 통계, **F1** 토글 — 10절 참조 |
 
 ### 파티원 HP HUD (인게임)
 
@@ -1338,3 +1367,18 @@ statusLabel(스킬/scale/cam/target HP). 타깃 더미는 reset 시 `positionDum
 | 서버 권한 처리 | `../../RoomServer/Room.cpp`, `PacketManager.cpp` | Player 소유 인벤토리, revision 검증, HP 브로드캐스트 |
 | 프로토콜 | `../../ServerEngine/protocol.hpp` | `C_InventoryAction`, `S_InventorySnapshot`, `S_InventoryActionResult` |
 | 유지보수 문서 | `inventorySystem.md` | 아이템 추가 방법, 확장 규칙, 빌드·검증 절차 |
+| `Inventory::canFit` | `../common/inventory.cpp` | add()와 같은 배치 규칙의 사전 검사(월드 습득의 전부-아니면-전무용) |
+
+## 16. 아이템 드롭 / 습득 (월드 보석)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| 설계 문서 | `../../RoomServer/docs/itemDropSystem.md` | 권위 경계, 룸 로컬 dropId, 패킷 계약, 아이콘 저작 절차 |
+| 프로토콜 | `../../ServerEngine/protocol.hpp` | `C_ItemPickup`, `S_ItemDropBatch`, `S_ItemDropRemove`, `ItemDropInfo`, `ItemPickupResult` |
+| 서버 드롭/습득 | `../../RoomServer/Room.cpp` | `spawnGemDrops` / `updateItemDrops` / `pickupItem`, `noteAndMaybeReward`의 사망 훅 |
+| 드롭 개수 티어 | `../../RoomServer/object.hpp`, `Npc.hpp`, `TacticalNpc.hpp`, `PlatoonLeader.hpp`, `finalBoss.hpp` | `rollGemDropCount()` virtual (0 / 1~2 / 5 / 10) |
+| 클라 드롭 객체 | `online/onlineGame.cpp` | `GemDrop`/`gemDrops_`, `createItemDrop`·`updateItemDrops`·`updateItemDropAim`·`destroyItemDrop` |
+| 보석 메시 | `AssetManager.hpp/.cpp` | `gemModels_`(32개 평탄 배열) + `gemModel(itemId, variant)` |
+| 강조 실루엣 | `outlinePipeline.hpp/.cpp`, `outline.hlsl`, `shader.cpp: createOutlineShader` | inverted hull, SceneColorHDR 가산 → bloom 발광 |
+| 습득 프롬프트 | `ui/pickupPromptHUD.hpp/.cpp` | 월드 앵커 `[F] 줍기` + 중앙 실패 안내 |
+| 아이콘 저작 모드 | `standalone/game.cpp: renderIconCapture` | F10 토글, 1~6 종류 / `[`·`]` variant |

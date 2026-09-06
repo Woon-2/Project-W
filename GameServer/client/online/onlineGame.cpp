@@ -708,6 +708,8 @@ void Game::setupStage() {
 	tacticalZoneIntro_.init(uiManager_, assetManager_);
 	tacticalDialogueOverlay_.init(uiManager_, assetManager_);
 	pathGuideHUD_.init(gfx_);   // creates the distance-label text target
+	pickupPromptHUD_.init(gfx_);   // "[F] 줍기" 프롬프트 + 실패 안내 텍스트 타깃
+	hiZStatsHUD_.init(gfx_);   // 컬링 통계 행별 텍스트 타깃(재입장 시 멱등)
 	dialogueSystem_.init(uiManager_, "../resources/UI/dialogues/dialogues.json");
 
 	// 1000개 이상의 render object가 필요하다면 여기를 수정
@@ -3533,6 +3535,12 @@ void Game::updateCorpses(Milliseconds deltaTime, float tPhysicInterp) {
 					finalBossRewardOrbsSpawned_ = true;
 				}
 				c.phase = Corpse::Phase::Orb;
+				// 보류 중이던 보석 드롭도 이 시점에 튀어나온다(오브 생성과 동기화).
+				// 시체는 client-authored라 id 맵에 없으므로 위치를 직접 넘긴다.
+				{
+					const mu::Vec3 corpsePos = o.pos();
+					releasePendingItemDrops(c.origId, &corpsePos);
+				}
 				if (o.ragdoll() && o.ragdoll()->isActive())
 					o.ragdoll()->deactivate(physicsWorld_);
 			}
@@ -3583,6 +3591,318 @@ void Game::createStronghold(const ObjectInfo& info) {
 	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, 0.f };
 
 	strongholds_.push_back(sh);
+}
+
+// ── 월드 드롭 보석 ───────────────────────────────────────────────────────────
+// 권위 경계: 서버가 착지점을, 클라가 낙하 연출을 소유한다. 튀어 오른 보석은 로컬
+// Dynamic 물리로 구르다가 권위 착지점으로 수렴한 뒤 물리에서 빠진다(비용 상한).
+// 근거: RoomServer/docs/itemDropSystem.md
+namespace {
+constexpr float kGemTossSec        = 0.75f;   // 던지기 탄도 비행 시간(초기 속도 역산에 사용)
+constexpr float kGemFlyMaxSec      = 2.0f;    // 이 시간이 지나면 무조건 수렴 단계로
+constexpr float kGemSettleSec      = 0.3f;    // 권위 착지점으로 블렌딩하는 시간
+constexpr float kGemScale          = 0.7f;    // 원본 prop 메시가 월드에선 너무 크다
+constexpr float kGemMass           = 0.6f;
+constexpr float kGemHalfExtent     = 0.06f;   // 관성 텐서용 근사 반치수(kGemScale 반영)
+constexpr float kGemIdleSpinRadSec = 0.9f;    // Idle 회전 속도
+constexpr float kGemBobAmplitude   = 0.05f;
+constexpr float kGemBobRadSec      = 2.2f;
+constexpr float kGemIdleLift       = 0.08f;   // 지면에 박혀 보이지 않도록 살짝 띄운다
+// 대응하는 시체를 못 찾은 보류 드롭의 강제 스폰 시한(래그돌 2.0s보다 넉넉하게).
+constexpr float kPendingDropTimeoutSec = 3.0f;
+
+// 카탈로그의 아이템 이름은 JSON에서 온 UTF-8이라 위젯에 넣기 전에 변환해야 한다.
+// pch.hpp가 NONLS를 정의해 MultiByteToWideChar/CP_UTF8을 쓸 수 없으므로,
+// lobbyUI.cpp / DialogueSystem.cpp와 같은 자체 디코더를 쓴다.
+std::wstring gemUtf8ToWide(const std::string& bytes) {
+	std::wstring out;
+	out.reserve(bytes.size());
+	const std::size_t n = bytes.size();
+	std::size_t i = 0;
+	while (i < n) {
+		const unsigned char c = static_cast<unsigned char>(bytes[i]);
+		char32_t cp = 0;
+		int extra = 0;
+		if (c < 0x80)              { cp = c;        extra = 0; }
+		else if ((c >> 5) == 0x06) { cp = c & 0x1F; extra = 1; }
+		else if ((c >> 4) == 0x0E) { cp = c & 0x0F; extra = 2; }
+		else if ((c >> 3) == 0x1E) { cp = c & 0x07; extra = 3; }
+		else                       { ++i; continue; }   // stray continuation/invalid lead
+
+		if (i + static_cast<std::size_t>(extra) >= n) break;
+		bool ok = true;
+		for (int k = 1; k <= extra; ++k) {
+			const unsigned char cc = static_cast<unsigned char>(bytes[i + k]);
+			if ((cc >> 6) != 0x02) { ok = false; break; }
+			cp = (cp << 6) | (cc & 0x3F);
+		}
+		if (!ok) { ++i; continue; }
+		i += static_cast<std::size_t>(extra) + 1;
+
+		if (cp <= 0xFFFF) {
+			out.push_back(static_cast<wchar_t>(cp));
+		} else {
+			cp -= 0x10000;
+			out.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
+			out.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
+		}
+	}
+	return out;
+}
+}
+
+void Game::createItemDrop(const ItemDropInfo& info) {
+	if (info.dropId == 0) return;
+	// 중복 수신/재접속 대비: 같은 dropId가 이미 있으면 무시한다.
+	if (gemDrops_.contains(info.dropId)) return;
+	for (const PendingGemDrop& p : pendingGemDrops_)
+		if (p.info.dropId == info.dropId) return;
+
+	// 사망 즉시 스폰하지 않는다 — 시체가 에너지 오브로 분해되는 시점까지 보류한다.
+	pendingGemDrops_.push_back(PendingGemDrop{ info, 0.f });
+}
+
+void Game::releasePendingItemDrops(uint16 sourceObjId, const mu::Vec3* originOverride) {
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		if (pendingGemDrops_[i].info.sourceObjId != sourceObjId) { ++i; continue; }
+		const ItemDropInfo info = pendingGemDrops_[i].info;
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+		spawnGemDropNow(info, originOverride);
+	}
+}
+
+void Game::spawnGemDropNow(const ItemDropInfo& info, const mu::Vec3* originOverride) {
+	if (gemDrops_.contains(info.dropId)) return;
+
+	const Model* model = assetManager_.gemModel(info.itemId, info.visualVariant);
+	if (!model) return;
+
+	const mu::Vec3 landing = mu::Vec3(info.pos.x, info.pos.y, info.pos.z);
+
+	// 던지기 시작점: 시체(오브 분해 지점)가 있으면 그 위치, 아니면 착지점 위.
+	// 시체는 client-authored라 skillObjectById_에 없으므로 호출자가 위치를 넘겨준다.
+	mu::Vec3 origin = landing + mu::Vec3(0.f, 1.5f, 0.f);
+	if (originOverride)
+		origin = *originOverride + mu::Vec3(0.f, 1.0f, 0.f);
+	else if (const size_t sid = static_cast<size_t>(info.sourceObjId);
+		sid != 0 && sid < skillObjectById_.size() && skillObjectById_[sid]) {
+		origin = skillObjectById_[sid]->pos() + mu::Vec3(0.f, 1.0f, 0.f);
+	}
+
+	auto obj = std::make_shared<Object>();
+	obj->setPos(origin);
+	obj->setModel(model);
+	obj->setScale(mu::Vec3(kGemScale, kGemScale, kGemScale));
+	obj->setRenderObjectId(nextRenderObjId_++);
+
+	RigidBody& body = obj->body();
+	body.setMotionType(MotionType::Dynamic);
+	body.setMass(kGemMass);
+	body.setInertia(computeBoxInertia(
+		kGemMass, mu::Vec3(kGemHalfExtent, kGemHalfExtent, kGemHalfExtent)));
+	body.setLinearDamping(0.25f);
+	body.setAngularDamping(0.5f);
+	body.setRestitution(0.35f);
+	body.setFriction(0.8f);
+
+	// 탄도해가 착지점에서 끝나도록 초기 속도를 역산한다. 접촉/감쇠 때문에 정확히
+	// 떨어지지는 않지만, 뒤이은 Settling 단계가 권위 착지점으로 수렴시킨다.
+	const mu::Vec3 g = physicsWorld_.gravity();
+	const mu::Vec3 v0 = (landing - origin) * (1.f / kGemTossSec) - g * (0.5f * kGemTossSec);
+	body.setLinearVel(v0);
+	body.setOmega(mu::Vec3(
+		rand(-6.f, 6.f), rand(-6.f, 6.f), rand(-6.f, 6.f)));
+	body.snapToCurrent();
+
+	Object* raw = obj.get();
+	physicsWorld_.registerBody(&body, [raw]() { raw->rebuildBodyBVH(); });
+
+	GemDrop drop;
+	drop.obj               = std::move(obj);
+	drop.itemId            = info.itemId;
+	drop.phase             = GemDrop::Phase::Flying;
+	drop.inPhysics         = true;
+	drop.authoritativePos  = landing;
+	gemDrops_.emplace(info.dropId, std::move(drop));
+}
+
+void Game::destroyItemDrop(uint16 dropId) {
+	// 아직 보류 중(오브 단계 대기)에 만료/습득 통지가 올 수 있다.
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		if (pendingGemDrops_[i].info.dropId != dropId) { ++i; continue; }
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+	}
+
+	const auto it = gemDrops_.find(dropId);
+	if (it == gemDrops_.end()) return;   // 중복 제거 통지는 무해
+
+	if (it->second.inPhysics && it->second.obj)
+		physicsWorld_.unregisterBody(&it->second.obj->body());
+	gemDrops_.erase(it);
+
+	if (aimedDropId_ == dropId)     aimedDropId_ = 0;
+	if (pickupPendingId_ == dropId) pickupPendingId_ = 0;
+}
+
+void Game::onItemDropRemoved(uint16 dropId, uint16 pickerObjId, ItemPickupResult result) {
+	if (result == ItemPickupResult::PickedUp || result == ItemPickupResult::Expired) {
+		// 최종 점수판 집계. 성공 시에만 세며, 이 패킷은 브로드캐스트라 모든 클라이언트가
+		// 같은 값을 얻는다(킬 카운트와 동일한 방식 — inGameMonsterKillsByPlayerId_ 참조).
+		// 드롭은 항상 quantity 1이므로 습득 횟수 = 보석 개수다.
+		if (result == ItemPickupResult::PickedUp && pickerObjId != 0
+			&& std::ranges::find(inGamePartyPlayerIds_, pickerObjId) != inGamePartyPlayerIds_.end()) {
+			++inGamePickedItemsByPlayerId_[pickerObjId];
+		}
+		destroyItemDrop(dropId);
+		return;
+	}
+
+	// 습득 거절: 드롭은 월드에 남는다. 대기 상태만 풀고 사유를 안내한다.
+	if (pickupPendingId_ == dropId) pickupPendingId_ = 0;
+	switch (result) {
+	case ItemPickupResult::InventoryFull:
+		pickupNotice_ = L"인벤토리가 가득 찼습니다"; break;
+	case ItemPickupResult::TooFar:
+		pickupNotice_ = L"너무 멀리 있습니다"; break;
+	case ItemPickupResult::NotFound:
+		pickupNotice_ = L"이미 다른 사람이 주웠습니다"; break;
+	default:
+		pickupNotice_ = L"지금은 주울 수 없습니다"; break;
+	}
+	pickupNoticeSec_ = 2.0f;
+}
+
+void Game::updateItemDrops(Milliseconds deltaTime, float tPhysicInterpolation) {
+	const float dt = std::chrono::duration_cast<Seconds>(deltaTime).count();
+
+	if (pickupNoticeSec_ > 0.f) pickupNoticeSec_ = std::max(0.f, pickupNoticeSec_ - dt);
+
+	// 보류 드롭: 대응 시체가 오브 단계로 넘어가면 releasePendingItemDrops가 꺼내간다.
+	// 시체를 끝내 못 찾은 것만 여기서 시한이 지나 강제 스폰된다.
+	for (size_t i = 0; i < pendingGemDrops_.size(); ) {
+		pendingGemDrops_[i].age += dt;
+		if (pendingGemDrops_[i].age < kPendingDropTimeoutSec) { ++i; continue; }
+		const ItemDropInfo info = pendingGemDrops_[i].info;
+		pendingGemDrops_[i] = pendingGemDrops_.back();
+		pendingGemDrops_.pop_back();
+		spawnGemDropNow(info, nullptr);
+	}
+	// 응답이 유실돼도 영구히 잠기지 않도록 대기 상태를 만료시킨다.
+	if (pickupPendingId_ != 0) {
+		pickupPendingSec_ += dt;
+		if (pickupPendingSec_ > 1.0f) { pickupPendingId_ = 0; pickupPendingSec_ = 0.f; }
+	}
+
+	for (auto& [dropId, drop] : gemDrops_) {
+		if (!drop.obj) continue;
+		drop.phaseSec += dt;
+
+		switch (drop.phase) {
+		case GemDrop::Phase::Flying: {
+			// 지형 청크가 아직 로드되지 않았거나 보석 메시에 BVH가 없으면 접촉이 생기지
+			// 않아 무한 낙하한다. 권위 착지점 아래로는 내려가지 못하게 잘라둔다.
+			if (const mu::Vec3 p = drop.obj->pos(); p.y() < drop.authoritativePos.y()) {
+				drop.obj->setCurrPos(mu::Vec3(p.x(), drop.authoritativePos.y(), p.z()));
+				const mu::Vec3 v = drop.obj->body().linearVel();
+				if (v.y() < 0.f)
+					drop.obj->body().setLinearVel(mu::Vec3(v.x(), 0.f, v.z()));
+			}
+
+			// 멈췄거나(접지 후 정지) 시간이 다 되면 수렴 단계로 넘어간다.
+			const mu::Vec3 v = drop.obj->body().linearVel();
+			const bool settled = (v.x() * v.x() + v.y() * v.y() + v.z() * v.z()) < 0.04f
+				&& drop.phaseSec > 0.5f;
+			if (!settled && drop.phaseSec < kGemFlyMaxSec)
+				break;
+
+			if (drop.inPhysics) {
+				physicsWorld_.unregisterBody(&drop.obj->body());
+				drop.inPhysics = false;
+			}
+			drop.settleFrom = drop.obj->pos();
+			drop.phase      = GemDrop::Phase::Settling;
+			drop.phaseSec   = 0.f;
+			break;
+		}
+		case GemDrop::Phase::Settling: {
+			const float t = std::min(1.f, drop.phaseSec / kGemSettleSec);
+			const float s = t * t * (3.f - 2.f * t);   // smoothstep
+			const mu::Vec3 target = drop.authoritativePos + mu::Vec3(0.f, kGemIdleLift, 0.f);
+			drop.obj->setPos(drop.settleFrom + (target - drop.settleFrom) * s);
+			if (t >= 1.f) {
+				drop.phase    = GemDrop::Phase::Idle;
+				drop.phaseSec = 0.f;
+			}
+			break;
+		}
+		case GemDrop::Phase::Idle: {
+			drop.idleSpinRad += kGemIdleSpinRadSec * dt;
+			drop.bobPhase    += kGemBobRadSec * dt;
+			drop.obj->setOrient(mu::NQuat(mu::Vec3(0.f, 1.f, 0.f), drop.idleSpinRad));
+			drop.obj->setPos(drop.authoritativePos + mu::Vec3(
+				0.f, kGemIdleLift + kGemBobAmplitude * std::sin(drop.bobPhase), 0.f));
+			break;
+		}
+		}
+
+		drop.obj->update(deltaTime, tPhysicInterpolation);
+	}
+
+	updateItemDropAim();
+}
+
+void Game::updateItemDropAim() {
+	aimedDropId_ = 0;
+	if (gemDrops_.empty() || !player_) return;
+
+	// 서버 Room::pickupItem의 kPickupRadius와 반드시 같아야 한다. 다르면 프롬프트가
+	// 뜨는데 서버는 TooFar로 거절하는(혹은 그 반대의) 거짓말 UX가 된다.
+	constexpr float kPickupRadius   = 2.5f;
+	constexpr float kPickupVertical = 3.0f;
+	constexpr float kScreenFallbackPx = 60.f;
+
+	const float sw = uiManager_.screenWidth();
+	const float sh = uiManager_.screenHeight();
+	const mu::Mat4x4 view = camera_.view();
+	const mu::Mat4x4 proj = camera_.proj();
+
+	Ray ray{};
+	screenToRay(sw * 0.5f, sh * 0.5f, sw, sh, view, proj, ray.origin, ray.dir);
+
+	const mu::Vec3 playerPos = player_->pos();
+	float bestRayT   = std::numeric_limits<float>::max();
+	uint16 bestRayId = 0;
+	float bestPx     = kScreenFallbackPx;
+	uint16 bestPxId  = 0;
+
+	for (const auto& [dropId, drop] : gemDrops_) {
+		if (!drop.obj) continue;
+
+		// 습득 가능 거리 밖이면 조준 대상에서 제외 — 프롬프트가 서버 판정과 일치한다.
+		const mu::Vec3 d = playerPos - drop.obj->pos();
+		if (std::abs(d.y()) > kPickupVertical) continue;
+		if ((d.x() * d.x() + d.z() * d.z()) > kPickupRadius * kPickupRadius) continue;
+
+		const RayHit hit = RaycastBVH(drop.obj->worldBVH(), ray);
+		if (hit.hit && hit.t < bestRayT) {
+			bestRayT  = hit.t;
+			bestRayId = dropId;
+			continue;
+		}
+
+		// 폴백: 보석 메시가 작아 화면 중앙 레이를 자주 놓친다. 에디터 피킹
+		// (editorController::pickHitbox)과 같은 화면 거리 근접 판정을 함께 쓴다.
+		float sx = 0.f, sy = 0.f;
+		if (!worldToScreen(drop.obj->pos(), view, proj, sw, sh, sx, sy)) continue;
+		const float dx = sx - sw * 0.5f;
+		const float dy = sy - sh * 0.5f;
+		const float px = std::sqrt(dx * dx + dy * dy);
+		if (px < bestPx) { bestPx = px; bestPxId = dropId; }
+	}
+
+	aimedDropId_ = bestRayId != 0 ? bestRayId : bestPxId;
 }
 
 void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
@@ -4933,6 +5253,8 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		sh->update(simulationDeltaTime, tPhysicInterpolation);
 	}
 
+	updateItemDrops(deltaTime, tPhysicInterpolation);
+
 	animSystem_.updatePriorities(
 		std::chrono::duration_cast<Seconds>(deltaTime),
 		player_->pos()
@@ -5433,6 +5755,37 @@ void Game::renderInGame() {
 		sh->render(gfx_);
 	}
 
+	// 월드 드롭 보석 + 조준 대상의 실루엣 강조.
+	{
+		gfx_.addCameraData(OutlinePipeline::CameraData{ camera_.view(), camera_.proj() });
+		gfx_.addFrameData(OutlinePipeline::FrameData{
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top) });
+
+		for (auto& [dropId, drop] : gemDrops_) {
+			if (!drop.obj) continue;
+			drop.obj->render(gfx_);
+			if (dropId != aimedDropId_) continue;
+
+			// Inverted hull은 SceneColorHDR에 가산 합성된다 — 색을 HDR 범위로 내보내면
+			// 뒤따르는 bloom이 테두리를 발광으로 만든다.
+			const Model* model = drop.obj->model();
+			if (!model) continue;
+			const mu::Mat4x4 world = drop.obj->renderState().world;
+			for (const auto& mwx : model->meshWithDressXforms) {
+				for (const auto& sub : mwx.mesh.subMeshes) {
+					gfx_.addDrawEvent(OutlinePipeline::DrawEvent{
+						.world       = mwx.dressXform * world,
+						.pMesh       = &mwx.mesh,
+						.pSubMesh    = &sub,
+						.color       = { 2.6f, 2.1f, 0.8f, 1.f },
+						.thicknessPx = 3.0f,
+					});
+				}
+			}
+		}
+	}
+
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 	submitBossHeatSources();
@@ -5575,6 +5928,23 @@ void Game::renderInGame() {
 			static_cast<float>(gClientRect.right - gClientRect.left),
 			static_cast<float>(gClientRect.bottom - gClientRect.top));
 
+	// 조준된 보석: 상호작용 안내 + 습득 실패 안내.
+		{
+			const float sw = static_cast<float>(gClientRect.right - gClientRect.left);
+			const float sh = static_cast<float>(gClientRect.bottom - gClientRect.top);
+			if (const auto it = gemDrops_.find(aimedDropId_);
+				aimedDropId_ != 0 && it != gemDrops_.end() && it->second.obj) {
+				std::wstring label = L"[F] 줍기";
+				if (const ItemDefinition* def = itemCatalog_.find(it->second.itemId))
+					label += L" · " + gemUtf8ToWide(def->name);
+				pickupPromptHUD_.render(gfx_, camera_.view(), camera_.proj(),
+					it->second.obj->pos(), label, true, sw, sh);
+			}
+			if (pickupNoticeSec_ > 0.f)
+				pickupPromptHUD_.renderNotice(gfx_, pickupNotice_,
+					std::min(1.f, pickupNoticeSec_ / 0.4f), sw, sh);
+		}
+
 		// Combo counter above the dial: kill-streak accelerator feedback. Shown while
 		// an active combo (>=2) is within its window; size eases down as it expires.
 		if (skillDial_.visible() && comboCount_ >= 2 && comboSecLeft_ > 0.f) {
@@ -5586,6 +5956,15 @@ void Game::renderInGame() {
 				sw - 96.f, sh - 232.f, 30.f + frac * 12.f, sh,
 				static_cast<int>(comboCount_), XMFLOAT4{ 1.f, 0.55f, 0.18f, 1.f },
 				DigitAtlas::Align::Center);
+		}
+
+		// 컬링 통계 오버레이(F1). 모달이 떠 있으면 아예 제출하지 않는다.
+		if (hiZOverlayVisible_ && !settingsPanel_.isOpen() && !inventoryPanel_.isOpen()) {
+			hiZStatsHUD_.render(gfx_, gfx_.getHiZStats(), gfx_.isHiZCullEnabled(),
+				hiZSkippedObjects_, hiZTrackedObjects_,
+				pTimer_ ? pTimer_->fps() : 0.f,
+				static_cast<float>(gClientRect.right - gClientRect.left),
+				static_cast<float>(gClientRect.bottom - gClientRect.top));
 		}
 	}
 
@@ -5942,6 +6321,16 @@ void Game::applyDisplaySettings() {
 
 	// 3. 스왑체인 백버퍼/깊이/GBuffer/HiZ 재생성 (GPU idle 후).
 	gfx_.resize(static_cast<u32t>(clientW), static_cast<u32t>(clientH));
+
+	// 3-1. 인게임 카메라의 종횡비를 새 해상도에 맞춘다. lobbyCamera_는 LobbyScene에서
+	//      매 프레임 gClientRect로부터 aspect를 재계산하므로 여기서 건드릴 필요가 없지만,
+	//      camera_(플레이어 추적 카메라)의 proj_는 setPerspective가 호출된 시점에 고정되어
+	//      InGame 도중 ESC 설정창에서 해상도를 바꿔도 갱신되지 않아 화면이 늘어나 보였다.
+	{
+		const float aspect = static_cast<float>(clientW)
+			/ std::max(1.f, static_cast<float>(clientH));
+		camera_.setAspect(aspect);
+	}
 
 	// 4. UI 화면 크기 갱신 + 픽셀 기반 UI(로비/설정창) 재빌드.
 	//    (HUD/데미지 넘버는 앵커·월드 좌표 기반이라 setScreenSize + 매 프레임 worldToScreen로 추종.)
@@ -7184,6 +7573,16 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	currVelocity_ = player_->velocity();
 
+	// F key: 조준된 월드 아이템 습득 요청. 서버가 거리/중복/용량을 권위로 판정하므로
+	// 여기서는 연타만 막는다(pickupPendingId_는 응답 또는 1초 타임아웃에 해제).
+	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80)
+		&& aimedDropId_ != 0 && pickupPendingId_ == 0 && !playerDead_ ) {
+		pickupPendingId_  = aimedDropId_;
+		pickupPendingSec_ = 0.f;
+		INet::ClientApp::addSendBuffer(PacketManager::makeCItemPickupPacket(aimedDropId_));
+		INet::ClientApp::send();
+	}
+
 	// C key: toggle CSM cascade debug visualization
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
@@ -7197,6 +7596,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
 		gfx_.cycleGBufferDebugMode();
+	}
+
+	// F1: 컬링 통계 오버레이 토글(기본 꺼짐). 끄면 패널이 화면에서 완전히 사라진다.
+	if ( (keyboardStateCurr_[VK_F1] & 0x80) && !(keyboardStatePrev_[VK_F1] & 0x80) ) {
+		hiZOverlayVisible_ = !hiZOverlayVisible_;
 	}
 
 	// F5/F6/F7: debug teleport to each arena to test the mid-boss encounters.
@@ -7435,6 +7839,10 @@ void Game::cullObjects() {
 // 서버에서 전달되어 생성되자마자 화면 밖/Hi-Z invisible로 판정되면 한 번도 갱신되지
 // 못한 채 방치(T-pose 등)될 수 있기 때문이다.
 void Game::feedbackCullResultToAnim() {
+	// 컬링 오버레이용 오브젝트 단위 집계. 어차피 도는 루프라 추가 비용은 없다.
+	hiZTrackedObjects_ = 0u;
+	hiZSkippedObjects_ = 0u;
+
 	if (!gfx_.isHiZCullEnabled()) {
 		for (auto& p : otherPlayers_) {
 			p->setHiZCulled(false);
@@ -7462,6 +7870,9 @@ void Game::feedbackCullResultToAnim() {
 		entt->setHiZCulled(!hiZVisible);
 		if (auto* blender = entt->animBlender())
 			blender->setCulled(blender->hasEverUpdated() && (entt->isFrustumCulled() || !hiZVisible));
+
+		++hiZTrackedObjects_;
+		if (!hiZVisible) ++hiZSkippedObjects_;
 	};
 	for (auto& g : goblins_)   applyToEntity(g);
 	for (auto& s : snakes_)    applyToEntity(s);

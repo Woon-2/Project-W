@@ -51,8 +51,25 @@ void AnimBlenderPlayer::buildSpineChain() {
 		}
 	}
 
+	// 상체 yaw 보정용 조상 경로: 루트부터 체인 말단까지 내려가는 순서로 담는다.
+	// Bone에는 부모 포인터가 없으므로 children으로 부모 표를 한 번 만들어 거슬러 올라간다.
+	spineAncestry_.clear();
+	if (chainCnt > 0) {
+		auto parentOf = std::vector<int>(bones.size(), -1);
+		for (const auto& b : bones) {
+			for (const auto* pChild : b.children) {
+				parentOf[pChild->boneIdx] = b.boneIdx;
+			}
+		}
+		for (int b = spineChainIdx_[chainCnt - 1]; b >= 0; b = parentOf[b]) {
+			spineAncestry_.push_back(b);
+		}
+		std::ranges::reverse(spineAncestry_);
+	}
+
 	// 검증 로그: 스파인 체인 길이 (Phase 3 확인용. 상체 본 수는 buildUpperBodyMask가 찍는다).
-	gSharedLog << "[AimPitch] player spine chain built: spineChain=" << chainCnt << "\n";
+	gSharedLog << "[AimPitch] player spine chain built: spineChain=" << chainCnt
+		<< ", ancestry=" << spineAncestry_.size() << "\n";
 	dumpLog();
 }
 
@@ -352,14 +369,86 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	}
 }
 
-// 드레스 공간 후처리: 스파인 체인(spine_01..03)에 조준 pitch를 분산 주입한다.
+namespace {
+// 드레스 공간 변환이 나타내는 본의 방향을 모델 공간 yaw로 잰다.
+// bind 자세의 본 전방(+Z)이 어디를 향하게 되었는지를 재므로,
+// 본마다 제각각인 로컬 축 규약과 무관하게 두 자세를 비교할 수 있다.
+float boneForwardYaw(const mu::Mat4x4& toLocal, const mu::Mat4x4& dress) {
+	const auto deform = toLocal * dress;
+	const auto fwd = mu::Vec3( mu::Vec4(0.f, 0.f, 1.f, 0.f) * deform );
+	return std::atan2( fwd.x(), fwd.z() );
+}
+
+// 각도를 (-pi, pi]로 접는다. 두 yaw의 차를 최단 회전으로 만들기 위함.
+float wrapPi(float rad) {
+	constexpr float kPi = 3.14159265358979323846f;
+	while (rad > kPi) rad -= 2.f * kPi;
+	while (rad < -kPi) rad += 2.f * kPi;
+	return rad;
+}
+}   // namespace
+
+// 드레스 공간 후처리. 상체 yaw 보정을 먼저 하고 조준 pitch를 얹는다
+// (pitch가 본 전방을 기울인 뒤엔 yaw 측정이 흐려진다).
+void AnimBlenderPlayer::onPostDress() {
+	if (spineChainIdx_[0] < 0) return;
+
+	cancelAttackYawDrift();
+	applyAimPitch();
+}
+
+// 이동 중 공격 시 상체가 이동 방향으로 끌려가는 것을 상쇄한다.
+//
+// 좌우 로코모션 클립(Run_*_Left/Right)은 골반을 이동 방향으로 ±90° 돌리고 상체를
+// 반대로 비틀어 정면을 유지하도록 저작돼 있다(어깨는 ±22°에 그친다). 상하체 마스크가
+// 상체를 공격 클립으로 덮으면 그 역회전만 사라지고 골반의 ±90°는 하체 몫으로 남아,
+// 상체가 통째로 이동 방향으로 끌려간다. 활은 왼손 무기라 왼쪽 이동 시 활이 몸 뒤로
+// 빠지는데(로컬 z가 음수로), 화살은 캐스터 정면에서 나가므로 옆구리 발사처럼 보였다.
+//
+// 공격 클립을 단독 재생했을 때의 상체 방향을 목표로 삼아, 그 차이의 yaw만 상체 루트
+// 피벗에서 되돌린다. 골반·다리는 손대지 않으므로 로코모션 접지(발 미끄러짐)는 그대로다.
+void AnimBlenderPlayer::cancelAttackYawDrift() {
+	// 정지 시엔 골반이 이미 조준 자세 그대로라 보정할 것이 없다. tIdle_ 항이
+	// 정지 상태에서 종전(전신 오버레이) 동작과의 프레임 단위 일치를 보장한다.
+	const float strength = tAttack_ * (1.f - tIdle_) * (1.f - tDeath_);
+	if (strength < 1e-3f || currentAttackClip_.empty() || spineAncestry_.empty()) {
+		return;
+	}
+
+	const auto& bones = *skeleton().bones;
+	const auto& framesAttack = curFrames(currentAttackClip_);
+
+	// 공격 클립 단독의 상체 드레스 변환을 조상 경로만 곱해 재구성한다
+	// (traverseBone과 같은 누적 순서: dress[child] = local[child] * dress[parent]).
+	mu::Mat4x4 attackDress{};
+	for (const int b : spineAncestry_) {
+		attackDress = convertAnimFrameToMatrix(framesAttack[b]) * attackDress;
+	}
+
+	auto& dress = dressXformData();
+	const int tail = spineAncestry_.back();
+	const auto yawDelta = mu::Radian( strength * wrapPi(
+		boneForwardYaw(bones[tail].toLocal, attackDress)
+		- boneForwardYaw(bones[tail].toLocal, dress[tail])
+	) );
+
+	// 상체 루트 피벗 기준 Y축 회전을 서브트리 전체에 우측 곱한다(pitch와 동일한 규약).
+	const int root = spineChainIdx_[0];
+	const mu::Vec3 pivot = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * dress[root]);
+	const mu::Mat4x4 K = mu::translate(-pivot) * mu::rotateYH(yawDelta) * mu::translate(pivot);
+	for (std::size_t b = 0; b < dress.size(); ++b) {
+		if (spineDepth_[b] > 0) {
+			dress[b] = dress[b] * K;
+		}
+	}
+}
+
+// 스파인 체인(spine_01..03)에 조준 pitch를 분산 주입한다.
 // 각 체인 본 k의 피벗(드레스 공간 본 원점) 기준 X축 회전 K를 서브트리 전체에
 // 우측 곱(dress[b] * K)으로 적용한다 — 부모→자식 누적이 끝난 상태이므로 서브트리
 // 전 본에 곱해야 자식이 함께 회전한다. 3관절에 pitch/N씩 누적해 자연스러운 굽힘.
 // (aimPitch + = 아래를 봄 = 상체 숙임. rotateXH(+)가 전방을 아래로 기울임 — Phase 2 검증됨.)
-void AnimBlenderPlayer::onPostDress() {
-	if (spineChainIdx_[0] < 0) return;
-
+void AnimBlenderPlayer::applyAimPitch() {
 	// 사망 페이드: death 블렌딩과 함께 조준 자세도 풀어준다.
 	const float effPitch = aimPitch_ * (1.f - tDeath_);
 	if (std::fabs(effPitch) < 1e-4f) return;

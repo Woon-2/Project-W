@@ -17,6 +17,9 @@ public:
 
     TacticalNpcUpdateResult update( Seconds dt, Room& room );
 
+    // Mid-boss (Hobgoblin / Grandbaum / Isys): 5 gems.
+    int32 rollGemDropCount() override { return 5; }
+
     void addSquad( TacticalSquad* squad );
     const std::vector<TacticalSquad*>& getSquads() const { return squads_; }
     void setTactic( std::unique_ptr<IMidBossTactic> tactic );

@@ -125,6 +125,14 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSInventoryActionResultPacket(buffer, len);
 		break;
 
+	case PacketType::S_ItemDropBatch:
+		handleSItemDropBatchPacket(buffer, len);
+		break;
+
+	case PacketType::S_ItemDropRemove:
+		handleSItemDropRemovePacket(buffer, len);
+		break;
+
 	case PacketType::S_Register:
 		handleSRegisterPacket( buffer, len );
 		break;
@@ -626,6 +634,46 @@ std::shared_ptr<SendBuffer> PacketManager::makeCTimeSyncPacket(uint64 clientSend
 	pkt->clientSendMs = clientSendMs;
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::C_TimeSync;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+void PacketManager::handleSItemDropBatchPacket(byte* buffer, int32 len) {
+	if (len < sizeof(SItemDropBatchPacket))
+		return;
+	auto* pkt = reinterpret_cast<SItemDropBatchPacket*>(buffer);
+	if (pkt->size != len)
+		return;
+	const std::size_t dataEnd = static_cast<std::size_t>(pkt->dataOffset)
+		+ sizeof(ItemDropInfo) * pkt->dropCount;
+	if (pkt->dataOffset < sizeof(SItemDropBatchPacket)
+		|| dataEnd > static_cast<std::size_t>(len)) {
+		return;
+	}
+
+	auto game = INet::ClientApp::onlineGame();
+	auto list = pkt->getDropList();
+	for (uint16 i = 0; i < list.count(); ++i)
+		game->createItemDrop(list[i]);
+}
+
+void PacketManager::handleSItemDropRemovePacket(byte* buffer, int32 len) {
+	if (len != sizeof(SItemDropRemovePacket))
+		return;
+	auto* pkt = reinterpret_cast<SItemDropRemovePacket*>(buffer);
+	INet::ClientApp::onlineGame()->onItemDropRemoved(
+		pkt->dropId, pkt->pickerObjId, pkt->result);
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCItemPickupPacket(uint16 dropId) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CItemPickupPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto* pkt = bw.reserve<CItemPickupPacket>();
+	pkt->dropId = dropId;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_ItemPickup;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

@@ -3252,6 +3252,105 @@ ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12Ro
 	return ret;
 }
 
+// Inverted-hull silhouette. Front faces are culled so only the back of the
+// expanded hull survives, forming a rim around the original mesh. Additive into
+// SceneColorHDR (R16G16B16A16_FLOAT) before bloom, so an HDR color glows.
+// Depth test uses GREATER to match the reversed-Z main camera (near=1/far=0);
+// depth write is off so the silhouette never occludes anything.
+ComPtr<ID3D12PipelineState> createOutlineShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader( "outline.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "outline.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+
+	// Input layout: Slot0=POSITION(float3), Slot1=NORMAL(float3)
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "NORMAL",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_FRONT,   // inverted hull
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER,   // reversed-Z
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	// Additive into SceneColorHDR so bloom turns the rim into a glow.
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState( &psoDesc, __uuidof(ID3D12PipelineState), &ret ),
+		false
+	);
+
+	setD3DName( ret.Get(), "OutlineShader" );
+
+	return ret;
+}
+
 ComPtr<ID3D12PipelineState> createHiZOccluderShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 

@@ -84,6 +84,9 @@ public:
     virtual NpcUpdateResult update(Seconds dt, Room& room);
     void onHitImpulse() override;
 
+    // 필드 일반 몬스터: 보석 1~2개.
+    int32 rollGemDropCount() override { return 1 + (rand() % 2); }
+
     // Register a skill-based attack (called from Room::setupX). With at least one
     // attack the NPC casts skills (hitbox = authoritative damage); with none it
     // falls back to the legacy direct-damage melee in updateAttackWindup.

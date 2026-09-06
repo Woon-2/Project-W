@@ -22,7 +22,7 @@ skill:addEvent(750, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 500,
-    onHit               = OnHit({ damage = 22, vfxId = 255, impulseStrength = 700.0, impulseDir = Vec3(0, 0.1, 1) })
+    onHit               = OnHit({ damage = 22, vfxId = 255, impulseStrength = 700.0, impulseDir = Vec3(0, 0.002, 1) })
 })
 skill:addEvent(1050, "DestroyHitbox", { slot = 0 })
 
@@ -34,7 +34,7 @@ skill:addEvent(1400, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 1,
     hitGroupCooldownMs  = 500,
-    onHit               = OnHit({ damage = 30, vfxId = 255, impulseStrength = 1200.0, impulseDir = Vec3(0, 0.25, 1) })
+    onHit               = OnHit({ damage = 30, vfxId = 255, impulseStrength = 1200.0, impulseDir = Vec3(0, 0.08, 0.9967) })
 })
 skill:addEvent(1700, "DestroyHitbox", { slot = 1 })
 
@@ -46,7 +46,7 @@ skill:addEvent(2400, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 2,
     hitGroupCooldownMs  = 500,
-    onHit               = OnHit({ damage = 40, vfxId = 255, impulseStrength = 1400.0, impulseDir = Vec3(0, 0.25, 1) })
+    onHit               = OnHit({ damage = 40, vfxId = 255, impulseStrength = 1400.0, impulseDir = Vec3(0, 0.125, 0.9354) })
 })
 skill:addEvent(2800, "DestroyHitbox", { slot = 2 })
 

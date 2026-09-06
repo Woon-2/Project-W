@@ -122,6 +122,12 @@ struct Resources {
 
         u32t  lastVisibleCount  = 0u;   // getHiZStats()용 (직전 완성 슬롯 기준 per-instance)
         u32t  lastTotalCount    = 0u;
+
+        // 컬링 3단계 오버레이용 카운터. sortDrawEvents()에서 매 프레임 갱신되므로
+        // Hi-Z가 꺼져 있어도(= hiZPass 미실행) 앞 두 단계는 항상 유효하다.
+        u32t  lastSubmittedCount = 0u;   // drawEvents_ 전량 (컬링 이전)
+        u32t  lastFrustumCount   = 0u;   // gBufferEvents_ (view frustum 통과)
+
         std::vector<bool> objectVisibility;          // renderObjectId → visible?
     } hiZPass;
 

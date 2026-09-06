@@ -21,7 +21,7 @@ skill:addEvent(850, "SpawnHitbox", {
     applyAttachRotation = true,
     hitGroup            = 0,
     hitGroupCooldownMs  = 800,
-    onHit               = OnHit({ damage = 32, vfxId = 255, impulseStrength = 900.0, impulseDir = Vec3(0, 0.2, 0) })
+    onHit               = OnHit({ damage = 32, vfxId = 255, impulseStrength = 900.0, impulseDir = Vec3(0, 0.01, 0) })
 })
 
 skill:addEvent(1300, "DestroyHitbox", { slot = 0 })

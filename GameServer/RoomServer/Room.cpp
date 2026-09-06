@@ -970,6 +970,7 @@ void Room::update() {
 
 	updatePlayerAnimations(dt);
 	updateSkillSystem(dt);
+	updateItemDrops(dt);      // 드롭 TTL 만료 — 사망 훅(updateSkillSystem)보다 뒤
 	updatePlayerRegen(dt);
 
 	// 다음 틱을 '절대 데드라인'으로 예약한다. 상대 지연(지금부터 dt)으로 재예약하면
@@ -2120,12 +2121,137 @@ const SkillAsset* Room::findSkillAsset(uint32 id) const {
 
 void Room::noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp) {
 	if (newHp >= prevHp) return;   // invulnerable/fully mitigated hits grant no contribution
-	if (!target || target->killChargeReward() <= 0.f) return;   // not a chargeable monster
+	if (!target) return;
 	Object* atk = (attackerObjId >= 0 && attackerObjId < static_cast<int32>(objectById_.size()))
 		? objectById_[attackerObjId] : nullptr;
 	if (!atk || atk->faction() != Faction::Players) return;     // credit player attackers only
+
+	// 보석 드롭은 killChargeReward 게이트보다 앞에 둔다. 두 보상은 독립적이며
+	// (charge는 ChargeConfig 주입값, 드롭은 클래스 티어), charge가 0인 몬스터도
+	// 드롭은 해야 한다.
+	if (prevHp > 0 && newHp <= 0) spawnGemDrops(*target);
+
+	if (target->killChargeReward() <= 0.f) return;   // not a chargeable monster
 	target->noteDamager(attackerObjId, elapsedMs_);
 	if (prevHp > 0 && newHp <= 0) distributeKillCharge(target);
+}
+
+void Room::spawnGemDrops(Object& corpse) {
+	// 착지점 산포 반경 / TTL / 아이템 id 범위(resources/data/inventory.json의 보석 6종).
+	constexpr float        kScatterRadius = 1.2f;
+	constexpr Milliseconds kDropTtl       = 180s;
+	constexpr ItemId       kFirstGemId    = 2;
+	constexpr ItemId       kGemKindCount  = 6;
+	// 종류별 클라 메시 개수(resources/models/props/<Kind><n>.bin). 클라 AssetManager와 미러.
+	static constexpr uint8 kVariantCount[kGemKindCount] = { 7, 5, 5, 5, 5, 5 };
+
+	const int32 count = corpse.rollGemDropCount();
+	if (count <= 0) return;
+
+	const uint16 sourceObjId = corpse.hasId() ? static_cast<uint16>(corpse.getId()) : uint16{ 0 };
+
+	std::vector<ItemDropInfo> infos;
+	infos.reserve(static_cast<size_t>(count));
+	for (int32 i = 0; i < count; ++i) {
+		const uint32 kind    = static_cast<uint32>(rand()) % kGemKindCount;   // 완전 랜덤
+		const ItemId itemId  = kFirstGemId + kind;
+		const uint8  variant = static_cast<uint8>(rand() % kVariantCount[kind]);
+
+		// 보석은 서버에서 물리 바디를 갖지 않으므로 prop 회피 샘플링(몬스터 풋프린트 기준)은
+		// 과하게 넓다. 지면 스냅만 하는 단순 산포로 충분하다 — 클라 물리가 겹침을 밀어낸다.
+		const mu::Vec3 pos = randomSpawnInDisc(corpse.pos(), kScatterRadius);
+
+		if (nextDropId_ == 0) nextDropId_ = 1;   // 0은 sentinel이므로 건너뛴다
+		const uint16 dropId = nextDropId_++;
+
+		drops_.push_back(ItemDrop{ dropId, itemId, 1, variant, sourceObjId, pos,
+		                           elapsedMs_ + kDropTtl });
+		infos.push_back(ItemDropInfo{
+			.dropId        = dropId,
+			.itemId        = itemId,
+			.quantity      = 1,
+			.visualVariant = variant,
+			.sourceObjId   = sourceObjId,
+			.pos           = { pos.x(), pos.y(), pos.z() },
+		});
+	}
+
+	broadcast(PacketManager::makeSItemDropBatchPacket(infos));   // 킬당 패킷 1개
+}
+
+void Room::updateItemDrops(Milliseconds) {
+	// elapsedMs_는 updateMonsterAI 안에서만 누적되고 그 함수는 빈 방에서 조기 반환한다.
+	// 즉 빈 방에서는 TTL이 멈추지만, 플레이어가 전부 나가면 방 자체가 파괴되고 drops_는
+	// 해제할 자원이 없는 POD 벡터라 실질적인 영향이 없다 — docs/itemDropSystem.md
+	for (size_t i = 0; i < drops_.size(); ) {
+		if (drops_[i].expireMs > elapsedMs_) {
+			++i;
+			continue;
+		}
+		const uint16 dropId = drops_[i].dropId;
+		drops_[i] = drops_.back();
+		drops_.pop_back();
+		broadcast(PacketManager::makeSItemDropRemovePacket(dropId, 0, ItemPickupResult::Expired));
+	}
+}
+
+void Room::pickupItem(int32 sessionId, uint16 dropId) {
+	// 클라 조준 UI가 프롬프트를 띄우는 반경과 반드시 같아야 한다
+	// (client/online/onlineGame.cpp kPickupRadius). 다르면 UX가 거짓말을 한다.
+	constexpr float kPickupRadius   = 2.5f;
+	constexpr float kPickupVertical = 3.0f;   // 경사면 착지 대비 수직 여유
+
+	const auto sessionIt = idSessionMap_.find(sessionId);
+	if (sessionIt == idSessionMap_.end())
+		return;
+
+	GameSession* session = sessionIt->second;
+	Player* player = session->player();
+	if (!player) return;
+
+	auto reject = [&](ItemPickupResult result) {
+		session->send(PacketManager::makeSItemDropRemovePacket(dropId, 0, result));
+	};
+
+	// DB 로드 완료 전 습득은 거절한다. 허용하면 뒤늦게 도착한 로드 스냅샷이
+	// 방금 주운 아이템을 덮어써 없앤다(inventoryAction과 같은 이유).
+	if (!session->inventoryReady()) {
+		reject(ItemPickupResult::NotReady);
+		return;
+	}
+
+	const auto it = std::find_if(drops_.begin(), drops_.end(),
+		[dropId](const ItemDrop& d) { return d.dropId == dropId; });
+	if (it == drops_.end()) {
+		reject(ItemPickupResult::NotFound);   // 이미 다른 플레이어가 주웠거나 만료됨
+		return;
+	}
+
+	const mu::Vec3 delta = player->pos() - it->pos;
+	if (std::abs(delta.y()) > kPickupVertical
+		|| (delta.x() * delta.x() + delta.z() * delta.z()) > kPickupRadius * kPickupRadius) {
+		reject(ItemPickupResult::TooFar);
+		return;
+	}
+
+	ASSERT_CRASH(assetManager_ != nullptr);
+	const ItemCatalog& catalog = assetManager_->itemCatalog();
+	Inventory& inventory = player->inventory();
+
+	// add()에는 롤백이 없다. 부분 습득 상태를 만들지 않으려면 사전 검사가 유일한 방법이다.
+	if (!inventory.canFit(catalog, it->itemId, it->quantity)) {
+		reject(ItemPickupResult::InventoryFull);
+		return;
+	}
+	inventory.add(catalog, it->itemId, it->quantity);   // canFit 통과 → 잔여 0 보장
+
+	*it = drops_.back();
+	drops_.pop_back();
+
+	session->send(PacketManager::makeSInventorySnapshotPacket(inventory));
+	persistInventory(session);
+	broadcast(PacketManager::makeSItemDropRemovePacket(
+		dropId, static_cast<uint16>(player->getId()), ItemPickupResult::PickedUp));
 }
 
 void Room::distributeKillCharge(Object* monster) {

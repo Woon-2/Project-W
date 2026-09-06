@@ -43,9 +43,17 @@ private:
 	// 상하체 마스크는 기반 클래스의 buildUpperBodyMask()가 담당한다.
 	void buildSpineChain();
 
-	// 드레스 공간 후처리: 스파인 체인에 조준 pitch를 피벗-공액으로 분산 주입한다.
+	// 드레스 공간 후처리: 이동 중 공격으로 상체가 끌려간 yaw를 되돌리고,
+	// 스파인 체인에 조준 pitch를 피벗-공액으로 분산 주입한다.
 	// (onCalcDress 누적 직후 호출됨. 자식 본들은 서브트리 곱으로 함께 회전.)
 	void onPostDress() override;
+
+	// 이동 중 공격 시 상체가 이동 방향으로 끌려가는 것을 상쇄한다.
+	// (pitch 주입 전에 호출해야 한다 — pitch가 본 전방을 기울이면 yaw 측정이 흐려진다.)
+	void cancelAttackYawDrift();
+
+	// 스파인 체인에 조준 pitch를 분산 주입한다.
+	void applyAimPitch();
 
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
@@ -55,6 +63,9 @@ private:
 	// 본별 스파인 체인 깊이: b가 spine_0k의 서브트리에 속하면 spineDepth_[b] >= k.
 	// (체인이 중첩 서브트리이므로 "조상인 체인 본 개수"와 같다. 0 = 하체/체인 밖.)
 	std::vector<uint8_t> spineDepth_{};
+	// 루트 본부터 스파인 체인 말단(spine_03)까지의 조상 경로(내려가는 순서).
+	// 공격 클립 단독의 상체 드레스 변환을 이 경로만 곱해 재구성한다(cancelAttackYawDrift).
+	std::vector<int> spineAncestry_{};
 	// update()에서 owner로부터 캐시한 조준 pitch (onPostDress는 owner 접근 불가).
 	float aimPitch_ = 0.f;
 

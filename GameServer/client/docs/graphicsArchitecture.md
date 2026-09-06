@@ -87,7 +87,7 @@
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
 3. gBufferPass(PBRDeferred, direct) → **gBufferIndirectPass(PBRDeferred)** → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록. **GB2.rgb = emissive 전용**(ambient는 lighting 패스 IBL로 이동). 스킨드 GBuffer PS는 추가로 **흡수 물결(per-instance ripple)** emissive를 GB2에 가산(로컬 플레이어만; 아래 "몬스터 사망 에너지 오브 연출" 참조)
    - PBRDeferredSkinned/PBRDeferred 모두 Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw 실행. compute 셰이더 5종 + `cmdSig_`는 공유
-   - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. visibility feedback ring/CPU readback **없음**(정적이라 anim/물리 스킵 불필요; cull u3 출력은 scratch로 폐기). 비-occludee는 `gBufferPass` direct
+   - **PBRDeferred Hi-Z**(정적 prop, 2026-06-15): `occludeeCandidate` DrawEvent(=VFC 통과 BVH prop)만 indirect 대상. 비-occludee는 `gBufferPass` direct. cull의 u3 출력은 스킨드와 동일한 **2-slot ring + readback**으로 받는다(2026-08-13) — 단 **통계 전용**이다(정적 prop은 anim/물리 스킵 대상이 아니라 `objectVisibility` 테이블이 없다). 아래 "컬링 통계 오버레이" 참조
    - PBRDeferredSkinned Hi-Z: Cull→visibleFlags + visibility feedback 2-slot ring → CPU readback(1-frame delay, anim/물리 스킵용)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, **SceneColorHDR(R16G16B16A16_FLOAT)에 선형 HDR 출력**. `color = directLight + computeIBL + emissive`, 이후 fog 적용. **톤매핑은 여기서 안 함**(resolve 담당)
@@ -95,6 +95,7 @@
 6a. **Skybox → SceneColorHDR 합성**(Deferred, `gBufferDebugMode_==0`) — SceneColorHDR가 **아직 RENDER_TARGET**일 때 backbuffer scene depth(reversed-Z far)로 depth-test해 **배경 픽셀만** raw 스카이박스로 채운다. 이후 가산 글로우/bloom/heat 워프가 하늘에도 적용되고 resolve까지 살아남는다(resolve가 배경 픽셀을 패스스루로 내보내 하늘 룩 보존). **Forward(로비) 경로는 종전대로 backbuffer에 직접**(아래 10) — `skyboxRtv`를 renderPath로 분기. **PSO RTV 포맷이 타깃과 일치해야 하므로 SceneColorHDR(R16G16B16A16F) 타깃엔 `SkyboxShaderHDR`, backbuffer(R8G8B8A8) 타깃엔 `SkyboxShader`를 선택**(한 빌더 `createSkyboxShaderImpl`에서 RTV 포맷만 다르게)
 6b. **Energy orb 패스(EnergyOrbPipeline)** — `gBufferDebugMode_==0`일 때만. SceneColorHDR가 **아직 RENDER_TARGET 상태**일 때, 복사된 backbuffer scene depth(reversed-Z)로 depth-test하며 **가산(additive) HDR**로 렌더 → bloom 이전이라 발광/bloom이 산다. 몬스터 사망 시 서브메시별 에너지 오브(정점→구체 모핑, GS quad). 단일 스레드(`updateGPUDataSingleThreaded`/`drawSingleThreaded`)
 6c. **Heat-haze 패스(HeatDistortionPipeline)** — `gBufferDebugMode_==0`일 때만(보스 위압 연출). EnergyOrb와 동일 슬롯(SceneColorHDR=RENDER_TARGET, bloom 이전)에서 **가산 HDR**로 보스별 틴트 글로우를 그려 bloom이 발광시킨다. depth는 GB4(linear view-Z)로 게이팅. 활성 heat source가 없으면 self-skip. 굴절 워프는 별도 패스가 아니라 resolve(아래 9)에 흡수. 아래 "보스 Heat Distortion" 참조
+6d. **상호작용 실루엣 패스(OutlinePipeline)** — `gBufferDebugMode_==0`일 때만. 6b/6c와 같은 슬롯(SceneColorHDR=RENDER_TARGET, bloom 이전)에서 inverted hull(`CullMode=FRONT`)을 **가산 HDR**로 그려 조준된 월드 아이템의 테두리를 bloom으로 발광시킨다. depth test `GREATER`(reversed-Z) / depth write off. 드로우콜이 프레임당 1개 수준이라 단일 스레드이며 Hi-Z 대상이 아니다. 아래 "상호작용 강조 실루엣" 참조
 7. SceneColorHDR 상태 전환: RTV→SRV (`SceneColor::transitionToRead`)
 8. **Bloom** (`gBufferDebugMode_==0`일 때만) — SceneColorHDR → bloom 밉체인(prefilter→downsample→additive upsample), mip0 → SRV
 9. **Tonemap resolve** — **배경(GB4==0, 하늘) 픽셀은 패스스루**(노출/ACES/감마/LUT 미적용, raw 하늘+bloom)로 스카이박스 룩 보존; **지오메트리 픽셀**은 SceneColorHDR(+ bloom mip0 가산) → exposure → ACES Filmic → gamma → **3D LUT** → backbuffer. **보스 heat distortion 굴절 워프**도 여기서: 샘플 UV를 보스 영역에서 오프셋(`heatField.hlsli`, GB4 깊이 게이팅; 패스스루/톤맵 분기는 **샘플된 픽셀**의 GB4로 결정해 인코딩 일치)
@@ -422,6 +423,39 @@ RenderingSlave 용량을 64→**96**으로 키웠다(부족 시 SwordSlash/UI �
 났다. 해결: Dispatcher 생성자에서 초과분을 truncate(로그) + draw 루프에 방어 가드. 초과 오브는 그 프레임
 드롭(graceful degrade).
 
+#### 상호작용 강조 실루엣 (OutlinePipeline, inverted hull)
+
+조준된 월드 아이템(드롭 보석)의 테두리를 빛나게 하는 패스.
+파일: `outline.hlsl`, `outlinePipeline.{hpp,cpp}`, `shader.hpp`의 `OutlineShader`,
+`shader.cpp`의 `createOutlineShader`.
+
+**inverted hull.** 메시를 한 번 더 그리되 `CullMode = FRONT`로 앞면을 버려서, 확장된
+껍질의 뒷면만 남아 원래 실루엣 둘레에 테두리가 생긴다. 별도 실루엣 추출 패스나 스텐실이
+필요 없다(코드베이스에 스텐실 실루엣 경로는 없다).
+
+**확장은 오브젝트 공간이 아니라 클립 공간에서 한다.** 오브젝트 공간으로 밀면 테두리
+두께가 거리에 따라 변한다. VS에서 법선을 클립 공간에 투영해 그 화면 방향으로
+`thicknessPx * 2 * invScreenSize * clip.w`만큼 민다 — `clip.w`를 곱해 원근 나눗셈을
+상쇄하므로 두께가 거리와 무관한 정확한 픽셀 수가 된다.
+
+**깊이 상태.** `DepthFunc = GREATER`(메인 카메라는 **reversed-Z**, near=1/far=0),
+`DepthWriteMask = ZERO`. 깊이를 쓰지 않으므로 실루엣이 다른 것을 가리지 않는다.
+
+**렌더 슬롯.** deferred lighting 이후, **bloom 이전**에 `SceneColorHDR`
+(`R16G16B16A16_FLOAT`)로 **가산** 합성한다(`gfx.cpp`의 heat distortion 직후).
+따라서 `DrawEvent::color`를 HDR 범위(예: 2.6, 2.1, 0.8)로 주면 **bloom이 알아서 테두리를
+발광으로 만든다** — 별도 글로우 패스가 필요 없다.
+
+**단일 스레드 / Hi-Z 제외.** 프레임당 드로우콜이 조준 대상 1개 수준이라 멀티스레드
+디스패치와 인스턴싱 버퍼가 없고(`TwoSidesPipeline`을 축약한 형태), Hi-Z occlusion
+컬링 대상도 아니다(별도 `renderObjectId` 불필요). 리소스는 16 드로우콜분만 잡는다.
+
+루트 파라미터는 규약대로 `PerFrameData=b1`, `PerDrawcallData=b0`.
+정점 입력은 POSITION(slot0) + NORMAL(slot1)뿐이며 VB view는
+`vbViewsByPipeline["OutlinePipeline"]`에 지연 캐싱한다.
+
+사용처와 게임플레이 계약은 `RoomServer/docs/itemDropSystem.md` §9.
+
 #### 보스 Heat Distortion (위압 연출, HeatDistortionPipeline + tonemap warp)
 
 중간보스(Grandbaum/Isys)·최종보스(FinalBoss) 주변 공기가 일렁이며 왜곡(굴절)되고, 왜곡 영역에 보스별
@@ -536,6 +570,52 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 3. `feedbackCullResultToAnim()`(이전 이름: `applyHiZCulling()`) 내에 `applyToEntity(obj)` 추가
 4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
 
+#### 컬링 통계 오버레이 (No Culling → Frustum → Hi-Z, 2026-08-13)
+
+Online 모드 인게임 좌측 중단(파티 HP 아래)에 컬링 단계별 잔존 인스턴스 수를 표시한다.
+과거 우상단 `HiZ: ON Visible n/m` 한 줄 라벨을 대체하며, 그 자리는 미니맵이 쓴다.
+
+**수치 수집 지점** — 단위는 오브젝트가 아니라 **DrawEvent 인스턴스**다.
+
+| 단계 | 스킨드(`PBRDeferredSkinnedPipeline`) | 정적/scatter(`PBRDeferredPipeline`) |
+|---|---|---|
+| Distance culling | `drawEvents_.size()` | `drawEvents_.size()` |
+| + Frustum | `gBufferEvents_.size()` | `gBufferEvents_.size() + hiZEvents_.size()` (둘은 disjoint) |
+| + Hi-Z | `hiZPass.lastVisibleCount` | `lastDirectCount + lastVisibleCount` |
+
+- 첫 행 레이블이 "No culling"이 아니라 **"Distance culling"**인 이유: 파이프라인에 도달하기
+  전에 이미 거리 컬링과 청크 스트리밍이 돌았으므로, `drawEvents_`는 원본 전량이 아니라
+  **거리 컬링까지 통과한 잔존분**이다(그래서 prop 수치가 이동에 따라 계속 변한다).
+- 앞 두 단계는 **`sortDrawEvents()`에서** 채운다(`lastSubmittedCount`/`lastFrustumCount`).
+  Hi-Z ON/OFF와 무관하게 매 프레임 실행되므로 Hi-Z를 꺼도 두 단계는 살아 있다.
+- 정적 파이프라인의 Hi-Z 단계에는 occludee가 아닌 몫(`lastDirectCount` = `gBufferEvents_`)을
+  더한다 — 그쪽은 Hi-Z와 무관하게 항상 그려지므로, 합이 곧 "실제로 그린 인스턴스"다.
+- Hi-Z 단계만 **N-2 프레임 슬롯 기준**이라 앞 두 단계와 최대 2프레임 어긋난다. 오버레이가
+  ~6Hz로 평균을 내 표시하므로 육안 차이는 없다.
+- `GFX::getHiZStats()`가 두 파이프라인 값을 합성한다. **Hi-Z OFF면 컬링 패스가 돌지 않아
+  마지막 단계 값이 낡으므로, `afterHiZ`에 `afterFrustum`을 그대로 넣어 반환**한다.
+
+**정적 파이프라인 visibility feedback (통계 전용):** 구 `cullScratch`(readback 없는 sink)를
+`visibilityFeedback`으로 바꿔 스킨드와 동일한 단일 리소스 2-slot ring(roomCnt=1,
+byteWidth=2*slotBytes) + readback으로 만들었다. cull이 u3에 슬롯 offset으로 `(objId<<1|vis)`를
+dense 기록 → `copyToReadback` → 다음 프레임 `hiZPassUpdate()`가 same-parity 슬롯을 세어
+`lastVisibleCount/lastTotalCount` 산출. 전용 fence 없음(전역 프레임 펜스 N-2 대기가 coherency 제공).
+스킨드와 달리 `objectVisibility` 테이블은 만들지 않는다 — 정적 prop은 anim/물리 스킵 대상이 아니다.
+
+**막대 방향 규칙(중요):** 막대는 *컬링된 양*이 아니라 **단계별 잔존량을 중첩해서**(제출 전체 →
+frustum 잔존 → Hi-Z 잔존, 큰 것부터 덮어 그림) 표시한다. 컬링의 성과는 "그리는 양이 줄어드는 것"
+이므로 **막대가 짧아지는 방향**이어야 직관적이다. 라벨도 `culled X%`가 아니라 `drawn X%`.
+UE(`stat initviews`)·Unity(Statistics)도 주 지표는 컬링된 양이 아니라 **실제로 그려지는 양**이다.
+표의 각 단계 행 텍스트 색을 대응 막대 세그먼트 색과 맞춰 별도 범례를 두지 않는다.
+
+**표시 규칙:** `HiZStatsHUD`(`client/ui/hiZStatsHUD.{hpp,cpp}`)는 `PathGuideHUD`/`PickupPromptHUD`와
+같은 즉시모드 HUD다(UIManager 트리 밖, 행별 `TextImage`, 문자열 변경 시에만 재래스터화, 고정폭
+Consolas로 열 정렬). **행 구성이 런타임에 정해진다**: Hi-Z OFF면 `+ Hi-Z` 행과
+`Anim/Physics skipped` 행을 값 대신 `—`로 채우는 게 아니라 **아예 그리지 않고** 패널이 줄어든다.
+**기본은 꺼진 상태**이며 `F1`로 켠다. 꺼져 있으면 `render()`가 최상단에서 조기 반환해
+**플레이트·막대·텍스트 전부 미제출**(오버레이가 없던 때와 동일한 화면).
+설정창/인벤토리/최종 스코어보드가 뜬 동안도 동일.
+
 **최초 1회 애니메이션 갱신 보장:**
 서버에서 막 생성된 오브젝트는 Hi-Z readback이 아직 해당 renderObjectId를 한 번도
 visible로 기록하지 못해 첫 프레임부터 invisible(culled) 판정을 받을 수 있다.
@@ -629,7 +709,7 @@ Unity에서 모델 루트에 `localScale`을 걸어 키운 모델(예: Hobgoblin
 
 ## 미니맵 (Minimap)
 
-우상단 top-down North-up 미니맵(제거된 Hi-Z 디버그 프린트 자리). 코드 위치는 `docs/CODE_INDEX.md` "미니맵" 섹션 참조. 핵심 설계 결정만 여기 정리한다.
+우상단 top-down North-up 미니맵(제거된 Hi-Z 디버그 프린트 자리 — 그 프린트는 2026-08-13에 좌측 중단의 `HiZStatsHUD` 컬링 통계 패널로 복원됐다. 위 "컬링 통계 오버레이" 참조). 코드 위치는 `docs/CODE_INDEX.md` "미니맵" 섹션 참조. 핵심 설계 결정만 여기 정리한다.
 
 ### 월드 고정 베이크 + 매 프레임 UV 스크롤 (스크롤의 핵심)
 

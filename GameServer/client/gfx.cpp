@@ -4,10 +4,36 @@
 #include "errorHandling.hpp"
 
 GFX::HiZStats GFX::getHiZStats() const {
-	return {
-		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastVisibleCount,
-		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastTotalCount
+	const auto& skinned = resourcesPBRDeferredSkinnedPipeline_.hiZPass;
+	const auto& prop    = resourcesPBRDeferredPipeline_.hiZPass;
+
+	auto stats = HiZStats{
+		.skinnedSubmitted    = skinned.lastSubmittedCount,
+		.skinnedAfterFrustum = skinned.lastFrustumCount,
+		.skinnedAfterHiZ     = skinned.lastVisibleCount,
+		.propSubmitted       = prop.lastSubmittedCount,
+		.propAfterFrustum    = prop.lastFrustumCount,
+		// occludee가 아닌 정적 지오메트리(lastDirectCount)는 Hi-Z와 무관하게 항상 그려지므로
+		// Hi-Z 단계의 "실제로 그린 인스턴스"는 그 몫 + Hi-Z를 통과한 occludee다.
+		.propAfterHiZ        = prop.lastDirectCount + prop.lastVisibleCount
 	};
+
+	// Hi-Z가 꺼져 있으면 컬링 패스 자체가 돌지 않아 마지막 단계 값이 낡는다.
+	// 진입 직후처럼 readback 슬롯이 아직 한 번도 안 채워진 경우도 마찬가지다(양쪽 슬롯 0).
+	// 두 경우 모두 "아직 모름"이므로 보수적으로 frustum 단계를 그대로 물려준다 —
+	// 0을 그대로 내보내면 "전부 컬링됨"으로 오독된다.
+	const bool skinnedNoData =
+		(skinned.slotEntryCount[0] == 0u && skinned.slotEntryCount[1] == 0u);
+	const bool propNoData =
+		(prop.slotEntryCount[0] == 0u && prop.slotEntryCount[1] == 0u);
+	if (!hiZCullEnabled_ || skinnedNoData) stats.skinnedAfterHiZ = stats.skinnedAfterFrustum;
+	if (!hiZCullEnabled_ || propNoData)    stats.propAfterHiZ    = stats.propAfterFrustum;
+
+	// Hi-Z 단계만 N-2 프레임 기준이라, 카메라가 급회전한 직후엔 현재 프레임의 frustum
+	// 잔존보다 커질 수 있다. 단계 잔존은 정의상 단조 감소이므로 클램프한다.
+	stats.skinnedAfterHiZ = std::min(stats.skinnedAfterHiZ, stats.skinnedAfterFrustum);
+	stats.propAfterHiZ    = std::min(stats.propAfterHiZ,    stats.propAfterFrustum);
+	return stats;
 }
 
 bool GFX::getHiZObjectVisible(u32t renderObjectId) const {
@@ -327,6 +353,7 @@ void GFX::init() {
 	shaders_.try_emplace("PiercingSlashMeshShader", createPiercingSlashMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("OutlineShader",   createOutlineShader(   device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShader",          createTrailShader(         device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderAdditive",  createTrailShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShaderHDR",       createTrailShaderHDR(      device_.Get(), defaultRootSig.get() ));
@@ -390,6 +417,7 @@ void GFX::init() {
 	drawEventsPiercingSlashMeshPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
+	drawEventsOutlinePipeline_.reserve(16u);   // 조준 대상 1개 수준
 	drawEventsTrailPipeline_.reserve(TrailPipeline::kMaxDrawEvents);
 	drawEventsTrailPipelineHDR_.reserve(128u);
 	drawEventsSkyboxPipeline_.reserve(10u);
@@ -674,6 +702,15 @@ void GFX::createSwapChain() {
 	resourcesTwoSidesPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof( TwoSidesShader::PerDrawcallData ), 256u, backBuffers_.size(), "TwoSides_PerDrawcallData"
 	);
+	resourcesOutlinePipeline_.perInstanceData.init(
+		device_.Get(), sizeof( OutlineShader::PerInstanceData ) * 16u, backBuffers_.size(), "Outline_PerInstanceData"
+	);
+	resourcesOutlinePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( OutlineShader::PerDrawcallData ), 16u, backBuffers_.size(), "Outline_PerDrawcallData"
+	);
+	resourcesOutlinePipeline_.perFrameData.init(
+		device_.Get(), sizeof( OutlineShader::PerFrameData ), backBuffers_.size(), "Outline_PerFrameData"
+	);
 	resourcesTwoSidesPipeline_.perFrameData.init(
 		device_.Get(), sizeof( TwoSidesShader::PerFrameData ), backBuffers_.size(), "TwoSides_PerFrameData"
 	);
@@ -819,8 +856,14 @@ void GFX::createSwapChain() {
 		resourcesPBRDeferredPipeline_.hiZPass.visibleIndices.init(
 			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_VisibleIndices"
 		);
-		resourcesPBRDeferredPipeline_.hiZPass.cullScratch.init(
-			device_.Get(), sizeof(u32t) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_CullScratch"
+		// visibility feedback: 스킨드와 동일한 단일 리소스 2-slot ring (roomCnt=1).
+		// 백버퍼 수와 무관하게 2슬롯이면 충분하다(전역 프레임 펜스가 N-2 완성을 보장).
+		resourcesPBRDeferredPipeline_.hiZPass.visibilityFeedback.init(
+			device_.Get(), 2u * static_cast<u64t>(kMaxStaticHiZ) * sizeof(u32t),
+			1u, "PBRDeferred_HiZ_VisibilityFeedback"
+		);
+		resourcesPBRDeferredPipeline_.hiZPass.visibilityFeedback.initReadback(
+			device_.Get(), 2u * static_cast<u64t>(kMaxStaticHiZ) * sizeof(u32t)
 		);
 		resourcesPBRDeferredPipeline_.hiZPass.gBufferPerInstanceData.init(
 			device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * kMaxStaticHiZ, backBuffers_.size(), "PBRDeferred_HiZ_GBufferPerInstanceData"
@@ -1219,6 +1262,18 @@ void GFX::addCameraData( const TwoSidesPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const TwoSidesPipeline::FrameData& frameData ) {
 	frameDataTwoSidesPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const OutlinePipeline::DrawEvent& drawEvent ) {
+	drawEventsOutlinePipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const OutlinePipeline::CameraData& cameraData ) {
+	cameraDataOutlinePipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const OutlinePipeline::FrameData& frameData ) {
+	frameDataOutlinePipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( TrailPipeline::DrawEvent&& drawEvent ) {
@@ -2211,6 +2266,19 @@ void GFX::render() {
 		sceneColorRoomIdx
 	);
 
+	// 상호작용 강조 실루엣: inverted hull을 SceneColorHDR에 가산 합성한다(bloom 전이라
+	// HDR 색이 그대로 발광으로 이어진다). 드로우콜이 프레임당 1개 수준이라 Hi-Z 컬링 대상이 아니다.
+	auto outlineDispatcher = OutlinePipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "OutlineShader" ),
+		submitter_.get(), viewport, clRect,
+		energyOrbRtv, depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesOutlinePipeline_, &cmdListPool_,
+		std::move( drawEventsOutlinePipeline_ ),
+		cameraDataOutlinePipeline_, frameDataOutlinePipeline_,
+		sceneColorRoomIdx
+	);
+
 	// Path-guidance ribbons: additive trail into SceneColorHDR (before bloom, so it
 	// glows). Independent resources from the post-resolve trail pass. Always additive,
 	// so the HDR PSO is bound for both PSO slots.
@@ -2402,7 +2470,8 @@ void GFX::render() {
 		std::move(lightDataPBRDeferredPipeline_),
 		mainDirectionalLightPBRDeferredPipeline_, cameraDataPBRDeferredPipeline_,
 		frameDataPBRDeferredPipeline_,
-		frameIdx_ % backBuffers_.size()
+		frameIdx_ % backBuffers_.size(),
+		static_cast<u32t>(frameIdx_ % 2u)   // visibility ring slot (2-slot, backbuffer 수와 무관)
 	);
 
 	auto pbrDeferredSkinnedDispatcher = PBRDeferredSkinnedPipeline::Dispatcher(
@@ -2801,6 +2870,9 @@ void GFX::render() {
 			// Boss heat-distortion glow: additive tinted halo into SceneColorHDR, before bloom.
 			heatDistortionDispatcher.updateGPUDataSingleThreaded();
 			heatDistortionDispatcher.drawSingleThreaded();
+			// 상호작용 강조 실루엣: SceneColorHDR에 가산, bloom 전.
+			outlineDispatcher.updateGPUDataSingleThreaded();
+			outlineDispatcher.drawSingleThreaded();
 		}
 
 		// HDR tonemap resolve: SceneColorHDR(deferred lighting 출력) -> 백버퍼(LDR).

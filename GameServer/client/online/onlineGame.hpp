@@ -43,6 +43,8 @@
 #include "../ui/skillDialHUD.hpp"
 #include "../ui/minimapHUD.hpp"
 #include "../ui/pathGuideHUD.hpp"
+#include "../ui/pickupPromptHUD.hpp"
+#include "../ui/hiZStatsHUD.hpp"
 #include "../ui/intro/TacticalZoneIntro.hpp"
 #include "../ui/dialogue/DialogueSystem.hpp"
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
@@ -139,6 +141,9 @@ public:
 	void onInventorySnapshot(uint32 revision, const std::vector<InventorySlotInfo>& slots);
 	void onInventoryActionResult(uint32 revision, uint8 slotIndex,
 		InventoryAction action, InventoryActionResult result, InventorySlotInfo slot);
+	// 월드 드롭 보석: 스폰 통지 / 제거·거절 통지 (S_ItemDropBatch, S_ItemDropRemove).
+	void createItemDrop(const ItemDropInfo& info);
+	void onItemDropRemoved(uint16 dropId, uint16 pickerObjId, ItemPickupResult result);
 	void onPlayerKnockback( uint16 playerId, float dirX, float dirZ, float speed, uint16 knockMs, uint16 postLockMs );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 	void beginServerTimeSync();
@@ -441,6 +446,49 @@ private:
 	// Object-derived with an EventBus (no AnimBlender) so Hit/Death route like goblins.
 	std::vector<std::shared_ptr<Stronghold>> strongholds_{};
 
+	// ── 월드 드롭 보석 ────────────────────────────────────────────────────────
+	// 서버는 착지점만 확정하고(권위), 낙하 연출은 여기서 Dynamic RigidBody로 로컬 시뮬한다.
+	// dropId는 룸 로컬 id 공간이라 objectById_/skillObjectById_와 무관하다 —
+	// 희소 배열이 아니라 map으로 받아 인덱스 초과 여지를 없앤다.
+	struct GemDrop {
+		enum class Phase : uint8_t { Flying, Settling, Idle };
+
+		std::shared_ptr<Object> obj;
+		ItemId   itemId  = 0;
+		Phase    phase   = Phase::Flying;
+		float    phaseSec = 0.f;          // 현재 phase 경과 시간
+		bool     inPhysics = false;       // physicsWorld_에 등록되어 있는가
+		mu::Vec3 authoritativePos{};      // 서버 착지점 (Settling의 목표)
+		mu::Vec3 settleFrom{};            // Settling 시작 위치
+		float    idleSpinRad = 0.f;       // Idle 회전 누적각
+		float    bobPhase = 0.f;          // Idle 상하 보빙 위상
+	};
+	std::unordered_map<uint16, GemDrop> gemDrops_{};
+
+	// 서버는 사망 즉시 드롭을 통지하지만, 연출은 시체가 에너지 오브로 분해되는 시점에
+	// 맞춘다(래그돌이 널브러진 채 보석이 튀어나오면 인과가 안 맞는다). 그때까지 통지를
+	// 여기 담아두고 releasePendingItemDrops()가 실제 오브젝트를 만든다.
+	// 대응하는 시체를 못 찾는 경우(sourceObjId=0, 사망을 못 본 몬스터)를 대비해
+	// age가 kPendingDropTimeoutSec를 넘으면 강제로 스폰한다 — 안 그러면 서버엔 있는데
+	// 클라엔 영영 안 보이는 드롭이 생긴다.
+	struct PendingGemDrop {
+		ItemDropInfo info;
+		float        age = 0.f;
+	};
+	std::vector<PendingGemDrop> pendingGemDrops_{};
+	void spawnGemDropNow(const ItemDropInfo& info, const mu::Vec3* originOverride);
+	// sourceObjId의 시체가 오브 단계로 넘어갈 때 호출. originOverride는 시체 위치.
+	void releasePendingItemDrops(uint16 sourceObjId, const mu::Vec3* originOverride);
+	uint16 aimedDropId_       = 0;   // 화면 중앙에 조준된 드롭(0 = 없음)
+	uint16 pickupPendingId_   = 0;   // C_ItemPickup 송신 후 응답 대기 중인 드롭
+	float  pickupPendingSec_  = 0.f; // 응답 유실 대비 타임아웃
+	float  pickupNoticeSec_   = 0.f; // 실패 안내 메시지 잔여 표시 시간
+	std::wstring pickupNotice_{};
+
+	void updateItemDrops(Milliseconds deltaTime, float tPhysicInterpolation);
+	void updateItemDropAim();        // 화면 중앙 레이 + 근접 폴백으로 aimedDropId_ 갱신
+	void destroyItemDrop(uint16 dropId);
+
 	// Client-local cosmetic trigger zones (BGM/camera/post-fx). Built from
 	// chunks_index.bin after the terrain index loads; tested each frame against
 	// the predicted local player. zoneStates_ caches server-driven S_ZoneState.
@@ -598,6 +646,14 @@ private:
 	std::vector<MinimapEntityIcon> minimapIcons_{};
 	// On-screen destination indicator (beacon / edge arrow) for the path-guidance route.
 	PathGuideHUD pathGuideHUD_{};
+	PickupPromptHUD pickupPromptHUD_{};
+	// 컬링 통계 오버레이(F1). 좌측 파티 HP 아래. 끄면 아무것도 그리지 않는다.
+	// 기본은 꺼진 상태 — 평소 화면은 릴리즈와 동일하고, 필요할 때만 F1로 켠다.
+	HiZStatsHUD hiZStatsHUD_{};
+	bool hiZOverlayVisible_ = false;
+	// feedbackCullResultToAnim()이 매 프레임 채우는 오브젝트 단위 Hi-Z 결과.
+	u32t hiZTrackedObjects_ = 0u;
+	u32t hiZSkippedObjects_ = 0u;
 	std::vector<mu::Vec3> minimapGuidePoly_{};   // active route sample points for the minimap
 	// World-fixed bake region of the current minimap cache (player-centered + fixed coverage);
 	// the HUD scrolls it via a per-frame UV sub-rect. Re-baked (single shared RT) on chunk

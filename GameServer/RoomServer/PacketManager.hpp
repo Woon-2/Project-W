@@ -20,6 +20,7 @@ public:
 	static void handleCSelectSkillPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCTimeSyncPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCInventoryActionPacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCItemPickupPacket(GameSession* session, byte* buffer, int32 len);
 
 	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos, const std::vector<PlayerNameInfo>& nameInfos);
 	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
@@ -58,6 +59,9 @@ public:
 	static std::shared_ptr<SendBuffer> makeSInventoryActionResultPacket(
 		uint32 revision, uint8 slotIndex, InventoryAction action,
 		InventoryActionResult result, InventorySlotInfo slot);
+	static std::shared_ptr<SendBuffer> makeSItemDropBatchPacket(const std::vector<ItemDropInfo>& drops);
+	static std::shared_ptr<SendBuffer> makeSItemDropRemovePacket(
+		uint16 dropId, uint16 pickerObjId, ItemPickupResult result);
 };
 
 #endif // packet_manager_hpp

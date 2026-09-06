@@ -428,7 +428,17 @@ void InventoryPanel::onSlotRightClick(std::size_t slotIndex) {
         return;
     }
     contextSlot_ = slotIndex;
-    positionBesideSlot(contextMenu_, slotIndex, kContextWidth, kContextHeight);
+    // Items with no use effect (gems) hide the "use" entry: the server would only
+    // reject it with NotUsable, so leaving it in the menu makes the UX lie.
+    const ItemDefinition* definition =
+        catalog_ ? catalog_->find(displayedSlots_[slotIndex].itemId) : nullptr;
+    const bool usable = definition && definition->useKind != ItemUseKind::None;
+    if (useButton_) useButton_->visible = usable;
+    if (discardButton_)
+        discardButton_->offsetY = DimValue::px(usable ? 43.f : 6.f);
+    positionBesideSlot(contextMenu_, slotIndex,
+                       kContextWidth, usable ? kContextHeight : kContextHeight - 37.f);
+    contextMenu_->height = DimValue::px(usable ? kContextHeight : kContextHeight - 37.f);
     contextMenu_->visible = true;
 }
 

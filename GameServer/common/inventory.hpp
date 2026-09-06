@@ -70,6 +70,10 @@ public:
     // Fills existing stacks from the lowest slot first, then empty slots.
     // Returns the amount that did not fit.
     std::uint32_t add(const ItemCatalog& catalog, ItemId itemId, std::uint32_t quantity);
+    // Same placement rules as add(), but only reports whether everything fits.
+    // add() has no rollback, so callers that need all-or-nothing semantics
+    // (world item pickup) must gate on this first.
+    bool canFit(const ItemCatalog& catalog, ItemId itemId, std::uint32_t quantity) const;
     bool removeOne(std::size_t slotIndex);
 
     // Client mirror operations. These never increment the supplied authoritative

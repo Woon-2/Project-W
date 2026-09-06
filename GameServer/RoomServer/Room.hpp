@@ -107,6 +107,9 @@ public:
 	void selectSkill(int32 sessionId, uint8 slot);   // dial selection (drives kill-charge attribution)
 	void inventoryAction(int32 sessionId, uint32 revision, uint8 slotIndex,
 		InventoryAction action);
+	// 월드에 떨어진 보석 습득. "주운 사람이 임자" — 소유권 필드가 없고, 같은 룸의
+	// 요청은 이 JobQueue에서 직렬 실행되므로 먼저 큐에 들어온 쪽이 이긴다.
+	void pickupItem(int32 sessionId, uint16 dropId);
 
 	// --- 인벤토리 영속화 (전부 이 방의 JobQueue 위에서만 실행된다) ---
 	// DB 잡 완료 시 콜백. DB 스레드가 아니라 doAsync로 되돌아온 잡에서 호출해야 한다.
@@ -299,6 +302,11 @@ private:
 	// distributes kill-charge to all recent damagers. Call after HP is updated.
 	void noteAndMaybeReward(int32 attackerObjId, Object* target, int32 prevHp, int32 newHp);
 	void distributeKillCharge(Object* monster);
+	// 플레이어에게 처치당한 몬스터 발밑에 보석을 뿌린다(티어별 개수는 Object::rollGemDropCount).
+	// 서버는 착지점만 확정하고 낙하 연출은 클라가 로컬 물리로 돌린다 —
+	// 근거와 권위 경계: docs/itemDropSystem.md
+	void spawnGemDrops(Object& corpse);
+	void updateItemDrops(Milliseconds dt);   // TTL 만료 처리
 	void updateComboExpiry();   // resets stale combos (combo window elapsed) each tick
 	void updatePlayerRegen(Milliseconds dt);   // server-authoritative combo-driven HP regen
 
@@ -329,6 +337,22 @@ private:
 	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
 	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
 	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
+
+	// ── 월드 아이템 드롭 ──────────────────────────────────────────────────────
+	// barriers_와 같은 부류: Object가 아니고 objectById_에 없으며 물리 바디도 없다.
+	// dropId는 룸 로컬 id 공간이라 IdPool을 쓰지 않는다(반납 경로 자체가 없으므로
+	// 룸 파괴 시 id 누수 클래스 버그에 노출되지 않는다) — docs/itemDropSystem.md
+	struct ItemDrop {
+		uint16       dropId;
+		ItemId       itemId;
+		uint16       quantity;
+		uint8        variant;     // 같은 종류 안에서의 클라 메시 인덱스(비주얼 전용)
+		uint16       sourceObjId; // 클라가 던지기 시작점으로 쓸 시체 objId (0 = 없음)
+		mu::Vec3     pos;         // 권위 착지점
+		Milliseconds expireMs;
+	};
+	std::vector<ItemDrop> drops_;        // 수십 개 규모 — 선형 탐색으로 충분
+	uint16                nextDropId_{ 1 };   // 0은 "드롭 없음" sentinel
 	uint16                     activeArenaZoneId_{ 0 };     // 현재 벽이 올라간 아레나 zone id (S_ZoneState 해제 대상)
 	bool                       arenaWallsActive_{ false };  // 일방향 벽이 올라가 있고 아직 해제 안 됨(1회성 가드)
 	std::vector<OneWayWall>    arenaWalls_;                 // 양끝 후방 Wall 일방향 슬랩(move() 권위 클램프 대상)
