@@ -237,6 +237,7 @@
     <ClCompile Include="particleImporter.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="physicsTestObject.cpp" />
     <ClCompile Include="ragdoll.cpp" />
     <ClCompile Include="ragdollDef.cpp" />
     <ClCompile Include="rigidBody.cpp" />

@@ -393,6 +393,10 @@ void Game::resetInGameSession() {
 		gfx_.drainGpu();
 	}
 
+	// 조인트 테스트 바디는 physicsWorld_가 비소유 포인터로 들고 있다. 세션 컨테이너보다
+	// 먼저 해제하지 않으면 다음 경기의 step()에서 dangling으로 남는다.
+	clearTestObjects();
+
 	uiManager_.resetInteractionState();
 	camera_.cancelFocusCinematic();
 	camera_.setTargetObject(std::shared_ptr<Object>{});
@@ -4939,7 +4943,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
 	const Seconds clampedDt = std::min(Seconds(simulationDeltaTime), kMaxPhysicsDeltaTime);
-	physicUpdateAcc_ += clampedDt;
+	// rdDebugTimeScale_(M 키)은 물리 스텝만 늦춘다 — 카메라/애니/UI/네트워크 시계는
+	// 실시간이라 관절 한계 도달 순간을 평소 속도로 돌려 가며 관찰할 수 있다.
+	physicUpdateAcc_ += clampedDt * rdDebugTimeScale_;
 
 	// move 패킷 전송 주기 판단
 	moveStateSendAcc_ += deltaTime;
@@ -4958,7 +4964,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	// are unaffected, only joints get the extra passes (setJointSolverExtraIterations).
 	const bool anyRagdollActive = std::any_of(corpses_.begin(), corpses_.end(),
 		[](const Corpse& c) { return c.phase == Corpse::Phase::Ragdoll; });
-	physicsWorld_.setJointSolverExtraIterations(anyRagdollActive ? 48 : 0);
+	// 조인트 테스트 구조물(래그돌형)도 같은 이유로 추가 반복이 필요하다. 이 호출이
+	// 매 프레임 실행되므로 spawnTestObject에서 한 번 켜는 방식은 곧바로 덮어써진다.
+	physicsWorld_.setJointSolverExtraIterations(
+		(anyRagdollActive || rdExtraIterKinds_ > 0) ? 48 : 0);
 
 	int physicsStepsDone = 0;
 	while (physicUpdateAcc_ >= effectiveInterval
@@ -5566,6 +5575,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		tornadoHitEffect_.update(simulationDeltaTime);
 		dustParticleSystem_.update(deltaTime);
 		debugBVView_.update(deltaTime);
+		// 조인트 테스트 구조물의 프리즈/연속 가진/와이어프레임 푸시.
+		// TTL이 깎이지 않도록 반드시 debugBVView_.update() 뒤에 둔다.
+		updateTestObjects(deltaTime);
 
 		if ( tornadoShotActive_ ) {
 			constexpr float kSpeed    = 10.f;
@@ -7089,6 +7101,73 @@ bool Game::findZoneCenter(const std::string& tag, mu::Vec3& out) const {
 	return false;
 }
 
+// ---------------------------------------------------------------------------
+// Joint constraint 검증 하네스 (클라 전용)
+//
+// 구조물 정의는 physicsTestObject.hpp의 makePhysicsTestObject()에 있고,
+// 여기서는 스폰 위치·물리월드 등록·프레임 훅만 담당한다. 바디는 클라이언트
+// PhysicsWorld에만 존재하며 어떤 패킷도 만들지 않는다(서버는 존재를 모른다).
+// ---------------------------------------------------------------------------
+
+void Game::spawnTestObject(int kind) {
+	if (!player_) return;
+
+	// 연속 스폰을 옆으로 벌려 구조물끼리 겹치지 않게 한다.
+	const float lateralOffset = static_cast<float>(rdObjects_.size()) * 4.f;
+	const mu::Vec3 base = player_->pos()
+		+ player_->forward() * 4.f
+		+ player_->right() * lateralOffset;
+
+	PhysicsTestObject obj = makePhysicsTestObject(kind, base);
+	if (obj.bodies.empty()) return;
+
+	obj.activate(physicsWorld_);
+	rdObjects_.push_back(std::move(obj));
+	rdShowBodies_ = true;   // 스폰하면 시각화를 자동으로 켠다
+
+	// 깊은/분기 조인트 체인은 기본 4회 속도 반복으로 수렴하지 않는다. 다만 여기서
+	// setJointSolverExtraIterations를 직접 부르면 InGameScene이 매 프레임 시체
+	// 래그돌 유무만 보고 0으로 되돌린다 — 플래그를 세워 그쪽 조건에 합류시킨다.
+	if (physicsTestObjectNeedsExtraIterations(kind))
+		++rdExtraIterKinds_;
+}
+
+void Game::clearTestObjects() {
+	for (auto& obj : rdObjects_) obj.deactivate(physicsWorld_);
+	rdObjects_.clear();
+	rdFrozen_          = false;
+	rdRandomBlast_     = false;
+	rdBlastAcc_        = 0s;
+	rdDebugTimeScale_  = 1.0f;
+	rdExtraIterKinds_  = 0;
+}
+
+void Game::updateTestObjects(Milliseconds deltaTime) {
+	if (rdObjects_.empty()) return;
+
+	// 프리즈: 중력·조인트가 매 스텝 다시 속도를 만들므로 프레임마다 0으로 되돌린다.
+	if (rdFrozen_) {
+		for (auto& obj : rdObjects_) obj.freezeAll();
+	}
+	else if (rdRandomBlast_) {
+		// 연속 랜덤 가진: 일정 간격마다 전 Dynamic 바디를 랜덤 방향으로 때린다.
+		// 프레임레이트와 무관하게 같은 빈도가 되도록 누적기로 처리한다.
+		constexpr Seconds kBlastInterval{ 0.5f };
+		rdBlastAcc_ += deltaTime;
+		while (rdBlastAcc_ >= kBlastInterval) {
+			rdBlastAcc_ -= kBlastInterval;
+			for (auto& obj : rdObjects_) obj.applyRandomImpulse(rdImpulseStrength_);
+		}
+	}
+
+	// 짧은 TTL로 매 프레임 다시 밀어 넣어 라이브 표시를 만든다.
+	// 반드시 debugBVView_.update() '뒤'에서 호출할 것 — 앞에서 넣으면 같은 프레임의
+	// update(deltaTime)가 TTL을 즉시 깎아 저프레임에서 박스가 사라진다.
+	if (rdShowBodies_) {
+		for (auto& obj : rdObjects_) obj.visualize(debugBVView_, 32ms);
+	}
+}
+
 void Game::debugTeleportToArena(const std::string& tag) {
 	if (!player_) return;
 	mu::Vec3 center{};
@@ -7625,6 +7704,36 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		debugSpeedMultiplier_ = (debugSpeedMultiplier_ > 1.f) ? 1.f : 5.f;
 		std::cout << "[Debug] player speed multiplier = " << debugSpeedMultiplier_ << "x\n";
 	}
+
+	// --- Joint constraint 검증 하네스 (클라 전용, 서버 미동기) ---
+	// 1~8 구조물 스폰 (1 진자 / 2 이중진자 / 3 힌지 도어 / 4 콘트위스트 팔 /
+	//                 5 콘트위스트 체인 / 6 휴머노이드 / 7 상체 / 8 하체 래그돌)
+	// K 전체 제거   V 와이어프레임 토글   P 프리즈 토글   M 슬로모 순환
+	// I 연속 랜덤 가진 토글   , / . 임펄스 세기 1/2배 · 2배
+	// 이 키들은 온라인 인게임에서 다른 용도로 쓰이지 않는다(위 디버그 블록들 참조).
+#define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
+	for (int kind = 1; kind <= 8; ++kind) {
+		if (RD_KEY_DOWN('0' + kind)) spawnTestObject(kind);
+	}
+	if (RD_KEY_DOWN('K')) clearTestObjects();
+	if (RD_KEY_DOWN('V')) rdShowBodies_ = !rdShowBodies_;
+	if (RD_KEY_DOWN('I')) {
+		rdRandomBlast_ = !rdRandomBlast_;
+		rdBlastAcc_    = 0s;
+	}
+	if (RD_KEY_DOWN('P')) {
+		rdFrozen_ = !rdFrozen_;
+		if (rdFrozen_)
+			for (auto& obj : rdObjects_) obj.freezeAll();
+	}
+	if (RD_KEY_DOWN('M')) {
+		if      (rdDebugTimeScale_ >= 1.f)   rdDebugTimeScale_ = 0.25f;
+		else if (rdDebugTimeScale_ >= 0.25f) rdDebugTimeScale_ = 0.05f;
+		else                                 rdDebugTimeScale_ = 1.0f;
+	}
+	if (RD_KEY_DOWN(VK_OEM_COMMA))  rdImpulseStrength_ = std::max(0.5f,  rdImpulseStrength_ * 0.5f);
+	if (RD_KEY_DOWN(VK_OEM_PERIOD)) rdImpulseStrength_ = std::min(500.f, rdImpulseStrength_ * 2.0f);
+#undef RD_KEY_DOWN
 
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

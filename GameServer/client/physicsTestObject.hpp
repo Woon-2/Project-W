@@ -44,7 +44,7 @@ inline void rebuildBoxBodyBVH(RigidBody* body, mu::Vec3 he)
 // visualized as OBB wireframes via DebugBVView.
 //
 // Usage:
-//   1. Build bodies/joints (factory functions in game.cpp).
+//   1. Build bodies/joints with makePhysicsTestObject() below.
 //   2. Call activate() to register with the physics world.
 //   3. Call visualize() each frame to push OBBs to the debug view.
 //   4. Call deactivate() before destroying to clean up physics world refs.
@@ -89,11 +89,17 @@ struct PhysicsTestObject {
 
     // Push one OBB per body into the debug view with the given TTL.
     // Call each frame with a short TTL (e.g. 32ms) to produce a live display.
-    void visualize(DebugBVView& view, Milliseconds ttl) const {
+    // Kinematic anchors are tinted apart from the simulated bodies so the joint
+    // structure stays readable in a still capture.
+    void visualize(DebugBVView& view, Milliseconds ttl,
+                   mu::Vec4 dynColor    = { 0.f, 1.f, 0.f, 1.f },
+                   mu::Vec4 anchorColor = { 0.55f, 0.55f, 0.60f, 1.f }) const {
         for (int i = 0; i < static_cast<int>(bodies.size()); ++i) {
             const mu::Vec3 he = (i < static_cast<int>(halfExtents.size()))
                 ? halfExtents[i] : mu::Vec3{ 0.15f, 0.15f, 0.15f };
-            view.push(OBB{ bodies[i]->pos(), he, bodies[i]->orient() }, ttl);
+            const bool dynamic = bodies[i]->motionType() == MotionType::Dynamic;
+            view.push(OBB{ bodies[i]->pos(), he, bodies[i]->orient() }, ttl,
+                      BVPipeline::BVModel::Box, dynamic ? dynColor : anchorColor);
         }
     }
 
@@ -104,6 +110,11 @@ struct PhysicsTestObject {
                 b->applyImpulse(imp, b->pos());
     }
 
+    // Apply a random-direction impulse to every Dynamic body. The vertical
+    // component is biased upward so a blast throws bodies outward instead of
+    // driving them into the floor. Uses the shared gRandomEngine (pch.hpp).
+    void applyRandomImpulse(float strength);
+
     // Zero linear and angular velocities of every Dynamic body (freeze).
     void freezeAll() {
         for (auto& b : bodies) {
@@ -113,5 +124,30 @@ struct PhysicsTestObject {
         }
     }
 };
+
+// ---------------------------------------------------------------------------
+// Test structure factories (physicsTestObject.cpp)
+//
+// Each factory builds a PhysicsTestObject with a small set of rigid bodies
+// connected by one joint type, centred around 'origin'.
+// Pivot convention: anchorA = {0,0,0} places the pivot at body A's CoM.
+//                   anchorB = {0, dist, 0} places the pivot 'dist' metres
+//                   above body B's CoM, equalling body A's CoM when
+//                   body B is spawned 'dist' metres below body A.
+//
+// These live in a .cpp on purpose: inlining ~600 lines of construction code
+// into every including TU pushed onlineGame.obj past the COFF section limit
+// (C1128), and nothing here is hot enough to want inlining.
+//
+// kind: 1=pendulum        2=doublePendulum   3=hingeDoor        4=coneTwistArm
+//       5=coneTwistChain  6=humanoidRagdoll  7=upperBodyRagdoll 8=lowerBodyRagdoll
+// Out-of-range kinds yield an empty object (activate() then does nothing).
+// ---------------------------------------------------------------------------
+PhysicsTestObject makePhysicsTestObject(int kind, mu::Vec3 origin);
+
+// Ragdoll-style structures (kind >= 6) have branching or deep joint chains that
+// cannot converge within the default 4 velocity passes. Extra joint-only
+// iterations are cheap because contacts are unaffected.
+inline bool physicsTestObjectNeedsExtraIterations(int kind) { return kind >= 6; }
 
 #endif // __PhysicsTestObject_HPP

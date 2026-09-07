@@ -97,16 +97,20 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `staticdepen::kSlop/kCorrectFrac/kMaxCorrect` | `staticDepenetration.hpp` | 진동 방지 파라미터 0.005m / 0.8 / 0.2m |
 | `RigidBody::setUserData()` / `userData()` | `rigidBody.hpp` | void* 게임 레이어 연결 포인터 (Object* 역참조용) |
 | `PhysicsWorld::forEachContact()` | `physicsWorld.hpp` | step() 후 활성 ContactConstraint 순회 (템플릿) |
-| `PhysicsTestObject` struct | `physicsTestObject.hpp #51` | bodies/halfExtents/joints/ignoredPairs 소유; activate/deactivate/visualize/applyImpulseAll/freezeAll |
+| `PhysicsTestObject` struct | `physicsTestObject.hpp #51` | bodies/halfExtents/joints/ignoredPairs 소유; activate/deactivate/visualize/applyImpulseAll/**applyRandomImpulse**/freezeAll. StandAlone·Online 공용 |
 | `PhysicsTestObject::ignoredPairs` | `physicsTestObject.hpp` | 1-hop+2-hop 충돌 무시 쌍; factory 함수가 채우고 activate/deactivate에서 setIgnoreCollision 호출 |
-| `makePendulum()` | `standalone/game.cpp #75` | PhysicsTestObject factory: BallSocket 단진자 (kind=1) |
-| `makeDoublePendulum()` | `standalone/game.cpp #100` | kind=2: BallSocket 이중 진자 |
-| `makeHingeDoor()` | `standalone/game.cpp #136` | kind=3: HingeJoint 문 |
-| `makeConeTwistArm()` | `standalone/game.cpp #170` | kind=4: ConeTwist 단일 팔 |
-| `makeConeTwistChain()` | `standalone/game.cpp #203` | kind=5: ConeTwist 5-link 체인 |
-| `makeHumanoidRagdoll()` | `standalone/game.cpp #244` | kind=6: 12 bodies A-pose, 11 joints(ConeTwist×7+Hinge×4), 1-hop+2-hop 충돌 무시; 팔·다리 twist axis=(0,-1,0) (A-pose 기준) |
-| `makeUpperBodyRagdoll()` | `standalone/game.cpp #~427` | kind=7: Kinematic Hips anchor + Dynamic 상체 7 bodies(척추·머리·팔), 7 joints |
-| `makeLowerBodyRagdoll()` | `standalone/game.cpp #~517` | kind=8: Kinematic Hips anchor + Dynamic 하체 4 bodies(양쪽 upper/lower leg), 4 joints |
+| `PhysicsTestObject::visualize()` | `physicsTestObject.hpp #94` | 바디마다 OBB 1개 push. Kinematic 앵커는 회색, Dynamic은 초록(색 인자로 재정의 가능) |
+| `PhysicsTestObject::applyRandomImpulse()` | `physicsTestObject.cpp #11` | 전 Dynamic 바디에 랜덤 방향 임펄스(+Y bias). `gRandomEngine` 사용 — 로컬 mt19937 금지 |
+| `makePhysicsTestObject(kind, origin)` | `physicsTestObject.cpp #607` | kind 1~8 → 팩토리 디스패치. 범위 밖이면 빈 객체. 두 모드 공용 진입점 |
+| `physicsTestObjectNeedsExtraIterations(kind)` | `physicsTestObject.hpp #151` | kind>=6(래그돌형)이면 joint 전용 PGS 추가 반복 필요 |
+| `makePendulum()` | `physicsTestObject.cpp #54` | PhysicsTestObject factory: BallSocket 단진자 (kind=1) |
+| `makeDoublePendulum()` | `physicsTestObject.cpp #79` | kind=2: BallSocket 이중 진자 |
+| `makeHingeDoor()` | `physicsTestObject.cpp #115` | kind=3: HingeJoint 문 |
+| `makeConeTwistArm()` | `physicsTestObject.cpp #149` | kind=4: ConeTwist 단일 팔 |
+| `makeConeTwistChain()` | `physicsTestObject.cpp #182` | kind=5: ConeTwist 5-link 체인 |
+| `makeHumanoidRagdoll()` | `physicsTestObject.cpp #228` | kind=6: 12 bodies A-pose, 11 joints(ConeTwist×7+Hinge×4), 1-hop+2-hop 충돌 무시; 팔·다리 twist axis=(0,-1,0) (A-pose 기준) |
+| `makeUpperBodyRagdoll()` | `physicsTestObject.cpp #407` | kind=7: Kinematic Hips anchor + Dynamic 상체 7 bodies(척추·머리·팔), 7 joints |
+| `makeLowerBodyRagdoll()` | `physicsTestObject.cpp #522` | kind=8: Kinematic Hips anchor + Dynamic 하체 4 bodies(양쪽 upper/lower leg), 4 joints |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
 | `BroadPhase` (abstract) | `broadPhase.hpp #36-40` | add/remove/update/queryPairs/queryAABB 인터페이스 |
 | `BroadPhase::queryAABB` | `broadPhase.hpp #39` | AABB 쿼리 순수 가상 메서드 — 카메라 arm 장애물 후보 조회 |
@@ -814,7 +818,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |------|------|------|
 | `StandAlone::Game` class | `standalone/game.hpp #28` | IGame 구현 |
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
-| `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
+| `Game::spawnTestObject(int kind)` | `standalone/game.cpp #1969` | `makePhysicsTestObject`로 생성 후 activate. **standalone은 스킬 에디터로 전환돼 키 바인딩이 없다(호출부 없음)** — 실사용 경로는 Online |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
 | `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → feedbackCullResultToAnim |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |
@@ -970,15 +974,15 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `DebugBVView` class | `debugBVView.hpp #16` | 배치 BV 렌더러 |
-| `push(AABB, ttl)` | `debugBVView.hpp #19` | 스냅샷 AABB 등록 |
-| `push(OBB, ttl)` | `debugBVView.hpp #26` | 스냅샷 OBB 등록 |
-| `pushLive(obj, halfExtent, offsetFwd, ttl)` | `debugBVView.hpp #36` | 이동 추적 공격 hitbox |
-| `pushBVHNodes(obj, ttl)` | `debugBVView.hpp #44` | BVH 노드 전체 스냅샷 |
-| `update(dt)` | `debugBVView.hpp #52` | TTL 감소 + 만료(hp≤0 포함) 제거 |
-| `render(gfx)` | `debugBVView.hpp #68` | BVPipeline::DrawEvent 제출 |
-| `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
-| `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
+| `DebugBVView` class | `debugBVView.hpp #20` | 배치 BV 렌더러 |
+| `push(AABB, ttl, model, color)` | `debugBVView.hpp #23` | 스냅샷 AABB 등록 |
+| `push(OBB, ttl, model, color)` | `debugBVView.hpp #31` | 스냅샷 OBB 등록 |
+| `pushLive(obj, halfExtent, offsetFwd, ttl)` | `debugBVView.hpp #64` | 이동 추적 공격 hitbox |
+| `pushBVHNodes(obj, ttl)` | `debugBVView.hpp #72` | BVH 노드 전체 스냅샷 |
+| `update(dt)` | `debugBVView.hpp #80` | TTL 감소 + 만료(hp≤0 포함) 제거 |
+| `render(gfx)` | `debugBVView.hpp #96` | BVPipeline::DrawEvent 제출 |
+| `StaticEntry` (private) | `debugBVView.hpp #116-121` | 사전 계산된 worldXform + ttl |
+| `LiveEntry` (private) | `debugBVView.hpp #123-129` | Object* + halfExtent + offsetFwd + ttl |
 
 ### 컬링 통계 오버레이 (온라인 인게임, F1)
 
@@ -993,6 +997,25 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 정적 prop visibility feedback | `pbrDeferredPipeline.cpp` `hiZPassUpdate/Compute()`, 버퍼는 `gfx.cpp` | 구 `cullScratch` → `visibilityFeedback`(단일 리소스 2-slot ring + readback, roomCnt=1). **통계 전용** — `objectVisibility` 테이블 없음 |
 | 오브젝트 단위 집계 | `online/onlineGame.cpp` `feedbackCullResultToAnim()` | `hiZTrackedObjects_` / `hiZSkippedObjects_`. 이미 도는 루프에 카운터만 추가 |
 | 토글 / 렌더 호출 | `online/onlineGame.cpp` `processInputGame()` (**F1**, `hiZOverlayVisible_` **기본 false**), `renderInGame()` | `uiManager_.render()` 직전, `finalScoreboard_` 비표시 블록 안. 설정창·인벤토리가 열려 있으면 미제출 |
+
+### Joint constraint 검증 하네스 (온라인 인게임, 클라 전용)
+
+**설계: `docs/physicsArchitecture.md` "Joint constraint 검증 하네스"**
+
+구조물 8종을 인게임에 스폰해 BallSocket / Hinge / ConeTwist의 한계와 체인 수렴을
+와이어프레임으로 관찰한다. 바디는 클라 `PhysicsWorld`에만 있고 패킷을 만들지 않는다.
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Game::spawnTestObject(int kind)` | `online/onlineGame.cpp #7112` | 플레이어 앞 4m(옆으로 4m씩 벌림)에 `makePhysicsTestObject`로 생성 후 `activate`. `rdShowBodies_` 자동 on |
+| `Game::clearTestObjects()` | `online/onlineGame.cpp #7135` | 전체 `deactivate` + 하네스 상태 리셋. `resetInGameSession()` 선두에서도 호출(로비 복귀 시 dangling 방지) |
+| `Game::updateTestObjects(dt)` | `online/onlineGame.cpp #7145` | 프리즈 / 연속 랜덤 가진(0.5s 간격 누적기) / `visualize` 푸시. **`debugBVView_.update()` 뒤**에서 호출해야 32ms TTL이 같은 프레임에 깎이지 않는다 |
+| 키 바인딩 | `online/onlineGame.cpp` `processInputGame()` | `1`~`8` 스폰 / `K` 제거 / `V` 와이어프레임 / `P` 프리즈 / `M` 슬로모(1→0.25→0.05) / `I` 연속 랜덤 가진 / `,` `.` 임펄스 세기 |
+| `rdObjects_` 외 상태 | `online/onlineGame.hpp #845~` | `rdImpulseStrength_`(5 N·s) `rdDebugTimeScale_` `rdShowBodies_` `rdFrozen_` `rdRandomBlast_` `rdBlastAcc_` `rdExtraIterKinds_` |
+| 슬로모 적용점 | `online/onlineGame.cpp` `InGameScene()` | `physicUpdateAcc_ += clampedDt * rdDebugTimeScale_` — 물리 스텝만 감속(카메라·애니·네트워크는 실시간). standalone과 동일 규약 |
+| ⚠ joint 추가 반복 | `online/onlineGame.cpp` `InGameScene()` | `setJointSolverExtraIterations((anyRagdollActive \|\| rdExtraIterKinds_ > 0) ? 48 : 0)`. **매 프레임 실행되므로** spawn에서 한 번 켜는 방식은 즉시 덮어써진다 |
+
+---
 
 ### 오브젝트 id 등록 / 수명주기 감시 (온라인)
 

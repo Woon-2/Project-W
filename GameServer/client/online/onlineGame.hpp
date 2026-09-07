@@ -50,6 +50,7 @@
 #include "../ui/dialogue/TacticalDialogueOverlay.hpp"
 #include "../ui/inventoryPanel.hpp"
 #include "../debugBVView.hpp"
+#include "../physicsTestObject.hpp"
 #include "../skill/skillSystem.hpp"
 #include "../skill/skillLoadout.hpp"
 
@@ -196,6 +197,14 @@ private:
 	// 유령 몬스터를 목격한 즉시 눌러 그 개체가 ORPHAN / STALE / SLOT MISMATCH 중
 	// 무엇인지 확정하는 도구(원인 분기표는 계획 파일 "재현·판독 절차" 참조).
 	void debugAuditObjectRegistry() const;
+
+	// --- Joint constraint 검증 하네스 (클라 전용, 서버 미동기) ---
+	// 1~8로 조인트 테스트 구조물을 스폰하고 랜덤 임펄스로 가진해 cone/twist/hinge
+	// 한계와 체인 수렴을 눈으로 확인한다. 패킷을 만들지 않으므로 서버는 이 바디들의
+	// 존재를 모른다. 구조물 정의는 physicsTestObject.hpp.
+	void spawnTestObject(int kind);
+	void clearTestObjects();
+	void updateTestObjects(Milliseconds deltaTime);
 	// npc id -> 마지막 S_NpcMoveBatch 수신 시각(클라 경과 시간). 감사에서 STALE
 	// (서버가 이동을 안 보내는 = 서버에서 이미 죽은) 몬스터를 가려내는 데 쓴다.
 	// Object에 멤버를 추가하지 않고 Game이 들고 있는다(게임 레이어 국소 상태).
@@ -831,6 +840,18 @@ private:
 	bool cursorShowEnabled_ = true;
 	// 인게임 설정창(ESC) 열림 전이 추적. 열림→커서 해제/표시, 닫힘→게임플레이 커서 모드 복원.
 	bool settingsOpenPrev_ = false;
+
+	// --- Joint constraint 검증 하네스 상태 (클라 전용) ---
+	std::vector<PhysicsTestObject> rdObjects_{};
+	float   rdImpulseStrength_ = 5.f;    // N*s, ',' / '.' 로 1/2배 · 2배
+	float   rdDebugTimeScale_  = 1.0f;   // M: 1.0 -> 0.25 -> 0.05 (물리 스텝만 감속)
+	bool    rdShowBodies_      = false;  // V: 바디 OBB 와이어프레임
+	bool    rdFrozen_          = false;  // P: 매 프레임 속도 0으로 고정
+	bool    rdRandomBlast_     = false;  // I: 연속 랜덤 가진
+	Seconds rdBlastAcc_{ 0s };           // 연속 가진 간격 누적
+	// kind>=6(래그돌형)을 몇 개 띄웠는지. >0이면 joint 전용 PGS 추가 반복을 켠다 —
+	// InGameScene이 매 프레임 setJointSolverExtraIterations를 덮어쓰므로 플래그가 필요.
+	int     rdExtraIterKinds_  = 0;
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};

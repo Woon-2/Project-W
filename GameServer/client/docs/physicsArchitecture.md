@@ -142,6 +142,50 @@ step(dt)
 
 ---
 
+## Joint constraint 검증 하네스 (PhysicsTestObject)
+
+조인트 3종을 **캐릭터·애니메이션·서버 없이** 격리 검증하는 디버그 하네스다. 모델을 쓰지 않고
+바디를 `DebugBVView` OBB 와이어프레임으로만 그리므로 리소스 의존성이 0이다.
+
+| 파일 | 역할 |
+|---|---|
+| `physicsTestObject.hpp` | `rebuildBoxBodyBVH()`, `struct PhysicsTestObject`(activate/deactivate/visualize/applyImpulseAll/applyRandomImpulse/freezeAll), 진입점 선언 |
+| `physicsTestObject.cpp` | 구조물 팩토리 8종 + `makePhysicsTestObject(kind, origin)` + `applyRandomImpulse` |
+| `online/onlineGame.{hpp,cpp}` | 스폰 위치·키 바인딩·프레임 훅 (실사용 경로) |
+| `standalone/game.cpp` | 같은 드라이버가 남아 있으나 스킬 에디터 전환 이후 **키 바인딩 없음** |
+
+| kind | 구조물 | 검증 대상 |
+|---|---|---|
+| 1 | 단진자 (anchor + bob) | BallSocket 3 병진 구속 |
+| 2 | 이중진자 | BallSocket 체인 수렴 (카오스 운동) |
+| 3 | 힌지 도어 | Hinge 축 정렬 2행 + limit ±120° |
+| 4 | 콘트위스트 팔 | cone 45° / twist 30° 동시 |
+| 5 | 콘트위스트 5링크 체인 | 다단 cone 60° / twist 45°, 질량 램프 |
+| 6 | 휴머노이드 래그돌 (12 body / 11 joint) | 분기 그래프 + self-collision 무시 쌍 |
+| 7 / 8 | 상체 / 하체 래그돌 | 부분 리그 (Kinematic Hips 앵커) |
+
+**온라인 키** — `1`~`8` 스폰, `K` 전체 제거, `V` 와이어프레임 토글, `P` 프리즈,
+`M` 슬로모 순환(1 → 0.25 → 0.05), `I` 연속 랜덤 가진 토글, `,` / `.` 임펄스 세기 ½·2배.
+
+### 통합 시 주의 3가지
+
+1. **`setJointSolverExtraIterations`는 매 프레임 덮어써진다.** `InGameScene()`이 시체 래그돌
+   유무를 보고 `48 : 0`을 무조건 재설정하므로, 스폰 시 한 번 켜는 방식은 다음 프레임에
+   무효가 된다. 테스트 구조물은 `rdExtraIterKinds_ > 0` 조건으로 **그 호출에 합류**시킨다.
+   빠뜨리면 kind 6~8이 1초 안에 사지가 분해된다 (원인·배경은 위 "Per-Constraint Damping").
+2. **`visualize()`는 `debugBVView_.update()` 뒤에서 호출한다.** 온라인은 물리 스텝이
+   `update()`보다 앞서므로, 물리 직후에 푸시하면 같은 프레임의 `update(deltaTime)`가
+   32ms TTL을 즉시 깎아 저프레임에서 박스가 사라진다 (standalone은 순서가 반대라 무해했다).
+3. **세션 리셋에서 해제 필수.** `PhysicsWorld`는 `RigidBody*`를 비소유로 들고 있어
+   `resetInGameSession()`에서 `clearTestObjects()`를 부르지 않으면 다음 경기 `step()`에서
+   dangling이 된다. `deactivate()`는 joint → body 순서를 지킨다.
+
+슬로모는 `physicUpdateAcc_ += clampedDt * rdDebugTimeScale_`로 **물리 스텝만** 늦춘다
+(카메라·애니메이션·UI·네트워크 시계는 실시간). 랜덤 가진은 `gRandomEngine`을 쓴다 —
+로컬 `mt19937` 생성 금지.
+
+---
+
 ## CFM (Constraint Force Mixing)
 
 수치 안정성을 위해 effective mass 행렬의 대각선에 CFM 값을 더한다.
