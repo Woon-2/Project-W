@@ -405,8 +405,8 @@ void Dispatcher::hiZPassCompute() {
 
     // visibility feedback readback: cull이 기록한 이번 프레임 슬롯을 단일 readback 리소스의
     // 같은 슬롯 offset으로 복사한다. cull(u3) 쓰기 이후 어떤 패스도 visibilityFeedback을
-    // 건드리지 않으므로(여전히 UAV 상태), copy의 UAV→COPY_SOURCE 전환이 곧 쓰기 완료 동기화점이다.
-    // 전용 fence는 걸지 않는다 — coherency는 전역 프레임 펜스(N-2 대기)가 제공한다.
+    // 건드리지 않으므로(여전히 UAV 상태), copy의 UAV->COPY_SOURCE 전환이 곧 쓰기 완료 동기화점이다.
+    // 전용 fence는 걸지 않는다 — false negative만큼은 일어나지 않는다.
     {
         const u64t slotBytes  = static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
         const u64t slotOffset = visibilitySlot_ * slotBytes;
