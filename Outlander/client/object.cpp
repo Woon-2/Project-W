@@ -289,6 +289,8 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
+	mode_ = Mode::Keyframe;
+
 	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
 	const bool hasAttack = !currentAttackClip_.empty();
 

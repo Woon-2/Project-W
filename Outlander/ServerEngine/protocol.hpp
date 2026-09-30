@@ -213,7 +213,7 @@ private:
 
 // Authoritative default player HP, shared by client and server so enter-time
 // HP sync agrees on the same value.
-constexpr int32 kPlayerMaxHp = 5000;
+constexpr int32 kPlayerMaxHp = 600;
 
 #pragma pack(push, 1)
 
