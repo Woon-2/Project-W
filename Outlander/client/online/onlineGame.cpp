@@ -7665,19 +7665,19 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// C key: toggle CSM cascade debug visualization (cascade 0~3을 R/G/B/Y로 틴트).
 	// 인게임은 Deferred 경로라 GFX::effectiveDebugMode()가 lighting 패스에 넘기는
 	// cascade level 뷰로 나타난다(로비 Forward에서는 PSO 퍼뮤테이션).
-	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
+	/*if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
-	}
+	}*/
 
 	// H key: toggle Hi-Z occlusion culling
-	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
+	/*if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
 		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
-	}
+	}*/
 
 	// G key: cycle GBuffer debug view (deferred path only)
-	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
+	/*if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
 		gfx_.cycleGBufferDebugMode();
-	}
+	}*/
 
 	// F1: 컬링 통계 오버레이 토글(기본 꺼짐). 끄면 패널이 화면에서 완전히 사라진다.
 	if ( (keyboardStateCurr_[VK_F1] & 0x80) && !(keyboardStatePrev_[VK_F1] & 0x80) ) {
@@ -7711,29 +7711,29 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// K 전체 제거   V 와이어프레임 토글   P 프리즈 토글   M 슬로모 순환
 	// I 연속 랜덤 가진 토글   , / . 임펄스 세기 1/2배 · 2배
 	// 이 키들은 온라인 인게임에서 다른 용도로 쓰이지 않는다(위 디버그 블록들 참조).
-#define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
-	for (int kind = 1; kind <= 8; ++kind) {
-		if (RD_KEY_DOWN('0' + kind)) spawnTestObject(kind);
-	}
-	if (RD_KEY_DOWN('K')) clearTestObjects();
-	if (RD_KEY_DOWN('V')) rdShowBodies_ = !rdShowBodies_;
-	if (RD_KEY_DOWN('I')) {
-		rdRandomBlast_ = !rdRandomBlast_;
-		rdBlastAcc_    = 0s;
-	}
-	if (RD_KEY_DOWN('P')) {
-		rdFrozen_ = !rdFrozen_;
-		if (rdFrozen_)
-			for (auto& obj : rdObjects_) obj.freezeAll();
-	}
-	if (RD_KEY_DOWN('M')) {
-		if      (rdDebugTimeScale_ >= 1.f)   rdDebugTimeScale_ = 0.25f;
-		else if (rdDebugTimeScale_ >= 0.25f) rdDebugTimeScale_ = 0.05f;
-		else                                 rdDebugTimeScale_ = 1.0f;
-	}
-	if (RD_KEY_DOWN(VK_OEM_COMMA))  rdImpulseStrength_ = std::max(0.5f,  rdImpulseStrength_ * 0.5f);
-	if (RD_KEY_DOWN(VK_OEM_PERIOD)) rdImpulseStrength_ = std::min(500.f, rdImpulseStrength_ * 2.0f);
-#undef RD_KEY_DOWN
+//#define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
+//	for (int kind = 1; kind <= 8; ++kind) {
+//		if (RD_KEY_DOWN('0' + kind)) spawnTestObject(kind);
+//	}
+//	if (RD_KEY_DOWN('K')) clearTestObjects();
+//	if (RD_KEY_DOWN('V')) rdShowBodies_ = !rdShowBodies_;
+//	if (RD_KEY_DOWN('I')) {
+//		rdRandomBlast_ = !rdRandomBlast_;
+//		rdBlastAcc_    = 0s;
+//	}
+//	if (RD_KEY_DOWN('P')) {
+//		rdFrozen_ = !rdFrozen_;
+//		if (rdFrozen_)
+//			for (auto& obj : rdObjects_) obj.freezeAll();
+//	}
+//	if (RD_KEY_DOWN('M')) {
+//		if      (rdDebugTimeScale_ >= 1.f)   rdDebugTimeScale_ = 0.25f;
+//		else if (rdDebugTimeScale_ >= 0.25f) rdDebugTimeScale_ = 0.05f;
+//		else                                 rdDebugTimeScale_ = 1.0f;
+//	}
+//	if (RD_KEY_DOWN(VK_OEM_COMMA))  rdImpulseStrength_ = std::max(0.5f,  rdImpulseStrength_ * 0.5f);
+//	if (RD_KEY_DOWN(VK_OEM_PERIOD)) rdImpulseStrength_ = std::min(500.f, rdImpulseStrength_ * 2.0f);
+//#undef RD_KEY_DOWN
 
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
